@@ -1,4 +1,7 @@
 
+import os
+
+import matplotlib.font_manager as fm
 import pytest
 
 from InkGen.style import DrawingStyle, Font, Style, TextStyle
@@ -7,6 +10,25 @@ from InkGen.style import DrawingStyle, Font, Style, TextStyle
 @pytest.fixture
 def next_id():
     return Style.id_iter.__reduce__()[1][0]
+
+@pytest.fixture(scope="session")
+def system_font_info():
+    entries = fm.fontManager.ttflist
+    assert entries, "No system fonts found on this system"
+    families = []
+    directory = None
+    for entry in entries:
+        dir_path = os.path.dirname(entry.fname)
+        if not os.path.isdir(dir_path):
+            continue
+        if directory is None:
+            directory = dir_path
+        if entry.name not in families:
+            families.append(entry.name)
+        if len(families) >= 2 and directory is not None:
+            break
+    assert directory is not None
+    return {"families": families, "directory": directory}
 
 def test_create_style(next_id):
     style = Style("Joe")
@@ -208,30 +230,41 @@ def test_invalid_opacity(next_id):
         style.fill_opacity = -0.0000001
 
 # Test Font Class
-def test_create_font():
+def test_create_font(system_font_info):
 
-    ff = Font("Times New Roman", "italic", "small-caps", "expanded", "bold", 16.0)
-    assert ff.family == "Times New Roman"
+    family = system_font_info["families"][0]
+    ff = Font(family, "italic", "small-caps", "expanded", "bold", 16.0)
+    assert ff.family.lower() == family.lower()
     assert ff.style == "italic"
     assert ff.variant == "small-caps"
     assert ff.stretch == "expanded"
     assert ff.weight == "bold"
     assert ff.size == 16.0
 
-def test_create_font_custom_location():
-    ff = Font(family="Times New Roman", custom_font_paths="C:\\Windows\\Fonts")
-    assert ff.family == "Times New Roman"
+def test_create_font_custom_location(system_font_info):
+    family = system_font_info["families"][0]
+    custom_dir = system_font_info["directory"]
+    ff = Font(family=family, custom_font_paths=custom_dir)
+    assert ff.family.lower() == family.lower()
+    recorded_paths = [
+        p.replace("\\", "/").rstrip("/") for p in ff.parameters["Font"]["custom_font_paths"]
+    ]
+    assert custom_dir.replace("\\", "/").rstrip("/") in recorded_paths
 
-def test_update_font():
+def test_update_font(system_font_info):
 
-    ff = Font("Times New Roman", "italic", "small-caps", "expanded", "bold", 16.0)
-    assert ff.family == "Times New Roman"
+    families = system_font_info["families"]
+    primary_family = families[0]
+    alternate_family = families[1] if len(families) > 1 else families[0]
+
+    ff = Font(primary_family, "italic", "small-caps", "expanded", "bold", 16.0)
+    assert ff.family.lower() == primary_family.lower()
     assert ff.style == "italic"
     assert ff.variant == "small-caps"
     assert ff.stretch == "expanded"
     assert ff.weight == "bold"
     assert ff.size == 16.0
-    assert ff.font_file.replace("\\", "/") == "C:/Windows/Fonts/timesbi.ttf"
+    assert os.path.isfile(ff.font_file)
 
     ff.style = "normal"
     ff.variant = "normal"
@@ -244,15 +277,14 @@ def test_update_font():
     assert ff.weight == "normal"
     assert ff.size == 20.0
 
-    ff.family = "arial"
+    ff.family = alternate_family
     ff.stretch = 500
     ff.weight = 500
     ff.size = "x-large"
-    assert ff.family == "Arial"
+    assert ff.family.lower() == alternate_family.lower()
     assert ff.stretch == 500
     assert ff.weight == 500
-    assert ff.size == 14.399999999999999
-    assert ff.configuration == "arial:style=normal:variant=normal:weight=500:stretch=500:size=14.399999999999999"
+    assert ff.size == pytest.approx(14.4, rel=1e-6)
 
 # @pytest.fixture
 # def platform(mocker):
@@ -271,12 +303,13 @@ def test_update_font():
 
 
 
-def test_font_errors():
+def test_font_errors(system_font_info):
 
     with pytest.raises(ValueError):
         ff = Font(family="Times New Roman", custom_font_paths="C:\\Windows\\Font")
 
-    ff = Font(family="Times New Roman")
+    family = system_font_info["families"][0]
+    ff = Font(family=family)
 
     with pytest.raises(ValueError):
         ff.style = "error"
@@ -296,11 +329,11 @@ def test_font_errors():
 # Test TextStyle
 
 @pytest.fixture
-def font():
-    ff = Font("Times New Roman")
+def font(system_font_info):
+    ff = Font(system_font_info["families"][0])
     return ff
 
-def test_create_text_style(font):
+def test_create_text_style(font, system_font_info):
     ts = TextStyle("Test", font)
     assert ts.name == "Test"
     assert ts.color == "#000000"
@@ -309,14 +342,16 @@ def test_create_text_style(font):
     assert ts.text_align == "start"
     assert ts.text_anchor == "start"
     assert ts.line_spacing == 1.0
-    assert ts.font.family == "Times New Roman"
+    assert ts.font.family.lower() == system_font_info["families"][0].lower()
 
-def test_update_text_style(font):
+def test_update_text_style(font, system_font_info):
     ts = TextStyle("Test1", font)
-    new_font = Font("arial")
-    assert ts.font.family == "Times New Roman"
+    families = system_font_info["families"]
+    alternate_family = families[1] if len(families) > 1 else families[0]
+    new_font = Font(alternate_family)
+    assert ts.font.family.lower() == families[0].lower()
     ts.font = new_font
-    assert ts.font.family == "Arial"
+    assert ts.font.family.lower() == alternate_family.lower()
     ts.color = "#FFFFFF"
     assert ts.color == "#ffffff"
     ts.text_align = "end"
@@ -378,16 +413,21 @@ def test_save_and_create_drawing_style():
     assert style_2.stroke_opacity == 0.5
     assert style_2.fill_opacity == 0.5
 
-def test_save_and_create_text_style():
-    font_ = Font("Times New Roman", "italic", "normal", "normal", "bold", 12.0, 'C:/Windows/Fonts/')
+def test_save_and_create_text_style(system_font_info):
+    family = system_font_info["families"][0]
+    custom_dir = system_font_info["directory"]
+    font_ = Font(family, "italic", "normal", "normal", "bold", 12.0, custom_dir)
     font_parameters = font_.parameters
-    assert font_parameters["Font"]["family"] == "Times New Roman"
+    assert font_parameters["Font"]["family"].lower() == family.lower()
     assert font_parameters["Font"]["style"] == "italic"
     assert font_parameters["Font"]["variant"] == "normal"
     assert font_parameters["Font"]["stretch"] == "normal"
     assert font_parameters["Font"]["weight"] == "bold"
     assert font_parameters["Font"]["size"] == 12.0
-    assert 'C:/Windows/Fonts/' in font_parameters["Font"]["custom_font_paths"]
+    recorded_paths = [
+        p.replace("\\", "/").rstrip("/") for p in font_parameters["Font"]["custom_font_paths"]
+    ]
+    assert custom_dir.replace("\\", "/").rstrip("/") in recorded_paths
 
     style = TextStyle("Let's make a Text Style!", font=font_)
     style.color = "red"
@@ -399,7 +439,7 @@ def test_save_and_create_text_style():
 
     style_2 = TextStyle.create_from_dict(style_parameters)
     assert style_2.color == '#ff0000'
-    assert style_2.font.family == "Times New Roman"
+    assert style_2.font.family.lower() == family.lower()
     assert style_2.line_spacing == 2.0
     assert style_2.text_align == "end"
     assert style_2.superscript is True

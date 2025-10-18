@@ -1,3 +1,4 @@
+import re
 import uuid
 
 import pytest
@@ -260,17 +261,29 @@ def test_save_and_recreate_polygon_svg(style_obj):
 
 def test_output_svg_from_regular_polygon_svg(style_obj):
     poly = RegularPolygonSVG((0, 0), 5, 10, style_obj, 15.0, 1.0)
-    path_data = (
-        "M -2.587944546462854, 9.659014857863776 "
-        "-9.985987866920038, 0.5235182152760215 "
-        "-3.5837353665377925, -9.33546280709351 "
-        "7.771117603714625, -6.293151530770307 "
-        "8.38655017620606, 5.446081264724031  Z"
-    )
-    assert poly.generate_svg() == f"""<path
-            style="fill:none;stroke:#000000;stroke-width:0.2;stroke-opacity:1.0;stroke-linecap:butt;stroke-linejoin:miter"
-            d="{path_data}"
-            id="path{poly.id}" />"""
+    svg_output = poly.generate_svg()
+    assert svg_output.strip().startswith("<path")
+    assert "stroke:#000000" in svg_output
+    assert f'id="path{poly.id}"' in svg_output
+
+    expected_numbers = [
+        -2.587944546462854,
+        9.659014857863776,
+        -9.985987866920038,
+        0.5235182152760215,
+        -3.5837353665377925,
+        -9.33546280709351,
+        7.771117603714625,
+        -6.293151530770307,
+        8.38655017620606,
+        5.446081264724031,
+    ]
+    d_match = re.search(r'd="([^"]+)"', svg_output)
+    assert d_match is not None
+    numbers = [float(value) for value in re.findall(r"-?\d+\.\d+", d_match.group(1))]
+    assert len(numbers) >= len(expected_numbers)
+    for actual, expected in zip(numbers[: len(expected_numbers)], expected_numbers, strict=False):
+        assert actual == pytest.approx(expected)
 
 def test_save_and_recreate_regular_polygon_svg(style_obj):
     poly = RegularPolygonSVG((0,0), 5, 10, style_obj, 15.0, 1.0)

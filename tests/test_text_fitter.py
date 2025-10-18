@@ -3,6 +3,7 @@ Unit Tests for the TextFitter utility.
 """
 import random
 
+import matplotlib.font_manager as fm
 import matplotlib.pyplot as plt
 import pytest
 from shapely.affinity import translate as shapely_translate
@@ -31,7 +32,7 @@ from InkGen.text_fitter import (
     save_debug_image,
 )
 
-FONT_PATH = "C:/Windows/Fonts/arial.ttf"
+FONT_PATH = fm.findfont(fm.FontProperties(family="DejaVu Sans"))
 
 
 @pytest.fixture

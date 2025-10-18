@@ -1,5 +1,6 @@
 import json
 import os
+from pathlib import Path as PathLib
 
 import pytest
 
@@ -370,7 +371,9 @@ def test_document_save_and_load_round_trip(tmp_path, canvas):
     assert styles
 
 def test_interdict():
-    file = "C:\\Users\\cmill\\OneDrive\\Documents\\PythonScripts\\DrawingGen\\tests\\temp_files\\test_document.json"
-    with open(file) as json_file:
+    file = PathLib(__file__).resolve().parent / "temp_files" / "test_document.json"
+    if not file.exists():
+        pytest.skip("test document fixture not available")
+    with file.open(encoding="utf-8") as json_file:
         data = json.load(json_file)
-    print(data)
+    assert isinstance(data, dict)

@@ -5,6 +5,7 @@
 import itertools
 import os
 import platform
+import subprocess
 
 from matplotlib import font_manager
 
@@ -497,19 +498,57 @@ class Font:
                     "~/Library/Fonts/",
                     "/System Folder/Fonts/"]
         elif self._platform == "Linux":
-            paths = ['/usr/bin/fc-list',
-                    '/usr/sbin/fc-list',
-                    '/usr/local/sbin/fc-list',
-                    '/usr/local/bin/fc-list']
+            paths = [
+                "/usr/share/fonts",
+                "/usr/share/fonts/truetype",
+                "/usr/share/fonts/opentype",
+                "/usr/local/share/fonts",
+                os.path.expanduser("~/.fonts"),
+                os.path.expanduser("~/.local/share/fonts"),
+            ]
+            fc_list_commands = [
+                "/usr/bin/fc-list",
+                "/usr/sbin/fc-list",
+                "/usr/local/sbin/fc-list",
+                "/usr/local/bin/fc-list",
+            ]
+            for cmd in fc_list_commands:
+                if os.path.isfile(cmd) and os.access(cmd, os.X_OK):
+                    try:
+                        result = subprocess.run(
+                            [cmd],
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.DEVNULL,
+                            text=True,
+                            check=False,
+                        )
+                    except OSError:
+                        continue
+                    for line in result.stdout.splitlines():
+                        font_path = line.split(":")[0].strip()
+                        directory = os.path.dirname(font_path)
+                        if directory:
+                            paths.append(directory)
         else:
             raise ValueError("This class currently only supports \
                             automatically finding font folders for \
                             Windows, MacOS (newer), or Linux. \
                             Please specify the font paths.")
+        seen_paths = set()
         for path in paths:
-            dir_len = len(os.listdir(path))
-            if os.path.exists(path) and dir_len > 0:
-                self._font_paths.append(path)
+            normalized = os.path.expanduser(path)
+            if not os.path.isdir(normalized):
+                continue
+            try:
+                if not os.listdir(normalized):
+                    continue
+            except OSError:
+                continue
+            if normalized not in seen_paths:
+                seen_paths.add(normalized)
+                if normalized[-1] not in ("\\", "/"):
+                    normalized = normalized + "/"
+                self._font_paths.append(normalized)
 
     def _get_font_manager(self) -> font_manager:
         font_files = font_manager.findSystemFonts(fontpaths=self._font_paths)

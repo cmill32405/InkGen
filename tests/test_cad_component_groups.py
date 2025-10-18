@@ -18,7 +18,7 @@ def line_style():
 
 @pytest.fixture
 def text_style():
-    return TextStyle(f"text_style_{random.randint(1000, 9999)}", Font("Arial"))
+    return TextStyle(f"text_style_{random.randint(1000, 9999)}", Font())
 
 def test_create_zoning_group(canvas, line_style, text_style):
     zoning = Zoning(canvas=canvas, line_style=line_style, text_style=text_style)

@@ -1,3 +1,4 @@
+import matplotlib.font_manager as fm
 import pytest
 
 from InkGen import text_outline
@@ -8,7 +9,7 @@ from InkGen.text_outline import (
     set_add_one_pixel_margin_default,
 )
 
-FONT_PATH = "C:/Windows/Fonts/arial.ttf"
+FONT_PATH = fm.findfont(fm.FontProperties(family="DejaVu Sans"))
 
 
 def test_set_add_one_pixel_margin_default_toggles_flag():
