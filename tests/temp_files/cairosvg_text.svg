@@ -1,0 +1,13 @@
+<svg width="220.0mm" height="260.0mm" viewBox="0 0 220.0 260.0" version="1.1" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="220.0" height="260.0" fill="#ffffff" stroke="none"/>
+  <g id="times_italic">
+  <rect x="150.837890625" y="192.0546875" width="40.869140625" height="8.0859375" fill="#e5efdc" stroke="#4f8f2f" stroke-width="0.15"/>
+  <path d="M 151.757812,192.054688 L 151.201172,194.164062 L 150.837891,200.000000 L 157.669922,200.140625 L 189.205078,200.140625 L 189.867188,199.917969 L 190.194010,199.651693 L 190.533854,199.282552 L 190.886719,198.810547 L 191.707031,194.837891 L 191.244141,193.244141 L 179.695312,192.054688 L 151.757812,192.054688 Z" fill="none" stroke="#4f8f2f" stroke-width="0.15" stroke-dasharray="0.8,0.8"/>
+  <text x="150.0" y="200.0" style="font-style:italic;font-size:12.0;font-family:Times New Roman;fill:#111111;">Test Text</text>
+</g>
+  <g id="arial_regular">
+  <rect x="50.28125" y="211.41015625" width="46.763671875" height="8.73046875" fill="#e5efdc" stroke="#4f8f2f" stroke-width="0.15"/>
+  <path d="M 50.281250,211.410156 L 50.281250,212.423828 L 53.111328,220.000000 L 59.404297,220.140625 L 84.529297,220.140625 L 96.248047,220.082031 L 96.623047,220.058594 L 97.044922,219.988281 L 96.892578,213.777344 L 95.832031,211.603516 L 82.214844,211.410156 L 50.281250,211.410156 Z" fill="none" stroke="#4f8f2f" stroke-width="0.15" stroke-dasharray="0.8,0.8"/>
+  <text x="50.0" y="220.0" style="font-style:normal;font-size:12.0;font-family:Arial;fill:#111111;">Test Text</text>
+</g>
+</svg>

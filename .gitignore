@@ -1,0 +1,56 @@
+# Virtual environments
+.venv/
+venv/
+env/
+Env/
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.nox/
+.tox/
+.hypothesis/
+.cache/
+
+# Build / packaging artifacts
+build/
+dist/
+*.egg-info/
+*.egg
+pip-wheel-metadata/
+
+# Coverage and profiler output
+coverage.xml
+htmlcov/
+*.cover
+*.py,cover
+.coverage*
+*.prof
+
+# Tooling state
+.dmypy.json
+dmypy.json
+.pytype/
+.pyre/
+
+# Local configuration / IDE
+.idea/
+#.vscode/
+
+# Generated assets
+debug_images/
+debug_output/
+examples/output/
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+
+# OS-specific files
+.DS_Store
+Thumbs.db

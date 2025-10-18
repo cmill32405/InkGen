@@ -1,0 +1,94 @@
+Document:
+  canvas:
+    Canvas:
+      height: 297.0
+      units: mm
+      width: 210.0
+  pages:
+  - Layers:
+      canvas:
+        Canvas:
+          height: 297.0
+          units: mm
+          width: 210.0
+      layers:
+        SegmentationMask:
+          Layer:
+            canvas:
+              Canvas:
+                height: 297.0
+                units: mm
+                width: 210.0
+            component_groups: []
+            group_collision_settings: {}
+            layer_name: SegmentationMask
+            model: true
+        base:
+          Layer:
+            canvas:
+              Canvas:
+                height: 297.0
+                units: mm
+                width: 210.0
+            component_groups:
+            - ComponentGroup:
+                components:
+                - WidthHeightDrawingComponent:
+                    height: 100.0
+                    position:
+                    - 50.0
+                    - 50.0
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: test_file_save_style
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.2
+                    width: 100.0
+                group_label: Group1
+            - ComponentGroup:
+                components:
+                - RegularPolygonDrawingComponent:
+                    angle: 0.0
+                    corner_radius: 0.0
+                    position:
+                    - 100.0
+                    - 100.0
+                    radius: 25.0
+                    sides: 5
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: test_file_save_style
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.2
+                - PolygonalDrawingComponent:
+                    points:
+                    - - 0.0
+                      - 0.0
+                    - - 2.0
+                      - 2.0
+                    - - 2.5
+                      - 3.0
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: test_file_save_style
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.2
+                group_label: Group2
+            group_collision_settings:
+              Group1:
+                allow_collision: true
+                strict: false
+              Group2:
+                allow_collision: false
+                strict: false
+            layer_name: base
+            model: true

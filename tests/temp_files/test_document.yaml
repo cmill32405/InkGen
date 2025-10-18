@@ -1,0 +1,1844 @@
+DocumentSVG:
+  canvas:
+    Canvas:
+      height: 250.0
+      units: mm
+      width: 277.0
+  pages:
+  - Layers:
+      canvas:
+        Canvas:
+          height: 250.0
+          units: mm
+          width: 277.0
+      layers:
+        base:
+          Layer:
+            canvas:
+              Canvas:
+                height: 250.0
+                units: mm
+                width: 277.0
+            component_groups:
+            - ComponentGroupSVG:
+                components:
+                - RectangleSVG:
+                    corner_radii: 0
+                    height: 56.0
+                    position:
+                    - 80.0
+                    - 50.0
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                    width: 56.0
+                - LineSVG:
+                    point_1:
+                    - 25.0
+                    - 110.0
+                    point_2:
+                    - 175.0
+                    - 110.0
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - RegularPolygonSVG:
+                    angle: 0.0
+                    corner_radius: 0.0
+                    position:
+                    - 50.0
+                    - 50.0
+                    radius: 25.0
+                    sides: 5
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - PolygonalSVG:
+                    points:
+                    - - 120.0
+                      - 120.0
+                    - - 170.0
+                      - 120.0
+                    - - 160.0
+                      - 145.0
+                    - - 110.0
+                      - 145.0
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                group_label: RandomStuff
+            - ComponentGroupSVG:
+                components:
+                - PolygonalSVG:
+                    points:
+                    - - 229.0
+                      - 10.0
+                    - - 267.0
+                      - 86.0
+                    - - 191.0
+                      - 86.0
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                group_label: TextFitterTriangle
+            - ComponentGroupSVG:
+                components:
+                - TextSVG:
+                    position:
+                    - 221.654
+                    - 52.654
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths:
+                            - C:/Windows/Fonts/
+                            - C:/Users/cmill/AppData/Local/Microsoft/Windows/Fonts/
+                            family: Arial
+                            size: 7.540625
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: normal
+                        line_spacing: 1.0
+                        name: TriangleQuote_0
+                        subscript: false
+                        superscript: false
+                        text_align: start
+                    text: A Big
+                group_label: TriangleQuote_line_0
+            - ComponentGroupSVG:
+                components:
+                - TextSVG:
+                    position:
+                    - 213.777
+                    - 64.29
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths:
+                            - C:/Windows/Fonts/
+                            - C:/Users/cmill/AppData/Local/Microsoft/Windows/Fonts/
+                            family: Arial
+                            size: 7.540625
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: normal
+                        line_spacing: 1.0
+                        name: TriangleQuote_1
+                        subscript: false
+                        superscript: false
+                        text_align: start
+                    text: Beautiful
+                group_label: TriangleQuote_line_1
+            - ComponentGroupSVG:
+                components:
+                - TextSVG:
+                    position:
+                    - 222.407
+                    - 75.937
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths:
+                            - C:/Windows/Fonts/
+                            - C:/Users/cmill/AppData/Local/Microsoft/Windows/Fonts/
+                            family: Arial
+                            size: 7.540625
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: normal
+                        line_spacing: 1.0
+                        name: TriangleQuote_2
+                        subscript: false
+                        superscript: false
+                        text_align: start
+                    text: Brain
+                group_label: TriangleQuote_line_2
+            - ComponentGroupSVG:
+                components:
+                - TextSVG:
+                    position:
+                    - 82.677
+                    - 65.367
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths:
+                            - C:/Windows/Fonts/
+                            - C:/Users/cmill/AppData/Local/Microsoft/Windows/Fonts/
+                            family: Arial
+                            size: 12.7
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: normal
+                        line_spacing: 1.0
+                        name: RectangleTitle_0
+                        subscript: false
+                        superscript: false
+                        text_align: start
+                    text: Control
+                group_label: RectangleTitle_line_3
+            - ComponentGroupSVG:
+                components:
+                - TextSVG:
+                    position:
+                    - 91.808
+                    - 82.828
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths:
+                            - C:/Windows/Fonts/
+                            - C:/Users/cmill/AppData/Local/Microsoft/Windows/Fonts/
+                            family: Arial
+                            size: 12.7
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: normal
+                        line_spacing: 1.0
+                        name: RectangleTitle_1
+                        subscript: false
+                        superscript: false
+                        text_align: start
+                    text: Core
+                group_label: RectangleTitle_line_4
+            - ComponentGroupSVG:
+                components:
+                - TextSVG:
+                    position:
+                    - 31.597
+                    - 60.559
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths:
+                            - C:/Windows/Fonts/
+                            - C:/Users/cmill/AppData/Local/Microsoft/Windows/Fonts/
+                            family: Arial
+                            size: 14.287500000000001
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: normal
+                        line_spacing: 1.0
+                        name: PentagonTitle_0
+                        subscript: false
+                        superscript: false
+                        text_align: start
+                    text: Idea
+                group_label: PentagonTitle_line_5
+            - ComponentGroupSVG:
+                components:
+                - TextSVG:
+                    position:
+                    - 121.755
+                    - 140.337
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths:
+                            - C:/Windows/Fonts/
+                            - C:/Users/cmill/AppData/Local/Microsoft/Windows/Fonts/
+                            family: Arial
+                            size: 12.7
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: normal
+                        line_spacing: 1.0
+                        name: ConnectorTitle_0
+                        subscript: false
+                        superscript: false
+                        text_align: start
+                    text: Relay
+                group_label: ConnectorTitle_line_6
+            - ComponentGroupSVG:
+                components:
+                - TextSVG:
+                    position:
+                    - 150
+                    - 200
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths:
+                            - C:/Windows/Fonts/
+                            - C:/Users/cmill/AppData/Local/Microsoft/Windows/Fonts/
+                            family: Times New Roman
+                            size: 12.0
+                            stretch: normal
+                            style: italic
+                            variant: normal
+                            weight: normal
+                        line_spacing: 1.0
+                        name: TimesNormal
+                        subscript: false
+                        superscript: false
+                        text_align: start
+                    text: Test Text
+                group_label: TextGroup
+            - ComponentGroupSVG:
+                components:
+                - TextSVG:
+                    position:
+                    - 150
+                    - 240
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths:
+                            - C:/Windows/Fonts/
+                            - C:/Users/cmill/AppData/Local/Microsoft/Windows/Fonts/
+                            family: Times New Roman
+                            size: 12.0
+                            stretch: normal
+                            style: italic
+                            variant: normal
+                            weight: normal
+                        line_spacing: 1.0
+                        name: TimesCenter
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: Test Text
+                group_label: TextGroupCenter
+            - ComponentGroupSVG:
+                components:
+                - CircleSVG:
+                    position:
+                    - 190.0
+                    - 100.0
+                    radius: 6.0
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - TextSVG:
+                    position:
+                    - 186.79
+                    - 104.792
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths:
+                            - C:/Windows/Fonts/
+                            - C:/Users/cmill/AppData/Local/Microsoft/Windows/Fonts/
+                            family: Arial
+                            size: 10.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: normal
+                        line_spacing: 1.0
+                        name: Callout
+                        subscript: false
+                        superscript: false
+                        text_align: start
+                    text: '1'
+                group_label: Circle Group
+            - ComponentGroupSVG:
+                components:
+                - SVGComponent:
+                    bbox:
+                    - - -1.5126788710517758e-15
+                      - 0.0
+                    - - 622.6262987012987
+                      - 676.9000000000001
+                    height: 297.0
+                    paths:
+                    - d: M 543.9262987012987,9.799999999999997 L 476.62629870129877,37.8
+                        L 476.62629870129877,0.0 L 368.7262987012987,0.0 L 398.12629870129865,246.0
+                        L 363.12629870129865,230.60000000000002 C 363.12629870129865,230.60000000000002
+                        324.8262987012987,254.20000000000005 304.2262987012987,264.90000000000003
+                        L 301.4262987012987,107.20000000000005 C 302.8262987012987,96.50000000000006
+                        312.12629870129865,83.60000000000005 329.4262987012987,68.70000000000005
+                        L 194.2262987012987,70.8 C 209.32629870129873,77.8 218.62629870129868,84.8
+                        222.32629870129873,91.80000000000001 C 224.12629870129874,95.5
+                        225.0262987012987,103.30000000000001 225.0262987012987,114.9
+                        L 225.0262987012987,311.8 C 198.0262987012987,328.2 174.82629870129873,339.6
+                        155.6262987012987,346.1 L 152.1262987012987,120.5 C 152.1262987012987,109.30000000000001
+                        157.5262987012987,99.5 168.2262987012987,91.1 L 37.2262987012987,91.1
+                        C 53.426298701298705,98.1 62.5262987012987,109.79999999999998
+                        64.42629870129869,126.1 L 66.62629870129868,344.7 C 36.2262987012987,335.8
+                        20.826298701298697,322.0 20.326298701298697,303.4 C 19.42629870129869,297.79999999999995
+                        22.226298701298703,293.4 28.726298701298703,290.09999999999997
+                        L 53.926298701298705,280.29999999999995 C 49.7262987012987,279.79999999999995
+                        45.7262987012987,279.59999999999997 42.0262987012987,279.59999999999997
+                        C 30.326298701298697,279.59999999999997 16.326298701298697,283.99999999999994
+                        0.02629870129869971,292.9 C -0.8737012987012989,332.59999999999997
+                        21.326298701298697,357.79999999999995 66.62629870129868,368.59999999999997
+                        L 66.62629870129868,503.9 C 66.62629870129868,524.0 53.726298701298674,538.0
+                        28.12629870129868,545.9 L 188.62629870129868,548.0 C 169.02629870129869,540.1
+                        158.02629870129869,529.1 155.72629870129867,515.1 L 155.72629870129867,375.6
+                        C 175.82629870129867,370.5 199.02629870129866,360.70000000000005
+                        225.12629870129868,346.20000000000005 L 225.12629870129868,543.8000000000001
+                        C 221.32629870129867,558.7 210.52629870129866,570.0000000000001
+                        192.9262987012987,577.4000000000001 L 340.8262987012987,579.5000000000001
+                        C 319.8262987012987,571.1000000000001 309.3262987012987,560.8000000000001
+                        309.3262987012987,548.7000000000002 L 304.4262987012987,295.70000000000016
+                        C 304.4262987012987,295.70000000000016 359.8262987012987,271.8000000000002
+                        369.12629870129877,268.60000000000014 L 389.9262987012987,404.3000000000001
+                        L 364.7262987012988,387.5000000000001 L 415.2262987012988,676.9000000000001
+                        L 430.62629870129877,508.70000000000005 L 453.02629870129874,543.7
+                        L 448.8262987012987,360.80000000000007 L 451.62629870129865,366.4000000000001
+                        L 478.2262987012987,407.0000000000001 L 477.52629870129863,257.0000000000001
+                        L 531.5262987012986,313.10000000000014 L 607.2262987012987,272.5
+                        L 622.6262987012987,114.1 L 543.9262987012987,9.799999999999997
+                        M 525.7262987012987,269.8 L 477.3262987012987,244.60000000000002
+                        L 476.62629870129865,69.00000000000003 L 531.3262987012987,46.20000000000003
+                        L 539.7262987012987,251.60000000000002 L 525.7262987012987,269.8
+                      style: null
+                    position:
+                    - 200.0
+                    - 120.0
+                    scale: 0.1
+                    source: C:\Users\cmill\OneDrive\Documents\PythonScripts\DrawingGen\drawing_templates\Harry
+                      Potter_small.svg
+                    width: 210.0
+                group_label: HarryPotterGraphic
+            - ComponentGroupSVG:
+                components:
+                - TextSVG:
+                    position:
+                    - 50
+                    - 220
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths:
+                            - C:/Windows/Fonts/
+                            - C:/Users/cmill/AppData/Local/Microsoft/Windows/Fonts/
+                            family: Arial
+                            size: 12.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: normal
+                        line_spacing: 1.0
+                        name: Aria
+                        subscript: false
+                        superscript: false
+                        text_align: start
+                    text: Test Text
+                group_label: TextGroup2
+            group_collision_settings:
+              Circle Group:
+                allow_collision: true
+                strict: false
+              ConnectorTitle_line_6:
+                allow_collision: true
+                strict: false
+              HarryPotterGraphic:
+                allow_collision: true
+                strict: false
+              PentagonTitle_line_5:
+                allow_collision: true
+                strict: false
+              RandomStuff:
+                allow_collision: true
+                strict: false
+              RectangleTitle_line_3:
+                allow_collision: true
+                strict: false
+              RectangleTitle_line_4:
+                allow_collision: true
+                strict: false
+              TextFitterTriangle:
+                allow_collision: true
+                strict: false
+              TextGroup:
+                allow_collision: true
+                strict: false
+              TextGroup2:
+                allow_collision: true
+                strict: false
+              TextGroupCenter:
+                allow_collision: true
+                strict: false
+              TriangleQuote_line_0:
+                allow_collision: true
+                strict: false
+              TriangleQuote_line_1:
+                allow_collision: true
+                strict: false
+              TriangleQuote_line_2:
+                allow_collision: true
+                strict: false
+            layer_name: base
+            model: true
+        zoning:
+          Layer:
+            canvas:
+              Canvas:
+                height: 250.0
+                units: mm
+                width: 277.0
+            component_groups:
+            - ComponentGroup:
+                components:
+                - RectangleSVG:
+                    corner_radii: 10.0
+                    height: 240.0
+                    position:
+                    - 5.0
+                    - 5.0
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                    width: 267.0
+                - RectangleSVG:
+                    corner_radii: 10.0
+                    height: 224.0
+                    position:
+                    - 15.0
+                    - 13.0
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                    width: 247.0
+                - LineSVG:
+                    point_1:
+                    - 5.0
+                    - 125.0
+                    point_2:
+                    - 15.0
+                    - 125.0
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - LineSVG:
+                    point_1:
+                    - 262.0
+                    - 125.0
+                    point_2:
+                    - 272.0
+                    - 125.0
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - LineSVG:
+                    point_1:
+                    - 5.0
+                    - 147.4
+                    point_2:
+                    - 15.0
+                    - 147.4
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - LineSVG:
+                    point_1:
+                    - 262.0
+                    - 147.4
+                    point_2:
+                    - 272.0
+                    - 147.4
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - LineSVG:
+                    point_1:
+                    - 5.0
+                    - 102.6
+                    point_2:
+                    - 15.0
+                    - 102.6
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - LineSVG:
+                    point_1:
+                    - 262.0
+                    - 102.6
+                    point_2:
+                    - 272.0
+                    - 102.6
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - LineSVG:
+                    point_1:
+                    - 5.0
+                    - 169.8
+                    point_2:
+                    - 15.0
+                    - 169.8
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - LineSVG:
+                    point_1:
+                    - 262.0
+                    - 169.8
+                    point_2:
+                    - 272.0
+                    - 169.8
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - LineSVG:
+                    point_1:
+                    - 5.0
+                    - 80.2
+                    point_2:
+                    - 15.0
+                    - 80.2
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - LineSVG:
+                    point_1:
+                    - 262.0
+                    - 80.2
+                    point_2:
+                    - 272.0
+                    - 80.2
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - LineSVG:
+                    point_1:
+                    - 5.0
+                    - 192.2
+                    point_2:
+                    - 15.0
+                    - 192.2
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - LineSVG:
+                    point_1:
+                    - 262.0
+                    - 192.2
+                    point_2:
+                    - 272.0
+                    - 192.2
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - LineSVG:
+                    point_1:
+                    - 5.0
+                    - 57.8
+                    point_2:
+                    - 15.0
+                    - 57.8
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - LineSVG:
+                    point_1:
+                    - 262.0
+                    - 57.8
+                    point_2:
+                    - 272.0
+                    - 57.8
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - LineSVG:
+                    point_1:
+                    - 5.0
+                    - 214.6
+                    point_2:
+                    - 15.0
+                    - 214.6
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - LineSVG:
+                    point_1:
+                    - 262.0
+                    - 214.6
+                    point_2:
+                    - 272.0
+                    - 214.6
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - LineSVG:
+                    point_1:
+                    - 5.0
+                    - 35.4
+                    point_2:
+                    - 15.0
+                    - 35.4
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - LineSVG:
+                    point_1:
+                    - 262.0
+                    - 35.4
+                    point_2:
+                    - 272.0
+                    - 35.4
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - TextSVG:
+                    position:
+                    - 10.0
+                    - 228.663
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: &id001
+                            - C:/Windows/Fonts/
+                            - C:/Users/cmill/AppData/Local/Microsoft/Windows/Fonts/
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: A
+                - TextSVG:
+                    position:
+                    - 267.0
+                    - 228.663
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: A
+                - TextSVG:
+                    position:
+                    - 10.0
+                    - 206.263
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: B
+                - TextSVG:
+                    position:
+                    - 267.0
+                    - 206.263
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: B
+                - TextSVG:
+                    position:
+                    - 10.0
+                    - 183.863
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: C
+                - TextSVG:
+                    position:
+                    - 267.0
+                    - 183.863
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: C
+                - TextSVG:
+                    position:
+                    - 10.0
+                    - 161.463
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: D
+                - TextSVG:
+                    position:
+                    - 267.0
+                    - 161.463
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: D
+                - TextSVG:
+                    position:
+                    - 10.0
+                    - 139.063
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: E
+                - TextSVG:
+                    position:
+                    - 267.0
+                    - 139.063
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: E
+                - TextSVG:
+                    position:
+                    - 10.0
+                    - 116.663
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: F
+                - TextSVG:
+                    position:
+                    - 267.0
+                    - 116.663
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: F
+                - TextSVG:
+                    position:
+                    - 10.0
+                    - 94.263
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: G
+                - TextSVG:
+                    position:
+                    - 267.0
+                    - 94.263
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: G
+                - TextSVG:
+                    position:
+                    - 10.0
+                    - 71.863
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: H
+                - TextSVG:
+                    position:
+                    - 267.0
+                    - 71.863
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: H
+                - TextSVG:
+                    position:
+                    - 10.0
+                    - 49.463
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: I
+                - TextSVG:
+                    position:
+                    - 267.0
+                    - 49.463
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: I
+                - TextSVG:
+                    position:
+                    - 10.0
+                    - 27.063
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: J
+                - TextSVG:
+                    position:
+                    - 267.0
+                    - 27.063
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: J
+                - LineSVG:
+                    point_1:
+                    - 138.5
+                    - 5.0
+                    point_2:
+                    - 138.5
+                    - 13.0
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - LineSVG:
+                    point_1:
+                    - 138.5
+                    - 237.0
+                    point_2:
+                    - 138.5
+                    - 245.0
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - LineSVG:
+                    point_1:
+                    - 169.375
+                    - 5.0
+                    point_2:
+                    - 169.375
+                    - 13.0
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - LineSVG:
+                    point_1:
+                    - 169.375
+                    - 237.0
+                    point_2:
+                    - 169.375
+                    - 245.0
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - LineSVG:
+                    point_1:
+                    - 107.625
+                    - 5.0
+                    point_2:
+                    - 107.625
+                    - 13.0
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - LineSVG:
+                    point_1:
+                    - 107.625
+                    - 237.0
+                    point_2:
+                    - 107.625
+                    - 245.0
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - LineSVG:
+                    point_1:
+                    - 200.25
+                    - 5.0
+                    point_2:
+                    - 200.25
+                    - 13.0
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - LineSVG:
+                    point_1:
+                    - 200.25
+                    - 237.0
+                    point_2:
+                    - 200.25
+                    - 245.0
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - LineSVG:
+                    point_1:
+                    - 76.75
+                    - 5.0
+                    point_2:
+                    - 76.75
+                    - 13.0
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - LineSVG:
+                    point_1:
+                    - 76.75
+                    - 237.0
+                    point_2:
+                    - 76.75
+                    - 245.0
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - LineSVG:
+                    point_1:
+                    - 231.125
+                    - 5.0
+                    point_2:
+                    - 231.125
+                    - 13.0
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - LineSVG:
+                    point_1:
+                    - 231.125
+                    - 237.0
+                    point_2:
+                    - 231.125
+                    - 245.0
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - LineSVG:
+                    point_1:
+                    - 45.875
+                    - 5.0
+                    point_2:
+                    - 45.875
+                    - 13.0
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - LineSVG:
+                    point_1:
+                    - 45.875
+                    - 237.0
+                    point_2:
+                    - 45.875
+                    - 245.0
+                    style:
+                      DrawingStyle:
+                        fill: none
+                        fill_opacity: 1.0
+                        name: Default
+                        stroke: '#000000'
+                        stroke_opacity: 1.0
+                        stroke_width: 0.4
+                - TextSVG:
+                    position:
+                    - 246.562
+                    - 11.875
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: '1'
+                - TextSVG:
+                    position:
+                    - 246.562
+                    - 243.875
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: '1'
+                - TextSVG:
+                    position:
+                    - 215.688
+                    - 11.875
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: '2'
+                - TextSVG:
+                    position:
+                    - 215.688
+                    - 243.875
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: '2'
+                - TextSVG:
+                    position:
+                    - 184.812
+                    - 11.875
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: '3'
+                - TextSVG:
+                    position:
+                    - 184.812
+                    - 243.875
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: '3'
+                - TextSVG:
+                    position:
+                    - 153.938
+                    - 11.875
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: '4'
+                - TextSVG:
+                    position:
+                    - 153.938
+                    - 243.875
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: '4'
+                - TextSVG:
+                    position:
+                    - 123.062
+                    - 11.875
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: '5'
+                - TextSVG:
+                    position:
+                    - 123.062
+                    - 243.875
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: '5'
+                - TextSVG:
+                    position:
+                    - 92.188
+                    - 11.875
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: '6'
+                - TextSVG:
+                    position:
+                    - 92.188
+                    - 243.875
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: '6'
+                - TextSVG:
+                    position:
+                    - 61.312
+                    - 11.875
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: '7'
+                - TextSVG:
+                    position:
+                    - 61.312
+                    - 243.875
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: '7'
+                - TextSVG:
+                    position:
+                    - 30.438
+                    - 11.875
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: '8'
+                - TextSVG:
+                    position:
+                    - 30.438
+                    - 243.875
+                    style:
+                      TextStyle:
+                        color: '#000000'
+                        font:
+                          Font:
+                            custom_font_paths: *id001
+                            family: Arial
+                            size: 6.0
+                            stretch: normal
+                            style: normal
+                            variant: normal
+                            weight: bold
+                        line_spacing: 1.0
+                        name: ArialBlack
+                        subscript: false
+                        superscript: false
+                        text_align: center
+                    text: '8'
+                group_label: Zoning
+            group_collision_settings:
+              Zoning:
+                allow_collision: true
+                strict: false
+            layer_name: zoning
+            model: false

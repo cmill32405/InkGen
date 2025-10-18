@@ -1,0 +1,10 @@
+{
+    "python.testing.pytestArgs": [
+        "-vv",
+        "--cov=InkGen",
+        "--cov-report=html",
+        "tests"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true
+}
