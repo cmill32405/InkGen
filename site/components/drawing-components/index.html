@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="light">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        
+        
+        <link rel="shortcut icon" href="../../img/favicon.ico">
+        <title>Drawing Components - InkGen Documentation</title>
+        <link href="../../css/bootstrap.min.css" rel="stylesheet">
+        <link href="../../css/fontawesome.min.css" rel="stylesheet">
+        <link href="../../css/brands.min.css" rel="stylesheet">
+        <link href="../../css/solid.min.css" rel="stylesheet">
+        <link href="../../css/v4-font-face.min.css" rel="stylesheet">
+        <link href="../../css/base.css" rel="stylesheet">
+        <link id="hljs-light" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" >
+        <link id="hljs-dark" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github-dark.min.css" disabled>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+        <script>hljs.highlightAll();</script> 
+    </head>
+
+    <body>
+        <div class="navbar fixed-top navbar-expand-lg navbar-dark bg-primary">
+            <div class="container">
+                <a class="navbar-brand" href="../..">InkGen Documentation</a>
+                <!-- Expander button -->
+                <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar-collapse" aria-controls="navbar-collapse" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+
+                <!-- Expanded navigation -->
+                <div id="navbar-collapse" class="navbar-collapse collapse">
+                        <!-- Main navigation -->
+                        <ul class="nav navbar-nav">
+                            <li class="nav-item">
+                                <a href="../.." class="nav-link">Overview</a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="../../getting-started/" class="nav-link">Getting Started</a>
+                            </li>
+                            <li class="nav-item dropdown">
+                                <a href="#" class="nav-link dropdown-toggle active" aria-current="page" role="button" data-bs-toggle="dropdown"  aria-expanded="false">Components</a>
+                                <ul class="dropdown-menu">
+                                    
+<li>
+    <a href="./" class="dropdown-item active" aria-current="page">Drawing Components</a>
+</li>
+                                    
+<li>
+    <a href="../document-structure/" class="dropdown-item">Document Structure</a>
+</li>
+                                </ul>
+                            </li>
+                            <li class="nav-item">
+                                <a href="../../text-and-layout/" class="nav-link">Text & Layout</a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="../../examples/" class="nav-link">Examples</a>
+                            </li>
+                            <li class="nav-item dropdown">
+                                <a href="#" class="nav-link dropdown-toggle" role="button" data-bs-toggle="dropdown"  aria-expanded="false">Notes</a>
+                                <ul class="dropdown-menu">
+                                    
+<li>
+    <a href="../../contributing/" class="dropdown-item">Contributing</a>
+</li>
+                                    
+<li>
+    <a href="../../mask_alignment_findings/" class="dropdown-item">Mask Alignment Findings</a>
+</li>
+                                </ul>
+                            </li>
+                            <li class="nav-item">
+                                <a href="../../api-reference/" class="nav-link">API Reference</a>
+                            </li>
+                        </ul>
+
+                    <ul class="nav navbar-nav ms-md-auto">
+                        <li class="nav-item">
+                            <a href="#" class="nav-link" data-bs-toggle="modal" data-bs-target="#mkdocs_search_modal">
+                                <i class="fa fa-search"></i> Search
+                            </a>
+                        </li>
+                            <li class="nav-item">
+                                <a rel="prev" href="../../getting-started/" class="nav-link">
+                                    <i class="fa fa-arrow-left"></i> Previous
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a rel="next" href="../document-structure/" class="nav-link">
+                                    Next <i class="fa fa-arrow-right"></i>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="https://github.com/<your-org>/InkGen" class="nav-link"><i class="fa-brands fa-github"></i> GitHub</a>
+                            </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="row">
+                    <div class="col-md-3"><div class="navbar-expand-md bs-sidebar hidden-print affix" role="complementary">
+    <div class="navbar-header">
+        <button type="button" class="navbar-toggler collapsed" data-bs-toggle="collapse" data-bs-target="#toc-collapse" title="Table of Contents">
+            <span class="fa fa-angle-down"></span>
+        </button>
+    </div>
+
+    
+    <div id="toc-collapse" class="navbar-collapse collapse card bg-body-tertiary">
+        <ul class="nav flex-column">
+            
+            <li class="nav-item" data-bs-level="1"><a href="#drawing-components" class="nav-link">Drawing Components</a>
+              <ul class="nav flex-column">
+            <li class="nav-item" data-bs-level="2"><a href="#core-hierarchy" class="nav-link">Core Hierarchy</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-bs-level="2"><a href="#serialization" class="nav-link">Serialization</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-bs-level="2"><a href="#component-groups" class="nav-link">Component Groups</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+              </ul>
+            </li>
+        </ul>
+    </div>
+</div></div>
+                    <div class="col-md-9" role="main">
+
+<h1 id="drawing-components">Drawing Components<a class="headerlink" href="#drawing-components" title="Permanent link">&para;</a></h1>
+<p>Drawing components are the foundational primitives of InkGen. Each component encapsulates geometric data, styling information, and SVG generation logic. Components derive from the core classes defined in <code>src/InkGen/component.py</code>.</p>
+<h2 id="core-hierarchy">Core Hierarchy<a class="headerlink" href="#core-hierarchy" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Class</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Component</code></td>
+<td>Base class providing unique identifiers and serialization helpers.</td>
+</tr>
+<tr>
+<td><code>DrawingComponent</code></td>
+<td>Extends <code>Component</code> with drawing-specific style information.</td>
+</tr>
+<tr>
+<td><code>StandardDrawingComponent</code></td>
+<td>Adds rectangular, two-point geometry (e.g., rectangles, arcs).</td>
+</tr>
+<tr>
+<td><code>SingleDimensionDrawingComponent</code></td>
+<td>Models a position and size instead of two points.</td>
+</tr>
+<tr>
+<td><code>PolygonalDrawingComponent</code></td>
+<td>Handles arbitrary polygon coordinate sets.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="rectangles-and-lines">Rectangles and Lines<a class="headerlink" href="#rectangles-and-lines" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">InkGen.style</span><span class="w"> </span><span class="kn">import</span> <span class="n">DrawingStyle</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">InkGen.svg_generator</span><span class="w"> </span><span class="kn">import</span> <span class="n">RectangleSVG</span><span class="p">,</span> <span class="n">LineSVG</span>
+
+<span class="n">style</span> <span class="o">=</span> <span class="n">DrawingStyle</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;Outline&quot;</span><span class="p">,</span> <span class="n">stroke</span><span class="o">=</span><span class="s2">&quot;#000&quot;</span><span class="p">,</span> <span class="n">stroke_width</span><span class="o">=</span><span class="mf">0.4</span><span class="p">,</span> <span class="n">fill</span><span class="o">=</span><span class="s2">&quot;none&quot;</span><span class="p">)</span>
+<span class="n">rect</span> <span class="o">=</span> <span class="n">RectangleSVG</span><span class="p">(</span><span class="n">position</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">),</span> <span class="n">width</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">height</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">corner_radii</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="n">style</span><span class="p">)</span>
+<span class="n">line</span> <span class="o">=</span> <span class="n">LineSVG</span><span class="p">(</span><span class="n">point_1</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">60</span><span class="p">),</span> <span class="n">point_2</span><span class="o">=</span><span class="p">(</span><span class="mi">110</span><span class="p">,</span> <span class="mi">60</span><span class="p">),</span> <span class="n">style</span><span class="o">=</span><span class="n">style</span><span class="p">)</span>
+
+<span class="n">svg_snippets</span> <span class="o">=</span> <span class="p">[</span><span class="n">rect</span><span class="o">.</span><span class="n">generate_svg</span><span class="p">(),</span> <span class="n">line</span><span class="o">.</span><span class="n">generate_svg</span><span class="p">()]</span>
+</code></pre></div>
+
+<h3 id="polygons">Polygons<a class="headerlink" href="#polygons" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">InkGen.svg_generator</span><span class="w"> </span><span class="kn">import</span> <span class="n">PolygonalSVG</span><span class="p">,</span> <span class="n">RegularPolygonSVG</span>
+
+<span class="n">poly_style</span> <span class="o">=</span> <span class="n">DrawingStyle</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;Poly&quot;</span><span class="p">,</span> <span class="n">stroke</span><span class="o">=</span><span class="s2">&quot;#0057B8&quot;</span><span class="p">,</span> <span class="n">fill</span><span class="o">=</span><span class="s2">&quot;#CCE5FF&quot;</span><span class="p">)</span>
+<span class="n">irregular</span> <span class="o">=</span> <span class="n">PolygonalSVG</span><span class="p">([(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="p">(</span><span class="mi">60</span><span class="p">,</span> <span class="mi">10</span><span class="p">),</span> <span class="p">(</span><span class="mi">40</span><span class="p">,</span> <span class="mi">40</span><span class="p">),</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">25</span><span class="p">)],</span> <span class="n">poly_style</span><span class="p">)</span>
+<span class="n">regular</span> <span class="o">=</span> <span class="n">RegularPolygonSVG</span><span class="p">(</span><span class="n">position</span><span class="o">=</span><span class="p">(</span><span class="mi">80</span><span class="p">,</span> <span class="mi">30</span><span class="p">),</span> <span class="n">sides</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span> <span class="n">radius</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="n">poly_style</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="paths-and-beziers">Paths and Beziers<a class="headerlink" href="#paths-and-beziers" title="Permanent link">&para;</a></h3>
+<p>For custom shapes use <code>PathSVG</code> with <code>PathCommand</code> instances or Bezier-specific classes.</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">InkGen.component</span><span class="w"> </span><span class="kn">import</span> <span class="n">PathCommand</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">InkGen.svg_generator</span><span class="w"> </span><span class="kn">import</span> <span class="n">PathSVG</span>
+
+<span class="n">commands</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="n">PathCommand</span><span class="p">(</span><span class="s2">&quot;M&quot;</span><span class="p">,</span> <span class="p">[(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)]),</span>
+    <span class="n">PathCommand</span><span class="p">(</span><span class="s2">&quot;L&quot;</span><span class="p">,</span> <span class="p">[(</span><span class="mf">40.0</span><span class="p">,</span> <span class="mf">10.0</span><span class="p">),</span> <span class="p">(</span><span class="mf">60.0</span><span class="p">,</span> <span class="mf">40.0</span><span class="p">)]),</span>
+    <span class="n">PathCommand</span><span class="p">(</span><span class="s2">&quot;Z&quot;</span><span class="p">,</span> <span class="p">[]),</span>
+<span class="p">]</span>
+<span class="n">path</span> <span class="o">=</span> <span class="n">PathSVG</span><span class="p">(</span><span class="n">style</span><span class="o">=</span><span class="n">style</span><span class="p">,</span> <span class="n">commands</span><span class="o">=</span><span class="n">commands</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="text-and-tables">Text and Tables<a class="headerlink" href="#text-and-tables" title="Permanent link">&para;</a></h3>
+<p>Text components require a <code>TextStyle</code> and are covered in detail in <a href="../../text-and-layout/">Text &amp; Layout</a>.</p>
+<p>Table composition is provided by classes in <code>src/InkGen/table.py</code>. Tables are converted to SVG with <code>TableSVG</code>.</p>
+<h2 id="serialization">Serialization<a class="headerlink" href="#serialization" title="Permanent link">&para;</a></h2>
+<p>Every component exposes a <code>parameters</code> property and <code>create_from_dict</code> constructor. This allows you to persist and reload components:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">params</span> <span class="o">=</span> <span class="n">rect</span><span class="o">.</span><span class="n">parameters</span>
+<span class="n">restored</span> <span class="o">=</span> <span class="n">RectangleSVG</span><span class="o">.</span><span class="n">create_from_dict</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">restored</span><span class="o">.</span><span class="n">parameters</span> <span class="o">==</span> <span class="n">params</span>
+</code></pre></div>
+
+<h2 id="component-groups">Component Groups<a class="headerlink" href="#component-groups" title="Permanent link">&para;</a></h2>
+<p>Components are usually assembled into <code>ComponentGroupSVG</code> objects, which carry metadata for labels, masks, and annotations. Groups support serialization and enforce canvas boundaries when added to layers.</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">InkGen.svg_generator</span><span class="w"> </span><span class="kn">import</span> <span class="n">ComponentGroupSVG</span>
+
+<span class="n">group</span> <span class="o">=</span> <span class="n">ComponentGroupSVG</span><span class="p">(</span><span class="s2">&quot;BaseAssembly&quot;</span><span class="p">)</span>
+<span class="n">group</span><span class="o">.</span><span class="n">add_component</span><span class="p">(</span><span class="n">rect</span><span class="p">)</span>
+<span class="n">group</span><span class="o">.</span><span class="n">add_component</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Continue with <a href="../document-structure/">Document Structure</a> to see how components are organised into layers and documents.</p></div>
+            </div>
+        </div>
+
+        <footer class="col-md-12">
+            <hr>
+            <p>Documentation built with <a href="https://www.mkdocs.org/">MkDocs</a>.</p>
+        </footer>
+        <script src="../../js/bootstrap.bundle.min.js"></script>
+        <script>
+            var base_url = "../..",
+                shortcuts = {"help": 191, "next": 78, "previous": 80, "search": 83};
+        </script>
+        <script src="../../js/base.js"></script>
+        <script src="../../search/main.js"></script>
+
+        <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="searchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="searchModalLabel">Search</h4>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>From here you can search these documents. Enter your search terms below.</p>
+                <form>
+                    <div class="form-group">
+                        <input type="search" class="form-control" placeholder="Search..." id="mkdocs-search-query" title="Type search term here">
+                    </div>
+                </form>
+                <div id="mkdocs-search-results" data-no-results-text="No results found"></div>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div><div class="modal" id="mkdocs_keyboard_modal" tabindex="-1" role="dialog" aria-labelledby="keyboardModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="keyboardModalLabel">Keyboard Shortcuts</h4>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 20%;">Keys</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="help shortcut"><kbd>?</kbd></td>
+                    <td>Open this help</td>
+                  </tr>
+                  <tr>
+                    <td class="next shortcut"><kbd>n</kbd></td>
+                    <td>Next page</td>
+                  </tr>
+                  <tr>
+                    <td class="prev shortcut"><kbd>p</kbd></td>
+                    <td>Previous page</td>
+                  </tr>
+                  <tr>
+                    <td class="search shortcut"><kbd>s</kbd></td>
+                    <td>Search</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div>
+
+    </body>
+</html>

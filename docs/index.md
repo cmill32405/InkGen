@@ -29,4 +29,4 @@ InkGen is an evolving project. If you run into issues or have questions:
 - Start a discussion about feature ideas or architectural questions.
 - Submit pull requests – contributions are welcome and appreciated.
 
-Before contributing, please review the [contributing guidelines](../CONTRIBUTING.md).
+Before contributing, please review the [contributing guidelines](contributing.md).

@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="light">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        
+        
+        <link rel="shortcut icon" href="../img/favicon.ico">
+        <title>API Reference - InkGen Documentation</title>
+        <link href="../css/bootstrap.min.css" rel="stylesheet">
+        <link href="../css/fontawesome.min.css" rel="stylesheet">
+        <link href="../css/brands.min.css" rel="stylesheet">
+        <link href="../css/solid.min.css" rel="stylesheet">
+        <link href="../css/v4-font-face.min.css" rel="stylesheet">
+        <link href="../css/base.css" rel="stylesheet">
+        <link id="hljs-light" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" >
+        <link id="hljs-dark" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github-dark.min.css" disabled>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+        <script>hljs.highlightAll();</script> 
+    </head>
+
+    <body>
+        <div class="navbar fixed-top navbar-expand-lg navbar-dark bg-primary">
+            <div class="container">
+                <a class="navbar-brand" href="..">InkGen Documentation</a>
+                <!-- Expander button -->
+                <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar-collapse" aria-controls="navbar-collapse" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+
+                <!-- Expanded navigation -->
+                <div id="navbar-collapse" class="navbar-collapse collapse">
+                        <!-- Main navigation -->
+                        <ul class="nav navbar-nav">
+                            <li class="nav-item">
+                                <a href=".." class="nav-link">Overview</a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="../getting-started/" class="nav-link">Getting Started</a>
+                            </li>
+                            <li class="nav-item dropdown">
+                                <a href="#" class="nav-link dropdown-toggle" role="button" data-bs-toggle="dropdown"  aria-expanded="false">Components</a>
+                                <ul class="dropdown-menu">
+                                    
+<li>
+    <a href="../components/drawing-components/" class="dropdown-item">Drawing Components</a>
+</li>
+                                    
+<li>
+    <a href="../components/document-structure/" class="dropdown-item">Document Structure</a>
+</li>
+                                </ul>
+                            </li>
+                            <li class="nav-item">
+                                <a href="../text-and-layout/" class="nav-link">Text & Layout</a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="../examples/" class="nav-link">Examples</a>
+                            </li>
+                            <li class="nav-item dropdown">
+                                <a href="#" class="nav-link dropdown-toggle" role="button" data-bs-toggle="dropdown"  aria-expanded="false">Notes</a>
+                                <ul class="dropdown-menu">
+                                    
+<li>
+    <a href="../contributing/" class="dropdown-item">Contributing</a>
+</li>
+                                    
+<li>
+    <a href="../mask_alignment_findings/" class="dropdown-item">Mask Alignment Findings</a>
+</li>
+                                </ul>
+                            </li>
+                            <li class="nav-item">
+                                <a href="./" class="nav-link active" aria-current="page">API Reference</a>
+                            </li>
+                        </ul>
+
+                    <ul class="nav navbar-nav ms-md-auto">
+                        <li class="nav-item">
+                            <a href="#" class="nav-link" data-bs-toggle="modal" data-bs-target="#mkdocs_search_modal">
+                                <i class="fa fa-search"></i> Search
+                            </a>
+                        </li>
+                            <li class="nav-item">
+                                <a rel="prev" href="../mask_alignment_findings/" class="nav-link">
+                                    <i class="fa fa-arrow-left"></i> Previous
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a rel="next" class="nav-link disabled">
+                                    Next <i class="fa fa-arrow-right"></i>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="https://github.com/<your-org>/InkGen" class="nav-link"><i class="fa-brands fa-github"></i> GitHub</a>
+                            </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="row">
+                    <div class="col-md-3"><div class="navbar-expand-md bs-sidebar hidden-print affix" role="complementary">
+    <div class="navbar-header">
+        <button type="button" class="navbar-toggler collapsed" data-bs-toggle="collapse" data-bs-target="#toc-collapse" title="Table of Contents">
+            <span class="fa fa-angle-down"></span>
+        </button>
+    </div>
+
+    
+    <div id="toc-collapse" class="navbar-collapse collapse card bg-body-tertiary">
+        <ul class="nav flex-column">
+            
+            <li class="nav-item" data-bs-level="1"><a href="#api-reference" class="nav-link">API Reference</a>
+              <ul class="nav flex-column">
+            <li class="nav-item" data-bs-level="2"><a href="#boundary-inkgenboundary" class="nav-link">Boundary (InkGen.boundary)</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-bs-level="2"><a href="#components-inkgencomponent" class="nav-link">Components (InkGen.component)</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-bs-level="2"><a href="#document-inkgendocument" class="nav-link">Document (InkGen.document)</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-bs-level="2"><a href="#svg-generator-inkgensvg_generator" class="nav-link">SVG Generator (InkGen.svg_generator)</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-bs-level="2"><a href="#tables-inkgentable" class="nav-link">Tables (InkGen.table)</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-bs-level="2"><a href="#styling-inkgenstyle" class="nav-link">Styling (InkGen.style)</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-bs-level="2"><a href="#text-fitting-inkgentext_fitter-inkgentext_outline" class="nav-link">Text Fitting (InkGen.text_fitter, InkGen.text_outline)</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-bs-level="2"><a href="#cad-component-groups-inkgencad_component_groups" class="nav-link">CAD Component Groups (InkGen.cad_component_groups)</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-bs-level="2"><a href="#utilities-inkgensvg_utils" class="nav-link">Utilities (InkGen.svg_utils)</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+              </ul>
+            </li>
+        </ul>
+    </div>
+</div></div>
+                    <div class="col-md-9" role="main">
+
+<h1 id="api-reference">API Reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h1>
+<p>This section provides a high-level index of the primary modules and classes exposed by InkGen. For detailed signatures consult the source files under <code>src/InkGen/</code> or generated API docs when available.</p>
+<h2 id="boundary-inkgenboundary">Boundary (<code>InkGen.boundary</code>)<a class="headerlink" href="#boundary-inkgenboundary" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>Boundary</code>: Base class representing convex hull boundaries.</li>
+<li><code>Canvas</code>: Specialised boundary used as the drawing surface.</li>
+</ul>
+<h2 id="components-inkgencomponent">Components (<code>InkGen.component</code>)<a class="headerlink" href="#components-inkgencomponent" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>Component</code>: Base class with identifiers and serialization.</li>
+<li><code>DrawingComponent</code> and subclasses (<code>StandardDrawingComponent</code>, <code>SingleDimensionDrawingComponent</code>, <code>PolygonalDrawingComponent</code>, etc.).</li>
+<li>Geometry-specific classes such as <code>Arc</code>, <code>QuadraticBezier</code>, <code>CubicBezier</code>, <code>Path</code>.</li>
+<li><code>ComponentGroup</code>: Collection of components with shared metadata.</li>
+</ul>
+<h2 id="document-inkgendocument">Document (<code>InkGen.document</code>)<a class="headerlink" href="#document-inkgendocument" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>Layer</code>: Container for component groups.</li>
+<li><code>Layers</code>: Layer stack with convenience helpers.</li>
+<li><code>Document</code>: Multi-page document abstraction.</li>
+</ul>
+<h2 id="svg-generator-inkgensvg_generator">SVG Generator (<code>InkGen.svg_generator</code>)<a class="headerlink" href="#svg-generator-inkgensvg_generator" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>RectangleSVG</code>, <code>LineSVG</code>, <code>PolygonalSVG</code>, <code>RegularPolygonSVG</code>, <code>CircleSVG</code>, <code>PathSVG</code>, <code>TextSVG</code>.</li>
+<li><code>ComponentGroupSVG</code>, <code>TableSVG</code>, <code>DocumentSVG</code>.</li>
+<li><code>IncludeLayer</code>: Enum controlling which layers are exported.</li>
+</ul>
+<h2 id="tables-inkgentable">Tables (<code>InkGen.table</code>)<a class="headerlink" href="#tables-inkgentable" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>Table</code>, <code>Row</code>, <code>Column</code>, <code>Cell</code>.</li>
+<li><code>AutoFitRule</code>: Column and row sizing strategies.</li>
+</ul>
+<h2 id="styling-inkgenstyle">Styling (<code>InkGen.style</code>)<a class="headerlink" href="#styling-inkgenstyle" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>Style</code>: Base style class.</li>
+<li><code>DrawingStyle</code>, <code>TextStyle</code>, <code>Font</code>.</li>
+</ul>
+<h2 id="text-fitting-inkgentext_fitter-inkgentext_outline">Text Fitting (<code>InkGen.text_fitter</code>, <code>InkGen.text_outline</code>)<a class="headerlink" href="#text-fitting-inkgentext_fitter-inkgentext_outline" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>TextBlock</code>, <code>TextFitter</code>, <code>FittingResult</code>.</li>
+<li>Helper functions for outlining text (<code>outline_for_text</code>, <code>sample_path_points</code>).</li>
+</ul>
+<h2 id="cad-component-groups-inkgencad_component_groups">CAD Component Groups (<code>InkGen.cad_component_groups</code>)<a class="headerlink" href="#cad-component-groups-inkgencad_component_groups" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>Zoning</code>: Grid layout utility for engineering drawings.</li>
+</ul>
+<h2 id="utilities-inkgensvg_utils">Utilities (<code>InkGen.svg_utils</code>)<a class="headerlink" href="#utilities-inkgensvg_utils" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>FlattenedPath</code>: Dataclass representing flattened path results.</li>
+<li><code>flatten_svg()</code>: Converts SVG files into flattened path data.</li>
+</ul>
+<hr />
+<p>To contribute more detailed function-level documentation:</p>
+<ol>
+<li>Add docstrings to the relevant modules.</li>
+<li>Expand this reference with code examples and parameter tables.</li>
+<li>(Optional) Configure MkDocs auto-documentation via <code>mkdocstrings</code>.</li>
+</ol></div>
+            </div>
+        </div>
+
+        <footer class="col-md-12">
+            <hr>
+            <p>Documentation built with <a href="https://www.mkdocs.org/">MkDocs</a>.</p>
+        </footer>
+        <script src="../js/bootstrap.bundle.min.js"></script>
+        <script>
+            var base_url = "..",
+                shortcuts = {"help": 191, "next": 78, "previous": 80, "search": 83};
+        </script>
+        <script src="../js/base.js"></script>
+        <script src="../search/main.js"></script>
+
+        <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="searchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="searchModalLabel">Search</h4>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>From here you can search these documents. Enter your search terms below.</p>
+                <form>
+                    <div class="form-group">
+                        <input type="search" class="form-control" placeholder="Search..." id="mkdocs-search-query" title="Type search term here">
+                    </div>
+                </form>
+                <div id="mkdocs-search-results" data-no-results-text="No results found"></div>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div><div class="modal" id="mkdocs_keyboard_modal" tabindex="-1" role="dialog" aria-labelledby="keyboardModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="keyboardModalLabel">Keyboard Shortcuts</h4>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 20%;">Keys</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="help shortcut"><kbd>?</kbd></td>
+                    <td>Open this help</td>
+                  </tr>
+                  <tr>
+                    <td class="next shortcut"><kbd>n</kbd></td>
+                    <td>Next page</td>
+                  </tr>
+                  <tr>
+                    <td class="prev shortcut"><kbd>p</kbd></td>
+                    <td>Previous page</td>
+                  </tr>
+                  <tr>
+                    <td class="search shortcut"><kbd>s</kbd></td>
+                    <td>Search</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div>
+
+    </body>
+</html>

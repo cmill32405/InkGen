@@ -68,4 +68,4 @@ Once you have a working environment, continue with:
 - [Text & Layout](text-and-layout.md) for details on text fitting, zoning, and table composition.
 - [Examples](examples.md) for cookbook-style guides that expand on the repository scripts.
 
-If you plan to contribute, please read the [Contributing Guide](../CONTRIBUTING.md) and follow the coding standards described there.
+If you plan to contribute, please read the [Contributing Guide](contributing.md) and follow the coding standards described there.
