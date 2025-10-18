@@ -3,7 +3,6 @@ import pytest
 from InkGen.boundary import Boundary, Canvas
 from InkGen.errors import IllegalArgumentError, InvalidConvexHull
 
-
 ##### Test Boundary Class ########
 
 def test_create_boundary_object():
@@ -18,15 +17,15 @@ def test_create_boundary_object_with_inner_boundary():
 
 def test_create_boundary_raises_invalid_convex_hull():
     with pytest.raises(InvalidConvexHull):
-        boundary = Boundary([(0.0, 0.0), (1, 0), (0.5, 0.5), (0, 1), (1,1)])
+        Boundary([(0.0, 0.0), (1, 0), (0.5, 0.5), (0, 1), (1, 1)])
 
 def test_create_boundary_raises_invalid_argument():
     with pytest.raises(InvalidConvexHull):
-        boundary = Boundary([("0.0", 0.0), (1, 0), (0.5, 0.5), (0, 1), (1,1)], False)
+        Boundary([("0.0", 0.0), (1, 0), (0.5, 0.5), (0, 1), (1, 1)], False)
 
 def test_create_boundary_raises_invalid_type():
     with pytest.raises(TypeError):
-        boundary = Boundary([(0.0, 0.0), (1, 0), (0.5, 0.5), (0, 1), (1,1)], "False")
+        Boundary([(0.0, 0.0), (1, 0), (0.5, 0.5), (0, 1), (1, 1)], "False")
 
 def test_boundary_check_clear():
     boundary = Boundary([(0.0, 0.0), (270, 0), (270,650),(0, 650)], True)
@@ -90,15 +89,15 @@ def test_create_canvas_object_with_imperial_units():
 
 def test_create_canvas_raises_type_error_width():
     with pytest.raises(TypeError):
-        canvas = Canvas("200", 300, "mm")
+        Canvas("200", 300, "mm")
 
 def test_create_canvas_raises_type_error_height():
     with pytest.raises(TypeError):
-        canvas = Canvas(200, "300", "mm")
+        Canvas(200, "300", "mm")
 
 def test_create_canvas_raises_value_error_unit():
     with pytest.raises(IllegalArgumentError):
-        canvas = Canvas(200, 300, "milli")
+        Canvas(200, 300, "milli")
 
 def test_save_and_recreate_canvas_object():
     canvas = Canvas(200, 300, "mm")

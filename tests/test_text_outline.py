@@ -2,10 +2,10 @@ import pytest
 
 from InkGen import text_outline
 from InkGen.text_outline import (
-    set_add_one_pixel_margin_default,
-    sample_path_points,
-    outline_for_text,
     _px_to_units,
+    outline_for_text,
+    sample_path_points,
+    set_add_one_pixel_margin_default,
 )
 
 FONT_PATH = "C:/Windows/Fonts/arial.ttf"

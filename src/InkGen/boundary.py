@@ -1,8 +1,9 @@
-""" Classes for defining and check boundaries such as the size of a sheet.
+"""Classes for defining and checking boundaries such as the size of a sheet."""
 
-"""
-from typing import Union, List, Tuple
-from shapely import Polygon, MultiPoint, get_coordinates
+from __future__ import annotations
+
+from shapely import MultiPoint, Polygon, get_coordinates
+
 from InkGen.errors import IllegalArgumentError, InvalidConvexHull
 
 
@@ -11,7 +12,7 @@ class Boundary:
         Class for storing boundary information for constraining component points.
     """
 
-    def __init__(self, hull: List[Tuple[float, float]], outer_boundary: bool = False) -> None:
+    def __init__(self, hull: list[tuple[float, float]], outer_boundary: bool = False) -> None:
         """Create a boundary wrapper around a convex hull."""
         """Create a boundary wrapper around a convex hull."""
         self._outer = outer_boundary
@@ -60,12 +61,12 @@ class Boundary:
         return True
 
     @property
-    def boundary_points(self) -> List[Tuple[float, float]]:
-        """ Provides access to the hull points as read-only values.
+    def boundary_points(self) -> list[tuple[float, float]]:
+        """Provides access to the hull points as read-only values.
 
         Returns
         -------
-        List[Tuple[float, float]]
+        list[tuple[float, float]]
             List of x, y coordinates for each point of the hull.
         """
         coordinates = []
@@ -75,35 +76,34 @@ class Boundary:
 
     @property
     def boundary_type(self) -> str:
-        """ Provides read-only access to the boundary limits, "outer" to indicate that 
-            outside the hull is off limits and "inner" to
-            indicate that the inside of the hull is offlimits.
+        """Provides read-only access to the boundary limits.
+
+        "outer" indicates that outside the hull is off limits and "inner" that the
+        inside of the hull is off limits.
 
         Returns
         -------
         str
-            Either "outer" or "inner" depending on whether the limit is outside 
+            Either "outer" or "inner" depending on whether the limit is outside
             (outer) the hull or inside (inner).
         """
         if self._outer:
             return "outer"
         return "inner"
 
-    def boundary_check(self, points: List[Tuple[float, float]], strict: bool = False) -> bool:
-        """ Verifies that the points provided do not exist inside/outside the boundary.  If 
-        no_touch is true also verified there is no intersection (points on the line)
+    def boundary_check(self, points: list[tuple[float, float]], strict: bool = False) -> bool:
+        """Verify that the provided points respect the boundary constraints.
 
         Args:
-            points (List[Tuple[float, float]]): List of coordinates to check against the boundary
-            no_touch (bool, optional): If false points on the boundary line are acceptable. 
-                                        Defaults to False.
+            points: Coordinates to check against the boundary.
+            strict: If False, points on the boundary line are acceptable.
 
         Returns:
             bool: True if there is no interference between the points provided and the boundary.
         """
 
-        points = MultiPoint(points)
-        polygon = Polygon(get_coordinates(points.convex_hull))
+        points_geometry = MultiPoint(points)
+        polygon = Polygon(get_coordinates(points_geometry.convex_hull))
         if self._outer:
             if strict:
                 return polygon.contains_properly(self._boundary_polygon.convex_hull)
@@ -111,17 +111,17 @@ class Boundary:
 
         if strict:
             return self._boundary_polygon.convex_hull.contains_properly(polygon)
-        return self._boundary_polygon.convex_hull.contains(points)
+        return self._boundary_polygon.convex_hull.contains(points_geometry)
 
 class Canvas(Boundary):
     """
-        Class for storing information about a drawing space including the 
+        Class for storing information about a drawing space including the
         dimensions and units of the space.
     """
 
     def __init__(self,
-                 canvas_width: Union[float, int],
-                 canvas_height: Union[float, int],
+                 canvas_width: float | int,
+                 canvas_height: float | int,
                  units: str = "mm") -> None:
         """
             Creates Canvas object to store dimensions and unit of measure for a space.
@@ -142,7 +142,7 @@ class Canvas(Boundary):
         TypeError
             Raises TypeError if the height argument is not a float or int
         IllegalArgumentError
-            Raises a IllegalArgumentError if the units argument is not one of the 
+            Raises a IllegalArgumentError if the units argument is not one of the
             following values: mm, in, metric, imperial, millimeters, inches, millimeter, or inch
         """
 

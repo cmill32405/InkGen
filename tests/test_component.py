@@ -1,14 +1,28 @@
-import pytest
-import numpy as np
-from InkGen.component import Component, DrawingComponent, StandardDrawingComponent
-from InkGen.component import SingleDimensionDrawingComponent, WidthHeightDrawingComponent
-from InkGen.component import PolarCoordinateDrawingComponent, PolygonalDrawingComponent
-from InkGen.component import ComponentGroup, RegularPolygonDrawingComponent
-from InkGen.component import PathCommand, Arc, QuadraticBezier, CubicBezier, Path
-from InkGen.component import TextComponent
-from InkGen.style import DrawingStyle, TextStyle, Font, Style
-from InkGen.errors import InvalidPolygonError, InvalidComponentID
 import random
+
+import numpy as np
+import pytest
+
+from InkGen.component import (
+    Arc,
+    Component,
+    ComponentGroup,
+    CubicBezier,
+    DrawingComponent,
+    Path,
+    PathCommand,
+    PolarCoordinateDrawingComponent,
+    PolygonalDrawingComponent,
+    QuadraticBezier,
+    RegularPolygonDrawingComponent,
+    SingleDimensionDrawingComponent,
+    StandardDrawingComponent,
+    TextComponent,
+    WidthHeightDrawingComponent,
+)
+from InkGen.errors import InvalidComponentID, InvalidPolygonError
+from InkGen.style import DrawingStyle, Font, TextStyle
+
 
 @pytest.fixture
 def next_comp_id():
@@ -37,7 +51,13 @@ def test_cant_set_id_or_type(next_comp_id):
 # Test Drawing Component and Standard Drawing Component
 @pytest.fixture
 def style_obj():
-    style = DrawingStyle(name="default"+str(random.randint(0, 99999)), stroke = "#000000", stroke_width = 0.2, fill = "none", stroke_opacity=1.0)
+    style = DrawingStyle(
+        name=f"default{random.randint(0, 99999)}",
+        stroke="#000000",
+        stroke_width=0.2,
+        fill="none",
+        stroke_opacity=1.0,
+    )
     return style
 
 def test_drawing_component_creation(style_obj, next_comp_id):
@@ -48,7 +68,13 @@ def test_drawing_component_creation(style_obj, next_comp_id):
 
 def test_update_style_in_drawing_component(style_obj):
     dr_comp = DrawingComponent(style_obj)
-    new_style = DrawingStyle(name="Alternative", stroke = "#000001", stroke_width = 0.5, fill = "#ffffff", stroke_opacity=0.9)
+    new_style = DrawingStyle(
+        name="Alternative",
+        stroke="#000001",
+        stroke_width=0.5,
+        fill="#ffffff",
+        stroke_opacity=0.9,
+    )
     dr_comp.style = new_style
     assert dr_comp.style.stroke == "#000001"
     dr_comp.style.stroke = "black"
@@ -58,7 +84,7 @@ def test_invalid_style(style_obj):
     dr_comp = DrawingComponent(style_obj)
     assert dr_comp.style.stroke == "#000000"
     with pytest.raises(TypeError):
-        dr_comp1 = DrawingComponent(Component())
+        DrawingComponent(Component())
 
 def test_standard_drawing_component_creation(style_obj, next_comp_id):
     dr_unit = StandardDrawingComponent((1.0, 2.0), (3.0, 4.0), style_obj)
@@ -69,15 +95,15 @@ def test_standard_drawing_component_creation(style_obj, next_comp_id):
 
 def test_standard_drawing_unit_with_neg_pos(style_obj):
     with pytest.raises(ValueError):
-        dr_unit = StandardDrawingComponent((-1, 2.0), (3.0, 4.0), style_obj)
+        StandardDrawingComponent((-1, 2.0), (3.0, 4.0), style_obj)
 
-# Removed this functionality when it became clear that it makes no sense with 
+# Removed this functionality when it became clear that it makes no sense with
 # subclasses needing to be in multiple directions.
 # def test_standard_drawing_unit_with_x1_gt_x2(style_obj):
 #     with pytest.raises(ValueError):
 #         dr_unit = StandardDrawingComponent((5, 2.0), (3.0, 4.0), style_obj)
 
-# Removed this functionality when it became clear that it makes no sense with 
+# Removed this functionality when it became clear that it makes no sense with
 # subclasses needing to be in multiple directions.
 # def test_standard_drawing_unit_with_y1_gt_y2(style_obj):
 #     with pytest.raises(ValueError):
@@ -93,7 +119,7 @@ def test_get_points_after_declaration(style_obj):
     dr_unit.point_2 = (3.5, 4.5)
     assert dr_unit.point_2 == (3.5, 4.5)
 
-# Removed this functionality when it became clear that it makes no sense with 
+# Removed this functionality when it became clear that it makes no sense with
 # subclasses needing to be in multiple directions.
 # def test_invalid_point_change(style_obj):
 #     dr_unit = StandardDrawingComponent((1.0, 2.0), (3.0, 4.0), style_obj)
@@ -230,14 +256,14 @@ def test_create_polygonal_drawing_component(style_obj):
 def test_update_polygonal_drawing_component(style_obj):
      poly = PolygonalDrawingComponent([(10.0, 10.0), (12.0, 7.5), (9.0, 5.0), (7.0, 5.0), (5.0, 7.0)], style_obj)
      assert poly.points == [(10.0, 10.0), (12.0, 7.5), (9.0, 5.0), (7.0, 5.0), (5.0, 7.0)]
-     
+
      poly.points = [(10.0, 10.0), (12.0, 7.5), (9.0, 5.0), (7.0, 5.0), (5.0, 7.5)]
      assert poly.points == [(10.0, 10.0), (12.0, 7.5), (9.0, 5.0), (7.0, 5.0), (5.0, 7.5)]
 
 def test_create_invalid_polygonal_drawing_component(style_obj):
     with pytest.raises(InvalidPolygonError):
         PolygonalDrawingComponent([(10.0, 10.0), (12.0, 7.5)], style_obj)
-    
+
     with pytest.raises(InvalidPolygonError):
         PolygonalDrawingComponent([(10.0, 10.0), (12.0, 7.5), (12.0, 4.5, 2.3)], style_obj)
 
@@ -257,7 +283,7 @@ def test_create_component_group(style_obj, next_comp_grp_id):
 
 def test_invalid_group_label_type(style_obj):
     with pytest.raises(TypeError):
-        comp_group = ComponentGroup(1)
+        ComponentGroup(1)
 
 def test_add_components_to_component_group(style_obj):
     comp_group = ComponentGroup("zoning")
@@ -339,7 +365,7 @@ def test_create_regular_polygon(style_obj):
                                             (1.22514845490862E-15, 20), (17.3205080756888, 10),  (17.3205080756888, -10)]).all()
     reg_poly.radius = 30
     assert reg_poly.radius == 30.0
-    
+
 def test_invalid_inputs(style_obj):
     with pytest.raises(ValueError):
         reg_poly = RegularPolygonDrawingComponent((0.0, 0.0), 2, 20, style_obj, 0, 0)
@@ -383,7 +409,7 @@ def test_text_component(text_style):
                        (176.4765625, 110.4921875),
                        (159.3984375, 109.40625)]
     assert len(text_comp.points) == len(expected_points)
-    for actual, expected in zip(text_comp.points, expected_points):
+    for actual, expected in zip(text_comp.points, expected_points, strict=False):
         assert actual == pytest.approx(expected, rel=1e-6)
     bbox = text_comp.bbox
     assert bbox[0] == pytest.approx((120.484375, 109.40625), rel=1e-6)
@@ -612,16 +638,25 @@ def test_save_and_recreate_component_group_object():
 
     assert group.parameters == group_2.parameters
 
-    print(params)
-
-    params['ComponentGroup']['components'][2]['TextComponent']['style']['TextStyle']['name'] = "new_text_style_8822"
-    params['ComponentGroup']['components'][0]['PolygonalDrawingComponent']['style']['DrawingStyle']['name'] = "new_draw_style_8922"
-    params['ComponentGroup']['components'][1]['RegularPolygonDrawingComponent']['style']['DrawingStyle']['name'] = "new_draw_style_8932"
+    component_entries = params['ComponentGroup']['components']
+    component_entries[2]['TextComponent']['style']['TextStyle']['name'] = "new_text_style_8822"
+    component_entries[0]['PolygonalDrawingComponent']['style']['DrawingStyle']['name'] = "new_draw_style_8922"
+    component_entries[1]['RegularPolygonDrawingComponent']['style']['DrawingStyle']['name'] = "new_draw_style_8932"
 
     group_3 = ComponentGroup.create_from_dict(params)
-    assert group_3.parameters['ComponentGroup']['components'][2]['TextComponent']['style']['TextStyle']['name'] == "new_text_style_8822"
-    assert group_3.parameters['ComponentGroup']['components'][0]['PolygonalDrawingComponent']['style']['DrawingStyle']['name'] == "new_draw_style_8922"
-    assert group_3.parameters['ComponentGroup']['components'][1]['RegularPolygonDrawingComponent']['style']['DrawingStyle']['name'] == "new_draw_style_8932"
+    recreated_components = group_3.parameters['ComponentGroup']['components']
+    assert (
+        recreated_components[2]['TextComponent']['style']['TextStyle']['name']
+        == "new_text_style_8822"
+    )
+    assert (
+        recreated_components[0]['PolygonalDrawingComponent']['style']['DrawingStyle']['name']
+        == "new_draw_style_8922"
+    )
+    assert (
+        recreated_components[1]['RegularPolygonDrawingComponent']['style']['DrawingStyle']['name']
+        == "new_draw_style_8932"
+    )
 
 def test_save_and_recreate_component():
     comp = Component()

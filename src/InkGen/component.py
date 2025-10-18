@@ -2,34 +2,33 @@
     Base Classes for Building Components and Component Groups Describing
     various document items.
 """
-from typing import Union, Tuple, List, Iterator, Optional
-import sys
 import itertools
 import math
-import numpy as np
-from shapely import Point, Polygon, MultiPoint
-from shapely import get_coordinates
-from svgpathtools import parse_path
+import sys
+from collections.abc import Iterator
 from copy import deepcopy
-from PIL import ImageFont
 
-from InkGen.errors import InvalidPolygonError, InvalidComponentID
+import numpy as np
+from shapely import MultiPoint, Point, Polygon, get_coordinates
+from svgpathtools import parse_path
+
+from InkGen.errors import InvalidComponentID, InvalidPolygonError
 from InkGen.style import DrawingStyle, TextStyle
-from InkGen.text_outline import outline_for_text, ADD_ONE_PIXEL_MARGIN_DEFAULT
+from InkGen.text_outline import ADD_ONE_PIXEL_MARGIN_DEFAULT, outline_for_text
 
 PRECISION = 3
 DEFAULT_CURVE_SAMPLES = 32
 
 
-class Component():
+class Component:
     """
-        Base class for creating synthetically generated objects. Includes automatically 
+        Base class for creating synthetically generated objects. Includes automatically
         generated id and component type properties.
     """
     id_iter = itertools.count()
 
     def __init__(self) -> None:
-        """ 
+        """
             Instantiates id and component_type based on class name.
         """
         self._id = next(Component.id_iter)
@@ -92,7 +91,7 @@ class DrawingComponent(Component):
         Component with DrawingStyle information for visualization.
     """
     def __init__(self, style: DrawingStyle) -> None:
-        """ 
+        """
             Instantiates component id, type, and sets DrawingStyle object
 
         Args:
@@ -167,12 +166,12 @@ class DrawingComponent(Component):
 
 
 class StandardDrawingComponent(DrawingComponent):
-    """ 
-        Drawing component with position data for two points defining top 
+    """
+        Drawing component with position data for two points defining top
         left and bottom right corners.
     """
-    def __init__(self, point_1: Tuple[float, float],
-                 point_2: Tuple[float, float],
+    def __init__(self, point_1: tuple[float, float],
+                 point_2: tuple[float, float],
                  style: DrawingStyle) -> None:
         """ Create component with two points and drawing style
 
@@ -256,15 +255,15 @@ class StandardDrawingComponent(DrawingComponent):
             self._y(point_1) < 0 or self._y(point_2) < 0
             ):
             raise ValueError("Points must be greater than zero.")
-        
-        # Removed this functionality when it became clear that it makes no sense with 
+
+        # Removed this functionality when it became clear that it makes no sense with
         # subclasses needing to be in multiple directions.
         # if self._x(point_1) > self._x(point_2) or self._y(point_1) > self._y(point_2):
         #     raise ValueError("The second Point should always be the larger of the two. \
         #                       For example, point_2.x should be greater than point_2.y")
 
     @property
-    def point_1(self) -> Tuple[float, float]:
+    def point_1(self) -> tuple[float, float]:
         """ Property to get the coordinates of the first point.
 
         Returns:
@@ -274,7 +273,7 @@ class StandardDrawingComponent(DrawingComponent):
                 float(round(self._y(self._p1), PRECISION)))
 
     @point_1.setter
-    def point_1(self, point_1: Tuple[float, float]) -> None:
+    def point_1(self, point_1: tuple[float, float]) -> None:
         """ Property setter to change coordinates of first point.
 
         Args:
@@ -285,7 +284,7 @@ class StandardDrawingComponent(DrawingComponent):
         self._p1 = p1
 
     @property
-    def point_2(self) -> Tuple[float, float]:
+    def point_2(self) -> tuple[float, float]:
         """Property to get the coordinates of the second point.
 
         Returns:
@@ -295,7 +294,7 @@ class StandardDrawingComponent(DrawingComponent):
                 float(round(self._y(self._p2), PRECISION)))
 
     @point_2.setter
-    def point_2(self, point_2: Tuple[float, float]) -> None:
+    def point_2(self, point_2: tuple[float, float]) -> None:
         """ Property setter to change coordinates of second point.
 
         Args:
@@ -306,8 +305,8 @@ class StandardDrawingComponent(DrawingComponent):
         self._p2 = p2
 
     @property
-    def points(self) -> List[Tuple[float, float]]:
-        """ 
+    def points(self) -> list[tuple[float, float]]:
+        """
            Exposes full list of points in the drawing component.
 
         Returns:
@@ -316,41 +315,41 @@ class StandardDrawingComponent(DrawingComponent):
         return [self.point_1, self.point_2]
 
     @property
-    def bbox(self) -> List[Tuple[float, float]]:
+    def bbox(self) -> list[tuple[float, float]]:
         """ Read-only property to get a list of all points representing the
         bounding box around the object.
 
         Returns:
-            List[Tuple(float, float)]: List with a tuple of floats for the 
-            two points of the bounding box for the object. 
+            List[Tuple(float, float)]: List with a tuple of floats for the
+            two points of the bounding box for the object.
         """
         return [(self.point_1[0], self.point_1[1]), (self.point_2[0], self.point_2[1])]
 
     @property
-    def convex_hull(self) -> List[Tuple[float, float]]:
+    def convex_hull(self) -> list[tuple[float, float]]:
         """ Read-only property to get a list of all points representing the
         convex hull around the object.
 
         Returns:
-            List[Tuple(float, float)]: List with a tuple of floats for the 
-            for each point of the convex hull of the object. 
+            List[Tuple(float, float)]: List with a tuple of floats for the
+            for each point of the convex hull of the object.
         """
         return self.points
 
 
 class SingleDimensionDrawingComponent(StandardDrawingComponent):
-    """ 
+    """
         Drawing Component with position and size rather than two points. This class could describe,
-            circles with position being center and size being radius or squares with position 
+            circles with position being center and size being radius or squares with position
             being the upper left corner and size being the length of each side.
 
     """
     def __init__(self,
-                 position: Tuple[float, float],
-                 size: Union[float, int],
+                 position: tuple[float, float],
+                 size: float | int,
                  style: DrawingStyle
                  ) -> None:
-        """ Initializes Single Dimension Drawing Components.  
+        """ Initializes Single Dimension Drawing Components.
 
         Args:
             position (Tuple[float, float]): coordinates of object location.
@@ -395,7 +394,7 @@ class SingleDimensionDrawingComponent(StandardDrawingComponent):
         return parameter_dict
 
     @property
-    def position(self) -> Tuple[float, float]:
+    def position(self) -> tuple[float, float]:
         """Property to get coordinates of the position.
 
         Returns:
@@ -404,7 +403,7 @@ class SingleDimensionDrawingComponent(StandardDrawingComponent):
         return self.point_1
 
     @position.setter
-    def position(self, value: Tuple[float, float]) -> None:
+    def position(self, value: tuple[float, float]) -> None:
         """ Setter to modify coordinates of the position.
 
         Args:
@@ -424,7 +423,7 @@ class SingleDimensionDrawingComponent(StandardDrawingComponent):
         return float(self._x(self._p2) - self._x(self._p1))
 
     @size.setter
-    def size(self, value: Union[float, int]) -> None:
+    def size(self, value: float | int) -> None:
         """Update size.
 
         Args:
@@ -434,34 +433,34 @@ class SingleDimensionDrawingComponent(StandardDrawingComponent):
         self.point_2 = point_2
 
     @property
-    def points(self) -> List[Tuple[float, float]]:
+    def points(self) -> list[tuple[float, float]]:
         """ Read-only property to get a list of all points in the object.
 
         Returns:
-            List[Tuple(float, float)]: List with a tuple of floats for each 
+            List[Tuple(float, float)]: List with a tuple of floats for each
             point in the object.
         """
         return [self.point_1, self.point_2]
 
     @property
-    def bbox(self) -> List[Tuple[float, float]]:
+    def bbox(self) -> list[tuple[float, float]]:
         """ Read-only property to get a list of all points representing the
         bounding box around the object.
 
         Returns:
-            List[Tuple(float, float)]: List with a tuple of floats for the 
-            two points of the bounding box for the object. 
+            List[Tuple(float, float)]: List with a tuple of floats for the
+            two points of the bounding box for the object.
         """
         return self.points
 
     @property
-    def convex_hull(self) -> List[Tuple[float, float]]:
+    def convex_hull(self) -> list[tuple[float, float]]:
         """ Read-only property to get a list of all points representing the
         convex hull around the object.
 
         Returns:
-            List[Tuple(float, float)]: List with a tuple of floats for the 
-            for each point of the convex hull of the object. 
+            List[Tuple(float, float)]: List with a tuple of floats for the
+            for each point of the convex hull of the object.
         """
         return self.points
 
@@ -473,9 +472,9 @@ class WidthHeightDrawingComponent(StandardDrawingComponent):
 
     """
     def __init__(self,
-                 position: Tuple[float, float],
-                 width: Union[float, int],
-                 height: Union[float, int],
+                 position: tuple[float, float],
+                 width: float | int,
+                 height: float | int,
                  style: DrawingStyle
                  ) -> None:
         """ Initializes the drawing component with position, width, height, and drawing style.
@@ -525,7 +524,7 @@ class WidthHeightDrawingComponent(StandardDrawingComponent):
         return parameter_dict
 
     @property
-    def position(self) -> Tuple[float, float]:
+    def position(self) -> tuple[float, float]:
         """ Property for position coordinates.
 
         Returns:
@@ -534,7 +533,7 @@ class WidthHeightDrawingComponent(StandardDrawingComponent):
         return self.point_1
 
     @position.setter
-    def position(self, value: Tuple[float, float]) -> None:
+    def position(self, value: tuple[float, float]) -> None:
         """ Setter to update position of Drawing Component.
 
         Args:
@@ -584,11 +583,11 @@ class WidthHeightDrawingComponent(StandardDrawingComponent):
         self.point_2 = point_2
 
     @property
-    def points(self) -> List[Tuple[float, float]]:
+    def points(self) -> list[tuple[float, float]]:
         """Read only property to get all 4 points of the object.
 
         Returns:
-            List[Tuple[float, float]]: Each of the four coordinates for a 
+            List[Tuple[float, float]]: Each of the four coordinates for a
             complete bounding box.
         """
         points = []
@@ -599,7 +598,7 @@ class WidthHeightDrawingComponent(StandardDrawingComponent):
         return points
 
     @property
-    def bbox(self) -> List[Tuple[float, float]]:
+    def bbox(self) -> list[tuple[float, float]]:
         """ Upper and Lower bounds as two coordinates.
 
         Returns:
@@ -610,7 +609,7 @@ class WidthHeightDrawingComponent(StandardDrawingComponent):
         return bounds
 
     @property
-    def convex_hull(self) -> List[Tuple[float, float]]:
+    def convex_hull(self) -> list[tuple[float, float]]:
         """ Points of the convex hull as a list of coordinates.
 
         Returns:
@@ -625,9 +624,9 @@ class PolarCoordinateDrawingComponent(StandardDrawingComponent):
         angle (direction).
     """
     def __init__(self,
-                 position: Tuple[float, float],
-                 length: Union[int, float],
-                 angle: Union[int, float],
+                 position: tuple[float, float],
+                 length: int | float,
+                 angle: int | float,
                  style: DrawingStyle) -> None:
         """ Create new polar coordinate class.
 
@@ -678,7 +677,7 @@ class PolarCoordinateDrawingComponent(StandardDrawingComponent):
 
 
     # https://stackoverflow.com/questions/20924085/python-conversion-between-coordinates
-    def _polar(self, point: Tuple[float, float]) -> Tuple[float, float]:
+    def _polar(self, point: tuple[float, float]) -> tuple[float, float]:
         """ Private method to convert cartesian coordinates to polar.
 
         Args:
@@ -689,7 +688,7 @@ class PolarCoordinateDrawingComponent(StandardDrawingComponent):
         """
         return (np.hypot(point[0], point[1]), np.degrees(np.arctan2(point[1], point[0])))
 
-    def _rect(self, length: Union[float, int], angle: Union[float, int]) -> Tuple[float, float]:
+    def _rect(self, length: float | int, angle: float | int) -> tuple[float, float]:
         """ Private method to convert polar coordinates to cartesian.
 
         Args:
@@ -703,8 +702,8 @@ class PolarCoordinateDrawingComponent(StandardDrawingComponent):
         y = length * np.sin(np.deg2rad(angle))
         return (x, y)
 
-    def _length_angle(self) -> Tuple[float, float]:
-        """ Private method to calculate length and angle from 
+    def _length_angle(self) -> tuple[float, float]:
+        """ Private method to calculate length and angle from
             cartesian coordinates.
 
         Returns:
@@ -716,7 +715,7 @@ class PolarCoordinateDrawingComponent(StandardDrawingComponent):
         return length, angle
 
     @property
-    def position(self) -> Tuple[float, float]:
+    def position(self) -> tuple[float, float]:
         """ Property to get position of drawing component.
 
         Returns:
@@ -725,7 +724,7 @@ class PolarCoordinateDrawingComponent(StandardDrawingComponent):
         return self.point_1
 
     @position.setter
-    def position(self, value: Tuple[float, float]) -> None:
+    def position(self, value: tuple[float, float]) -> None:
         """ Setter to update position as cartesian coordinate.
 
         Args:
@@ -746,7 +745,7 @@ class PolarCoordinateDrawingComponent(StandardDrawingComponent):
         return float(length)
 
     @length.setter
-    def length(self, value: Union[float, int]) -> None:
+    def length(self, value: float | int) -> None:
         """ Setter to update length of drawing component.
 
         Args:
@@ -768,7 +767,7 @@ class PolarCoordinateDrawingComponent(StandardDrawingComponent):
         return float(round(angle, PRECISION))
 
     @angle.setter
-    def angle(self, value: Union[float, int]) -> None:
+    def angle(self, value: float | int) -> None:
         """ Setter to update angle of drawing component.
 
         Args:
@@ -780,49 +779,49 @@ class PolarCoordinateDrawingComponent(StandardDrawingComponent):
         self.point_2 = (coords[0] + self.point_1[0], coords[1] + self.point_1[1])
 
     @property
-    def points(self) -> List[Tuple[float, float]]:
+    def points(self) -> list[tuple[float, float]]:
         """ Read-only property to get a list of all points in the object.
 
         Returns:
-            List[Tuple(float, float)]: List with a tuple of floats for each 
+            List[Tuple(float, float)]: List with a tuple of floats for each
             point in the object.
         """
         return [self.point_1, self.point_2]
 
     @property
-    def bbox(self) -> List[Tuple[float, float]]:
+    def bbox(self) -> list[tuple[float, float]]:
         """ Read-only property to get a list of all points representing the
         bounding box around the object.
 
         Returns:
-            List[Tuple(float, float)]: List with a tuple of floats for the 
-            two points of the bounding box for the object. 
+            List[Tuple(float, float)]: List with a tuple of floats for the
+            two points of the bounding box for the object.
         """
         return self.points
 
     @property
-    def convex_hull(self) -> List[Tuple[float, float]]:
+    def convex_hull(self) -> list[tuple[float, float]]:
         """ Read-only property to get a list of all points representing the
         convex hull around the object.
 
         Returns:
-            List[Tuple(float, float)]: List with a tuple of floats for the 
-            for each point of the convex hull of the object. 
+            List[Tuple(float, float)]: List with a tuple of floats for the
+            for each point of the convex hull of the object.
         """
         return self.points
 
 
 class PolygonalDrawingComponent(DrawingComponent):
-    """ 
+    """
        DrawingComponent with mulitple connected points (in order based).
     """
 
-    def __init__(self, points: List[Tuple[float, float]], style: DrawingStyle) -> None:
+    def __init__(self, points: list[tuple[float, float]], style: DrawingStyle) -> None:
         """
            Instantiates drawing component with list of points and style information.
 
         Args:
-            points (List[Tuple[float, float]]): Ordered list of connected points 
+            points (List[Tuple[float, float]]): Ordered list of connected points
                                                 representing a polygon.
             style (DrawingStyle): Object with information for visualizing components.
         """
@@ -866,7 +865,7 @@ class PolygonalDrawingComponent(DrawingComponent):
                         "style": self.style.parameters}}
         return parameter_dict
 
-    def _polygon_check(self, points: List[Tuple[float, float]]) -> bool:
+    def _polygon_check(self, points: list[tuple[float, float]]) -> bool:
         """ Verifies that points represent a valid Tuple.
 
         Args:
@@ -884,9 +883,9 @@ class PolygonalDrawingComponent(DrawingComponent):
         return True
 
     @property
-    def bbox(self) ->  Tuple[Tuple[float, float], Tuple[float, float]]:
-        """ 
-           Provides a bounding box around the polygon with lower and upper 
+    def bbox(self) ->  tuple[tuple[float, float], tuple[float, float]]:
+        """
+           Provides a bounding box around the polygon with lower and upper
            limit coordinates.
 
         Returns:
@@ -897,8 +896,8 @@ class PolygonalDrawingComponent(DrawingComponent):
         return ((bounds[0], bounds[1]), (bounds[2], bounds[3]))
 
     @property
-    def points(self) -> List[Tuple[float, float]]:
-        """ 
+    def points(self) -> list[tuple[float, float]]:
+        """
            Exposes full list of points in the polygon.
 
         Returns:
@@ -910,7 +909,7 @@ class PolygonalDrawingComponent(DrawingComponent):
         return coordinates[:-1]
 
     @points.setter
-    def points(self, value: List[Tuple[float, float]]) -> None:
+    def points(self, value: list[tuple[float, float]]) -> None:
         """
            Replaces all points with a new list of points.
 
@@ -934,7 +933,7 @@ class PolygonalDrawingComponent(DrawingComponent):
         return self._polygon
 
     @property
-    def convex_hull(self) -> List[Tuple[float, float]]:
+    def convex_hull(self) -> list[tuple[float, float]]:
         """ Read-only property with list of points defining convex hull of the polygon.
 
         Returns:
@@ -952,7 +951,7 @@ class RegularPolygonDrawingComponent(PolarCoordinateDrawingComponent):
     # https://pypi.org/project/svgpathtools/
     # regular_polygon function in simple_inkscape_scripting.py
     def __init__(self,
-                 position: Tuple[float, float],
+                 position: tuple[float, float],
                  sides: int,
                  radius: float,
                  style: DrawingStyle,
@@ -1126,8 +1125,8 @@ class RegularPolygonDrawingComponent(PolarCoordinateDrawingComponent):
             raise ValueError("The corner rounding should not exced half the radius.")
 
     @property
-    def points(self) -> List[Tuple[float, float]]:
-        """ 
+    def points(self) -> list[tuple[float, float]]:
+        """
            Exposes full list of points in the polygon.
 
         Returns:
@@ -1136,9 +1135,9 @@ class RegularPolygonDrawingComponent(PolarCoordinateDrawingComponent):
         return self._get_points()
 
     @property
-    def bbox(self) -> Tuple[Tuple[float, float], Tuple[float, float]]:
-        """ 
-           Provides a bounding box around the polygon with lower and upper 
+    def bbox(self) -> tuple[tuple[float, float], tuple[float, float]]:
+        """
+           Provides a bounding box around the polygon with lower and upper
            limit coordinates.
 
         Returns:
@@ -1150,7 +1149,7 @@ class RegularPolygonDrawingComponent(PolarCoordinateDrawingComponent):
         return ((bounds[0], bounds[1]), (bounds[2], bounds[3]))
 
     @property
-    def convex_hull(self) -> List[Tuple[float, float]]:
+    def convex_hull(self) -> list[tuple[float, float]]:
         """ Read-only property with list of points defining convex hull of the polygon.
 
         Returns:
@@ -1169,13 +1168,13 @@ class PathCommand:
     """
     VALID_COMMANDS = {"M", "L", "H", "V", "Z", "C", "S", "Q", "T", "A"}
 
-    def __init__(self, command_type: str, points: Optional[List[Tuple[float, float]]] = None) -> None:
+    def __init__(self, command_type: str, points: list[tuple[float, float]] | None = None) -> None:
         self._type = ""
-        self._points: List[Tuple[float, float]] = []
+        self._points: list[tuple[float, float]] = []
         self.type = command_type
         self.points = points or []
 
-    def _coerce_point(self, point: Tuple[float, float]) -> Tuple[float, float]:
+    def _coerce_point(self, point: tuple[float, float]) -> tuple[float, float]:
         if len(point) != 2:
             raise ValueError("Points must contain two numeric values.")
         return (float(point[0]), float(point[1]))
@@ -1195,7 +1194,7 @@ class PathCommand:
         self._type = normalized
 
     @property
-    def points(self) -> List[Tuple[float, float]]:
+    def points(self) -> list[tuple[float, float]]:
         """Read-only copy of the points associated with the command."""
         return [
             (float(round(x, PRECISION)), float(round(y, PRECISION)))
@@ -1203,10 +1202,10 @@ class PathCommand:
         ]
 
     @points.setter
-    def points(self, values: List[Tuple[float, float]]) -> None:
+    def points(self, values: list[tuple[float, float]]) -> None:
         self._points = [self._coerce_point(point) for point in values]
 
-    def add_point(self, point: Tuple[float, float]) -> None:
+    def add_point(self, point: tuple[float, float]) -> None:
         """Append an additional point to the command."""
         self._points.append(self._coerce_point(point))
 
@@ -1220,7 +1219,7 @@ class Arc(DrawingComponent):
     """DrawingComponent representing an elliptical arc."""
 
     def __init__(self,
-                 center: Tuple[float, float],
+                 center: tuple[float, float],
                  radius_x: float,
                  radius_y: float,
                  start_angle: float,
@@ -1239,7 +1238,7 @@ class Arc(DrawingComponent):
         super().__init__(style)
 
     @staticmethod
-    def _coerce_point(point: Tuple[float, float]) -> Tuple[float, float]:
+    def _coerce_point(point: tuple[float, float]) -> tuple[float, float]:
         if len(point) != 2:
             raise ValueError("Point must contain two numeric values.")
         return (float(point[0]), float(point[1]))
@@ -1275,12 +1274,12 @@ class Arc(DrawingComponent):
                  "style": self.style.parameters}}
 
     @property
-    def center(self) -> Tuple[float, float]:
+    def center(self) -> tuple[float, float]:
         return (float(round(self._center[0], PRECISION)),
                 float(round(self._center[1], PRECISION)))
 
     @center.setter
-    def center(self, value: Tuple[float, float]) -> None:
+    def center(self, value: tuple[float, float]) -> None:
         self._center = self._coerce_point(value)
 
     @property
@@ -1324,7 +1323,7 @@ class Arc(DrawingComponent):
         self._rotation = float(value)
 
     @property
-    def points(self) -> List[Tuple[float, float]]:
+    def points(self) -> list[tuple[float, float]]:
         start = math.radians(self._start_angle)
         end = math.radians(self._end_angle)
         if math.isclose(start, end, abs_tol=1e-9):
@@ -1354,9 +1353,9 @@ class QuadraticBezier(DrawingComponent):
     """DrawingComponent representing a quadratic Bezier curve."""
 
     def __init__(self,
-                 start_point: Tuple[float, float],
-                 control_point: Tuple[float, float],
-                 end_point: Tuple[float, float],
+                 start_point: tuple[float, float],
+                 control_point: tuple[float, float],
+                 end_point: tuple[float, float],
                  style: DrawingStyle) -> None:
 
         self._start_point = self._coerce_point(start_point)
@@ -1367,7 +1366,7 @@ class QuadraticBezier(DrawingComponent):
         super().__init__(style)
 
     @staticmethod
-    def _coerce_point(point: Tuple[float, float]) -> Tuple[float, float]:
+    def _coerce_point(point: tuple[float, float]) -> tuple[float, float]:
         if len(point) != 2:
             raise ValueError("Point must contain two numeric values.")
         return (float(point[0]), float(point[1]))
@@ -1390,34 +1389,34 @@ class QuadraticBezier(DrawingComponent):
                  "style": self.style.parameters}}
 
     @property
-    def start_point(self) -> Tuple[float, float]:
+    def start_point(self) -> tuple[float, float]:
         return (float(round(self._start_point[0], PRECISION)),
                 float(round(self._start_point[1], PRECISION)))
 
     @start_point.setter
-    def start_point(self, value: Tuple[float, float]) -> None:
+    def start_point(self, value: tuple[float, float]) -> None:
         self._start_point = self._coerce_point(value)
 
     @property
-    def control_point(self) -> Tuple[float, float]:
+    def control_point(self) -> tuple[float, float]:
         return (float(round(self._control_point[0], PRECISION)),
                 float(round(self._control_point[1], PRECISION)))
 
     @control_point.setter
-    def control_point(self, value: Tuple[float, float]) -> None:
+    def control_point(self, value: tuple[float, float]) -> None:
         self._control_point = self._coerce_point(value)
 
     @property
-    def end_point(self) -> Tuple[float, float]:
+    def end_point(self) -> tuple[float, float]:
         return (float(round(self._end_point[0], PRECISION)),
                 float(round(self._end_point[1], PRECISION)))
 
     @end_point.setter
-    def end_point(self, value: Tuple[float, float]) -> None:
+    def end_point(self, value: tuple[float, float]) -> None:
         self._end_point = self._coerce_point(value)
 
     @property
-    def points(self) -> List[Tuple[float, float]]:
+    def points(self) -> list[tuple[float, float]]:
         coords = []
         for step in range(self._samples + 1):
             t = step / self._samples
@@ -1436,10 +1435,10 @@ class CubicBezier(DrawingComponent):
     """DrawingComponent representing a cubic Bezier curve."""
 
     def __init__(self,
-                 start_point: Tuple[float, float],
-                 control_point1: Tuple[float, float],
-                 control_point2: Tuple[float, float],
-                 end_point: Tuple[float, float],
+                 start_point: tuple[float, float],
+                 control_point1: tuple[float, float],
+                 control_point2: tuple[float, float],
+                 end_point: tuple[float, float],
                  style: DrawingStyle) -> None:
 
         self._start_point = self._coerce_point(start_point)
@@ -1451,7 +1450,7 @@ class CubicBezier(DrawingComponent):
         super().__init__(style)
 
     @staticmethod
-    def _coerce_point(point: Tuple[float, float]) -> Tuple[float, float]:
+    def _coerce_point(point: tuple[float, float]) -> tuple[float, float]:
         if len(point) != 2:
             raise ValueError("Point must contain two numeric values.")
         return (float(point[0]), float(point[1]))
@@ -1476,43 +1475,43 @@ class CubicBezier(DrawingComponent):
                  "style": self.style.parameters}}
 
     @property
-    def start_point(self) -> Tuple[float, float]:
+    def start_point(self) -> tuple[float, float]:
         return (float(round(self._start_point[0], PRECISION)),
                 float(round(self._start_point[1], PRECISION)))
 
     @start_point.setter
-    def start_point(self, value: Tuple[float, float]) -> None:
+    def start_point(self, value: tuple[float, float]) -> None:
         self._start_point = self._coerce_point(value)
 
     @property
-    def control_point1(self) -> Tuple[float, float]:
+    def control_point1(self) -> tuple[float, float]:
         return (float(round(self._control_point1[0], PRECISION)),
                 float(round(self._control_point1[1], PRECISION)))
 
     @control_point1.setter
-    def control_point1(self, value: Tuple[float, float]) -> None:
+    def control_point1(self, value: tuple[float, float]) -> None:
         self._control_point1 = self._coerce_point(value)
 
     @property
-    def control_point2(self) -> Tuple[float, float]:
+    def control_point2(self) -> tuple[float, float]:
         return (float(round(self._control_point2[0], PRECISION)),
                 float(round(self._control_point2[1], PRECISION)))
 
     @control_point2.setter
-    def control_point2(self, value: Tuple[float, float]) -> None:
+    def control_point2(self, value: tuple[float, float]) -> None:
         self._control_point2 = self._coerce_point(value)
 
     @property
-    def end_point(self) -> Tuple[float, float]:
+    def end_point(self) -> tuple[float, float]:
         return (float(round(self._end_point[0], PRECISION)),
                 float(round(self._end_point[1], PRECISION)))
 
     @end_point.setter
-    def end_point(self, value: Tuple[float, float]) -> None:
+    def end_point(self, value: tuple[float, float]) -> None:
         self._end_point = self._coerce_point(value)
 
     @property
-    def points(self) -> List[Tuple[float, float]]:
+    def points(self) -> list[tuple[float, float]]:
         coords = []
         for step in range(self._samples + 1):
             t = step / self._samples
@@ -1534,9 +1533,9 @@ class Path(DrawingComponent):
 
     def __init__(self,
                  style: DrawingStyle,
-                 commands: Optional[List[PathCommand]] = None) -> None:
+                 commands: list[PathCommand] | None = None) -> None:
 
-        self._commands: List[PathCommand] = []
+        self._commands: list[PathCommand] = []
         if commands:
             for command in commands:
                 self.add_command(command)
@@ -1558,7 +1557,7 @@ class Path(DrawingComponent):
                 {"commands": [cmd.parameters for cmd in self._commands],
                  "style": self.style.parameters}}
 
-    def add_command(self, command: Union[PathCommand, dict]) -> None:
+    def add_command(self, command: PathCommand | dict) -> None:
         """Append a new command to the path."""
         if isinstance(command, PathCommand):
             self._commands.append(command)
@@ -1568,12 +1567,12 @@ class Path(DrawingComponent):
             raise TypeError("Command must be a PathCommand or a dictionary.")
 
     @property
-    def commands(self) -> List[PathCommand]:
+    def commands(self) -> list[PathCommand]:
         return list(self._commands)
 
     @property
-    def points(self) -> List[Tuple[float, float]]:
-        coords: List[Tuple[float, float]] = []
+    def points(self) -> list[tuple[float, float]]:
+        coords: list[tuple[float, float]] = []
         for command in self._commands:
             coords.extend(command.points)
         return coords
@@ -1583,7 +1582,7 @@ class TextComponent(Component):
     """
         Component for creating text.
     """
-    def __init__(self, text: str, position: Tuple[float, float], style: TextStyle) -> None:
+    def __init__(self, text: str, position: tuple[float, float], style: TextStyle) -> None:
         """ Instantiat text component.
 
         Parameters
@@ -1645,7 +1644,7 @@ class TextComponent(Component):
         return self._text
 
     @text.setter
-    def text(self, value: Union[str, int, float, complex, bool]) -> None:
+    def text(self, value: str | int | float | complex | bool) -> None:
         """Update text to be displayed
 
         Args:
@@ -1662,7 +1661,7 @@ class TextComponent(Component):
             raise TypeError("Text argument should be a string or a non-iterable built in type.")
 
     @property
-    def position(self) -> Tuple[float, float]:
+    def position(self) -> tuple[float, float]:
         """ Coordinates for text dependant on alignment.
 
         Returns
@@ -1673,7 +1672,7 @@ class TextComponent(Component):
         return (round(self._position[0], PRECISION), round(self._position[1], PRECISION))
 
     @position.setter
-    def position(self, value: Tuple[float, float]) -> None:
+    def position(self, value: tuple[float, float]) -> None:
         """ Setter to update text location coordinates.
 
         Parameters
@@ -1802,7 +1801,7 @@ class TextComponent(Component):
         return self._translate_outline(outline, dx, 0.0)
 
     @staticmethod
-    def _outline_span(outline: dict) -> Optional[Tuple[float, float]]:
+    def _outline_span(outline: dict) -> tuple[float, float] | None:
         for key in ("convex_hull", "bbox", "points"):
             pts = outline.get(key)
             if pts:
@@ -1846,7 +1845,7 @@ class TextComponent(Component):
         return shifted
 
     @property
-    def points(self) -> List[Tuple[float, float]]:
+    def points(self) -> list[tuple[float, float]]:
         """Expose the outline-derived points for the text in document units."""
 
         outline = self._compute_outline()
@@ -1863,7 +1862,7 @@ class TextComponent(Component):
         return list(bbox)
 
     @property
-    def bbox(self) -> Tuple[Tuple[float, float], Tuple[float, float]]:
+    def bbox(self) -> tuple[tuple[float, float], tuple[float, float]]:
         """Bounding box derived from the text outline."""
 
         outline = self._compute_outline()
@@ -1873,7 +1872,7 @@ class TextComponent(Component):
         return ((self.position[0], self.position[1]), (self.position[0], self.position[1]))
 
     @property
-    def convex_hull(self) -> List[Tuple[float, float]]:
+    def convex_hull(self) -> list[tuple[float, float]]:
         """Read-only property returning the convex hull of the text outline."""
 
         outline = self._compute_outline()
@@ -1891,7 +1890,7 @@ class ComponentGroup:
     grp_id_iter = itertools.count()
 
     def __init__(self, group_label: str) -> None:
-        """ 
+        """
             Instantiates group_id and group_label which serves as the object
             detection/segmentation label for document AI models.
         """
@@ -1925,14 +1924,12 @@ class ComponentGroup:
                 if c[component_class_name]['style'][style_name]['name'] not in list(styles.keys()):
                     style_class_name = list(c[component_class_name]['style'].keys())[0]
                     style_class = getattr(sys.modules[__name__], style_class_name)
-                    func = getattr(style_class, "create_from_dict")
-                    style = func(c[component_class_name]['style'])
+                    style = style_class.create_from_dict(c[component_class_name]['style'])
                     styles[c[component_class_name]['style'][style_name]['name']] = style
                 else:
                     style = styles[c[component_class_name]['style'][style_name]['name']]
             component_class = getattr(sys.modules[__name__], component_class_name)
-            func = getattr(component_class, "create_from_dict")
-            component = func(c, style)
+            component = component_class.create_from_dict(c, style)
             group.add_component(component)
 
         return group
@@ -2002,8 +1999,7 @@ class ComponentGroup:
             Component: next Component object in the component group.
         """
 
-        for component in self._components.values():
-            yield component
+        yield from self._components.values()
 
     @property
     def group_id(self) -> int:
@@ -2031,7 +2027,7 @@ class ComponentGroup:
         return self._group_label
 
     def _create_multipoint(self) -> MultiPoint:
-        """ Private class for building a multipoint object to be used for 
+        """ Private class for building a multipoint object to be used for
             calculations of convex hull, bounding box, and points outputs.
 
         Returns:
@@ -2046,7 +2042,7 @@ class ComponentGroup:
         return multi
 
     @property
-    def points(self) -> List[Tuple[float, float]]:
+    def points(self) -> list[tuple[float, float]]:
         """ List of all the points in the group.
 
         Returns:
@@ -2061,7 +2057,7 @@ class ComponentGroup:
         return coordinates
 
     @property
-    def bbox(self) -> Tuple[Tuple[float, float], Tuple[float, float]]:
+    def bbox(self) -> tuple[tuple[float, float], tuple[float, float]]:
         """ Bounding box of object (minx, miny) and (maxx, maxy).
 
             Returns:
@@ -2074,7 +2070,7 @@ class ComponentGroup:
         return ((bounds[0], bounds[1]), (bounds[2], bounds[3]))
 
     @property
-    def convex_hull(self) -> List[Tuple[float, float]]:
+    def convex_hull(self) -> list[tuple[float, float]]:
         """ Read-only property with list of points defining convex hull of the points
             in the group.
 

@@ -1,7 +1,7 @@
 import pytest
 
-from InkGen.table import AutoFitRule, Table
 import InkGen.table as table_module
+from InkGen.table import AutoFitRule, Table
 
 
 def make_basic_table(rows: int = 0, cols: int = 0, *, position=(0.0, 0.0)) -> Table:

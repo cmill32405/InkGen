@@ -9,37 +9,38 @@
 
 """
 import abc
+import base64
+import math
 import os
 import sys
-import yaml
-import logging
-import base64
-from xml.sax.saxutils import escape
-import xml.etree.ElementTree as ET
 from enum import Flag, auto
-from typing import Union, Tuple, List, Dict, Optional
-import math
-import numpy as np
-from svgpathtools import Path, parse_path, bpoints2bezier
-from shapely import MultiPoint, get_coordinates
-from shapely.geometry import Polygon, LineString, Point
-from shapely.ops import unary_union
-from shapely.errors import GEOSException
+from xml.sax.saxutils import escape
 
-from InkGen.component import WidthHeightDrawingComponent, StandardDrawingComponent
-from InkGen.component import RegularPolygonDrawingComponent, PolygonalDrawingComponent
-from InkGen.component import TextComponent, ComponentGroup, SingleDimensionDrawingComponent
-from InkGen.component import Component
+import numpy as np
+from shapely.errors import GEOSException
+from shapely.geometry import LineString, Point, Polygon
+from shapely.ops import unary_union
+
+from InkGen.boundary import Canvas
 from InkGen.component import Arc as ArcComponent
-from InkGen.component import QuadraticBezier as QuadraticBezierComponent
+from InkGen.component import (
+    Component,
+    ComponentGroup,
+    PathCommand,
+    PolygonalDrawingComponent,
+    RegularPolygonDrawingComponent,
+    SingleDimensionDrawingComponent,
+    StandardDrawingComponent,
+    TextComponent,
+    WidthHeightDrawingComponent,
+)
 from InkGen.component import CubicBezier as CubicBezierComponent
 from InkGen.component import Path as PathComponent
-from InkGen.component import PathCommand
-from InkGen.document import Document, Layers, Layer
-from InkGen.style import DrawingStyle, TextStyle, Font
-from InkGen.boundary import Canvas
-from InkGen.table import Table, AutoFitRule
+from InkGen.component import QuadraticBezier as QuadraticBezierComponent
+from InkGen.document import Document, Layer, Layers
+from InkGen.style import DrawingStyle, Font, TextStyle
 from InkGen.svg_utils import flatten_svg
+from InkGen.table import AutoFitRule, Table
 
 try:
     from shapely.validation import make_valid as _shapely_make_valid
@@ -53,14 +54,14 @@ else:
 PRECISION = 3
 
 
-def _primitive_parameters(name: str, *, values: Dict[str, object], style: DrawingStyle) -> Dict[str, object]:
+def _primitive_parameters(name: str, *, values: dict[str, object], style: DrawingStyle) -> dict[str, object]:
     """Return a serialization dictionary for a primitive component."""
     payload = dict(values)
     payload["style"] = style.parameters
     return {name: payload}
 
 
-def _coerce_command_points(points: List[Tuple[float, float]]) -> List[str]:
+def _coerce_command_points(points: list[tuple[float, float]]) -> list[str]:
     """Convert points to SVG coordinate strings."""
     return [f"{float(x)},{float(y)}" for x, y in points]
 
@@ -86,7 +87,7 @@ def _style_properties(style: DrawingStyle, *, include_fill: bool = True, include
     return ";".join(parts)
 
 class DrawingGeneratorInterface(metaclass=abc.ABCMeta):
-    """ 
+    """
         Interface to enable Components to create SVG XML outputs to represent them.
     """
     @classmethod
@@ -119,15 +120,15 @@ class LabelGenerator(metaclass=abc.ABCMeta):
                 NotImplemented)
 
     @abc.abstractmethod
-    def generate_label(self) -> Dict[str, List[Tuple[float, float]]]:
-        """ Generates the data for labelling component groups 
+    def generate_label(self) -> dict[str, list[tuple[float, float]]]:
+        """ Generates the data for labelling component groups
 
         Returns
         -------
         Dict[str, List[Tuple[float, float]]]
             Dictionary with the label as the key and bounding box points
             as the value.
-            
+
         """
         raise NotImplementedError
 
@@ -144,28 +145,28 @@ class SegmentGenerator(metaclass=abc.ABCMeta):
                 NotImplemented)
 
     @abc.abstractmethod
-    def generate_segmentation_mask(self) -> Dict[str, List[Tuple[float, float]]]:
-        """ Generates the data for segmentation masks of component groups 
+    def generate_segmentation_mask(self) -> dict[str, list[tuple[float, float]]]:
+        """ Generates the data for segmentation masks of component groups
 
         Returns
         -------
         Dict[str, List[Tuple[float, float]]]
             Dictionary with the label as the key and convex hull points
             as the value.
-            
+
         """
         raise NotImplementedError
 
 
 class RectangleSVG(WidthHeightDrawingComponent, DrawingGeneratorInterface):
-    """ 
+    """
         Class to describe rectangles as SVG components.
     """
     def __init__(self,
-                 position: Tuple[float, float],
-                 width: Union[float, int],
-                 height: Union[float, int],
-                 corner_radii: Union[float, Tuple[float, float]],
+                 position: tuple[float, float],
+                 width: float | int,
+                 height: float | int,
+                 corner_radii: float | tuple[float, float],
                  style: DrawingStyle):
         """ Instantiate a new rectangle object.
 
@@ -178,7 +179,7 @@ class RectangleSVG(WidthHeightDrawingComponent, DrawingGeneratorInterface):
         height : Union[float, int]
             Height of the rectangle
         corner_radii : Union[float, Tuple[float, float]]
-            Corner Radi of the Rectangle as either a float (both corners) or a Tuple 
+            Corner Radi of the Rectangle as either a float (both corners) or a Tuple
             with the Horizontal Radius and Verticle Radius.
         style : DrawingStyle
             Style used to draw the rectangle
@@ -231,7 +232,7 @@ class RectangleSVG(WidthHeightDrawingComponent, DrawingGeneratorInterface):
         return parameter_dict
 
     def _radius_check(self,
-                      corner_radii: Union[float, Tuple[float, float]],
+                      corner_radii: float | tuple[float, float],
                       width: float,
                       height: float) -> bool:
         """ Private method to verify corner radius can be implemented.
@@ -321,12 +322,12 @@ class RectangleSVG(WidthHeightDrawingComponent, DrawingGeneratorInterface):
 
 
 class LineSVG(StandardDrawingComponent, DrawingGeneratorInterface):
-    """ 
+    """
         Class to describe lines as SVG components.
     """
     def __init__(self,
-                 point_1: Tuple[float, float],
-                 point_2: Tuple[float, float],
+                 point_1: tuple[float, float],
+                 point_2: tuple[float, float],
                  style: DrawingStyle):
         """ Instantiate a new line object
 
@@ -379,12 +380,12 @@ class LineSVG(StandardDrawingComponent, DrawingGeneratorInterface):
         """ Creates a single path object (line) in XML for a SVG file.
 
         Example:
-        
+
             <path
             style="opacity:0.521898;fill:#000000;stroke:#000000;stroke-width:0.2"
             d="m 32.196103,137.82826 83.565167,-27.4933"
             id="path1" />
-        
+
 
         Returns
         -------
@@ -403,7 +404,7 @@ class ArcSVG(ArcComponent, DrawingGeneratorInterface):
     """SVG representation of an elliptical arc."""
 
     def __init__(self,
-                 center: Tuple[float, float],
+                 center: tuple[float, float],
                  radius_x: float,
                  radius_y: float,
                  start_angle: float,
@@ -433,7 +434,7 @@ class ArcSVG(ArcComponent, DrawingGeneratorInterface):
                    rotation=arc.get('rotation', 0.0))
 
     @property
-    def parameters(self) -> Dict[str, Dict[str, object]]:
+    def parameters(self) -> dict[str, dict[str, object]]:
         """Return serialized geometry/style information."""
         return _primitive_parameters(
             "ArcSVG",
@@ -448,7 +449,7 @@ class ArcSVG(ArcComponent, DrawingGeneratorInterface):
             style=self.style,
         )
 
-    def _arc_flags(self) -> Tuple[int, int]:
+    def _arc_flags(self) -> tuple[int, int]:
         delta = self.end_angle - self.start_angle
         sweep_flag = 1 if delta >= 0 else 0
         delta_norm = abs(delta) % 360.0
@@ -473,9 +474,9 @@ class QuadraticBezierSVG(QuadraticBezierComponent, DrawingGeneratorInterface):
     """SVG representation of a quadratic Bezier curve."""
 
     def __init__(self,
-                 start_point: Tuple[float, float],
-                 control_point: Tuple[float, float],
-                 end_point: Tuple[float, float],
+                 start_point: tuple[float, float],
+                 control_point: tuple[float, float],
+                 end_point: tuple[float, float],
                  style: DrawingStyle) -> None:
         super().__init__(start_point=start_point,
                          control_point=control_point,
@@ -494,7 +495,7 @@ class QuadraticBezierSVG(QuadraticBezierComponent, DrawingGeneratorInterface):
                    style=style)
 
     @property
-    def parameters(self) -> Dict[str, Dict[str, object]]:
+    def parameters(self) -> dict[str, dict[str, object]]:
         """Return serialized geometry/style information."""
         return _primitive_parameters(
             "QuadraticBezierSVG",
@@ -521,10 +522,10 @@ class CubicBezierSVG(CubicBezierComponent, DrawingGeneratorInterface):
     """SVG representation of a cubic Bezier curve."""
 
     def __init__(self,
-                 start_point: Tuple[float, float],
-                 control_point1: Tuple[float, float],
-                 control_point2: Tuple[float, float],
-                 end_point: Tuple[float, float],
+                 start_point: tuple[float, float],
+                 control_point1: tuple[float, float],
+                 control_point2: tuple[float, float],
+                 end_point: tuple[float, float],
                  style: DrawingStyle) -> None:
         super().__init__(start_point=start_point,
                          control_point1=control_point1,
@@ -545,7 +546,7 @@ class CubicBezierSVG(CubicBezierComponent, DrawingGeneratorInterface):
                    style=style)
 
     @property
-    def parameters(self) -> Dict[str, Dict[str, object]]:
+    def parameters(self) -> dict[str, dict[str, object]]:
         """Return serialized geometry/style information."""
         return _primitive_parameters(
             "CubicBezierSVG",
@@ -575,7 +576,7 @@ class PathSVG(PathComponent, DrawingGeneratorInterface):
 
     def __init__(self,
                  style: DrawingStyle,
-                 commands: Optional[List[PathCommand]] = None) -> None:
+                 commands: list[PathCommand] | None = None) -> None:
         super().__init__(style=style, commands=commands)
 
     @classmethod
@@ -583,17 +584,17 @@ class PathSVG(PathComponent, DrawingGeneratorInterface):
         """Recreate a path primitive from serialized commands."""
         if not style:
             style = DrawingStyle.create_from_dict(data['PathSVG']['style'])
-        commands: List[PathCommand] = []
+        commands: list[PathCommand] = []
         for cmd in data['PathSVG'].get('commands', []):
             command = PathCommand(cmd['type'], cmd.get('points', []))
             flags = cmd.get('flags')
             if flags:
-                setattr(command, "flags", flags)
+                command.flags = flags
             commands.append(command)
         return cls(style=style, commands=commands)
 
     @property
-    def parameters(self) -> Dict[str, Dict[str, object]]:
+    def parameters(self) -> dict[str, dict[str, object]]:
         """Return serialized geometry/style information."""
         serialized = []
         for command in self.commands:
@@ -642,11 +643,11 @@ class PathSVG(PathComponent, DrawingGeneratorInterface):
 
 class RegularPolygonSVG(RegularPolygonDrawingComponent, DrawingGeneratorInterface):
     """
-        Class to describe regular polygons (triangle, square, pentagon, etc.) as SVG 
+        Class to describe regular polygons (triangle, square, pentagon, etc.) as SVG
         components.
     """
     def __init__(self,
-                 position: Tuple[float, float],
+                 position: tuple[float, float],
                  sides: int,
                  radius: float,
                  style: DrawingStyle,
@@ -655,7 +656,7 @@ class RegularPolygonSVG(RegularPolygonDrawingComponent, DrawingGeneratorInterfac
         super().__init__(position=position, sides=sides,
                          radius=radius, style=style,
                          angle=angle, corner_radius=corner_radius)
-  
+
     @classmethod
     def create_from_dict(cls, data: dict, style: DrawingStyle=None) -> object:
         """ Class method to recreate the object from its serialization dict.
@@ -698,12 +699,12 @@ class RegularPolygonSVG(RegularPolygonDrawingComponent, DrawingGeneratorInterfac
         """ Creates a single path object (polygon) in XML for a SVG file.
 
         Example:
-        
+
             <path
             style="opacity:0.521898;fill:#000000;stroke:#000000;stroke-width:0.2"
             d="M 40.915129,89.501844 103.38376,83.291512 141.37638,118.72694 Z"
             id="path1" />
-        
+
 
         Returns
         -------
@@ -729,7 +730,7 @@ class PolygonalSVG(PolygonalDrawingComponent, DrawingGeneratorInterface):
         Class to describe irregular polygons as SVG components.
     """
     def __init__(self,
-                 points: List[Tuple[float, float]],
+                 points: list[tuple[float, float]],
                  style: DrawingStyle):
         super().__init__(points=points, style=style)
 
@@ -798,7 +799,7 @@ class CircleSVG(SingleDimensionDrawingComponent, DrawingGeneratorInterface):
         Class to describe circles as SVG components.
     """
     def __init__(self,
-                 position: Tuple[float, float],
+                 position: tuple[float, float],
                  radius: float,
                  style: DrawingStyle) -> None:
         """_summary_
@@ -872,7 +873,7 @@ class CircleSVG(SingleDimensionDrawingComponent, DrawingGeneratorInterface):
         else:
             raise ValueError("Radii must be a float greater than 0")
 
-    def _rect(self, length: Union[float, int], angle: Union[float, int]) -> Tuple[float, float]:
+    def _rect(self, length: float | int, angle: float | int) -> tuple[float, float]:
         """ Private method to convert polar coordinates to cartesian.
 
         Args:
@@ -887,11 +888,11 @@ class CircleSVG(SingleDimensionDrawingComponent, DrawingGeneratorInterface):
         return (x, y)
 
     @property
-    def points(self) -> List[Tuple[float, float]]:
+    def points(self) -> list[tuple[float, float]]:
         """ Read-only property to get a list of all points in the object.
 
         Returns:
-            List[Tuple(float, float)]: List with a tuple of floats for each 
+            List[Tuple(float, float)]: List with a tuple of floats for each
             point in the object.
         """
         num_points = int(3.14159 * 2 * self.radius / 0.2)
@@ -904,13 +905,13 @@ class CircleSVG(SingleDimensionDrawingComponent, DrawingGeneratorInterface):
         return points
 
     @property
-    def bbox(self) -> List[Tuple[float, float]]:
+    def bbox(self) -> list[tuple[float, float]]:
         """ Read-only property to get a list of all points representing the
         bounding box around the object.
 
         Returns:
-            List[Tuple(float, float)]: List with a tuple of floats for the 
-            two points of the bounding box for the object. 
+            List[Tuple(float, float)]: List with a tuple of floats for the
+            two points of the bounding box for the object.
         """
         min_pos = (self.position[0]-self.radius,
                    self.position[1]-self.radius)
@@ -919,13 +920,13 @@ class CircleSVG(SingleDimensionDrawingComponent, DrawingGeneratorInterface):
         return [min_pos, max_pos]
 
     @property
-    def convex_hull(self) -> List[Tuple[float, float]]:
+    def convex_hull(self) -> list[tuple[float, float]]:
         """ Read-only property to get a list of all points representing the
         convex hull around the object.
 
         Returns:
-            List[Tuple(float, float)]: List with a tuple of floats for the 
-            for each point of the convex hull of the object. 
+            List[Tuple(float, float)]: List with a tuple of floats for the
+            for each point of the convex hull of the object.
         """
         return self.points
 
@@ -957,12 +958,12 @@ class CircleSVG(SingleDimensionDrawingComponent, DrawingGeneratorInterface):
 
 
 class TextSVG(TextComponent, DrawingGeneratorInterface):
-    """ 
+    """
         Class to describe text as SVG components.
     """
     def __init__(self,
                  text: str,
-                 position: Tuple[float, float],
+                 position: tuple[float, float],
                  style: TextStyle):
         """ Instantiate a new text object
 
@@ -1078,15 +1079,15 @@ class SVGComponent(Component, DrawingGeneratorInterface):
 
     def __init__(
         self,
-        filepath: Optional[str] = None,
+        filepath: str | None = None,
         *,
-        paths: Optional[List[Dict[str, object]]] = None,
-        bbox: Optional[Tuple[Tuple[float, float], Tuple[float, float]]] = None,
-        position: Tuple[float, float] = (0.0, 0.0),
+        paths: list[dict[str, object]] | None = None,
+        bbox: tuple[tuple[float, float], tuple[float, float]] | None = None,
+        position: tuple[float, float] = (0.0, 0.0),
         scale: float = 1.0,
-        width: Optional[float] = None,
-        height: Optional[float] = None,
-        source: Optional[str] = None,
+        width: float | None = None,
+        height: float | None = None,
+        source: str | None = None,
     ) -> None:
         super().__init__()
         if filepath:
@@ -1112,11 +1113,11 @@ class SVGComponent(Component, DrawingGeneratorInterface):
         self.scale = scale
 
     @property
-    def position(self) -> Tuple[float, float]:
+    def position(self) -> tuple[float, float]:
         return self._position
 
     @position.setter
-    def position(self, value: Tuple[float, float]) -> None:
+    def position(self, value: tuple[float, float]) -> None:
         x, y = value
         self._position = (float(x), float(y))
 
@@ -1139,7 +1140,7 @@ class SVGComponent(Component, DrawingGeneratorInterface):
     def height(self) -> float:
         return (self._bbox[1][1] - self._bbox[0][1]) * self.scale
 
-    def _scaled_bounds(self) -> Tuple[Tuple[float, float], Tuple[float, float]]:
+    def _scaled_bounds(self) -> tuple[tuple[float, float], tuple[float, float]]:
         (min_x, min_y), (max_x, max_y) = self._bbox
         px, py = self.position
         scale = self.scale
@@ -1149,7 +1150,7 @@ class SVGComponent(Component, DrawingGeneratorInterface):
         )
 
     @property
-    def points(self) -> List[Tuple[float, float]]:
+    def points(self) -> list[tuple[float, float]]:
         (min_x, min_y), (max_x, max_y) = self._scaled_bounds()
         corners = [
             (min_x, min_y),
@@ -1162,7 +1163,7 @@ class SVGComponent(Component, DrawingGeneratorInterface):
         ]
 
     @property
-    def bbox(self) -> Tuple[Tuple[float, float], Tuple[float, float]]:
+    def bbox(self) -> tuple[tuple[float, float], tuple[float, float]]:
         scaled = self._scaled_bounds()
         return (
             (float(round(scaled[0][0], PRECISION)), float(round(scaled[0][1], PRECISION))),
@@ -1170,11 +1171,11 @@ class SVGComponent(Component, DrawingGeneratorInterface):
         )
 
     @property
-    def convex_hull(self) -> List[Tuple[float, float]]:
+    def convex_hull(self) -> list[tuple[float, float]]:
         return self.points
 
     @property
-    def parameters(self) -> Dict[str, object]:
+    def parameters(self) -> dict[str, object]:
         return {
             "SVGComponent": {
                 "paths": self._paths,
@@ -1202,7 +1203,7 @@ class SVGComponent(Component, DrawingGeneratorInterface):
         )
 
     def generate_svg(self) -> str:
-        transforms: List[str] = []
+        transforms: list[str] = []
         if not math.isclose(self.position[0], 0.0) or not math.isclose(self.position[1], 0.0):
             transforms.append(f"translate({self.position[0]},{self.position[1]})")
         if not math.isclose(self.scale, 1.0):
@@ -1216,7 +1217,7 @@ class SVGComponent(Component, DrawingGeneratorInterface):
         content = "\n        ".join(path_markup)
         return f"<g{transform_attr}>\n        {content}\n    </g>"
 class ComponentGroupSVG(ComponentGroup, LabelGenerator, SegmentGenerator):
-    """ 
+    """
         Text to generate labeling data for component groups.
     """
     @classmethod
@@ -1241,14 +1242,12 @@ class ComponentGroupSVG(ComponentGroup, LabelGenerator, SegmentGenerator):
                 if c[component_class_name]['style'][style_name]['name'] not in list(styles.keys()):
                     style_class_name = list(c[component_class_name]['style'].keys())[0]
                     style_class = getattr(sys.modules[__name__], style_class_name)
-                    func = getattr(style_class, "create_from_dict")
-                    style = func(c[component_class_name]['style'])
+                    style = style_class.create_from_dict(c[component_class_name]['style'])
                     styles[c[component_class_name]['style'][style_name]['name']] = style
                 else:
                     style = styles[c[component_class_name]['style'][style_name]['name']]
             component_class = getattr(sys.modules[__name__], component_class_name)
-            func = getattr(component_class, "create_from_dict")
-            component = func(c, style)
+            component = component_class.create_from_dict(c, style)
             group.add_component(component)
 
         return group
@@ -1270,11 +1269,11 @@ class ComponentGroupSVG(ComponentGroup, LabelGenerator, SegmentGenerator):
                        {"group_label": self.group_label,
                        "components": comps}}
         return parameter_dict
-    
-    def generate_label(self) -> Dict[str, List[Tuple[float, float]]]:
+
+    def generate_label(self) -> dict[str, list[tuple[float, float]]]:
         return {self.group_label: self.bbox}
 
-    def generate_segmentation_mask(self) -> Dict[str, List[Tuple[float, float]]]:
+    def generate_segmentation_mask(self) -> dict[str, list[tuple[float, float]]]:
         return {self.group_label: self.convex_hull}
 
 
@@ -1290,13 +1289,13 @@ class TableSVG(ComponentGroupSVG):
         table: Table,
         group_label: str,
         border_style: DrawingStyle,
-        text_styles: Dict[str, TextStyle],
-        cell_padding: Optional[Union[float, Tuple[float, float, float, float]]] = None,
+        text_styles: dict[str, TextStyle],
+        cell_padding: float | tuple[float, float, float, float] | None = None,
     ) -> None:
         super().__init__(group_label)
         self._table = table
-        self._scaled_styles: Dict[Tuple[str, float], TextStyle] = {}
-        self._cell_style_overrides: Dict[Tuple[int, int, int], TextStyle] = {}
+        self._scaled_styles: dict[tuple[str, float], TextStyle] = {}
+        self._cell_style_overrides: dict[tuple[int, int, int], TextStyle] = {}
         self._border_style = border_style
         self._text_styles = text_styles
         padding_tuple = table.cell_padding if cell_padding is None else cell_padding
@@ -1309,10 +1308,10 @@ class TableSVG(ComponentGroupSVG):
         cls,
         table: Table,
         *,
-        group_label: Optional[str] = None,
+        group_label: str | None = None,
         border_style: DrawingStyle,
-        text_styles: Dict[str, TextStyle],
-        cell_padding: Optional[Union[float, Tuple[float, float, float, float]]] = None,
+        text_styles: dict[str, TextStyle],
+        cell_padding: float | tuple[float, float, float, float] | None = None,
     ) -> "TableSVG":
         label = group_label if group_label is not None else f"Table_{table.id}"
         return cls(table, label, border_style, text_styles, cell_padding)
@@ -1332,7 +1331,7 @@ class TableSVG(ComponentGroupSVG):
         return left + pad_left
 
     @staticmethod
-    def _normalize_padding(value: Union[float, Tuple[float, float, float, float], List[float]]) -> Tuple[float, float, float, float]:
+    def _normalize_padding(value: float | tuple[float, float, float, float] | list[float]) -> tuple[float, float, float, float]:
         if isinstance(value, (int, float)):
             pad = float(value)
             return (pad, pad, pad, pad)
@@ -1390,10 +1389,10 @@ class TableSVG(ComponentGroupSVG):
                             override = self._scale_style(style, scale)
                             self._cell_style_overrides[(row_index, column_index, line_idx)] = override
 
-    def _collect_lines(self, row_index: int, column_index: int, *, apply_overrides: bool) -> List[Tuple[str, TextStyle]]:
+    def _collect_lines(self, row_index: int, column_index: int, *, apply_overrides: bool) -> list[tuple[str, TextStyle]]:
         cell = self._table.cell(row_index, column_index)
-        lines: List[Tuple[str, TextStyle]] = []
-        for idx, (text, style_id) in enumerate(zip(cell.paragraphs, cell.paragraph_styles)):
+        lines: list[tuple[str, TextStyle]] = []
+        for idx, (text, style_id) in enumerate(zip(cell.paragraphs, cell.paragraph_styles, strict=False)):
             if not text:
                 continue
             style = self._text_styles.get(style_id)
@@ -1441,7 +1440,7 @@ class TableSVG(ComponentGroupSVG):
         space_bonus = text.count(' ') * size_value * mm_per_point * 0.2
         return max(base_width + space_bonus, 0.1)
 
-    def _line_metrics(self, text: str, style: TextStyle) -> Tuple[float, float, float]:
+    def _line_metrics(self, text: str, style: TextStyle) -> tuple[float, float, float]:
         component = TextSVG(text, (0.0, 0.0), style)
         outline = component._compute_outline()
         points = outline.get('points') or outline.get('bbox') or outline.get('convex_hull') or []
@@ -1501,7 +1500,7 @@ class TableSVG(ComponentGroupSVG):
                     target_top = pad_top
 
                 baseline_shift = y + target_top - (block_top or 0.0)
-                for baseline_cursor, line_height, top_offset, bottom_offset, text_value, style in metrics:
+                for baseline_cursor, _line_height, _top_offset, _bottom_offset, text_value, style in metrics:
                     baseline = baseline_shift + baseline_cursor
                     text_x = self._horizontal_position(x, width, pad_left, pad_right, style)
                     self.add_component(TextSVG(text_value, (text_x, baseline), style))
@@ -1564,7 +1563,7 @@ class DocumentSVG(Document):
                     IncludeLayer.BASE: Just the drawing components
                     IncludeLayer.LABEL: Drawing components with bounding boxes
                                         around groups
-                    IncludeLayer.MASK: Drawing components with convex hulls 
+                    IncludeLayer.MASK: Drawing components with convex hulls
                                         around groups
         """
         path, base_filename = self._normalize_output_path(filepath)
@@ -1583,7 +1582,7 @@ class DocumentSVG(Document):
             target = self._target_filename(path, base_filename, pg)
             self._write_svg(target, svg_payload)
 
-    def _normalize_output_path(self, filepath: str) -> Tuple[str, str]:
+    def _normalize_output_path(self, filepath: str) -> tuple[str, str]:
         path, file = os.path.split(os.path.abspath(filepath))
         if "." in file:
             file = file.split(".")[0]
@@ -1591,9 +1590,9 @@ class DocumentSVG(Document):
             raise ValueError("The file path does not exist.")
         return path, file
 
-    def _collect_font_rules(self) -> List[str]:
+    def _collect_font_rules(self) -> list[str]:
         font_sources = self._collect_fonts()
-        rules: List[str] = []
+        rules: list[str] = []
         for family, font_path in font_sources.items():
             try:
                 with open(font_path, "rb") as font_file:
@@ -1607,7 +1606,7 @@ class DocumentSVG(Document):
                 continue
         return rules
 
-    def _assemble_page_svg(self, page: Layers, font_rules: List[str]) -> str:
+    def _assemble_page_svg(self, page: Layers, font_rules: list[str]) -> str:
         header = f"""<?xml version="1.0" encoding="UTF-8" standalone="no"?>\t
 <!-- Created with Inkscape (http://www.inkscape.org/) -->\t
 \t
@@ -1676,7 +1675,7 @@ class DocumentSVG(Document):
         with open(file=filepath, mode="w", encoding="utf-8") as handle:
             handle.write(content)
 
-    def _compute_model_mask(self, group: ComponentGroup) -> List[Tuple[float, float]]:
+    def _compute_model_mask(self, group: ComponentGroup) -> list[tuple[float, float]]:
         """Determine mask polygon for a component group, accounting for stroke width."""
         override = getattr(group, "_mask_override", None)
         if override:
@@ -1703,7 +1702,7 @@ class DocumentSVG(Document):
                 except Exception:
                     geom = None
             if geom is None:
-                pts: List[Tuple[float, float]] = []
+                pts: list[tuple[float, float]] = []
                 if hasattr(component, "points"):
                     try:
                         pts = list(component.points)
@@ -1758,7 +1757,7 @@ class DocumentSVG(Document):
         elif hull_geom.geom_type == "Point":
             hull_geom = hull_geom.buffer(max(buffer_amount, 1e-6))
 
-        coords: List[Tuple[float, float]] = []
+        coords: list[tuple[float, float]] = []
         if hasattr(hull_geom, "exterior"):
             coords = [(float(x), float(y)) for x, y in hull_geom.exterior.coords]
         else:

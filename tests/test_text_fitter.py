@@ -10,23 +10,26 @@ from shapely.errors import TopologicalError
 from shapely.geometry import (
     GeometryCollection,
     MultiPolygon,
-    Point,
+)
+from shapely.geometry import (
     Polygon as ShapelyPolygon,
+)
+from shapely.geometry import (
     box as shapely_box,
 )
 
 import InkGen.text_fitter as text_fitter_module
+from InkGen.style import DrawingStyle
+from InkGen.svg_generator import RegularPolygonSVG
 from InkGen.text_fitter import (
-    TextFitter,
+    PX_TO_MM,
     FitterShape,
     TextBlock,
-    PX_TO_MM,
+    TextFitter,
     component_to_fitter_shape,
     plot_polygon,
     save_debug_image,
 )
-from InkGen.svg_generator import RegularPolygonSVG
-from InkGen.style import DrawingStyle
 
 FONT_PATH = "C:/Windows/Fonts/arial.ttf"
 

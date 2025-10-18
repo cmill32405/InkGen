@@ -1,6 +1,8 @@
-from InkGen.style import DrawingStyle, Style, Font, TextStyle
+
 import pytest
-from unittest.mock import Mock
+
+from InkGen.style import DrawingStyle, Font, Style, TextStyle
+
 
 @pytest.fixture
 def next_id():
@@ -13,11 +15,11 @@ def test_create_style(next_id):
 
 def test_invalid_name(next_id):
     with pytest.raises(TypeError):
-        style = Style(DrawingStyle(name="WTF"))
+        Style(DrawingStyle(name="WTF"))
     with pytest.raises(TypeError):
-        style = Style({"dog": 1})
+        Style({"dog": 1})
     with pytest.raises(TypeError):
-        style = Style(1)
+        Style(1)
 
 def test_cant_set_id_or_name(next_id):
     name = "Volcano"
@@ -35,10 +37,10 @@ def test_cant_set_id_or_name(next_id):
 
 def test_cant_reuse_style_name(next_id):
     name = "Original"
-    style = Style(name)
+    Style(name)
 
     with pytest.raises(ValueError):
-        style = Style(name)
+        Style(name)
 
 def test_create_drawingstyle(next_id):
     name = "Bob"
@@ -77,7 +79,7 @@ def test_update_drawingstyle(next_id):
 
     style.stroke = new_stroke
     assert style.stroke == new_stroke
-    
+
     style.fill = new_fill
     assert style.fill == new_fill
 
@@ -105,17 +107,17 @@ def test_invalid_colors(next_id):
     stroke = "orangutan"
     fill = "Blue"
     with pytest.raises(ValueError):
-        style = DrawingStyle(name=name, stroke=stroke, fill=fill)
+        DrawingStyle(name=name, stroke=stroke, fill=fill)
 
     stroke = "black"
     fill = "putrid"
     with pytest.raises(ValueError):
-        style = DrawingStyle(name=name, stroke=stroke, fill=fill)
+        DrawingStyle(name=name, stroke=stroke, fill=fill)
 
     stroke = "#0123ag"
     fill = "Blue"
     with pytest.raises(ValueError):
-        style = DrawingStyle(name=name, stroke=stroke, fill=fill)
+        DrawingStyle(name=name, stroke=stroke, fill=fill)
 
     stroke = "black"
     fill = "#11223g"
@@ -141,7 +143,7 @@ def test_invalid_colors(next_id):
     fill = "001122"
     with pytest.raises(ValueError):
         style = DrawingStyle(name=name, stroke=stroke, fill=fill)
-    
+
     name = "GoodColors"
     stroke = "Black"
     fill = "Blue"
@@ -292,7 +294,7 @@ def test_font_errors():
         ff.size = "error"
 
 # Test TextStyle
-        
+
 @pytest.fixture
 def font():
     ff = Font("Times New Roman")

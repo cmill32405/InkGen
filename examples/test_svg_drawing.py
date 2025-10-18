@@ -1,4 +1,3 @@
-import json
 import os
 from pathlib import Path
 from uuid import uuid4
@@ -6,6 +5,7 @@ from uuid import uuid4
 from InkGen.boundary import Canvas
 from InkGen.cad_component_groups import Zoning
 from InkGen.document import Layer
+from InkGen.style import DrawingStyle, Font, TextStyle
 from InkGen.svg_generator import (
     ComponentGroupSVG,
     DocumentSVG,
@@ -16,7 +16,6 @@ from InkGen.svg_generator import (
     TableSVG,
     TextSVG,
 )
-from InkGen.style import DrawingStyle, Font, TextStyle
 from InkGen.table import AutoFitRule, Table
 
 BASE_DIR = Path(__file__).resolve().parent

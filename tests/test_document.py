@@ -1,12 +1,13 @@
-import pytest
-import os
 import json
-from InkGen.document import Layer, Layers, Document
+import os
+
+import pytest
+
+from InkGen.boundary import Boundary, Canvas
 from InkGen.component import *
-from InkGen.boundary import Canvas, Boundary
+from InkGen.document import Document, Layer, Layers
+from InkGen.errors import ComponentGroupCollision, ComponentGroupOffCanvas, IncompatibleCanvas, InvalidComponentGroupID
 from InkGen.style import Style
-from InkGen.errors import ComponentGroupCollision, InvalidComponentGroupID
-from InkGen.errors import ComponentGroupOffCanvas, IncompatibleCanvas
 
 
 @pytest.fixture
@@ -148,18 +149,18 @@ def test_layers_errors(canvas):
     new_canvas = Canvas(200, 300, "mm")
     layer = Layer("WillFail", new_canvas)
     with pytest.raises(IncompatibleCanvas):
-        page = Layers(canvas, None, layer)
+        Layers(canvas, None, layer)
 
     with pytest.raises(TypeError):
-        page = Layers(layer)
+        Layers(layer)
 
     with pytest.raises(TypeError):
         page = Layers(canvas, "BadLayer")
-        layer_id = page.layer(canvas).layer_id
+        page.layer(canvas)
 
     with pytest.raises(ValueError):
         page = Layers(canvas, "CorrectName")
-        layer_id = page.layer("WrongName").layer_id
+        page.layer("WrongName")
 
 def test_add_layer(canvas, next_layer_id):
     page = Layers(canvas)
@@ -173,7 +174,6 @@ def test_add_layer(canvas, next_layer_id):
 
 def test_add_layer_errors(canvas):
     page = Layers(canvas)
-    new_layer = Layer("SegmentationMask", canvas)
     with pytest.raises(TypeError):
         page.add_layer(layer=canvas)
 
@@ -196,7 +196,7 @@ def test_remove_layer(canvas, next_layer_id):
     assert len(page._layers) == 1
 
 # Test Document class
-    
+
 def test_create_document(canvas, next_layer_id):
     document = Document(canvas)
     document.add_page(page=Layers(canvas, "base1"))
@@ -237,7 +237,7 @@ def test_remove_document(canvas, next_layer_id):
     assert document.pages == 0
 
 def test_creat_document_errors(canvas, next_layer_id):
-    
+
     with pytest.raises(TypeError):
         layer1 = Layers(canvas)
         document = Document(layer1)
@@ -368,7 +368,7 @@ def test_document_save_and_load_round_trip(tmp_path, canvas):
     loaded_doc, styles = Document.load(str(yaml_path))
     assert loaded_doc.parameters == document.parameters
     assert styles
-    
+
 def test_interdict():
     file = "C:\\Users\\cmill\\OneDrive\\Documents\\PythonScripts\\DrawingGen\\tests\\temp_files\\test_document.json"
     with open(file) as json_file:

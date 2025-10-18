@@ -1,16 +1,17 @@
-""" Module for creating full representations of documents and 
+""" Module for creating full representations of documents and
 the layers they contain.
 """
 import itertools
-import yaml
 import sys
-import os
-from typing import Union, Dict, Optional, Tuple, List
+
+import yaml
+
+from InkGen.boundary import Boundary, Canvas
+
 #import YAML
 from InkGen.component import ComponentGroup
-from InkGen.boundary import Canvas, Boundary
-from InkGen.errors import ComponentGroupCollision, InvalidComponentGroupID
-from InkGen.errors import ComponentGroupOffCanvas, IncompatibleCanvas
+from InkGen.errors import ComponentGroupCollision, ComponentGroupOffCanvas, IncompatibleCanvas, InvalidComponentGroupID
+
 
 class Layer:
     """ Class for storing a collection of component groups.
@@ -104,7 +105,7 @@ class Layer:
 
     @property
     def canvas(self) -> Canvas:
-        """ Object for storing information about 
+        """ Object for storing information about
         the layers boundaries and dimensions.
 
         Returns:
@@ -121,7 +122,7 @@ class Layer:
         self._group_boundaries[group.group_id] = Boundary(group.convex_hull, False)
 
     def _check_bounds(self, group: ComponentGroup, strict: bool) -> bool:
-        """ Verifies group argument doesn't interfere with others that 
+        """ Verifies group argument doesn't interfere with others that
         don't allow for collisions
 
         Args:
@@ -176,7 +177,7 @@ class Layer:
         else:
             raise TypeError("The group argument must be a ComponentGroup class")
 
-    def remove_component_group(self, group_id: Union[int, str]) -> None:
+    def remove_component_group(self, group_id: int | str) -> None:
         """ Drops a component group from the layer.
 
         Args:
@@ -204,7 +205,7 @@ class Layer:
             raise InvalidComponentGroupID("group_id must a valid group_id in the layer")
 
     @property
-    def component_groups(self) -> Dict[str, int]:
+    def component_groups(self) -> dict[str, int]:
         """Attribute with all component groups in the layer.
 
         Returns:
@@ -246,19 +247,19 @@ class Layers:
     """
     def __init__(self,
                  canvas: Canvas,
-                 name: Optional[str]=None,
-                 layer: Optional[Layer]=None) -> None:
+                 name: str | None=None,
+                 layer: Layer | None=None) -> None:
         """ Create new layers container. If Layer object is passed as argument,
-        it is added as the first layer and the name argument is ignored, but if 
+        it is added as the first layer and the name argument is ignored, but if
         only a name is provided a new layer with that name is added to the stack.
         If neither is provided, a new layer named "base" is created and added
         to the stack.
 
         Args:
-            canvas (Canvas): Canvas object 
-            name (Optional[str], optional): Name of new layer if created. 
+            canvas (Canvas): Canvas object
+            name (Optional[str], optional): Name of new layer if created.
                                             Defaults to None.
-            layer (Optional[Layer], optional): Layer object to add as first layer. 
+            layer (Optional[Layer], optional): Layer object to add as first layer.
                                                 Defaults to None.
 
         Raises:
@@ -285,8 +286,8 @@ class Layers:
             object: instance of the class.
         """
         layers = cls(Canvas.create_from_dict(data['Layers']['canvas']))
-        for k, v in data['Layers']['layers'].items():
-            layer = Layer.create_from_dict(v, styles)
+        for _, layer_payload in data['Layers']['layers'].items():
+            layer = Layer.create_from_dict(layer_payload, styles)
             layers.add_layer(layer.layer_name, layer)
         return layers
 
@@ -325,7 +326,7 @@ class Layers:
             return
         raise IncompatibleCanvas("Layer does have match the same canvas attributes.")
 
-    def _layer_identification_lookup(self, identifier: Union[int, str]) -> Tuple[str, int]:
+    def _layer_identification_lookup(self, identifier: int | str) -> tuple[str, int]:
         """ Private method to lookup the name and id of a Layer object if either the
         name or id is provided.
 
@@ -353,8 +354,8 @@ class Layers:
         return layer_name, layer_id
 
     def add_layer(self,
-                  name: Optional[str]=None,
-                  layer: Optional[Layer]=None):
+                  name: str | None=None,
+                  layer: Layer | None=None):
         """ Add a new layer to the stack by either adding an existing Layer object
         or by creating a new layer object with the name provided.  If Layer object
         is passed as an argument the name argument is ignored as the Layer object
@@ -364,7 +365,7 @@ class Layers:
         with the name as "unamed_{layer_id}".
 
         Args:
-            name (Optional[str], optional): Name which the layer can be looked up with. 
+            name (Optional[str], optional): Name which the layer can be looked up with.
                                             Defaults to None.
             layer (Optional[Layer], optional): Layer object. Defaults to None.
 
@@ -395,7 +396,7 @@ class Layers:
             self._layer_name_to_id_map[layer.layer_name] = layer.layer_id
 
     def remove_layer(self,
-                     identifier: Union[int, str]) -> None:
+                     identifier: int | str) -> None:
         """ Removes layer from the stack.
 
         Args:
@@ -410,7 +411,7 @@ class Layers:
         del self._layer_name_to_id_map[layer_name]
         del self._layers[layer_id]
 
-    def layer(self, identifier: Union[str, int]) -> Layer:
+    def layer(self, identifier: str | int) -> Layer:
         """ Lookup Layer in stack based on either layer name or id and return
         instance.
 
@@ -424,7 +425,7 @@ class Layers:
         return self._layers[layer_id]
 
     @property
-    def layers(self) -> List[str]:
+    def layers(self) -> list[str]:
         """ Return a list of all layer names in the collection
 
         Returns:
@@ -434,12 +435,12 @@ class Layers:
 
 
 class Document:
-    """Class for containing numerous Layers objects as pages in a document.  Has the ability 
+    """Class for containing numerous Layers objects as pages in a document.  Has the ability
         to add and remove pages, select the Layers object as a page number.  Also, provides
         a means of loading and saving document recipes as a YAML file.
     """
     def __init__(self, canvas: Canvas) -> None:
-        """ Instanciate a new document with no pages 
+        """ Instanciate a new document with no pages
 
         Args:
             canvas (Canvas): Canvas object for default pages added to the document.
@@ -526,7 +527,7 @@ class Document:
             Dict[str, Style]: Dictionary of all the styles in the Document.
         """
         document_data = {}
-        with open(filepath, 'r', encoding='UTF-8') as file:
+        with open(filepath, encoding='UTF-8') as file:
             document_data = yaml.safe_load(file)
 
         if not styles:
@@ -537,15 +538,14 @@ class Document:
                 exists = styles.get(k, None)
                 if not exists:
                     component_class = getattr(sys.modules[__name__], list(v.keys())[0])
-                    func = getattr(component_class, "create_from_dict")
-                    styles[k] = func(v)
+                    styles[k] = component_class.create_from_dict(v)
 
         document = Document.create_from_dict(document_data, styles)
 
         return document, styles
 
     def add_page(self, position: int=-1, page: Layers=None) -> None:
-        """ Add a page to the document at an optional position using the optional page 
+        """ Add a page to the document at an optional position using the optional page
         argument to incorporate an existing Layers object.
 
         Args:

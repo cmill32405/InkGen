@@ -1,30 +1,34 @@
 """
 An intelligent text-in-shape fitting utility for the InkGen Framework.
 """
+import logging
 import os
 import random
 from dataclasses import dataclass
-from typing import List, Tuple, Optional
 
 import matplotlib
 import matplotlib.pyplot as plt
 from PIL import ImageFont
-from shapely.geometry.base import BaseGeometry
+from shapely.affinity import scale as shapely_scale
+from shapely.affinity import translate as shapely_translate
 from shapely.errors import TopologicalError
 from shapely.geometry import (
     GeometryCollection,
     MultiPolygon,
     Point,
+)
+from shapely.geometry import (
     Polygon as ShapelyPolygon,
+)
+from shapely.geometry import (
     box as shapely_box,
 )
-from shapely.affinity import scale as shapely_scale, translate as shapely_translate
+from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
 from InkGen.boundary import Boundary
+from InkGen.component import Component
 from InkGen.text_outline import outline_for_text
-
-import logging
 
 matplotlib.use('Agg')
 
@@ -35,13 +39,12 @@ MAX_JITTER_ATTEMPTS = 8
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
-from .component import Component
 
 
 @dataclass
 class FitterShape:
     polygon: ShapelyPolygon
-    line_thickness_range: Tuple[float, float] = (1.0, 3.0)
+    line_thickness_range: tuple[float, float] = (1.0, 3.0)
     padding: float = 1.0
 
 
@@ -49,17 +52,17 @@ class FitterShape:
 class TextBlock:
     text: str
     font_path: str
-    font_size_range: Tuple[int, int] = (4, 24)
+    font_size_range: tuple[int, int] = (4, 24)
     min_font_size_px: int = 6
-    max_line_width: Optional[float] = 80.0
+    max_line_width: float | None = 80.0
 
 
 @dataclass
 class FittingResult:
     original_shape: FitterShape
-    fitted_text_lines: List[str]
-    line_positions: List[Tuple[float, float]]
-    line_widths: List[float]
+    fitted_text_lines: list[str]
+    line_positions: list[tuple[float, float]]
+    line_widths: list[float]
     font_size: float
     final_line_thickness: float
     text_geometry: BaseGeometry
@@ -107,7 +110,7 @@ def save_debug_image(boundary: ShapelyPolygon, text_poly: ShapelyPolygon, font_s
 
 class TextFitter:
     """Manage text fitting into shapes and optional jitter offsets."""
-    def __init__(self, rng: Optional[random.Random] = None):
+    def __init__(self, rng: random.Random | None = None):
         """Initialise the fitter with an optional random source."""
         self.rng = rng if rng is not None else random.Random(4242)
         self._pil_font_cache = {}
@@ -118,11 +121,11 @@ class TextFitter:
             if (font_path, size) not in self._pil_font_cache:
                 self._pil_font_cache[(font_path, size)] = ImageFont.truetype(font_path, size)
             return self._pil_font_cache[(font_path, size)]
-        except IOError:
+        except OSError:
             return ImageFont.load_default()
 
     @staticmethod
-    def _polygon_from_coords(coords: List[Tuple[float, float]]) -> Optional[ShapelyPolygon]:
+    def _polygon_from_coords(coords: list[tuple[float, float]]) -> ShapelyPolygon | None:
         """Create a shapely polygon from coordinates when possible."""
         if not coords:
             return None
@@ -146,7 +149,7 @@ class TextFitter:
         font_size: int,
         origin_x: float,
         origin_y: float,
-    ) -> Optional[ShapelyPolygon]:
+    ) -> ShapelyPolygon | None:
         """Generate an outline polygon for a single line of text."""
         if not line_text.strip():
             return None
@@ -175,7 +178,7 @@ class TextFitter:
         return None
 
     @staticmethod
-    def _merge_polygons(polygons: List[BaseGeometry]) -> Optional[BaseGeometry]:
+    def _merge_polygons(polygons: list[BaseGeometry]) -> BaseGeometry | None:
         """Merge multiple geometries into a single shape."""
         valid_geoms = [poly for poly in polygons if poly and not poly.is_empty]
         if not valid_geoms:
@@ -192,7 +195,7 @@ class TextFitter:
                 return None
         return merged
 
-    def _calculate_inner_boundary(self, shape: FitterShape) -> Tuple[Optional[ShapelyPolygon], float]:
+    def _calculate_inner_boundary(self, shape: FitterShape) -> tuple[ShapelyPolygon | None, float]:
         """Calculate the inner boundary polygon after padding and stroke adjustments."""
         min_thick, max_thick = shape.line_thickness_range
         random_thickness = self.rng.uniform(min_thick, max_thick)
@@ -209,14 +212,14 @@ class TextFitter:
         font: ImageFont.FreeTypeFont,
         font_size: int,
         font_path: str,
-        max_line_width: Optional[float],
-    ) -> Optional[Tuple[List[Tuple[str, float, float, float]], BaseGeometry]]:
+        max_line_width: float | None,
+    ) -> tuple[list[tuple[str, float, float, float]], BaseGeometry] | None:
         """Wrap text to fit within the inner boundary using adaptive line widths."""
         words = text.split()
         if not words:
             return None
 
-        temp_wrapped_lines: List[str] = []
+        temp_wrapped_lines: list[str] = []
         temp_words = list(words)
         max_possible_width = inner_boundary.bounds[2] - inner_boundary.bounds[0]
         if max_line_width is not None:
@@ -243,7 +246,7 @@ class TextFitter:
         center_y = inner_boundary.centroid.y
         start_y = center_y - total_text_height / 2.0
 
-        wrapped_lines_data: List[Tuple[str, float, float, float]] = []
+        wrapped_lines_data: list[tuple[str, float, float, float]] = []
         all_line_rects = []
         outline_polygons = []
         current_y = start_y
@@ -298,10 +301,17 @@ class TextFitter:
 
         return wrapped_lines_data, text_geometry
 
-    def _check_fit(self, text_block: TextBlock, inner_boundary: ShapelyPolygon, font_size: int) -> Optional[Tuple]:
+    def _check_fit(self, text_block: TextBlock, inner_boundary: ShapelyPolygon, font_size: int) -> tuple | None:
         """Evaluate whether the given font size fits within the inner boundary."""
         font = self._get_pil_font(text_block.font_path, font_size)
-        fit_details = self._adaptive_word_wrap(text_block.text, inner_boundary, font, font_size, text_block.font_path, text_block.max_line_width)
+        fit_details = self._adaptive_word_wrap(
+            text_block.text,
+            inner_boundary,
+            font,
+            font_size,
+            text_block.font_path,
+            text_block.max_line_width,
+        )
 
         if not fit_details:
             return None
@@ -311,10 +321,21 @@ class TextFitter:
         if inner_boundary.contains(text_geometry):
             return wrapped_data, text_geometry
 
-        save_debug_image(inner_boundary, text_geometry.convex_hull if hasattr(text_geometry, "convex_hull") else text_geometry, font_size, text_block.text)
+        debug_geometry = (
+            text_geometry.convex_hull if hasattr(text_geometry, "convex_hull") else text_geometry
+        )
+        save_debug_image(inner_boundary, debug_geometry, font_size, text_block.text)
         return None
 
-    def _max_axis_shift(self, inner_boundary: BaseGeometry, geometry: BaseGeometry, axis: str, direction: int, max_bound: float, tolerance: float = 1e-3) -> float:
+    def _max_axis_shift(
+        self,
+        inner_boundary: BaseGeometry,
+        geometry: BaseGeometry,
+        axis: str,
+        direction: int,
+        max_bound: float,
+        tolerance: float = 1e-3,
+    ) -> float:
         """Binary search the maximum shift along a single axis."""
         if max_bound <= 0.0:
             return 0.0
@@ -334,7 +355,13 @@ class TextFitter:
                 high = mid
         return low
 
-    def _axis_shift_limits(self, inner_boundary: BaseGeometry, geometry: BaseGeometry, axis: str, safety_margin: float) -> Tuple[float, float]:
+    def _axis_shift_limits(
+        self,
+        inner_boundary: BaseGeometry,
+        geometry: BaseGeometry,
+        axis: str,
+        safety_margin: float,
+    ) -> tuple[float, float]:
         """Return min/max shifts allowed along an axis after applying the safety margin."""
         inner_minx, inner_miny, inner_maxx, inner_maxy = inner_boundary.bounds
         geom_minx, geom_miny, geom_maxx, geom_maxy = geometry.bounds
@@ -393,7 +420,7 @@ class TextFitter:
         jitter_x: bool,
         jitter_y: bool,
         safety_margin: float,
-    ) -> Tuple[float, float, BaseGeometry]:
+    ) -> tuple[float, float, BaseGeometry]:
         """Calculate jitter offsets while ensuring containment inside both boundaries."""
         if not (jitter_x or jitter_y):
             logger.debug('jitter skipped', extra={'inkgen': {'reason': 'no jitter axes enabled'}})
@@ -412,23 +439,42 @@ class TextFitter:
             working_geometry = geometry
 
             if jitter_x:
-                min_x, max_x = self._axis_shift_limits(inner_boundary, working_geometry, 'x', safety_margin)
+                min_x, max_x = self._axis_shift_limits(
+                    inner_boundary,
+                    working_geometry,
+                    'x',
+                    safety_margin,
+                )
                 if max_x - min_x > 1e-6:
                     dx = self._sample_axis_offset(min_x, max_x)
                     if abs(dx) > 1e-9:
                         working_geometry = shapely_translate(working_geometry, xoff=dx)
 
             if jitter_y:
-                min_y, max_y = self._axis_shift_limits(inner_boundary, working_geometry, 'y', safety_margin)
+                min_y, max_y = self._axis_shift_limits(
+                    inner_boundary,
+                    working_geometry,
+                    'y',
+                    safety_margin,
+                )
                 if max_y - min_y > 1e-6:
                     dy = self._sample_axis_offset(min_y, max_y)
                     if abs(dy) > 1e-9:
                         working_geometry = shapely_translate(working_geometry, yoff=dy)
 
-            hull_points = list(working_geometry.convex_hull.exterior.coords) if hasattr(working_geometry, 'convex_hull') else []
-            boundary_result = boundary.boundary_check(hull_points, strict=False) if hull_points else None
+            hull_points: list[tuple[float, float]] = []
+            if hasattr(working_geometry, 'convex_hull'):
+                hull_points = list(working_geometry.convex_hull.exterior.coords)
+
+            boundary_result = (
+                boundary.boundary_check(hull_points, strict=False) if hull_points else None
+            )
             covers_result = inner_boundary.covers(working_geometry)
-            outer_covers = outer_boundary.covers(working_geometry) if outer_boundary is not None else True
+            outer_covers = (
+                outer_boundary.covers(working_geometry)
+                if outer_boundary is not None
+                else True
+            )
             candidate_inside = (bool(boundary_result) or covers_result) and outer_covers
 
             if not candidate_inside and (abs(dx) > 1e-9 or abs(dy) > 1e-9):
@@ -446,16 +492,45 @@ class TextFitter:
                     dx *= low
                     dy *= low
                     working_geometry = best_geom
-                    hull_points = list(working_geometry.convex_hull.exterior.coords) if hasattr(working_geometry, 'convex_hull') else []
-                    boundary_result = boundary.boundary_check(hull_points, strict=False) if hull_points else None
+                    hull_points = (
+                        list(working_geometry.convex_hull.exterior.coords)
+                        if hasattr(working_geometry, 'convex_hull')
+                        else []
+                    )
+                    boundary_result = (
+                        boundary.boundary_check(hull_points, strict=False)
+                        if hull_points
+                        else None
+                    )
                     covers_result = True
-                    outer_covers = outer_boundary.covers(working_geometry) if outer_boundary is not None else True
+                    outer_covers = (
+                        outer_boundary.covers(working_geometry)
+                        if outer_boundary is not None
+                        else True
+                    )
                     candidate_inside = True
 
             sample_points = hull_points[:4] if hull_points else None
-            diff_inner = working_geometry.difference(inner_boundary).area if inner_boundary.intersects(working_geometry) else working_geometry.area
-            diff_outer = working_geometry.difference(outer_boundary).area if outer_boundary is not None and outer_boundary.intersects(working_geometry) else working_geometry.area if outer_boundary is not None and not outer_boundary.contains(working_geometry) else 0.0
-            log_details = f"boundary={boundary_result} covers_inner={covers_result} covers_outer={outer_covers} diff_inner={diff_inner:.6f} diff_outer={diff_outer:.6f} dx={dx:.4f} dy={dy:.4f} sample={sample_points}"
+            if inner_boundary.intersects(working_geometry):
+                diff_inner = working_geometry.difference(inner_boundary).area
+            else:
+                diff_inner = working_geometry.area
+
+            if outer_boundary is None:
+                diff_outer = 0.0
+            elif outer_boundary.intersects(working_geometry):
+                diff_outer = working_geometry.difference(outer_boundary).area
+            elif outer_boundary.contains(working_geometry):
+                diff_outer = 0.0
+            else:
+                diff_outer = working_geometry.area
+
+            log_details = (
+                f"boundary={boundary_result} covers_inner={covers_result} "
+                f"covers_outer={outer_covers} diff_inner={diff_inner:.6f} "
+                f"diff_outer={diff_outer:.6f} dx={dx:.4f} dy={dy:.4f} "
+                f"sample={sample_points}"
+            )
 
             if candidate_inside:
                 logger.debug('jitter candidate accepted: %s', log_details)
@@ -466,7 +541,15 @@ class TextFitter:
         logger.debug('jitter fallback: no jitter candidate accepted')
         return 0.0, 0.0, geometry
 
-    def fit(self, text_block: TextBlock, shape: FitterShape, *, jitter_x: bool = False, jitter_y: bool = False, jitter_margin: float = JITTER_SAFETY_MARGIN_DEFAULT) -> Optional[FittingResult]:
+    def fit(
+    self,
+    text_block: TextBlock,
+    shape: FitterShape,
+    *,
+    jitter_x: bool = False,
+    jitter_y: bool = False,
+    jitter_margin: float = JITTER_SAFETY_MARGIN_DEFAULT,
+) -> FittingResult | None:
         """Fit text into the provided shape and return placement details."""
         inner_boundary, random_thickness = self._calculate_inner_boundary(shape)
         if not inner_boundary:
@@ -503,7 +586,14 @@ class TextFitter:
 
         if jitter_x or jitter_y:
             safety_margin = max(0.0, float(jitter_margin))
-            jitter_dx, jitter_dy, jittered_geometry = self._compute_jitter_offsets(inner_boundary, shape.polygon, final_text_geometry, jitter_x, jitter_y, safety_margin)
+            jitter_dx, jitter_dy, jittered_geometry = self._compute_jitter_offsets(
+                inner_boundary,
+                shape.polygon,
+                final_text_geometry,
+                jitter_x,
+                jitter_y,
+                safety_margin,
+            )
             if abs(jitter_dx) > 1e-9 or abs(jitter_dy) > 1e-9:
                 candidate_lines = [
                     (line_text, x + jitter_dx, y + jitter_dy, width)
@@ -563,11 +653,17 @@ class TextFitter:
         )
 
 
-def component_to_fitter_shape(component: Component, thickness_range: Tuple[float, float] = (1.0, 3.0), padding: float = 1.0) -> Optional[FitterShape]:
+def component_to_fitter_shape(
+    component: Component,
+    thickness_range: tuple[float, float] = (1.0, 3.0),
+    padding: float = 1.0,
+) -> FitterShape | None:
     """Convert a component into a FitterShape wrapper."""
     polygon = None
-    if hasattr(component, 'convex_hull') and getattr(component, 'convex_hull'):
-        polygon = ShapelyPolygon(component.convex_hull)
+    if hasattr(component, 'convex_hull'):
+        hull_points = component.convex_hull
+        if hull_points:
+            polygon = ShapelyPolygon(hull_points)
     elif hasattr(component, 'radius'):
         polygon = Point(component.position).buffer(component.radius, quad_segs=64)
     if polygon:

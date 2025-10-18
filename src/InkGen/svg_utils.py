@@ -7,8 +7,8 @@ basic metadata needed by the generator module.
 """
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Optional, Tuple
 
 from svgpathtools import Path, svg2paths2
 
@@ -18,24 +18,24 @@ class FlattenedPath:
     """A single SVG path with its original styling information."""
 
     d: str
-    style: Optional[str]
+    style: str | None
 
 
 @dataclass(frozen=True)
 class FlattenedSVG:
     """Container describing the normalised geometry extracted from an SVG."""
 
-    paths: List[FlattenedPath]
-    bbox: Tuple[Tuple[float, float], Tuple[float, float]]
-    width: Optional[float]
-    height: Optional[float]
+    paths: list[FlattenedPath]
+    bbox: tuple[tuple[float, float], tuple[float, float]]
+    width: float | None
+    height: float | None
 
 
-def _style_from_attributes(attributes: Dict[str, str]) -> Optional[str]:
+def _style_from_attributes(attributes: dict[str, str]) -> str | None:
     style = attributes.get("style")
     if style:
         return style
-    parts: List[str] = []
+    parts: list[str] = []
     if "fill" in attributes:
         parts.append(f"fill:{attributes['fill']}")
     if "stroke" in attributes:
@@ -49,7 +49,7 @@ def _style_from_attributes(attributes: Dict[str, str]) -> Optional[str]:
     return ";".join(parts) if parts else None
 
 
-def _parse_length(value: Optional[str]) -> Optional[float]:
+def _parse_length(value: str | None) -> float | None:
     if value is None:
         return None
     try:
@@ -59,7 +59,7 @@ def _parse_length(value: Optional[str]) -> Optional[float]:
         return None
 
 
-def _collect_bbox(paths: Iterable[Path]) -> Tuple[Tuple[float, float], Tuple[float, float]]:
+def _collect_bbox(paths: Iterable[Path]) -> tuple[tuple[float, float], tuple[float, float]]:
     min_x = float("inf")
     min_y = float("inf")
     max_x = float("-inf")
@@ -95,9 +95,9 @@ def flatten_svg(filepath: str) -> FlattenedSVG:
     (min_x, min_y), (max_x, max_y) = bbox
     offset = complex(-min_x, -min_y)
 
-    flattened_paths: List[FlattenedPath] = []
-    translated_paths: List[Path] = []
-    for path, attr in zip(paths, attributes):
+    flattened_paths: list[FlattenedPath] = []
+    translated_paths: list[Path] = []
+    for path, attr in zip(paths, attributes, strict=False):
         translated = path.translated(offset)
         translated_paths.append(translated)
         flattened_paths.append(

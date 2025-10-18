@@ -1,11 +1,15 @@
-from InkGen.svg_generator import *
-from InkGen.style import DrawingStyle, Font, Style, TextStyle
-from InkGen.boundary import Canvas
-from InkGen.svg_utils import flatten_svg
 import uuid
+
 import pytest
-import InkGen.svg_generator as svg_module
+
 import InkGen.component as component_module
+import InkGen.svg_generator as svg_module
+from InkGen.boundary import Canvas
+from InkGen.style import DrawingStyle, Font, Style, TextStyle
+from InkGen.svg_generator import *
+from InkGen.svg_utils import flatten_svg
+from InkGen.table import Table
+
 
 @pytest.fixture
 def style_obj():
@@ -40,19 +44,19 @@ def test_create_rectangle_svg(style_obj):
 
 def test_rectangle_svg_errors(style_obj):
     with pytest.raises(TypeError):
-        rect = RectangleSVG((50, 50), 100, 100, {"width": 0.5, "height": 0.5}, style_obj)
+        RectangleSVG((50, 50), 100, 100, {"width": 0.5, "height": 0.5}, style_obj)
 
     with pytest.raises(ValueError):
-        rect = RectangleSVG((20, 20), 5, 5, [2.6, 2.6], style_obj)
+        RectangleSVG((20, 20), 5, 5, [2.6, 2.6], style_obj)
 
     with pytest.raises(ValueError):
-        rect = RectangleSVG((20, 20), 5, 5, [2.5, 2.6], style_obj)
-    
-    with pytest.raises(ValueError):
-        rect = RectangleSVG((20, 20), 5, 6, 2.6, style_obj)
+        RectangleSVG((20, 20), 5, 5, [2.5, 2.6], style_obj)
 
     with pytest.raises(ValueError):
-        rect = RectangleSVG((20, 20), 5, 6, 3.1, style_obj)
+        RectangleSVG((20, 20), 5, 6, 2.6, style_obj)
+
+    with pytest.raises(ValueError):
+        RectangleSVG((20, 20), 5, 6, 3.1, style_obj)
 
 def test_save_and_recreate_rectangle_svg(style_obj):
     rect = RectangleSVG((50, 50), 100, 100, 1.0, style_obj)
@@ -67,7 +71,7 @@ def test_save_and_recreate_rectangle_svg(style_obj):
 
 def test_output_svg_data_from_rectangle_svg(style_obj):
     rect = RectangleSVG((50, 50), 100, 100, 1.0, style_obj)
-    
+
     assert rect.generate_svg() == f"""<rect
             style="fill:none;stroke:#000000;stroke-width:0.2;stroke-opacity:1.0"
             id="rect{rect.id}"
@@ -197,10 +201,10 @@ def test_create_circle_svg(style_obj):
 
 def test_circle_svg_errors(style_obj):
     with pytest.raises(ValueError):
-        circle = CircleSVG((50.0, 50.0), -10.0, style_obj)
+        CircleSVG((50.0, 50.0), -10.0, style_obj)
 
     with pytest.raises(ValueError):
-        circle = CircleSVG((50.0, 50.0), (10,10), style_obj)
+        CircleSVG((50.0, 50.0), (10, 10), style_obj)
 
     circle = CircleSVG((50.0, 50.0), 10.0, style_obj)
     with pytest.raises(ValueError):
@@ -228,7 +232,7 @@ def test_output_svg_data_from_circle_svg(style_obj):
             r="10.0"
             style="fill:none;stroke:#000000;stroke-width:0.2;stroke-opacity:1.0"
             id="circle{circle.id}" />"""
-    
+
 def test_circe_svg_read_only_properties(style_obj):
     circle = CircleSVG((50.0, 50.0), 10.0, style_obj)
     assert circle.bbox == [(40.0, 40.0), (60.0, 60.0)]
@@ -242,7 +246,7 @@ def test_output_svg_from_polygon_svg(style_obj):
             style="fill:none;stroke:#000000;stroke-width:0.2;stroke-opacity:1.0;stroke-linecap:butt;stroke-linejoin:miter"
             d="M 5.0,10.0 24.0,10.0 24.0,20.0 5.0,20.0 Z"
             id="path{poly.id}" />"""
-    
+
 def test_save_and_recreate_polygon_svg(style_obj):
     poly = PolygonalSVG([(5.0, 10.0), (24.0, 10.0), (24.0, 20.0), (5.0, 20.0)], style_obj)
     params = poly.parameters
@@ -256,11 +260,18 @@ def test_save_and_recreate_polygon_svg(style_obj):
 
 def test_output_svg_from_regular_polygon_svg(style_obj):
     poly = RegularPolygonSVG((0, 0), 5, 10, style_obj, 15.0, 1.0)
+    path_data = (
+        "M -2.587944546462854, 9.659014857863776 "
+        "-9.985987866920038, 0.5235182152760215 "
+        "-3.5837353665377925, -9.33546280709351 "
+        "7.771117603714625, -6.293151530770307 "
+        "8.38655017620606, 5.446081264724031  Z"
+    )
     assert poly.generate_svg() == f"""<path
             style="fill:none;stroke:#000000;stroke-width:0.2;stroke-opacity:1.0;stroke-linecap:butt;stroke-linejoin:miter"
-            d="M -2.587944546462854, 9.659014857863776 -9.985987866920038, 0.5235182152760215 -3.5837353665377925, -9.33546280709351 7.771117603714625, -6.293151530770307 8.38655017620606, 5.446081264724031  Z"
+            d="{path_data}"
             id="path{poly.id}" />"""
-    
+
 def test_save_and_recreate_regular_polygon_svg(style_obj):
     poly = RegularPolygonSVG((0,0), 5, 10, style_obj, 15.0, 1.0)
     params = poly.parameters
@@ -282,39 +293,33 @@ def draw_gen_obj():
     class Test(DrawingGeneratorInterface):
         pass
     Test.__abstractmethods__ = frozenset()
-    return Test() 
+    return Test()
 
 def test_not_implemented_errors_for_draw_gen_interfaces(draw_gen_obj):
     with pytest.raises(NotImplementedError):
-        data = draw_gen_obj.generate_svg()
+        draw_gen_obj.generate_svg()
 
 @pytest.fixture()
 def label_gen_obj():
     class Test(LabelGenerator):
         pass
     Test.__abstractmethods__ = frozenset()
-    return Test() 
+    return Test()
 
 def test_not_implemented_errors_for_label_gen_interfaces(label_gen_obj):
     with pytest.raises(NotImplementedError):
-        data = label_gen_obj.generate_label()
+        label_gen_obj.generate_label()
 
 @pytest.fixture()
 def segment_gen_obj():
     class Test(SegmentGenerator):
         pass
     Test.__abstractmethods__ = frozenset()
-    return Test() 
+    return Test()
 
 def test_not_implemented_errors_for_segment_gen_interfaces(segment_gen_obj):
     with pytest.raises(NotImplementedError):
-        data = segment_gen_obj.generate_segmentation_mask()
-import uuid
-
-from InkGen.table import Table
-from InkGen.svg_generator import ComponentGroupSVG, RectangleSVG, TableSVG, TextSVG
-from InkGen.style import DrawingStyle, Font, TextStyle
-
+        segment_gen_obj.generate_segmentation_mask()
 
 def test_table_svg_builds_component_group():
     table = Table(position=(0.0, 0.0))

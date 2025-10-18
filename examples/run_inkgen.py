@@ -1,10 +1,19 @@
+from __future__ import annotations
+
+import itertools
+import logging
 import os
 import random
 from pathlib import Path
-from typing import Optional, Tuple
+
+from shapely.affinity import translate as shapely_translate
+from shapely.geometry import Polygon as ShapelyPolygon
+from shapely.geometry import box as shapely_box
+from shapely.ops import nearest_points
+from svgpathtools import parse_path
 
 from InkGen.boundary import Canvas
-from InkGen.cad_component_groups import *
+from InkGen.cad_component_groups import Zoning
 from InkGen.component import Component
 from InkGen.document import Layer
 from InkGen.errors import ComponentGroupOffCanvas
@@ -19,21 +28,18 @@ from InkGen.svg_generator import (
     RectangleSVG,
     RegularPolygonSVG,
     SVGComponent,
-    TableSVG,
     TextSVG,
     _style_properties,
 )
-
-import itertools
-
-from InkGen.text_outline import outline_for_text, ADD_ONE_PIXEL_MARGIN_DEFAULT
-from InkGen.text_fitter import TextFitter, TextBlock, component_to_fitter_shape, FitterShape, FittingResult, JITTER_SAFETY_MARGIN_DEFAULT
-from shapely.geometry import box as shapely_box, Polygon as ShapelyPolygon
-from shapely.ops import nearest_points
-from shapely.affinity import translate as shapely_translate
-from svgpathtools import parse_path
-
-import logging
+from InkGen.text_fitter import (
+    JITTER_SAFETY_MARGIN_DEFAULT,
+    FitterShape,
+    FittingResult,
+    TextBlock,
+    TextFitter,
+    component_to_fitter_shape,
+)
+from InkGen.text_outline import outline_for_text
 
 LEFT_MARGIN = 0
 RIGHT_MARGIN = 0
@@ -154,9 +160,9 @@ def _add_fitted_text(
     style_name: str,
     *,
     padding: float = 2.0,
-    thickness_range: Tuple[float, float] = (0.75, 1.5),
-    font_range: Tuple[int, int] = (8, 64),
-    max_line_width: Optional[float] = None,
+    thickness_range: tuple[float, float] = (0.75, 1.5),
+    font_range: tuple[int, int] = (8, 64),
+    max_line_width: float | None = None,
     jitter_x: bool = True,
     jitter_y: bool = True,
     jitter_margin: float = JITTER_SAFETY_MARGIN_DEFAULT,
@@ -184,7 +190,7 @@ def _add_fitted_text(
         max_line_width=max_line_width,
     )
 
-    def _fit_with_shape(f_shape: Optional[FitterShape]) -> Optional[FittingResult]:
+    def _fit_with_shape(f_shape: FitterShape | None) -> FittingResult | None:
         if not f_shape:
             return None
         return text_fitter.fit(
@@ -255,7 +261,7 @@ def _add_fitted_text(
         combined_group = ComponentGroupSVG(_next_group_label(f"{style_name}_group"))
 
     for idx, (line_text, (x_pos, y_pos), width) in enumerate(
-        zip(result.fitted_text_lines, result.line_positions, result.line_widths)
+        zip(result.fitted_text_lines, result.line_positions, result.line_widths, strict=False)
     ):
         left_x = float(x_pos)
         center_x = left_x + float(width) / 2.0
@@ -399,11 +405,9 @@ def _add_fitted_text(
 
         if mode == "combined":
             combined_group.add_component(line_component)
-            label_key = f"{style_name}_line_{idx}"
         else:
             line_group = ComponentGroupSVG(_next_group_label(f"{style_name}_line"))
             line_group.add_component(line_component)
-            label_key = line_group.group_label
             if mask_points:
                 line_group._mask_override = [(float(px), float(py)) for px, py in mask_points]
             fitted_text_groups.append(line_group)
@@ -481,7 +485,7 @@ callout.position = (190 - callout_x_offset, 100 - callout_y_offset)
 circle_group.add_component(callout)
 
 harry_template = TEMPLATE_DIR / "Harry Potter_small.svg"
-harry_group: Optional[ComponentGroupSVG] = None
+harry_group: ComponentGroupSVG | None = None
 if harry_template.exists():
     harry_svg_component = SVGComponent(
         filepath=str(harry_template),

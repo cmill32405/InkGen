@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import List, Optional, Tuple
 
 from InkGen.component import Component
 
@@ -21,27 +20,27 @@ class Table(Component):
     def __init__(
         self,
         *,
-        position: Tuple[float, float] = (0.0, 0.0),
+        position: tuple[float, float] = (0.0, 0.0),
         autofit: bool = False,
     ) -> None:
         super().__init__()
         self._position = (float(position[0]), float(position[1]))
         self._auto_fit = bool(autofit)
-        self._autofit_queue: List[Tuple[Tuple[int, int], AutoFitRule, AutoFitRule]] = []
+        self._autofit_queue: list[tuple[tuple[int, int], AutoFitRule, AutoFitRule]] = []
         self._autofit_suppressed = False
 
-        self._rows: List[Row] = []
-        self._columns: List[Column] = []
-        self._matrix: List[List[Cell]] = []
+        self._rows: list[Row] = []
+        self._columns: list[Column] = []
+        self._matrix: list[list[Cell]] = []
         self._padding = (1.0, 1.0, 1.0, 1.0)
         self.cell_padding = 1.0
 
     @property
-    def cell_padding(self) -> Tuple[float, float, float, float]:
+    def cell_padding(self) -> tuple[float, float, float, float]:
         return self._padding
 
     @cell_padding.setter
-    def cell_padding(self, value: Union[float, Tuple[float, float, float, float], List[float]]):
+    def cell_padding(self, value: float | tuple[float, float, float, float] | list[float]):
         self._padding = self._normalize_padding(value)
 
     @property
@@ -61,7 +60,7 @@ class Table(Component):
         return self._padding[3]
 
     @staticmethod
-    def _normalize_padding(value: Union[float, Tuple[float, float, float, float], List[float]]) -> Tuple[float, float, float, float]:
+    def _normalize_padding(value: float | tuple[float, float, float, float] | list[float]) -> tuple[float, float, float, float]:
         if isinstance(value, (int, float)):
             pad = float(value)
             return (pad, pad, pad, pad)
@@ -72,7 +71,7 @@ class Table(Component):
     # ------------------------------------------------------------------
     # Core structural helpers
     # ------------------------------------------------------------------
-    def add_row(self, *, location: Optional[int] = None, height: float = 10.0) -> Row:
+    def add_row(self, *, location: int | None = None, height: float = 10.0) -> Row:
         """Insert a new row at *location* (default end) with the supplied height."""
         insert_at = self._validate_insert_index(location, self.row_count)
         row = Row(self, height)
@@ -84,7 +83,7 @@ class Table(Component):
         self._reindex_cells()
         return row
 
-    def add_column(self, *, location: Optional[int] = None, width: float = 10.0) -> Column:
+    def add_column(self, *, location: int | None = None, width: float = 10.0) -> Column:
         """Insert a new column at *location* (default end) with the supplied width."""
         insert_at = self._validate_insert_index(location, self.column_count)
         column = Column(self, width)
@@ -96,18 +95,18 @@ class Table(Component):
         self._reindex_cells()
         return column
 
-    def cell(self, row: int, column: int) -> "Cell":
+    def cell(self, row: int, column: int) -> Cell:
         return self._matrix[row][column]
 
-    def row_cells(self, row: int) -> Tuple["Cell", ...]:
+    def row_cells(self, row: int) -> tuple[Cell, ...]:
         return tuple(self._matrix[row])
 
-    def column_cells(self, column: int) -> Tuple["Cell", ...]:
+    def column_cells(self, column: int) -> tuple[Cell, ...]:
         return tuple(self._matrix[row][column] for row in range(self.row_count))
 
     def cell_bounds(
         self, row: int, column: int
-    ) -> Tuple[Tuple[float, float], float, float]:
+    ) -> tuple[tuple[float, float], float, float]:
         """Return the top-left coordinate, width, and height for a cell."""
         if not (0 <= row < self.row_count and 0 <= column < self.column_count):
             raise IndexError("Cell coordinates outside table dimensions")
@@ -121,11 +120,11 @@ class Table(Component):
     # Geometry and layout
     # ------------------------------------------------------------------
     @property
-    def position(self) -> Tuple[float, float]:
+    def position(self) -> tuple[float, float]:
         return self._position
 
     @position.setter
-    def position(self, value: Tuple[float, float]) -> None:
+    def position(self, value: tuple[float, float]) -> None:
         self._position = (float(value[0]), float(value[1]))
 
     @property
@@ -137,7 +136,7 @@ class Table(Component):
         return sum(row.height for row in self._rows)
 
     @property
-    def points(self) -> List[Tuple[float, float]]:
+    def points(self) -> list[tuple[float, float]]:
         x, y = self._position
         w, h = self.width, self.height
         if w == 0 or h == 0:
@@ -145,12 +144,12 @@ class Table(Component):
         return [(x, y), (x + w, y), (x + w, y + h), (x, y + h)]
 
     @property
-    def bbox(self) -> Tuple[Tuple[float, float], Tuple[float, float]]:
+    def bbox(self) -> tuple[tuple[float, float], tuple[float, float]]:
         x, y = self._position
         return ((x, y), (x + self.width, y + self.height))
 
     @property
-    def convex_hull(self) -> List[Tuple[float, float]]:
+    def convex_hull(self) -> list[tuple[float, float]]:
         return self.points.copy()
 
     # ------------------------------------------------------------------
@@ -165,7 +164,7 @@ class Table(Component):
         self._auto_fit = bool(state)
 
     @property
-    def autofit_queue(self) -> List[Tuple[Tuple[int, int], AutoFitRule, AutoFitRule]]:
+    def autofit_queue(self) -> list[tuple[tuple[int, int], AutoFitRule, AutoFitRule]]:
         return list(self._autofit_queue)
 
     def clear_autofit_queue(self) -> None:
@@ -199,7 +198,7 @@ class Table(Component):
         }
 
     @classmethod
-    def create_from_dict(cls, data: dict) -> "Table":
+    def create_from_dict(cls, data: dict) -> Table:
         payload = data["Table"] if "Table" in data else data
         table = cls(position=tuple(payload["position"]), autofit=payload["auto_fit"])
         table.cell_padding = payload.get("padding", table.cell_padding)
@@ -231,11 +230,11 @@ class Table(Component):
     # Collection accessors
     # ------------------------------------------------------------------
     @property
-    def rows(self) -> Tuple["Row", ...]:
+    def rows(self) -> tuple[Row, ...]:
         return tuple(self._rows)
 
     @property
-    def columns(self) -> Tuple["Column", ...]:
+    def columns(self) -> tuple[Column, ...]:
         return tuple(self._columns)
 
     @property
@@ -249,7 +248,7 @@ class Table(Component):
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
-    def _validate_insert_index(self, location: Optional[int], upper: int) -> int:
+    def _validate_insert_index(self, location: int | None, upper: int) -> int:
         if location is None:
             return upper
         if not 0 <= location <= upper:
@@ -270,7 +269,7 @@ class Table(Component):
 
 
 @staticmethod
-def _normalize_padding(value: Union[float, Tuple[float, float, float, float], List[float]]) -> Tuple[float, float, float, float]:
+def _normalize_padding(value: float | tuple[float, float, float, float] | list[float]) -> tuple[float, float, float, float]:
     if isinstance(value, (int, float)):
         pad = float(value)
         return (pad, pad, pad, pad)
@@ -287,17 +286,17 @@ class Row:
         self._table = table
         self._height = float(height)
         self._height_rule = AutoFitRule.EXPAND
-        self._cells: List[Cell] = []
+        self._cells: list[Cell] = []
 
     @property
     def table(self) -> Table:
         return self._table
 
     @property
-    def cells(self) -> Tuple["Cell", ...]:
+    def cells(self) -> tuple[Cell, ...]:
         return tuple(self._cells)
 
-    def column(self, index: int) -> "Cell":
+    def column(self, index: int) -> Cell:
         return self._cells[index]
 
     @property
@@ -328,7 +327,7 @@ class Row:
         }
 
     # Internal
-    def _set_cells(self, cells: List["Cell"]) -> None:
+    def _set_cells(self, cells: list[Cell]) -> None:
         self._cells = cells
 
 
@@ -339,17 +338,17 @@ class Column:
         self._table = table
         self._width = float(width)
         self._width_rule = AutoFitRule.EXPAND
-        self._cells: List[Cell] = []
+        self._cells: list[Cell] = []
 
     @property
     def table(self) -> Table:
         return self._table
 
     @property
-    def cells(self) -> Tuple["Cell", ...]:
+    def cells(self) -> tuple[Cell, ...]:
         return tuple(self._cells)
 
-    def row(self, index: int) -> "Cell":
+    def row(self, index: int) -> Cell:
         return self._cells[index]
 
     @property
@@ -380,7 +379,7 @@ class Column:
         }
 
     # Internal
-    def _set_cells(self, cells: List["Cell"]) -> None:
+    def _set_cells(self, cells: list[Cell]) -> None:
         self._cells = cells
 
 
@@ -393,11 +392,11 @@ class Cell:
         self._table = table
         self._row_index = row_index
         self._column_index = column_index
-        self._paragraph_text: List[str] = []
-        self._paragraph_styles: List[Optional[str]] = []
+        self._paragraph_text: list[str] = []
+        self._paragraph_styles: list[str | None] = []
         self._merged = False
-        self._merge_start: Tuple[int, int] = (row_index, column_index)
-        self._merge_end: Tuple[int, int] = (row_index, column_index)
+        self._merge_start: tuple[int, int] = (row_index, column_index)
+        self._merge_end: tuple[int, int] = (row_index, column_index)
         self._vertical_alignment = "top"
 
     @property
@@ -417,11 +416,11 @@ class Cell:
         return self._merged
 
     @property
-    def merge_start(self) -> Tuple[int, int]:
+    def merge_start(self) -> tuple[int, int]:
         return self._merge_start
 
     @property
-    def merge_end(self) -> Tuple[int, int]:
+    def merge_end(self) -> tuple[int, int]:
         return self._merge_end
 
     @property
@@ -436,24 +435,24 @@ class Cell:
 
     # Paragraph handling ------------------------------------------------
     @property
-    def paragraphs(self) -> List[str]:
+    def paragraphs(self) -> list[str]:
         return list(self._paragraph_text)
 
     @property
-    def paragraph_styles(self) -> List[Optional[str]]:
+    def paragraph_styles(self) -> list[str | None]:
         return list(self._paragraph_styles)
 
     @property
     def text(self) -> str:
         return "\n".join(self._paragraph_text)
 
-    def add_paragraph(self, text: str, *, style_id: Optional[str] = None) -> None:
+    def add_paragraph(self, text: str, *, style_id: str | None = None) -> None:
         self._append_paragraph(text, style_id, trigger_autofit=True)
 
     def _append_paragraph(
         self,
         text: str,
-        style_id: Optional[str],
+        style_id: str | None,
         *,
         trigger_autofit: bool,
     ) -> None:
@@ -472,7 +471,7 @@ class Cell:
         return self._paragraph_text[index]
 
     # Merge -------------------------------------------------------------
-    def merge(self, other: "Cell") -> "Cell":
+    def merge(self, other: Cell) -> Cell:
         if self.table is not other.table:
             raise ValueError("Cells belong to different tables")
         top = min(self._row_index, other._row_index)
@@ -493,7 +492,7 @@ class Cell:
         return {
             "paragraphs": [
                 {"text": text, "style_id": style_id}
-                for text, style_id in zip(self._paragraph_text, self._paragraph_styles)
+                for text, style_id in zip(self._paragraph_text, self._paragraph_styles, strict=False)
             ],
             "merged": self._merged,
             "merge_start": list(self._merge_start),

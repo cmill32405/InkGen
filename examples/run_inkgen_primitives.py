@@ -7,10 +7,14 @@ describing its parameters, plus a companion convex-hull mask SVG.
 from __future__ import annotations
 
 import argparse
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable, List, Tuple
 
 from InkGen.boundary import Canvas
+from InkGen.component import PathCommand
+from InkGen.document import Layer
+from InkGen.errors import ComponentGroupOffCanvas
+from InkGen.style import DrawingStyle, Font, TextStyle
 from InkGen.svg_generator import (
     ArcSVG,
     CircleSVG,
@@ -26,24 +30,20 @@ from InkGen.svg_generator import (
     RegularPolygonSVG,
     TextSVG,
 )
-from InkGen.component import PathCommand
-from InkGen.errors import ComponentGroupOffCanvas
-from InkGen.document import Layer
-from InkGen.style import DrawingStyle, Font, TextStyle
 
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_OUTPUT_DIR = BASE_DIR / "output"
 
-LabelPos = Tuple[float, float]
+LabelPos = tuple[float, float]
 
 
 def _ensure_output_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
-def _bbox_from_points(points: Iterable[Tuple[float, float]]) -> Tuple[Tuple[float, float], Tuple[float, float]]:
-    xs: List[float] = []
-    ys: List[float] = []
+def _bbox_from_points(points: Iterable[tuple[float, float]]) -> tuple[tuple[float, float], tuple[float, float]]:
+    xs: list[float] = []
+    ys: list[float] = []
     for x, y in points:
         xs.append(float(x))
         ys.append(float(y))
@@ -102,7 +102,7 @@ def _format_parameters(component) -> str:
     params = component.parameters
     component_name = next(iter(params.keys()))
     values = params[component_name]
-    parts: List[str] = []
+    parts: list[str] = []
     for key, value in values.items():
         if key == "style":
             continue
@@ -118,7 +118,7 @@ def _format_parameters(component) -> str:
     return f"{component_name}: {summary}"
 
 
-def _create_styles() -> Tuple[DrawingStyle, DrawingStyle, DrawingStyle, TextStyle]:
+def _create_styles() -> tuple[DrawingStyle, DrawingStyle, DrawingStyle, TextStyle]:
     outline_style = DrawingStyle(
         name="ShowcaseOutline",
         stroke="#1F77B4",
@@ -192,23 +192,51 @@ def _build_showcase(document: DocumentSVG, output_dir: str, filename: str) -> No
 
     polygon = RegularPolygonSVG(position=(26.0, 70.0), sides=6, radius=14.0, style=outline_style, angle=15.0, corner_radius=1.5)
     regular_label = "RegularPolygonSVG hex"
-    polygon_label_component = _add_component_with_label(shapes_group, polygon, label_style, canvas_width, canvas_height, regular_label)
+    polygon_label_component = _add_component_with_label(
+        shapes_group,
+        polygon,
+        label_style,
+        canvas_width,
+        canvas_height,
+        regular_label,
+    )
     labels_group.add_component(polygon_label_component)
 
     poly_points = [(62.0, 58.0), (84.0, 60.0), (90.0, 80.0), (70.0, 86.0), (58.0, 72.0)]
     irregular = PolygonalSVG(poly_points, fill_style)
     polygonal_label = "PolygonalSVG 5pts"
-    polygonal_label_component = _add_component_with_label(shapes_group, irregular, label_style, canvas_width, canvas_height, polygonal_label)
+    polygonal_label_component = _add_component_with_label(
+        shapes_group,
+        irregular,
+        label_style,
+        canvas_width,
+        canvas_height,
+        polygonal_label,
+    )
     labels_group.add_component(polygonal_label_component)
 
     arc = ArcSVG(center=(126.0, 70.0), radius_x=18.0, radius_y=12.0, start_angle=0.0, end_angle=210.0, rotation=25.0, style=accent_style)
     arc_label = "ArcSVG rx18 ry12"
-    arc_label_component = _add_component_with_label(shapes_group, arc, label_style, canvas_width, canvas_height, arc_label)
+    arc_label_component = _add_component_with_label(
+        shapes_group,
+        arc,
+        label_style,
+        canvas_width,
+        canvas_height,
+        arc_label,
+    )
     labels_group.add_component(arc_label_component)
 
     quad = QuadraticBezierSVG(start_point=(18.0, 108.0), control_point=(36.0, 92.0), end_point=(60.0, 114.0), style=outline_style)
     quad_label = "QuadraticBezierSVG"
-    quad_label_component = _add_component_with_label(shapes_group, quad, label_style, canvas_width, canvas_height, quad_label)
+    quad_label_component = _add_component_with_label(
+        shapes_group,
+        quad,
+        label_style,
+        canvas_width,
+        canvas_height,
+        quad_label,
+    )
     labels_group.add_component(quad_label_component)
 
     cubic = CubicBezierSVG(

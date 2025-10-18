@@ -1,9 +1,9 @@
 """ CAD Generation Classes for Generating the Major components of a CAD drawing
 """
-from InkGen.component import ComponentGroup, TextComponent
-from InkGen.svg_generator import RectangleSVG, LineSVG, TextSVG
-from InkGen.style import TextStyle, DrawingStyle
 from InkGen.boundary import Canvas
+from InkGen.component import ComponentGroup, TextComponent
+from InkGen.style import DrawingStyle, TextStyle
+from InkGen.svg_generator import LineSVG, RectangleSVG, TextSVG
 
 
 class Zoning:
@@ -16,7 +16,7 @@ class Zoning:
             canvas (Canvas): Canvas for drawing
             line_style (DrawingStyle): Drawing style of the zoning lines
             text_style (TextStyle): Text style used for the zoning characters.
-        
+
         Kwargs:
             Margins (float):
                 Like CSS margins come in multiple flavors with more specific values overriding
@@ -24,7 +24,7 @@ class Zoning:
                 - left_margin, top_margin, right_margin, bottom_margin - enables setting separately
                 - h_margins, v_margins - enables setting horizontal separate of vertical margins
                 - margins - enables setting all margins at once
-                
+
                 If margins is set and left_margin is set also, the margins will be:
                 [left_margin, margin, margin, margin]
 
@@ -46,16 +46,16 @@ class Zoning:
                 - outer_radius - Outer line will be rounded per the radius
 
             Zones (int):
-                The zoning section will be divided up in an even number of zones for the 
+                The zoning section will be divided up in an even number of zones for the
                 horizontal and vertical sections.  Odd numbers don't work here because
-                the zones must be symmetric around the microfiche guide arrows. 
+                the zones must be symmetric around the microfiche guide arrows.
                 Defaults are based on the canvas widths and heights.  For a landscape A4
                 they are 10 horizontal and 8 vertical zones.
                 - horizontal_zones - Number of zones for the top and bottom of the drawing
                 - vertical_zones - Number of zones for the left and right of the drawing
 
             Zone Characters (int):
-                ASCII number associated with an alphanumeric sequence to indicate if the 
+                ASCII number associated with an alphanumeric sequence to indicate if the
                 zoning sections are represented by letters or numbers.  Usually set
                 to either 49 for '1' or 65 for 'A'
                 - first_horizontal_char - Default '1' in the right most zone
@@ -77,7 +77,7 @@ class Zoning:
         self._text_style = text_style
         self._group = ComponentGroup("Zoning")
         self._parameters = {"margins": None, "h_margins": None, "v_margins": None,
-                           "left_margin": None, "right_margin": None, 
+                           "left_margin": None, "right_margin": None,
                            "top_margin": None, "bottom_margin": None,
                            "zone_width": None, "h_zone_width": None, "v_zone_width": None,
                            "left_zone_width": None, "right_zone_width": None,

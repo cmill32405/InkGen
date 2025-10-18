@@ -5,24 +5,25 @@
 import itertools
 import os
 import platform
-from typing import Union, List
+
 from matplotlib import font_manager
 
+
 class Style:
-    """ 
+    """
         Base class for styles.  Holds id and name.
     """
     id_iter = itertools.count()
     style_names = []
 
     colors = ['red', 'black', 'blue', 'silver', 'gray', 'white', 'maroon',
-              'purple', 'fuchsia', 'green', 'lime', 'olive', 'yellow', 
+              'purple', 'fuchsia', 'green', 'lime', 'olive', 'yellow',
               'navy', 'teal', 'aqua', 'brown', 'orange', 'cyan', 'magenta', 'beige', 'apricot']
     hex_values = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b',
                   'c', 'd', 'e', 'f', 'A', 'B', 'C', 'D', 'E', 'F']
 
     hex_lookup = {'red': '#FF0000', 'black': '#000000', 'blue': '#0000FF', 'silver': '#C0C0C0',
-                  'gray': '#808080', 'white': '#FFFFFF', 'maroon': '#800000', 'purple': '#800080', 
+                  'gray': '#808080', 'white': '#FFFFFF', 'maroon': '#800000', 'purple': '#800080',
                   'fuchsia': '#FF00FF', 'green': '#008000', 'lime': '#00FF00', 'olive': '#808000',
                   'yellow': '#FFFF00', 'navy': '#000080', 'teal': '#008080', 'aqua': '#00FFFF',
                   'brown': '#9A6324', 'orange': '#f58231', 'cyan': '#42d4f4', 'magenta': '#f032e6',
@@ -136,7 +137,7 @@ class Style:
 
 
 class DrawingStyle(Style):
-    """ 
+    """
         Class controlling the parameters for DrawingComponents.
 
     """
@@ -162,7 +163,7 @@ class DrawingStyle(Style):
         stroke_width : float, optional
             width of lines of drawing components, by default 0.2
         fill : str, optional
-            color parameter of the fill of component as word based color or hex code, 
+            color parameter of the fill of component as word based color or hex code,
             by default 'none'
         stroke_opacity : float, optional
             _description_, by default 1.0
@@ -367,41 +368,43 @@ class Font:
     """
         Class for storing font information.
     """
-    def __init__(self,
-                 family: Union[str, List[str]] = 'sans-serif',
-                 style: str = "normal",
-                 variant: str = "normal",
-                 stretch: str = "normal",
-                 weight: Union[str, int] = "normal",
-                 size: Union[str, float] = 10.0,
-                 custom_font_paths: List[str] = None) -> None:
+    def __init__(
+        self,
+        family: str | list[str] = "sans-serif",
+        style: str = "normal",
+        variant: str = "normal",
+        stretch: str = "normal",
+        weight: str | int = "normal",
+        size: str | float = 10.0,
+        custom_font_paths: list[str] | None = None,
+    ) -> None:
         """ Create a new font object with desired parameters.
 
         Args:
-            family (List[str]): A list of font names in decreasing order of priority. 
-                                The items may include a generic font family name, either 
-                                'sans-serif', 'serif', 'cursive', 'fantasy', or 'monospace'. 
+            family (List[str]): A list of font names in decreasing order of priority.
+                                The items may include a generic font family name, either
+                                'sans-serif', 'serif', 'cursive', 'fantasy', or 'monospace'.
                                 Defaults to "sans-serif".
-            style (str, optional): Either 'normal', 'italic' or 'oblique'. 
+            style (str, optional): Either 'normal', 'italic' or 'oblique'.
                                 Defaults to "normal".
-            variant (str, optional): Either 'normal' or 'small-caps'. 
+            variant (str, optional): Either 'normal' or 'small-caps'.
                                 Defaults to "normal".
-            stretch (str, optional): A numeric value in the range 0-1000 or one of 
-                                'ultra-condensed', 'extra-condensed', 'condensed', 
-                                'semi-condensed', 'normal', 'semi-expanded', 'expanded', 
-                                'extra-expanded' or 'ultra-expanded'. 
+            stretch (str, optional): A numeric value in the range 0-1000 or one of
+                                'ultra-condensed', 'extra-condensed', 'condensed',
+                                'semi-condensed', 'normal', 'semi-expanded', 'expanded',
+                                'extra-expanded' or 'ultra-expanded'.
                                 Defaults to "normal".
-            weight (Union[str, int], optional): A numeric value in the range 0-1000 or one of 
-                                'ultralight', 'light', 'normal', 'regular', 'book', 'medium', 
-                                'roman', 'semibold', 'demibold', 'demi', 'bold', 'heavy', 
-                                'extra bold', 'black'. 
+            weight (Union[str, int], optional): A numeric value in the range 0-1000 or one of
+                                'ultralight', 'light', 'normal', 'regular', 'book', 'medium',
+                                'roman', 'semibold', 'demibold', 'demi', 'bold', 'heavy',
+                                'extra bold', 'black'.
                                 Defaults to "normal".
-            size (Union[str, float], optional): Either a relative value of 'xx-small', 'x-small', 
-                                'small', 'medium', 'large', 'x-large', 'xx-large' or an absolute 
-                                font size, e.g., 10. 
+            size (Union[str, float], optional): Either a relative value of 'xx-small', 'x-small',
+                                'small', 'medium', 'large', 'x-large', 'xx-large' or an absolute
+                                font size, e.g., 10.
                                 Defaults to 10.0.
             custom_font_paths (List[str], optional): Path to desired fonts if custom location is
-                                desired, otherwise system font locations are autoloaded. 
+                                desired, otherwise system font locations are autoloaded.
                                 Defaults to None.
 
         Raises:
@@ -554,7 +557,7 @@ class Font:
 
     @style.setter
     def style(self, style: str) -> None:
-        """Change the style setting of the current font to 
+        """Change the style setting of the current font to
         either normal, italic, or oblique.
 
         Args:
@@ -602,21 +605,21 @@ class Font:
         return self._font.get_stretch()
 
     @stretch.setter
-    def stretch(self, stretch: Union[str, int]) -> None:
+    def stretch(self, stretch: str | int) -> None:
         """Update the compression (kerning) of the current font.
 
         Args:
-            stretch (Union[str, int]): A numeric value in the range 0-1000 or one of 
-                                'ultra-condensed', 'extra-condensed', 'condensed', 
-                                'semi-condensed', 'normal', 'semi-expanded', 'expanded', 
-                                'extra-expanded' or 'ultra-expanded'. 
+            stretch (str | int): A numeric value in the range 0-1000 or one of
+                                'ultra-condensed', 'extra-condensed', 'condensed',
+                                'semi-condensed', 'normal', 'semi-expanded', 'expanded',
+                                'extra-expanded' or 'ultra-expanded'.
 
         Raises:
             ValueError: Invalid value not used for stretch.
         """
 
         valid_names = ['ultra-condensed', 'extra-condensed', 'condensed',
-                       'semi-condensed', 'normal', 'semi-expanded', 'expanded', 
+                       'semi-condensed', 'normal', 'semi-expanded', 'expanded',
                        'extra-expanded', 'ultra-expanded']
 
         if isinstance(stretch, str) and stretch in valid_names:
@@ -636,13 +639,13 @@ class Font:
         return self._font.get_weight()
 
     @weight.setter
-    def weight(self, weight: Union[str, int]) -> None:
+    def weight(self, weight: str | int) -> None:
         """Update weight of the current font.
 
         Args:
-            weight (Union[str, int]): A numeric value in the range 0-1000 or one of 
-                                'ultralight', 'light', 'normal', 'regular', 'book', 'medium', 
-                                'roman', 'semibold', 'demibold', 'demi', 'bold', 'heavy', 
+            weight (str | int): A numeric value in the range 0-1000 or one of
+                                'ultralight', 'light', 'normal', 'regular', 'book', 'medium',
+                                'roman', 'semibold', 'demibold', 'demi', 'bold', 'heavy',
                                 'extra bold', 'black'.
 
         Raises:
@@ -650,7 +653,7 @@ class Font:
         """
 
         valid_names = ['ultralight', 'light', 'normal', 'regular', 'book', 'medium',
-                        'roman', 'semibold', 'demibold', 'demi', 'bold', 'heavy', 
+                        'roman', 'semibold', 'demibold', 'demi', 'bold', 'heavy',
                         'extra bold', 'black']
 
         if isinstance(weight, str) and weight in valid_names:
@@ -670,12 +673,12 @@ class Font:
         return self._font.get_size_in_points()
 
     @size.setter
-    def size(self, size: Union[str, float]) -> None:
+    def size(self, size: str | float) -> None:
         """Update size of current font.
 
         Args:
-            size (Union[str, float]): Either a relative value of 'xx-small', 'x-small', 
-                                'small', 'medium', 'large', 'x-large', 'xx-large' or an absolute 
+            size (str | float): Either a relative value of 'xx-small', 'x-small',
+                                'small', 'medium', 'large', 'x-large', 'xx-large' or an absolute
                                 font size, e.g., 10.
 
         Raises:
@@ -701,7 +704,7 @@ class Font:
 
 
 class TextStyle(Style):
-    """ Style information for text including font, color, anchor, subscript, 
+    """ Style information for text including font, color, anchor, subscript,
         superscript, and line spacing.
     """
     def __init__(self,
@@ -865,7 +868,7 @@ class TextStyle(Style):
 
     @property
     def text_align(self) -> str:
-        """ Identifies if text is left (start), center, 
+        """ Identifies if text is left (start), center,
             or right (end) aligned.
 
         Returns
@@ -877,7 +880,7 @@ class TextStyle(Style):
 
     @property
     def text_anchor(self) -> str:
-        """ Identifies if text ancor is left (start), middle, 
+        """ Identifies if text ancor is left (start), middle,
             or right (end) aligned.  Set by text align.
 
         Returns
@@ -890,13 +893,13 @@ class TextStyle(Style):
     @text_align.setter
     def text_align(self, value: str) -> None:
         """ Updates text_align and text_anchor
-            based on input value.  Sets the 
+            based on input value.  Sets the
             text_align and text_anchor parameters.
 
         Parameters
         ----------
         value : str
-            Valid values: 
+            Valid values:
                start - start, left
                end - end, right
                center - middle, center
@@ -914,8 +917,8 @@ class TextStyle(Style):
 
     @property
     def line_spacing(self) -> float:
-        """ Space between lines for multiline text.  
-        If set to default one the bounding boxes of each 
+        """ Space between lines for multiline text.
+        If set to default one the bounding boxes of each
         text line will be right on top of each other.
 
         Returns

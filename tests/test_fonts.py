@@ -15,8 +15,9 @@
 #     assert "bold" in ff.font_info("Times New Roman").keys()
 #     assert "italic" in ff.font_info("Times New Roman").keys()
 #     assert "bold italic" in ff.font_info("Times New Roman").keys()
-#     assert list(ff.font_info("Times New Roman")['bold italic'].keys()) == ["Full Name", "Typographic Family", "Typographic Subfamily", "File Path"]
-#     assert list(ff.font_info("Times New Roman", 'bold italic').keys()) == ["Full Name", "Typographic Family", "Typographic Subfamily", "File Path"]
+#     expected_keys = ["Full Name", "Typographic Family", "Typographic Subfamily", "File Path"]
+#     assert list(ff.font_info("Times New Roman")['bold italic'].keys()) == expected_keys
+#     assert list(ff.font_info("Times New Roman", 'bold italic').keys()) == expected_keys
 
 # def test_specify_font_path():
 #     ff = FontFinder(["C:\\Windows\\Fonts"])
@@ -52,4 +53,3 @@
 #     assert not ff.style_exists("Times New Roman", "Regulated")
 #     with pytest.raises(ValueError):
 #         ff.style_exists("Times New Reagan", "Regular")
-    

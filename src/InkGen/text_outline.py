@@ -1,17 +1,15 @@
 # SPDX-License-Identifier: MIT
 # Lightweight text→outline pipeline using uharfbuzz + fontTools + svgpathtools + shapely
 
-from typing import Dict, List, Tuple, Optional
 import math
 
-import uharfbuzz as hb                   # shaping
-from fontTools.ttLib import TTFont       # font loading
+import uharfbuzz as hb  # shaping
+from fontTools.misc.transform import Transform
 from fontTools.pens.svgPathPen import SVGPathPen
 from fontTools.pens.transformPen import TransformPen
-from fontTools.misc.transform import Transform
-
-from shapely.geometry import MultiPoint, Polygon, box
-from shapely.affinity import translate
+from fontTools.ttLib import TTFont  # font loading
+from shapely.geometry import MultiPoint, Polygon
+from shapely.geometry import box as shapely_box
 from svgpathtools import parse_path
 
 ADD_ONE_PIXEL_MARGIN_DEFAULT = False
@@ -28,11 +26,11 @@ def set_add_one_pixel_margin_default(enabled: bool) -> None:
 
 def _px_to_units(px, units="mm", dpi=96.0):
     if units.lower() in ("mm", "millimeter", "millimeters"):
-        return px * (25.4 / 96.0)   # 1 CSS px = 1/96 in; 25.4 mm/in. 
+        return px * (25.4 / 96.0)   # 1 CSS px = 1/96 in; 25.4 mm/in.
     if units.lower() in ("in", "inch", "inches"):
         return px / 96.0
     return px  # "px"
-    
+
 def sample_path_points(d: str, px_step: float = 0.5, *, units: str = "mm", dpi: float = 96.0):
     step = _px_to_units(px_step, units, dpi)
     path = parse_path(d)
@@ -46,7 +44,7 @@ def sample_path_points(d: str, px_step: float = 0.5, *, units: str = "mm", dpi: 
             pts.append((z.real, z.imag))
     return pts
 
-def _shape_with_harfbuzz(font_bytes: bytes, text: str, features: Optional[Dict[str, bool]]=None):
+def _shape_with_harfbuzz(font_bytes: bytes, text: str, features: dict[str, bool] | None=None):
     """Return (glyph_ids, positions) shaped with HarfBuzz in font units."""
     face = hb.Face(font_bytes)
     font = hb.Font(face)
@@ -79,11 +77,11 @@ def _shape_with_harfbuzz(font_bytes: bytes, text: str, features: Optional[Dict[s
 
 def _glyphs_to_svg_path(
     tt: TTFont,
-    gids: List[int],
-    positions_fu: List[Tuple[int, int]],
+    gids: list[int],
+    positions_fu: list[tuple[int, int]],
     upem: int,
     size_px: float,
-    origin: Tuple[float, float],
+    origin: tuple[float, float],
     y_down: bool = True
 ) -> str:
     """
@@ -100,7 +98,7 @@ def _glyphs_to_svg_path(
     # baseline origin
     x0, y0 = origin
 
-    for gid, (px_fu, py_fu) in zip(gids, positions_fu):
+    for gid, (px_fu, py_fu) in zip(gids, positions_fu, strict=False):
         gname = tt.getGlyphName(gid)
         # Transform: scale, then translate to pen position and baseline origin.
         # NOTE: HarfBuzz positions are in font units. Convert to px via s.
@@ -110,13 +108,13 @@ def _glyphs_to_svg_path(
 
     return pen.getCommands()
 
-def _sample_svg_path(d: str, step_px: float = 0.75) -> List[Tuple[float, float]]:
+def _sample_svg_path(d: str, step_px: float = 0.75) -> list[tuple[float, float]]:
     """
     Sample the SVG path densely enough that the convex hull & bbox are pixel-tight.
     `step_px` is the target arc-length step in the same user units as `d` (usually px).
     """
     path = parse_path(d)
-    pts: List[Tuple[float, float]] = []
+    pts: list[tuple[float, float]] = []
     for seg in path:
         # ensure at least two points per segment
         seg_len = max(0.0, seg.length(error=1e-4))
@@ -133,11 +131,8 @@ def _sample_svg_path(d: str, step_px: float = 0.75) -> List[Tuple[float, float]]
 
 
 
-from typing import Dict, List, Tuple, Optional
-from shapely import MultiPoint, Polygon
-from shapely.geometry import box as shapely_box
-from fontTools.ttLib import TTFont
-from svgpathtools import parse_path
+
+
 
 def outline_for_text(
     text: str,
@@ -147,11 +142,11 @@ def outline_for_text(
     y: float = 0.0,
     dpi: float = 96.0,
     units: str = "mm",              # <- pass your document units here
-    add_one_pixel_margin: Optional[bool] = None,
+    add_one_pixel_margin: bool | None = None,
     y_down: bool = True,
-    features: Optional[Dict[str, bool]] = None,
+    features: dict[str, bool] | None = None,
     sampling_step_px: float = 0.75,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """
     Returns:
       {
@@ -185,7 +180,7 @@ def outline_for_text(
     )
 
     # Helper: sample path directly in document units
-    pts: List[Tuple[float, float]] = _sample_svg_path(d, step_px=sampling_step_px)
+    pts: list[tuple[float, float]] = _sample_svg_path(d, step_px=sampling_step_px)
     # For debug/consistency checks it’s nice to also get a tight path bbox:
     try:
         p = parse_path(d)
