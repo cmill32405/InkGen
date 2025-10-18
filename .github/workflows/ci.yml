@@ -33,3 +33,7 @@ jobs:
       - name: Run tests
         run: |
           pytest --cov
+
+      - name: Build documentation with MkDocs
+        run: |
+          mkdocs build --strict

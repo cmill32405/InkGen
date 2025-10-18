@@ -46,6 +46,8 @@ dev = [
   "pytest-cov",
   "ruff",
   "black",
+  "mkdocs",
+  "mkdocs-material",
 ]
 
 [tool.setuptools.packages.find]

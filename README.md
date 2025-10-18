@@ -34,6 +34,11 @@ Generated artifacts are stored in `examples/output/`. Execute the test suite wit
 pytest
 ```
 
+## Documentation
+- Browse the docs locally: `mkdocs serve`
+- Build static documentation: `mkdocs build`
+- Published content lives under `docs/` with topics covering components, layout utilities, and full examples.
+
 ## Development Workflow
 1. Create and activate a virtual environment: `python -m venv .venv`
 2. Install dependencies: `pip install -e .[dev]`

@@ -1,0 +1,25 @@
+site_name: InkGen Documentation
+site_description: Procedural SVG drawing toolkit for technical schematics and synthetic data workflows.
+repo_url: https://github.com/<your-org>/InkGen
+edit_uri: ""
+
+nav:
+  - Overview: index.md
+  - Getting Started: getting-started.md
+  - Components:
+      - Drawing Components: components/drawing-components.md
+      - Document Structure: components/document-structure.md
+  - Text & Layout: text-and-layout.md
+  - Examples: examples.md
+  - API Reference: api-reference.md
+
+theme:
+  name: mkdocs
+  highlightjs: true
+
+markdown_extensions:
+  - admonition
+  - codehilite
+  - tables
+  - toc:
+      permalink: true
