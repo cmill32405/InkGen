@@ -8,6 +8,8 @@
         check out svg.path and svgwrite
 
 """
+from __future__ import annotations
+
 import abc
 import base64
 import math
@@ -62,7 +64,14 @@ def _primitive_parameters(name: str, *, values: dict[str, object], style: Drawin
 
 
 def _coerce_command_points(points: list[tuple[float, float]]) -> list[str]:
-    """Convert points to SVG coordinate strings."""
+    """Convert points to SVG coordinate strings.
+    
+    Args:
+        points: List of (x, y) coordinate tuples.
+        
+    Returns:
+        List of formatted coordinate strings in "x,y" format.
+    """
     return [f"{float(x)},{float(y)}" for x, y in points]
 
 
@@ -420,7 +429,7 @@ class ArcSVG(ArcComponent, DrawingGeneratorInterface):
                          rotation=rotation)
 
     @classmethod
-    def create_from_dict(cls, data: dict, style: DrawingStyle = None) -> "ArcSVG":
+    def create_from_dict(cls, data: dict, style: DrawingStyle = None) -> ArcSVG:
         """Recreate an `ArcSVG` from serialized parameters."""
         if not style:
             style = DrawingStyle.create_from_dict(data['ArcSVG']['style'])
@@ -484,7 +493,7 @@ class QuadraticBezierSVG(QuadraticBezierComponent, DrawingGeneratorInterface):
                          style=style)
 
     @classmethod
-    def create_from_dict(cls, data: dict, style: DrawingStyle = None) -> "QuadraticBezierSVG":
+    def create_from_dict(cls, data: dict, style: DrawingStyle = None) -> QuadraticBezierSVG:
         """Recreate a quadratic Bezier primitive from serialized data."""
         if not style:
             style = DrawingStyle.create_from_dict(data['QuadraticBezierSVG']['style'])
@@ -534,7 +543,7 @@ class CubicBezierSVG(CubicBezierComponent, DrawingGeneratorInterface):
                          style=style)
 
     @classmethod
-    def create_from_dict(cls, data: dict, style: DrawingStyle = None) -> "CubicBezierSVG":
+    def create_from_dict(cls, data: dict, style: DrawingStyle = None) -> CubicBezierSVG:
         """Recreate a cubic Bezier primitive from serialized data."""
         if not style:
             style = DrawingStyle.create_from_dict(data['CubicBezierSVG']['style'])
@@ -580,7 +589,7 @@ class PathSVG(PathComponent, DrawingGeneratorInterface):
         super().__init__(style=style, commands=commands)
 
     @classmethod
-    def create_from_dict(cls, data: dict, style: DrawingStyle = None) -> "PathSVG":
+    def create_from_dict(cls, data: dict, style: DrawingStyle = None) -> PathSVG:
         """Recreate a path primitive from serialized commands."""
         if not style:
             style = DrawingStyle.create_from_dict(data['PathSVG']['style'])
@@ -1189,7 +1198,7 @@ class SVGComponent(Component, DrawingGeneratorInterface):
         }
 
     @classmethod
-    def create_from_dict(cls, data: dict) -> "SVGComponent":
+    def create_from_dict(cls, data: dict) -> SVGComponent:
         payload = data["SVGComponent"]
         bbox_data = tuple(tuple(coord) for coord in payload["bbox"])
         return cls(
@@ -1312,7 +1321,7 @@ class TableSVG(ComponentGroupSVG):
         border_style: DrawingStyle,
         text_styles: dict[str, TextStyle],
         cell_padding: float | tuple[float, float, float, float] | None = None,
-    ) -> "TableSVG":
+    ) -> TableSVG:
         label = group_label if group_label is not None else f"Table_{table.id}"
         return cls(table, label, border_style, text_styles, cell_padding)
 
@@ -1528,6 +1537,8 @@ class TableSVG(ComponentGroupSVG):
             spacing_value = 1.0
         mm_per_point = 25.4 / 72.0
         return max(size_value * spacing_value * mm_per_point, 0.1)
+    
+
 class IncludeLayer(Flag):
     BASE = auto()
     LABEL = auto()
@@ -1845,7 +1856,7 @@ class DocumentSVG(Document):
         self._add_modeling_layer('label')
 
     @classmethod
-    def create_from_dict(cls, data: dict, styles: dict=None) -> object:
+    def create_from_dict(cls, data: dict, styles: dict | None = None) -> object:
         """ Class method to recreate the object from its serialization dict.
 
         Args:

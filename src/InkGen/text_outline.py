@@ -24,14 +24,37 @@ def set_add_one_pixel_margin_default(enabled: bool) -> None:
 # Helpers
 # ──────────────────────────────────────────────────────────────────────────────
 
-def _px_to_units(px, units="mm", dpi=96.0):
+
+def _px_to_units(px: float, units: str = "mm", dpi: float = 96.0) -> float:
+    """Convert pixels to document units.
+    
+    Args:
+        px: Value in pixels.
+        units: Target unit system ("mm", "in", or "px").
+        dpi: Dots per inch (default 96.0 for CSS pixels).
+        
+    Returns:
+        Converted value in the specified units.
+    """
     if units.lower() in ("mm", "millimeter", "millimeters"):
         return px * (25.4 / 96.0)   # 1 CSS px = 1/96 in; 25.4 mm/in.
     if units.lower() in ("in", "inch", "inches"):
         return px / 96.0
     return px  # "px"
 
-def sample_path_points(d: str, px_step: float = 0.5, *, units: str = "mm", dpi: float = 96.0):
+
+def sample_path_points(d: str, px_step: float = 0.5, *, units: str = "mm", dpi: float = 96.0) -> list[tuple[float, float]]:
+    """Sample points along an SVG path.
+
+    Args:
+        d: SVG path data string.
+        px_step: Step size in pixels for sampling.
+        units: Unit system for output coordinates.
+        dpi: Dots per inch for conversion.
+
+    Returns:
+        List of (x, y) coordinate tuples.
+    """
     step = _px_to_units(px_step, units, dpi)
     path = parse_path(d)
     pts = []
@@ -44,8 +67,20 @@ def sample_path_points(d: str, px_step: float = 0.5, *, units: str = "mm", dpi: 
             pts.append((z.real, z.imag))
     return pts
 
-def _shape_with_harfbuzz(font_bytes: bytes, text: str, features: dict[str, bool] | None=None):
-    """Return (glyph_ids, positions) shaped with HarfBuzz in font units."""
+def _shape_with_harfbuzz(font_bytes: bytes, text: str, features: dict[str, bool] | None = None) -> tuple[list[int], list[tuple[int, int]], int]:
+    """Shape text with HarfBuzz and return glyph information.
+    
+    Args:
+        font_bytes: Raw font file bytes.
+        text: Text string to shape.
+        features: Optional OpenType feature flags.
+        
+    Returns:
+        Tuple of (glyph_ids, positions, upem) where:
+        - glyph_ids: List of glyph indices
+        - positions: List of (x, y) positions in font units
+        - upem: Units per em from the font
+    """
     face = hb.Face(font_bytes)
     font = hb.Font(face)
     upem = face.upem  # units-per-em
@@ -84,9 +119,19 @@ def _glyphs_to_svg_path(
     origin: tuple[float, float],
     y_down: bool = True
 ) -> str:
-    """
-    Build a single SVG path `d` for all glyph outlines positioned & scaled.
-    Coordinates are emitted in the same orientation as SVG (y_down=True flips).
+    """Build a single SVG path `d` for all glyph outlines positioned & scaled.
+    
+    Args:
+        tt: FontTools TTFont object.
+        gids: List of glyph indices.
+        positions_fu: List of (x, y) positions in font units.
+        upem: Units per em from the font.
+        size_px: Font size in pixels.
+        origin: (x, y) origin point for positioning.
+        y_down: If True, flip Y-axis (SVG convention).
+        
+    Returns:
+        SVG path data string.
     """
     glyph_set = tt.getGlyphSet()
     pen = SVGPathPen(glyph_set)
@@ -108,10 +153,16 @@ def _glyphs_to_svg_path(
 
     return pen.getCommands()
 
+
 def _sample_svg_path(d: str, step_px: float = 0.75) -> list[tuple[float, float]]:
-    """
-    Sample the SVG path densely enough that the convex hull & bbox are pixel-tight.
-    `step_px` is the target arc-length step in the same user units as `d` (usually px).
+    """Sample the SVG path densely enough that the convex hull & bbox are pixel-tight.
+    
+    Args:
+        d: SVG path data string.
+        step_px: Target arc-length step in pixels.
+        
+    Returns:
+        List of (x, y) coordinate tuples sampled along the path.
     """
     path = parse_path(d)
     pts: list[tuple[float, float]] = []
@@ -128,10 +179,6 @@ def _sample_svg_path(d: str, step_px: float = 0.75) -> list[tuple[float, float]]
 # ──────────────────────────────────────────────────────────────────────────────
 # Public API
 # ──────────────────────────────────────────────────────────────────────────────
-
-
-
-
 
 
 def outline_for_text(

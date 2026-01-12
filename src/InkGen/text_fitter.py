@@ -40,7 +40,6 @@ logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
 
-
 @dataclass
 class FitterShape:
     polygon: ShapelyPolygon
@@ -73,7 +72,6 @@ class FittingResult:
         """Convex hull for backward compatibility with legacy bounding box usage."""
         return self.text_convex_hull
 
-# --- FINAL, ROBUST DEBUGGING UTILITY ---
 
 def plot_polygon(ax, poly, color, label):
     """Helper to plot a shapely Polygon or MultiPolygon robustly."""

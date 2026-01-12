@@ -1,6 +1,7 @@
 """
     Module for styling components.
 """
+from __future__ import annotations
 
 import itertools
 import os
@@ -111,14 +112,14 @@ class Style:
         return self._id
 
     @classmethod
-    def create_from_dict(cls, data: dict) -> None:
+    def create_from_dict(cls, data: dict) -> Style:
         """ Class method to recreate the object from its serialization dict.
 
         Args:
             data (dict): Dictionary created via obj.parameters property.
 
         Returns:
-            object: instance of the class.
+            Style: instance of the class.
         """
         style = cls(name=data['Style']['name'])
 
@@ -198,14 +199,14 @@ class DrawingStyle(Style):
         super().__init__(name=name)
 
     @classmethod
-    def create_from_dict(cls, data: dict) -> None:
+    def create_from_dict(cls, data: dict) -> DrawingStyle:
         """ Class method to recreate the object from its serialization dict.
 
         Args:
             data (dict): Dictionary created via obj.parameters property.
 
         Returns:
-            object: instance of the class.
+            DrawingStyle: instance of the class.
         """
         style = cls(name=data['DrawingStyle']['name'],
                     stroke=data['DrawingStyle']['stroke'],
@@ -365,6 +366,7 @@ class DrawingStyle(Style):
                  "stroke_opacity": self.stroke_opacity,
                  "fill_opacity": self.fill_opacity}}
 
+
 class Font:
     """
         Class for storing font information.
@@ -438,14 +440,14 @@ class Font:
                                                        size=size)
 
     @classmethod
-    def create_from_dict(cls, data: dict) -> None:
+    def create_from_dict(cls, data: dict) -> Font:
         """ Class method to recreate the object from its serialization dict.
 
         Args:
             data (dict): Dictionary created via obj.parameters property.
 
         Returns:
-            object: instance of the class.
+            Font: instance of the class.
         """
         font = Font(family=data['Font']['family'],
                     style=data['Font']['style'],
@@ -760,14 +762,14 @@ class TextStyle(Style):
         self.line_spacing = 1.0
 
     @classmethod
-    def create_from_dict(cls, data: dict) -> None:
+    def create_from_dict(cls, data: dict) -> TextStyle:
         """ Class method to recreate the object from its serialization dict.
 
         Args:
             data (dict): Dictionary created via obj.parameters property.
 
         Returns:
-            object: instance of the class.
+            TextStyle: instance of the class.
         """
         font = Font.create_from_dict(data['TextStyle']['font'])
         style = cls(name=data['TextStyle']['name'], font=font)

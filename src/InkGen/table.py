@@ -267,17 +267,6 @@ class Table(Component):
                 cell._set_position(row_index, column_index)
 
 
-
-@staticmethod
-def _normalize_padding(value: float | tuple[float, float, float, float] | list[float]) -> tuple[float, float, float, float]:
-    if isinstance(value, (int, float)):
-        pad = float(value)
-        return (pad, pad, pad, pad)
-    if isinstance(value, (tuple, list)) and len(value) == 4:
-        return tuple(float(v) for v in value)  # type: ignore[arg-type]
-    raise ValueError("Padding must be a float or an iterable of four floats")
-
-
 class Row:
 
     """Row metadata wrapper."""

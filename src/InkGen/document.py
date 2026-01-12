@@ -1,14 +1,14 @@
 """ Module for creating full representations of documents and
 the layers they contain.
 """
+from __future__ import annotations
+
 import itertools
 import sys
 
 import yaml
 
 from InkGen.boundary import Boundary, Canvas
-
-#import YAML
 from InkGen.component import ComponentGroup
 from InkGen.errors import ComponentGroupCollision, ComponentGroupOffCanvas, IncompatibleCanvas, InvalidComponentGroupID
 
@@ -49,7 +49,7 @@ class Layer:
         self._group_collision_settings = {}
 
     @classmethod
-    def create_from_dict(cls, data: dict, styles: dict | None = None) -> "Layer":
+    def create_from_dict(cls, data: dict, styles: dict | None = None) -> Layer:
         """Recreate a layer from its serialised representation.
 
         Args:
@@ -240,8 +240,9 @@ class Layer:
 
         raise ValueError("Invalid component group id.")
 
+
 class Layers:
-    """ Collection of Layer Objects for holding multiple levels of information \
+    """ Collection of Layer Objects for holding multiple levels of information
     such as the content to be created ("base"), bounding boxes for object detection,
     and segmentation mask with each on a different layer.
     """
@@ -276,7 +277,7 @@ class Layers:
         self.add_layer(name, layer)
 
     @classmethod
-    def create_from_dict(cls, data: dict, styles: dict=None) -> object:
+    def create_from_dict(cls, data: dict, styles: dict | None = None) -> object:
         """ Class method to recreate the object from its serialization dict.
 
         Args:
@@ -354,8 +355,8 @@ class Layers:
         return layer_name, layer_id
 
     def add_layer(self,
-                  name: str | None=None,
-                  layer: Layer | None=None):
+                  name: str | None = None,
+                  layer: Layer | None = None):
         """ Add a new layer to the stack by either adding an existing Layer object
         or by creating a new layer object with the name provided.  If Layer object
         is passed as an argument the name argument is ignored as the Layer object
@@ -457,7 +458,7 @@ class Document:
         self._pages = {}
 
     @classmethod
-    def create_from_dict(cls, data: dict, styles: dict=None) -> object:
+    def create_from_dict(cls, data: dict, styles: dict | None = None) -> object:
         """ Class method to recreate the object from its serialization dict.
 
         Args:
@@ -564,8 +565,7 @@ class Document:
                 self._pages[p+1] = self._pages[p]
                 page_number = position
         else:
-            raise ValueError("Invalid position, should be either a value between\
-                             1 and self.pages or -1 for last page.")
+            raise ValueError("Invalid position, should be either a value between 1 and self.pages or -1 for last page.")
 
         if page:
             if isinstance(page, Layers):

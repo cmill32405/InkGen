@@ -14,11 +14,8 @@ class Boundary:
 
     def __init__(self, hull: list[tuple[float, float]], outer_boundary: bool = False) -> None:
         """Create a boundary wrapper around a convex hull."""
-        """Create a boundary wrapper around a convex hull."""
-        self._outer = outer_boundary
-
         if not isinstance(outer_boundary, bool):
-            raise TypeError("The outer_boundary argumen is required to be a boolean.")
+            raise TypeError("The outer_boundary argument is required to be a boolean.")
 
         self._outer = outer_boundary
         self._boundary_polygon = Polygon(hull)
@@ -27,14 +24,14 @@ class Boundary:
             raise InvalidConvexHull("The hull argument is not a valid convex hull")
 
     @classmethod
-    def create_from_dict(cls, data: dict) -> object:
+    def create_from_dict(cls, data: dict) -> Boundary:
         """ Class method to recreate the object from its serialization dict.
 
         Args:
             data (dict): Dictionary created via obj.parameters property.
 
         Returns:
-            object: instance of the class.
+            Boundary: instance of the class.
         """
         boundary = cls(data['Boundary']['hull'], data['Boundary']['outer_boundary'])
         return boundary
@@ -54,6 +51,11 @@ class Boundary:
         return parameter_dict
 
     def _hull_check(self) -> bool:
+        """Verify that the boundary polygon is a valid convex hull.
+
+        Returns:
+            bool: True if the polygon is a valid convex hull, False otherwise.
+        """
         hull = get_coordinates(self._boundary_polygon.convex_hull)
         for point in get_coordinates(self._boundary_polygon):
             if point not in hull:
@@ -113,6 +115,7 @@ class Boundary:
             return self._boundary_polygon.convex_hull.contains_properly(polygon)
         return self._boundary_polygon.convex_hull.contains(points_geometry)
 
+
 class Canvas(Boundary):
     """
         Class for storing information about a drawing space including the
@@ -166,14 +169,14 @@ class Canvas(Boundary):
                           (canvas_width, canvas_height)])
 
     @classmethod
-    def create_from_dict(cls, data: dict) -> object:
+    def create_from_dict(cls, data: dict) -> Canvas:
         """ Class method to recreate the object from its serialization dict.
 
         Args:
             data (dict): Dictionary created via obj.parameters property.
 
         Returns:
-            object: instance of the class.
+            Canvas: instance of the class.
         """
         canvas = cls(canvas_width=data["Canvas"]["width"],
                         canvas_height=data["Canvas"]["height"],
