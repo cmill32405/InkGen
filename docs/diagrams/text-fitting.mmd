@@ -1,0 +1,54 @@
+%% Diagram: Text Fitting Classes
+%% Shows text fitting utilities and dataclasses
+
+classDiagram
+    class FitterShape {
+        <<dataclass>>
+        +ShapelyPolygon polygon
+        +Tuple[float, float] line_thickness_range
+        +float padding
+    }
+    
+    class TextBlock {
+        <<dataclass>>
+        +str text
+        +str font_path
+        +Tuple[int, int] font_size_range
+        +int min_font_size_px
+        +float|None max_line_width
+    }
+    
+    class FittingResult {
+        <<dataclass>>
+        +FitterShape original_shape*
+        +List[str] fitted_text_lines*
+        +List[Tuple[float, float]] line_positions*
+        +List[float] line_widths*
+        +float font_size*
+        +float final_line_thickness*
+        +BaseGeometry text_geometry*
+        +ShapelyPolygon text_convex_hull*
+        +ShapelyPolygon text_bounding_box*
+    }
+    
+    class TextFitter {
+        -Random rng
+        -Dict _pil_font_cache
+        +__init__(Random)
+        -_get_pil_font(str, int) ImageFont
+        +_polygon_from_coords(List[Tuple]) ShapelyPolygon|None
+        -_create_line_outline(str, str, int, float, float) ShapelyPolygon|None
+        +component_to_fitter_shape(Component) FitterShape
+        +fit(TextBlock, FitterShape) FittingResult
+    }
+    
+    class Component {
+        +List[Tuple] points*
+        +Tuple bbox*
+    }
+    
+    TextFitter --> FitterShape : creates
+    TextFitter --> TextBlock : uses
+    TextFitter --> FittingResult : returns
+    TextFitter --> Component : uses
+    FittingResult --> FitterShape : contains

@@ -11,8 +11,8 @@ nav:
       - Document Structure: components/document-structure.md
   - Text & Layout: text-and-layout.md
   - Examples: examples.md
+  - Architecture Diagrams: architecture-diagrams.md
   - Notes:
-      - Contributing: contributing.md
       - Mask Alignment Findings: mask_alignment_findings.md
   - API Reference: api-reference.md
 

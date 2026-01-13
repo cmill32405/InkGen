@@ -67,7 +67,8 @@ select = [
   "UP", # pyupgrade
 ]
 ignore = [
-  "E203",  # whitespace before :
+    "E203",  # whitespace before :
+    "E501",  # line too long
 ]
 
 [tool.ruff.lint.per-file-ignores]

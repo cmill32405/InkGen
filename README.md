@@ -13,9 +13,10 @@ synthetic engineering schematics for experimentation and analysis.
 - Example scripts that generate ready-to-use SVG artifacts
 
 ## Installation
+
+Create a virtual environment and install the package with development dependencies:
+
 ```bash
-git clone https://github.com/<your-org>/InkGen.git
-cd InkGen
 python -m venv .venv
 . .venv/Scripts/activate   # On macOS/Linux use: source .venv/bin/activate
 pip install -e .[dev]
@@ -49,7 +50,7 @@ pytest
    ```
 4. Run the tests (optionally with coverage): `pytest --cov`
 5. Update example outputs if needed via the scripts in `examples/`
-6. Ensure CI passes and submit a pull request
+6. Build documentation locally: `mkdocs serve`
 
 ## Testing
 - Unit tests live under `tests/` alongside fixtures

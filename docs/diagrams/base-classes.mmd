@@ -1,0 +1,98 @@
+%% Diagram 1: Base Classes
+%% Shows the core component hierarchy and style classes
+
+classDiagram
+    class Component {
+        +int id_iter
+        -int _id
+        -str _component_type
+        +__init__()
+        +create_from_dict(dict) object
+        +dict parameters*
+        +int id*
+        +str component_type*
+    }
+    
+    class DrawingComponent {
+        -DrawingStyle _style
+        +__init__(DrawingStyle)
+        -_check_style(DrawingStyle)
+        +create_from_dict(dict, DrawingStyle) object
+        +dict parameters*
+        +DrawingStyle style
+    }
+    
+    class TextComponent {
+        -str _text
+        -Tuple[float, float] _position
+        -TextStyle _style
+        +__init__(str, Tuple, TextStyle)
+        +create_from_dict(dict, TextStyle) object
+        +dict parameters*
+        +str text
+        +Tuple[float, float] position
+        +TextStyle style
+    }
+    
+    class Style {
+        +int id_iter
+        -int _id
+        -str _name
+        +__init__(str)
+        +create_from_dict(dict) Style
+        +dict parameters*
+        +int id*
+        +str name*
+    }
+    
+    class DrawingStyle {
+        -str _stroke
+        -float _stroke_width
+        -str _fill
+        -float _stroke_opacity
+        -float _fill_opacity
+        +__init__(str, str, float, str, float, float)
+        +create_from_dict(dict) DrawingStyle
+        +dict parameters*
+        +str stroke
+        +float stroke_width
+        +str fill
+        +float stroke_opacity
+        +float fill_opacity
+    }
+    
+    class TextStyle {
+        +Font font
+        +str color
+        +bool superscript
+        +bool subscript
+        +str text_align
+        +float line_spacing
+        +__init__(str, Font)
+        +create_from_dict(dict) TextStyle
+        +dict parameters*
+    }
+    
+    class Font {
+        -str _platform
+        -List[str] _font_paths
+        -font_manager _font_manager
+        -int _font
+        +__init__(...)
+        +create_from_dict(dict) Font
+        +dict parameters*
+        +str configuration*
+        +str family
+        +str font_file*
+        +str style
+        +str variant
+        +Union[str, int] stretch
+        +Union[str, int] weight
+        +Union[str, float] size
+    }
+    
+    Component <|-- DrawingComponent
+    Component <|-- TextComponent
+    Style <|-- DrawingStyle
+    Style <|-- TextStyle
+    TextStyle --> Font : uses

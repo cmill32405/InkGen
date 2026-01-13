@@ -1,0 +1,253 @@
+%% Diagram: Complete SVG Generator Classes
+%% Shows all SVG generation classes and interfaces
+
+classDiagram
+    class DrawingGeneratorInterface {
+        <<interface>>
+        +generate_svg() str
+    }
+    
+    class LabelGenerator {
+        <<interface>>
+        +generate_label() dict
+    }
+    
+    class SegmentGenerator {
+        <<interface>>
+        +generate_segmentation_mask() dict
+    }
+    
+    class IncludeLayer {
+        <<enumeration>>
+        BASE
+        LABEL
+        MASK
+    }
+    
+    class DrawingComponent {
+        -DrawingStyle _style
+        +DrawingStyle style
+    }
+    
+    class StandardDrawingComponent {
+        -Point _p1
+        -Point _p2
+        +Tuple[float, float] point_1
+        +Tuple[float, float] point_2
+    }
+    
+    class WidthHeightDrawingComponent {
+        -Tuple[float, float] _position
+        -float _width
+        -float _height
+        +Tuple[float, float] position
+        +float width
+        +float height
+    }
+    
+    class SingleDimensionDrawingComponent {
+        +Tuple[float, float] position
+        +float size
+    }
+    
+    class PolarCoordinateDrawingComponent {
+        +Tuple[float, float] position
+        +float length
+        +float angle
+    }
+    
+    class RegularPolygonDrawingComponent {
+        -Tuple[float, float] _center_position
+        -int _sides
+        -float _radius
+        -float _angle
+        -float _round
+        +int sides
+        +Tuple[float, float] center_position
+        +float radius
+        +float angle
+        +float corner_radius
+    }
+    
+    class PolygonalDrawingComponent {
+        -List[Tuple[float, float]] _points
+        +List[Tuple] points*
+    }
+    
+    class Arc {
+        -Tuple[float, float] _center
+        -float _radius_x
+        -float _radius_y
+        -float _start_angle
+        -float _end_angle
+        -float _rotation
+    }
+    
+    class QuadraticBezier {
+        -List[Tuple[float, float]] _points
+    }
+    
+    class CubicBezier {
+        -List[Tuple[float, float]] _points
+    }
+    
+    class Path {
+        -List[PathCommand] _commands
+    }
+    
+    class TextComponent {
+        -str _text
+        -Tuple[float, float] _position
+        -TextStyle _style
+    }
+    
+    class Component {
+        +int id*
+        +str component_type*
+    }
+    
+    class ComponentGroup {
+        -str _group_label
+        -List[Component] _components
+    }
+    
+    class Document {
+        -Canvas _canvas
+        -Dict[int, Layers] _pages
+    }
+    
+    class RectangleSVG {
+        -float _corner_radius
+        +__init__(Tuple, float, float, float, DrawingStyle)
+        +create_from_dict(dict, DrawingStyle) RectangleSVG
+        +generate_svg() str
+        +float corner_radius
+    }
+    
+    class CircleSVG {
+        +__init__(Tuple, float, DrawingStyle)
+        +create_from_dict(dict, DrawingStyle) CircleSVG
+        +generate_svg() str
+    }
+    
+    class LineSVG {
+        +__init__(Tuple, float, float, DrawingStyle)
+        +create_from_dict(dict, DrawingStyle) LineSVG
+        +generate_svg() str
+    }
+    
+    class RegularPolygonSVG {
+        +__init__(int, Tuple, float, float, float, DrawingStyle)
+        +create_from_dict(dict, DrawingStyle) RegularPolygonSVG
+        +generate_svg() str
+    }
+    
+    class PolygonalSVG {
+        +__init__(List[Tuple], DrawingStyle)
+        +create_from_dict(dict, DrawingStyle) PolygonalSVG
+        +generate_svg() str
+    }
+    
+    class ArcSVG {
+        +__init__(Tuple, float, float, float, float, DrawingStyle, float)
+        +create_from_dict(dict, DrawingStyle) ArcSVG
+        +generate_svg() str
+    }
+    
+    class QuadraticBezierSVG {
+        +__init__(List[Tuple], DrawingStyle)
+        +create_from_dict(dict, DrawingStyle) QuadraticBezierSVG
+        +generate_svg() str
+    }
+    
+    class CubicBezierSVG {
+        +__init__(List[Tuple], DrawingStyle)
+        +create_from_dict(dict, DrawingStyle) CubicBezierSVG
+        +generate_svg() str
+    }
+    
+    class PathSVG {
+        +__init__(List[PathCommand], DrawingStyle)
+        +create_from_dict(dict, DrawingStyle) PathSVG
+        +generate_svg() str
+    }
+    
+    class TextSVG {
+        +__init__(str, Tuple, TextStyle)
+        +create_from_dict(dict, TextStyle) TextSVG
+        +generate_svg() str
+    }
+    
+    class SVGComponent {
+        -str _svg_path
+        -Tuple[float, float] _position
+        +__init__(str, Tuple, DrawingStyle)
+        +create_from_dict(dict, DrawingStyle) SVGComponent
+        +generate_svg() str
+    }
+    
+    class ComponentGroupSVG {
+        +__init__(str)
+        +create_from_dict(dict, dict) ComponentGroupSVG
+        +generate_svg() str
+        +generate_label() dict
+        +generate_segmentation_mask() dict
+    }
+    
+    class TableSVG {
+        -Table _table
+        -DrawingStyle _border_style
+        -dict[str, TextStyle] _text_styles
+        +__init__(Table, str, DrawingStyle, dict, ...)
+        +from_table(Table, ...) TableSVG
+        +Table table*
+        +generate_svg() str
+    }
+    
+    class DocumentSVG {
+        +__init__(Canvas)
+        +create_from_dict(dict, dict) DocumentSVG
+        +create_svg(str, ...)
+    }
+    
+    Component <|-- DrawingComponent
+    Component <|-- TextComponent
+    Component <|-- ComponentGroup
+    Component <|-- SVGComponent
+    DrawingComponent <|-- StandardDrawingComponent
+    DrawingComponent <|-- PolygonalDrawingComponent
+    DrawingComponent <|-- Arc
+    DrawingComponent <|-- QuadraticBezier
+    DrawingComponent <|-- CubicBezier
+    DrawingComponent <|-- Path
+    StandardDrawingComponent <|-- WidthHeightDrawingComponent
+    StandardDrawingComponent <|-- SingleDimensionDrawingComponent
+    StandardDrawingComponent <|-- PolarCoordinateDrawingComponent
+    PolarCoordinateDrawingComponent <|-- RegularPolygonDrawingComponent
+    WidthHeightDrawingComponent <|-- RectangleSVG
+    SingleDimensionDrawingComponent <|-- CircleSVG
+    StandardDrawingComponent <|-- LineSVG
+    RegularPolygonDrawingComponent <|-- RegularPolygonSVG
+    PolygonalDrawingComponent <|-- PolygonalSVG
+    Arc <|-- ArcSVG
+    QuadraticBezier <|-- QuadraticBezierSVG
+    CubicBezier <|-- CubicBezierSVG
+    Path <|-- PathSVG
+    TextComponent <|-- TextSVG
+    ComponentGroup <|-- ComponentGroupSVG
+    ComponentGroupSVG <|-- TableSVG
+    Document <|-- DocumentSVG
+    DrawingGeneratorInterface <|.. RectangleSVG
+    DrawingGeneratorInterface <|.. CircleSVG
+    DrawingGeneratorInterface <|.. LineSVG
+    DrawingGeneratorInterface <|.. RegularPolygonSVG
+    DrawingGeneratorInterface <|.. PolygonalSVG
+    DrawingGeneratorInterface <|.. ArcSVG
+    DrawingGeneratorInterface <|.. QuadraticBezierSVG
+    DrawingGeneratorInterface <|.. CubicBezierSVG
+    DrawingGeneratorInterface <|.. PathSVG
+    DrawingGeneratorInterface <|.. TextSVG
+    DrawingGeneratorInterface <|.. SVGComponent
+    DrawingGeneratorInterface <|.. ComponentGroupSVG
+    LabelGenerator <|.. ComponentGroupSVG
+    SegmentGenerator <|.. ComponentGroupSVG

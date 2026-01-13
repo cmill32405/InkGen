@@ -1,0 +1,86 @@
+%% Diagram 3: Table Structure
+%% Shows the table, row, column, and cell classes
+
+classDiagram
+    class Table {
+        -Tuple[float, float] _position
+        -List[Row] _rows
+        -List[Column] _columns
+        -List[List[Cell]] _matrix
+        -Tuple[float, float, float, float] _padding
+        -bool _auto_fit
+        +__init__(Tuple, bool)
+        +create_from_dict(dict) Table
+        +dict parameters*
+        +Tuple[float, float, float, float] cell_padding
+        +add_row(int, float) Row
+        +add_column(int, float) Column
+        +Cell cell(int, int)
+        +Tuple[Cell] row_cells(int)
+        +Tuple[Cell] column_cells(int)
+        +Tuple[float, float] position
+        +float width*
+        +float height*
+        +list[tuple] points*
+        +bool autofit
+        +Tuple[Row] rows*
+        +Tuple[Column] columns*
+        +int row_count*
+        +int column_count*
+    }
+    
+    class Row {
+        -Table _table
+        -float _height
+        -AutoFitRule _height_rule
+        -List[Cell] _cells
+        +__init__(Table, float)
+        +Table table*
+        +Tuple[Cell] cells*
+        +Cell column(int)
+        +float height
+        +AutoFitRule height_rule
+    }
+    
+    class Column {
+        -Table _table
+        -float _width
+        -AutoFitRule _width_rule
+        -List[Cell] _cells
+        +__init__(Table, float)
+        +Table table*
+        +Tuple[Cell] cells*
+        +Cell row(int)
+        +float width
+        +AutoFitRule width_rule
+    }
+    
+    class Cell {
+        -Table _table
+        -int _row_index
+        -int _column_index
+        -bool _merged
+        -Tuple[int, int] _merge_start
+        -Tuple[int, int] _merge_end
+        -str _vertical_alignment
+        -List[str] _paragraph_text
+        -List[str|None] _paragraph_styles
+        +__init__(Table, int, int)
+        +Table table*
+        +int row_index*
+        +int column_index*
+        +bool merged*
+        +str vertical_alignment
+        +List[str] paragraphs*
+        +str text*
+        +add_paragraph(str, str)
+        +remove_paragraph(int)
+        +str paragraph(int)
+        +Cell merge(Cell)
+    }
+    
+    Table "1" *-- "many" Row : contains
+    Table "1" *-- "many" Column : contains
+    Table "1" *-- "many" Cell : contains
+    Row "1" *-- "many" Cell : contains
+    Column "1" *-- "many" Cell : contains

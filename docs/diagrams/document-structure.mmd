@@ -1,0 +1,99 @@
+%% Diagram 2: Document Structure
+%% Shows the document, layer, and boundary classes
+
+classDiagram
+    class Boundary {
+        -bool _outer
+        -Polygon _boundary_polygon
+        +__init__(list, bool)
+        +create_from_dict(dict) Boundary
+        +dict parameters*
+        +list[tuple] boundary_points*
+        +str boundary_type*
+        +boundary_check(list, bool) bool
+    }
+    
+    class Canvas {
+        -float _width
+        -float _height
+        -str _units
+        +__init__(float, float, str)
+        +create_from_dict(dict) Canvas
+        +dict parameters*
+        +float width*
+        +float height*
+        +str units*
+    }
+    
+    class Layer {
+        +int id_iter
+        -int _id
+        -str _name
+        -Canvas _canvas
+        -bool _model
+        -Dict[str, int] _group_names
+        -Dict[int, ComponentGroup] _component_groups
+        -Dict[int, Boundary] _group_boundaries
+        +__init__(str, Canvas, bool)
+        +create_from_dict(dict, dict) Layer
+        +dict parameters*
+        -_create_boundary(ComponentGroup)
+        -_check_bounds(ComponentGroup, bool) bool
+        +add_component_group(ComponentGroup, bool, bool)
+        +remove_component_group(int|str)
+        +Dict[str, int] component_groups*
+        +bool model*
+        +ComponentGroup group(int)
+        +int layer_id*
+        +str layer_name*
+        +Canvas canvas*
+    }
+    
+    class Layers {
+        -Canvas _canvas
+        -Dict[int, Layer] _layers
+        -Dict[str, int] _layer_name_to_id_map
+        +__init__(Canvas)
+        +create_from_dict(dict, dict) Layers
+        +dict parameters*
+        +add_layer(Layer)
+        +remove_layer(str|int)
+        +Layer layer(str|int)
+        +list[str] layers*
+    }
+    
+    class Document {
+        -Canvas _canvas
+        -Dict[int, Layers] _pages
+        +__init__(Canvas)
+        +create_from_dict(dict, dict) Document
+        +dict parameters*
+        +add_page(int, Layers)
+        +remove_page(int)
+        +Layers page(int)
+        +int pages*
+    }
+    
+    class ComponentGroup {
+        -str _group_label
+        -List[Component] _components
+        +__init__(str)
+        +create_from_dict(dict, dict) ComponentGroup
+        +dict parameters*
+        +add_component(Component)
+        +remove_component(int)
+        +Component component(int)
+        +int group_id*
+        +str group_label*
+        +list[tuple] points*
+        +tuple bbox*
+        +list[tuple] convex_hull*
+    }
+    
+    Boundary <|-- Canvas
+    Layers "1" *-- "many" Layer : contains
+    Document "1" *-- "many" Layers : contains
+    Layer "1" *-- "many" ComponentGroup : contains
+    Layer --> Canvas : uses
+    Layers --> Canvas : uses
+    Document --> Canvas : uses

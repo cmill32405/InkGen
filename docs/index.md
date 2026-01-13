@@ -21,12 +21,12 @@ graph LR
 
 The codebase is split between the core package located in `src/InkGen/` and runnable examples in the `examples/` directory. Formal tests live in `tests/` and act as an executable specification of the API.
 
-## Support and Feedback
+## Documentation Structure
 
-InkGen is an evolving project. If you run into issues or have questions:
+- **[Getting Started](getting-started.md)**: Installation, setup, and your first drawing
+- **[Drawing Components](components/drawing-components.md)**: Available shapes and primitives
+- **[Document Structure](components/document-structure.md)**: Layers, pages, and document organization
+- **[Text & Layout](text-and-layout.md)**: Text fitting, tables, and zoning utilities
+- **[Examples](examples.md)**: Detailed walkthroughs of example scripts
+- **[API Reference](api-reference.md)**: Complete module and class index
 
-- Open an issue in the GitHub repository.
-- Start a discussion about feature ideas or architectural questions.
-- Submit pull requests – contributions are welcome and appreciated.
-
-Before contributing, please review the [contributing guidelines](contributing.md).

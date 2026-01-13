@@ -57,6 +57,49 @@ Text components require a `TextStyle` and are covered in detail in [Text & Layou
 
 Table composition is provided by classes in `src/InkGen/table.py`. Tables are converted to SVG with `TableSVG`.
 
+## Circles and Arcs
+
+```python
+from InkGen.svg_generator import CircleSVG, ArcSVG
+
+circle_style = DrawingStyle(name="Circle", stroke="#FF0000", stroke_width=1.0, fill="#FFCCCC")
+circle = CircleSVG(center=(50, 50), radius=25, style=circle_style)
+
+arc = ArcSVG(
+    point_1=(0, 0),
+    point_2=(100, 50),
+    radius=60,
+    large_arc=False,
+    sweep=True,
+    style=circle_style
+)
+```
+
+## Bezier Curves
+
+InkGen supports both quadratic and cubic Bezier curves:
+
+```python
+from InkGen.svg_generator import QuadraticBezierSVG, CubicBezierSVG
+
+# Quadratic Bezier (one control point)
+quad_bezier = QuadraticBezierSVG(
+    point_1=(0, 0),
+    point_2=(100, 0),
+    control=(50, 50),
+    style=style
+)
+
+# Cubic Bezier (two control points)
+cubic_bezier = CubicBezierSVG(
+    point_1=(0, 0),
+    point_2=(100, 0),
+    control_1=(25, 50),
+    control_2=(75, 50),
+    style=style
+)
+```
+
 ## Serialization
 
 Every component exposes a `parameters` property and `create_from_dict` constructor. This allows you to persist and reload components:
@@ -65,6 +108,21 @@ Every component exposes a `parameters` property and `create_from_dict` construct
 params = rect.parameters
 restored = RectangleSVG.create_from_dict(params)
 assert restored.parameters == params
+```
+
+Components can be serialized to dictionaries and saved as YAML for later reconstruction:
+
+```python
+import yaml
+
+# Save component
+with open("component.yaml", "w") as f:
+    yaml.dump(rect.parameters, f)
+
+# Load component
+with open("component.yaml", "r") as f:
+    data = yaml.safe_load(f)
+    restored = RectangleSVG.create_from_dict(data)
 ```
 
 ## Component Groups

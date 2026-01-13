@@ -9,14 +9,16 @@ InkGen provides utilities for laying out text, zoning drawings, and managing tab
 
 ## Text Fitting Workflow
 
-`TextFitter` wraps HarfBuzz, fontTools, and shapely to render text within arbitrary polygons.
+`TextFitter` wraps HarfBuzz, fontTools, and shapely to render text within arbitrary polygons. It automatically adjusts font size and word wrapping to fit text into complex shapes.
+
+### Basic Text Fitting
 
 ```python
 from InkGen.text_fitter import TextBlock, TextFitter
 from InkGen.style import TextStyle, Font
 from shapely.geometry import Polygon as ShapelyPolygon
 
-style = TextStyle("Body", Font("Arial", size=10))
+# Define text block parameters
 text_block = TextBlock(
     text="Engineering Systems Division",
     font_path="C:/Windows/Fonts/arial.ttf",
@@ -25,10 +27,34 @@ text_block = TextBlock(
     max_line_width=120,
 )
 
+# Create target shape
 outer_shape = ShapelyPolygon([(0, 0), (140, 0), (140, 60), (0, 60)])
+
+# Fit text
 fitter = TextFitter()
 result = fitter.fit(text_block, fitter_shape=fitter.component_to_fitter_shape(outer_shape))
+
+# Check if fitting succeeded
+if result.success:
+    # Convert fitted lines to TextSVG components
+    style = TextStyle("Body", Font("Arial", size=result.font_size))
+    for line in result.lines:
+        text_svg = TextSVG(
+            text=line.text,
+            position=(line.x, line.y),
+            style=style
+        )
+        # Add to component group...
 ```
+
+### Fitting Parameters
+
+The `TextBlock` constructor accepts:
+- `text`: The text string to fit
+- `font_path`: Path to the TrueType/OpenType font file
+- `min_font_size_px`: Minimum font size to try (in pixels)
+- `font_size_range`: Tuple of (min, max) font sizes to search
+- `max_line_width`: Maximum width for a single line (in document units)
 
 The fitter performs binary search over font size, adaptive word wrapping, and geometric jittering to ensure text stays within the boundary. When `TextFitter.fit()` returns a `FittingResult`, you can convert the text lines into `TextSVG` components.
 

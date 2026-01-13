@@ -1,0 +1,184 @@
+%% Diagram: Complete Component Hierarchy
+%% Shows the full inheritance tree for all component classes
+
+classDiagram
+    class Component {
+        +int id_iter
+        -int _id
+        -str _component_type
+        +__init__()
+        +create_from_dict(dict) object
+        +dict parameters*
+        +int id*
+        +str component_type*
+    }
+    
+    class DrawingComponent {
+        -DrawingStyle _style
+        +__init__(DrawingStyle)
+        -_check_style(DrawingStyle)
+        +create_from_dict(dict, DrawingStyle) object
+        +dict parameters*
+        +DrawingStyle style
+    }
+    
+    class StandardDrawingComponent {
+        -Point _p1
+        -Point _p2
+        +__init__(Tuple, Tuple, DrawingStyle)
+        +create_from_dict(dict, DrawingStyle) object
+        +dict parameters*
+        +Tuple[float, float] point_1
+        +Tuple[float, float] point_2
+        +List[Tuple] points*
+        +Tuple bbox*
+    }
+    
+    class SingleDimensionDrawingComponent {
+        +__init__(Tuple, float, DrawingStyle)
+        +create_from_dict(dict, DrawingStyle) object
+        +dict parameters*
+        +Tuple[float, float] position
+        +float size
+    }
+    
+    class WidthHeightDrawingComponent {
+        -Tuple[float, float] _position
+        -float _width
+        -float _height
+        +__init__(Tuple, float, float, DrawingStyle)
+        +create_from_dict(dict, DrawingStyle) object
+        +dict parameters*
+        +Tuple[float, float] position
+        +float width
+        +float height
+    }
+    
+    class PolarCoordinateDrawingComponent {
+        +__init__(Tuple, float, float, DrawingStyle)
+        +create_from_dict(dict, DrawingStyle) object
+        +dict parameters*
+        +Tuple[float, float] position
+        +float length
+        +float angle
+    }
+    
+    class RegularPolygonDrawingComponent {
+        -Tuple[float, float] _center_position
+        -int _sides
+        -float _radius
+        -float _angle
+        -float _round
+        +__init__(Tuple, int, float, float, float, float, DrawingStyle)
+        +dict parameters*
+        +int sides
+        +Tuple[float, float] center_position
+        +float radius
+        +float angle
+        +float corner_radius
+        +List[Tuple] points*
+        +Tuple bbox*
+    }
+    
+    class PolygonalDrawingComponent {
+        -List[Tuple[float, float]] _points
+        +__init__(List[Tuple], DrawingStyle)
+        +create_from_dict(dict, DrawingStyle) object
+        +dict parameters*
+        +List[Tuple] points*
+        +Tuple bbox*
+    }
+    
+    class Arc {
+        -Tuple[float, float] _center
+        -float _radius_x
+        -float _radius_y
+        -float _start_angle
+        -float _end_angle
+        -float _rotation
+        +__init__(Tuple, float, float, float, float, DrawingStyle, float)
+        +create_from_dict(dict, DrawingStyle) object
+        +dict parameters*
+        +Tuple[float, float] center*
+        +float radius_x*
+        +float radius_y*
+        +float start_angle*
+        +float end_angle*
+        +float rotation*
+    }
+    
+    class QuadraticBezier {
+        -List[Tuple[float, float]] _points
+        +__init__(List[Tuple], DrawingStyle)
+        +create_from_dict(dict, DrawingStyle) object
+        +dict parameters*
+        +List[Tuple] points*
+    }
+    
+    class CubicBezier {
+        -List[Tuple[float, float]] _points
+        +__init__(List[Tuple], DrawingStyle)
+        +create_from_dict(dict, DrawingStyle) object
+        +dict parameters*
+        +List[Tuple] points*
+    }
+    
+    class Path {
+        -List[PathCommand] _commands
+        +__init__(List[PathCommand], DrawingStyle)
+        +create_from_dict(dict, DrawingStyle) object
+        +dict parameters*
+        +List[PathCommand] commands*
+        +List[Tuple] points*
+    }
+    
+    class PathCommand {
+        -str _type
+        -List[Tuple[float, float]] _points
+        +__init__(str, List[Tuple])
+        +str type
+        +List[Tuple] points
+    }
+    
+    class TextComponent {
+        -str _text
+        -Tuple[float, float] _position
+        -TextStyle _style
+        +__init__(str, Tuple, TextStyle)
+        +create_from_dict(dict, TextStyle) object
+        +dict parameters*
+        +str text
+        +Tuple[float, float] position
+        +TextStyle style
+    }
+    
+    class ComponentGroup {
+        -str _group_label
+        -List[Component] _components
+        +__init__(str)
+        +create_from_dict(dict, dict) ComponentGroup
+        +dict parameters*
+        +add_component(Component)
+        +remove_component(int)
+        +Component component(int)
+        +int group_id*
+        +str group_label*
+        +list[tuple] points*
+        +tuple bbox*
+        +list[tuple] convex_hull*
+    }
+    
+    Component <|-- DrawingComponent
+    Component <|-- TextComponent
+    Component <|-- ComponentGroup
+    DrawingComponent <|-- StandardDrawingComponent
+    DrawingComponent <|-- PolygonalDrawingComponent
+    DrawingComponent <|-- Arc
+    DrawingComponent <|-- QuadraticBezier
+    DrawingComponent <|-- CubicBezier
+    DrawingComponent <|-- Path
+    StandardDrawingComponent <|-- SingleDimensionDrawingComponent
+    StandardDrawingComponent <|-- WidthHeightDrawingComponent
+    StandardDrawingComponent <|-- PolarCoordinateDrawingComponent
+    PolarCoordinateDrawingComponent <|-- RegularPolygonDrawingComponent
+    Path --> PathCommand : contains

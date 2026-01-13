@@ -1,0 +1,122 @@
+%% Diagram 4: SVG Components
+%% Shows the SVG generation classes that implement the DrawingGeneratorInterface
+
+classDiagram
+    class DrawingGeneratorInterface {
+        <<interface>>
+        +generate_svg() str
+    }
+    
+    class WidthHeightDrawingComponent {
+        -Tuple[float, float] _position
+        -float _width
+        -float _height
+        +__init__(Tuple, float, float, DrawingStyle)
+        +create_from_dict(dict, DrawingStyle) object
+        +dict parameters*
+        +Tuple[float, float] position
+        +float width
+        +float height
+    }
+    
+    class StandardDrawingComponent {
+        -Tuple[float, float] _point_1
+        -Tuple[float, float] _point_2
+        +__init__(Tuple, Tuple, DrawingStyle)
+        +create_from_dict(dict, DrawingStyle) object
+        +dict parameters*
+        +Tuple[float, float] point_1
+        +Tuple[float, float] point_2
+        +List[Tuple] points*
+        +Tuple bbox*
+    }
+    
+    class RegularPolygonDrawingComponent {
+        -Tuple[float, float] _center_position
+        -int _sides
+        -float _radius
+        -float _angle
+        -float _round
+        +__init__(Tuple, int, float, float, float, float, DrawingStyle)
+        +dict parameters*
+        +int sides
+        +Tuple[float, float] center_position
+        +float radius
+        +float angle
+        +float corner_radius
+        +List[Tuple] points*
+        +Tuple bbox*
+    }
+    
+    class RectangleSVG {
+        -float _corner_radius
+        +__init__(Tuple, float, float, float, DrawingStyle)
+        +create_from_dict(dict, DrawingStyle) RectangleSVG
+        +dict parameters*
+        +generate_svg() str
+        +float corner_radius
+    }
+    
+    class LineSVG {
+        +__init__(Tuple, float, float, DrawingStyle)
+        +create_from_dict(dict, DrawingStyle) LineSVG
+        +dict parameters*
+        +generate_svg() str
+    }
+    
+    class RegularPolygonSVG {
+        +__init__(int, Tuple, float, float, float, DrawingStyle)
+        +create_from_dict(dict, DrawingStyle) RegularPolygonSVG
+        +dict parameters*
+        +generate_svg() str
+    }
+    
+    class TextSVG {
+        +__init__(str, Tuple, TextStyle)
+        +create_from_dict(dict, TextStyle) TextSVG
+        +dict parameters*
+        +generate_svg() str
+    }
+    
+    class ComponentGroupSVG {
+        +__init__(str)
+        +create_from_dict(dict, dict) ComponentGroupSVG
+        +dict parameters*
+        +generate_svg() str
+        +generate_label() dict
+        +generate_segmentation_mask() dict
+    }
+    
+    class TableSVG {
+        -Table _table
+        -DrawingStyle _border_style
+        -dict[str, TextStyle] _text_styles
+        +__init__(Table, str, DrawingStyle, dict, ...)
+        +from_table(Table, ...) TableSVG
+        +Table table*
+        +generate_svg() str
+    }
+    
+    class DocumentSVG {
+        +__init__(Canvas)
+        +create_from_dict(dict, dict) DocumentSVG
+        +dict parameters*
+        +create_svg(str, ...)
+    }
+    
+    DrawingComponent <|-- WidthHeightDrawingComponent
+    DrawingComponent <|-- StandardDrawingComponent
+    DrawingComponent <|-- RegularPolygonDrawingComponent
+    DrawingComponent <|-- TextComponent
+    WidthHeightDrawingComponent <|-- RectangleSVG
+    StandardDrawingComponent <|-- LineSVG
+    RegularPolygonDrawingComponent <|-- RegularPolygonSVG
+    TextComponent <|-- TextSVG
+    ComponentGroup <|-- ComponentGroupSVG
+    ComponentGroupSVG <|-- TableSVG
+    Document <|-- DocumentSVG
+    DrawingGeneratorInterface <|.. RectangleSVG
+    DrawingGeneratorInterface <|.. LineSVG
+    DrawingGeneratorInterface <|.. RegularPolygonSVG
+    DrawingGeneratorInterface <|.. TextSVG
+    DrawingGeneratorInterface <|.. ComponentGroupSVG

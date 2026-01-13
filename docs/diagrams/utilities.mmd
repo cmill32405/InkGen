@@ -1,0 +1,56 @@
+%% Diagram: Utility Classes
+%% Shows utility classes for SVG processing and CAD components
+
+classDiagram
+    class FlattenedPath {
+        <<dataclass>>
+        +str d*
+        +str|None style*
+    }
+    
+    class FlattenedSVG {
+        <<dataclass>>
+        +List[FlattenedPath] paths*
+        +Tuple[Tuple[float, float], Tuple[float, float]] bbox*
+        +float|None width*
+        +float|None height*
+    }
+    
+    class Zoning {
+        -Canvas _canvas
+        -DrawingStyle _line_style
+        -TextStyle _text_style
+        -ComponentGroup _group
+        -Dict _parameters
+        +__init__(Canvas, DrawingStyle, TextStyle, **kwargs)
+        +ComponentGroup group*
+        +dict parameters*
+    }
+    
+    class Canvas {
+        -float _width
+        -float _height
+        -str _units
+    }
+    
+    class DrawingStyle {
+        -str _stroke
+        -float _stroke_width
+        -str _fill
+    }
+    
+    class TextStyle {
+        +Font font
+        +str color
+    }
+    
+    class ComponentGroup {
+        -str _group_label
+        -List[Component] _components
+    }
+    
+    FlattenedSVG "1" *-- "many" FlattenedPath : contains
+    Zoning --> Canvas : uses
+    Zoning --> DrawingStyle : uses
+    Zoning --> TextStyle : uses
+    Zoning --> ComponentGroup : creates
