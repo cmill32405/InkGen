@@ -55,7 +55,6 @@ pytest
 ## Testing
 - Unit tests live under `tests/` alongside fixtures
 - Example-driven smoke tests live in `examples/`
-- Continuous Integration runs linting (`ruff`) and tests on every push
 
 ## License
 InkGen is released under the terms of the [MIT License](LICENSE).

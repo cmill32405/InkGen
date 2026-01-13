@@ -1,6 +1,3 @@
-# SPDX-License-Identifier: MIT
-# Lightweight text→outline pipeline using uharfbuzz + fontTools + svgpathtools + shapely
-
 import math
 
 import uharfbuzz as hb  # shaping
@@ -67,6 +64,7 @@ def sample_path_points(d: str, px_step: float = 0.5, *, units: str = "mm", dpi: 
             pts.append((z.real, z.imag))
     return pts
 
+
 def _shape_with_harfbuzz(font_bytes: bytes, text: str, features: dict[str, bool] | None = None) -> tuple[list[int], list[tuple[int, int]], int]:
     """Shape text with HarfBuzz and return glyph information.
     
@@ -109,6 +107,7 @@ def _shape_with_harfbuzz(font_bytes: bytes, text: str, features: dict[str, bool]
         x += pos.x_advance
         y += pos.y_advance
     return gids, advs, upem
+
 
 def _glyphs_to_svg_path(
     tt: TTFont,

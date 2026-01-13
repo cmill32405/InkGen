@@ -103,7 +103,7 @@ def save_debug_image(boundary: ShapelyPolygon, text_poly: ShapelyPolygon, font_s
     plt.title(f"Containment Fail | Font Size: {font_size}")
     plt.savefig(filename)
     plt.close(fig)
-    print(f"    -> VISUAL DEBUG: Saved debug image to {filename}")
+    logger.debug(f"Saved debug image to {filename}")
 
 
 class TextFitter:
@@ -571,7 +571,7 @@ class TextFitter:
                 high = font_size - 1
 
         if not best_fit_details or best_size < max(text_block.min_font_size_px, text_block.font_size_range[0]):
-            print("--- DEBUG: FAILED. No suitable font size found. ---")
+            logger.debug("No suitable font size found")
             return None
 
         wrapped_lines_data, final_text_geometry = best_fit_details

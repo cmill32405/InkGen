@@ -144,11 +144,9 @@ class Zoning:
         for i in range(32, 255):
             character = chr(i)
             text_comp.text = character
-            #print(character, text_comp.bbox)
             width = text_comp.bbox[1][0] - text_comp.bbox[0][0]
             height = text_comp.bbox[1][1] - text_comp.bbox[0][1]
             baseline_offset = -0.5 * (text_comp.bbox[0][1] + text_comp.bbox[1][1])
-            #print(width, height)
             self._sizes[character] = (width, height, baseline_offset)
 
     def _set_margins(self) -> None:
@@ -185,7 +183,6 @@ class Zoning:
         for i in range(4):
             for j in range(3):
                 if self._parameters[priority[i][j]]:
-                    #print(self._parameters[priority[i][j]])
                     self._widths[i] = self._parameters[priority[i][j]]
                     break
 
