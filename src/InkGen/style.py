@@ -83,6 +83,14 @@ class Style:
 
     @classmethod
     def _get_hex_color(cls, color: str) -> str:
+        """Convert a color name or hex code to a normalized hex string.
+
+        Args:
+            color: Color name (e.g., "red") or hex code (e.g., "#FF0000").
+
+        Returns:
+            Lowercase hex color code, or "none" if invalid.
+        """
         if color[0] == "#" and len(color) == 7:
             return color.lower()
         if color.lower() in Style.colors:

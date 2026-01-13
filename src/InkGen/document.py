@@ -500,9 +500,17 @@ class Document:
             yaml.safe_dump(self.parameters, file, allow_unicode=True, default_flow_style=False)
 
     @classmethod
-    def _iterdict(cls, dictionary):
+    def _iterdict(cls, dictionary: dict) -> dict | None:
+        """Recursively extract style dictionaries from a nested structure.
+
+        Args:
+            dictionary: Nested dictionary potentially containing style definitions.
+
+        Returns:
+            Dictionary mapping style names to style data, or None if no styles found.
+        """
         new_style = {}
-        for k,v in dictionary.items():
+        for k, v in dictionary.items():
             if isinstance(v, dict):
                 styles = cls._iterdict(v)
                 if styles:
@@ -517,7 +525,7 @@ class Document:
             return None
 
     @classmethod
-    def load(cls, filepath: str, styles: dict=None):
+    def load(cls, filepath: str, styles: dict | None = None):
         """ Creates a Document object from a saved YAML file.
 
         Args:
@@ -545,7 +553,7 @@ class Document:
 
         return document, styles
 
-    def add_page(self, position: int=-1, page: Layers=None) -> None:
+    def add_page(self, position: int = -1, page: Layers | None = None) -> None:
         """ Add a page to the document at an optional position using the optional page
         argument to incorporate an existing Layers object.
 
@@ -574,7 +582,6 @@ class Document:
                 raise TypeError("page argument take a Layers object")
         else:
             self._pages[page_number] = Layers(self._canvas)
-
 
     def remove_page(self, position: int) -> None:
         """Drops a page from the document and shuffles the other pages to

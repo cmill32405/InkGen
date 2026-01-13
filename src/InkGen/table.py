@@ -37,26 +37,60 @@ class Table(Component):
 
     @property
     def cell_padding(self) -> tuple[float, float, float, float]:
+        """Cell padding as a 4-tuple (top, right, bottom, left).
+
+        Returns:
+            Tuple of four floats representing padding in each direction.
+        """
         return self._padding
 
     @cell_padding.setter
     def cell_padding(self, value: float | tuple[float, float, float, float] | list[float]):
+        """Set cell padding for all cells.
+
+        Args:
+            value: Either a single float (applied to all sides) or a 4-tuple/list
+                   of floats representing (top, right, bottom, left) padding.
+
+        Raises:
+            ValueError: If value is not a float or a 4-element sequence.
+        """
         self._padding = self._normalize_padding(value)
 
     @property
     def padding_top(self) -> float:
+        """Top padding value.
+
+        Returns:
+            Top padding in document units.
+        """
         return self._padding[0]
 
     @property
     def padding_right(self) -> float:
+        """Right padding value.
+
+        Returns:
+            Right padding in document units.
+        """
         return self._padding[1]
 
     @property
     def padding_bottom(self) -> float:
+        """Bottom padding value.
+
+        Returns:
+            Bottom padding in document units.
+        """
         return self._padding[2]
 
     @property
     def padding_left(self) -> float:
+        """Left padding value.
+
+        Returns:
+            Left padding in document units.
+        """
         return self._padding[3]
 
     @staticmethod
@@ -96,12 +130,40 @@ class Table(Component):
         return column
 
     def cell(self, row: int, column: int) -> Cell:
+        """Get a cell at the specified row and column.
+
+        Args:
+            row: Zero-based row index.
+            column: Zero-based column index.
+
+        Returns:
+            Cell object at the specified position.
+
+        Raises:
+            IndexError: If row or column is out of bounds.
+        """
         return self._matrix[row][column]
 
     def row_cells(self, row: int) -> tuple[Cell, ...]:
+        """Get all cells in a specific row.
+
+        Args:
+            row: Zero-based row index.
+
+        Returns:
+            Tuple of all Cell objects in the row.
+        """
         return tuple(self._matrix[row])
 
     def column_cells(self, column: int) -> tuple[Cell, ...]:
+        """Get all cells in a specific column.
+
+        Args:
+            column: Zero-based column index.
+
+        Returns:
+            Tuple of all Cell objects in the column.
+        """
         return tuple(self._matrix[row][column] for row in range(self.row_count))
 
     def cell_bounds(
@@ -121,22 +183,48 @@ class Table(Component):
     # ------------------------------------------------------------------
     @property
     def position(self) -> tuple[float, float]:
+        """Top-left corner position of the table.
+
+        Returns:
+            (x, y) coordinates of the table origin.
+        """
         return self._position
 
     @position.setter
     def position(self, value: tuple[float, float]) -> None:
+        """Set the table position.
+
+        Args:
+            value: (x, y) coordinates for the top-left corner.
+        """
         self._position = (float(value[0]), float(value[1]))
 
     @property
     def width(self) -> float:
+        """Total width of the table.
+
+        Returns:
+            Sum of all column widths in document units.
+        """
         return sum(column.width for column in self._columns)
 
     @property
     def height(self) -> float:
+        """Total height of the table.
+
+        Returns:
+            Sum of all row heights in document units.
+        """
         return sum(row.height for row in self._rows)
 
     @property
     def points(self) -> list[tuple[float, float]]:
+        """Corner points of the table bounding box.
+
+        Returns:
+            List of (x, y) coordinates for the four corners, or a single point
+            if the table has zero width or height.
+        """
         x, y = self._position
         w, h = self.width, self.height
         if w == 0 or h == 0:
@@ -145,11 +233,22 @@ class Table(Component):
 
     @property
     def bbox(self) -> tuple[tuple[float, float], tuple[float, float]]:
+        """Bounding box of the table.
+
+        Returns:
+            Tuple of ((min_x, min_y), (max_x, max_y)) coordinates.
+        """
         x, y = self._position
         return ((x, y), (x + self.width, y + self.height))
 
     @property
     def convex_hull(self) -> list[tuple[float, float]]:
+        """Convex hull points of the table.
+
+        Returns:
+            List of (x, y) coordinates forming the convex hull (same as points
+            for a rectangular table).
+        """
         return self.points.copy()
 
     # ------------------------------------------------------------------
@@ -157,17 +256,34 @@ class Table(Component):
     # ------------------------------------------------------------------
     @property
     def autofit(self) -> bool:
+        """Whether automatic fitting is enabled.
+
+        Returns:
+            True if autofit is enabled, False otherwise.
+        """
         return self._auto_fit
 
     @autofit.setter
     def autofit(self, state: bool) -> None:
+        """Enable or disable automatic fitting.
+
+        Args:
+            state: True to enable autofit, False to disable.
+        """
         self._auto_fit = bool(state)
 
     @property
     def autofit_queue(self) -> list[tuple[tuple[int, int], AutoFitRule, AutoFitRule]]:
+        """Queue of cells pending autofit processing.
+
+        Returns:
+            List of ((row, col), row_rule, col_rule) tuples for cells that
+            need autofit processing.
+        """
         return list(self._autofit_queue)
 
     def clear_autofit_queue(self) -> None:
+        """Clear all pending autofit operations from the queue."""
         self._autofit_queue.clear()
 
     def _register_autofit(self, row_index: int, column_index: int) -> None:
@@ -231,18 +347,38 @@ class Table(Component):
     # ------------------------------------------------------------------
     @property
     def rows(self) -> tuple[Row, ...]:
+        """All rows in the table.
+
+        Returns:
+            Tuple of Row objects.
+        """
         return tuple(self._rows)
 
     @property
     def columns(self) -> tuple[Column, ...]:
+        """All columns in the table.
+
+        Returns:
+            Tuple of Column objects.
+        """
         return tuple(self._columns)
 
     @property
     def row_count(self) -> int:
+        """Number of rows in the table.
+
+        Returns:
+            Total row count.
+        """
         return len(self._rows)
 
     @property
     def column_count(self) -> int:
+        """Number of columns in the table.
+
+        Returns:
+            Total column count.
+        """
         return len(self._columns)
 
     # ------------------------------------------------------------------
@@ -267,6 +403,26 @@ class Table(Component):
                 cell._set_position(row_index, column_index)
 
 
+def _normalize_padding(value: float | tuple[float, float, float, float] | list[float]) -> tuple[float, float, float, float]:
+    """Normalize padding value to a 4-tuple.
+    
+    Args:
+        value: Either a single float (applied to all sides) or a 4-tuple/list of floats.
+        
+    Returns:
+        A 4-tuple of floats representing (top, right, bottom, left) padding.
+        
+    Raises:
+        ValueError: If value is not a float or a 4-element sequence.
+    """
+    if isinstance(value, (int, float)):
+        pad = float(value)
+        return (pad, pad, pad, pad)
+    if isinstance(value, (tuple, list)) and len(value) == 4:
+        return tuple(float(v) for v in value)  # type: ignore[arg-type]
+    raise ValueError("Padding must be a float or an iterable of four floats")
+
+
 class Row:
 
     """Row metadata wrapper."""
@@ -279,37 +435,89 @@ class Row:
 
     @property
     def table(self) -> Table:
+        """Parent table containing this row.
+
+        Returns:
+            Table instance that owns this row.
+        """
         return self._table
 
     @property
     def cells(self) -> tuple[Cell, ...]:
+        """All cells in this row.
+
+        Returns:
+            Tuple of Cell objects in the row.
+        """
         return tuple(self._cells)
 
     def column(self, index: int) -> Cell:
+        """Get a cell at a specific column index.
+
+        Args:
+            index: Zero-based column index.
+
+        Returns:
+            Cell object at the specified column.
+
+        Raises:
+            IndexError: If index is out of bounds.
+        """
         return self._cells[index]
 
     @property
     def height(self) -> float:
+        """Row height in document units.
+
+        Returns:
+            Height value.
+        """
         return self._height
 
     @height.setter
     def height(self, value: float) -> None:
+        """Set the row height.
+
+        Args:
+            value: New height value (must be non-negative).
+
+        Raises:
+            ValueError: If value is negative.
+        """
         if value < 0:
             raise ValueError("Row height must be non-negative")
         self._height = float(value)
 
     @property
     def height_rule(self) -> AutoFitRule:
+        """Autofit rule for row height adjustment.
+
+        Returns:
+            Current AutoFitRule for this row.
+        """
         return self._height_rule
 
     @height_rule.setter
     def height_rule(self, rule: AutoFitRule) -> None:
+        """Set the autofit rule for row height.
+
+        Args:
+            rule: AutoFitRule to apply (EXPAND, FIT, CUT, or FIXED).
+
+        Raises:
+            TypeError: If rule is not an AutoFitRule instance.
+        """
         if not isinstance(rule, AutoFitRule):
             raise TypeError("Rule must be an AutoFitRule")
         self._height_rule = rule
 
     @property
     def parameters(self) -> dict:
+        """Serialization parameters for this row.
+
+        Returns:
+            Dictionary with height and height_rule values.
+        """
         return {
             "height": self._height,
             "height_rule": self._height_rule.value,
@@ -331,37 +539,89 @@ class Column:
 
     @property
     def table(self) -> Table:
+        """Parent table containing this column.
+
+        Returns:
+            Table instance that owns this column.
+        """
         return self._table
 
     @property
     def cells(self) -> tuple[Cell, ...]:
+        """All cells in this column.
+
+        Returns:
+            Tuple of Cell objects in the column.
+        """
         return tuple(self._cells)
 
     def row(self, index: int) -> Cell:
+        """Get a cell at a specific row index.
+
+        Args:
+            index: Zero-based row index.
+
+        Returns:
+            Cell object at the specified row.
+
+        Raises:
+            IndexError: If index is out of bounds.
+        """
         return self._cells[index]
 
     @property
     def width(self) -> float:
+        """Column width in document units.
+
+        Returns:
+            Width value.
+        """
         return self._width
 
     @width.setter
     def width(self, value: float) -> None:
+        """Set the column width.
+
+        Args:
+            value: New width value (must be non-negative).
+
+        Raises:
+            ValueError: If value is negative.
+        """
         if value < 0:
             raise ValueError("Column width must be non-negative")
         self._width = float(value)
 
     @property
     def width_rule(self) -> AutoFitRule:
+        """Autofit rule for column width adjustment.
+
+        Returns:
+            Current AutoFitRule for this column.
+        """
         return self._width_rule
 
     @width_rule.setter
     def width_rule(self, rule: AutoFitRule) -> None:
+        """Set the autofit rule for column width.
+
+        Args:
+            rule: AutoFitRule to apply (EXPAND, FIT, CUT, or FIXED).
+
+        Raises:
+            TypeError: If rule is not an AutoFitRule instance.
+        """
         if not isinstance(rule, AutoFitRule):
             raise TypeError("Rule must be an AutoFitRule")
         self._width_rule = rule
 
     @property
     def parameters(self) -> dict:
+        """Serialization parameters for this column.
+
+        Returns:
+            Dictionary with width and width_rule values.
+        """
         return {
             "width": self._width,
             "width_rule": self._width_rule.value,
@@ -390,34 +650,77 @@ class Cell:
 
     @property
     def table(self) -> Table:
+        """Parent table containing this cell.
+
+        Returns:
+            Table instance that owns this cell.
+        """
         return self._table
 
     @property
     def row_index(self) -> int:
+        """Zero-based row index of this cell.
+
+        Returns:
+            Row index.
+        """
         return self._row_index
 
     @property
     def column_index(self) -> int:
+        """Zero-based column index of this cell.
+
+        Returns:
+            Column index.
+        """
         return self._column_index
 
     @property
     def merged(self) -> bool:
+        """Whether this cell is part of a merged region.
+
+        Returns:
+            True if the cell is merged with other cells, False otherwise.
+        """
         return self._merged
 
     @property
     def merge_start(self) -> tuple[int, int]:
+        """Starting position of the merged region.
+
+        Returns:
+            (row, column) tuple of the top-left cell in the merge.
+        """
         return self._merge_start
 
     @property
     def merge_end(self) -> tuple[int, int]:
+        """Ending position of the merged region.
+
+        Returns:
+            (row, column) tuple of the bottom-right cell in the merge.
+        """
         return self._merge_end
 
     @property
     def vertical_alignment(self) -> str:
+        """Vertical text alignment within the cell.
+
+        Returns:
+            One of 'top', 'middle', or 'bottom'.
+        """
         return self._vertical_alignment
 
     @vertical_alignment.setter
     def vertical_alignment(self, value: str) -> None:
+        """Set the vertical text alignment.
+
+        Args:
+            value: Alignment value ('top', 'middle', or 'bottom').
+
+        Raises:
+            ValueError: If value is not one of the allowed alignments.
+        """
         if value not in self._ALLOWED_ALIGNMENTS:
             raise ValueError("Alignment must be one of 'top', 'middle', or 'bottom'")
         self._vertical_alignment = value
@@ -425,17 +728,38 @@ class Cell:
     # Paragraph handling ------------------------------------------------
     @property
     def paragraphs(self) -> list[str]:
+        """List of paragraph texts in this cell.
+
+        Returns:
+            List of text strings, one per paragraph.
+        """
         return list(self._paragraph_text)
 
     @property
     def paragraph_styles(self) -> list[str | None]:
+        """Style IDs for each paragraph.
+
+        Returns:
+            List of style ID strings (or None) corresponding to each paragraph.
+        """
         return list(self._paragraph_styles)
 
     @property
     def text(self) -> str:
+        """All paragraph text joined with newlines.
+
+        Returns:
+            Complete cell text as a single string.
+        """
         return "\n".join(self._paragraph_text)
 
     def add_paragraph(self, text: str, *, style_id: str | None = None) -> None:
+        """Add a new paragraph to the cell.
+
+        Args:
+            text: Text content for the paragraph.
+            style_id: Optional style identifier for the paragraph.
+        """
         self._append_paragraph(text, style_id, trigger_autofit=True)
 
     def _append_paragraph(
@@ -453,14 +777,44 @@ class Cell:
             self._table._register_autofit(self._row_index, self._column_index)
 
     def remove_paragraph(self, index: int) -> None:
+        """Remove a paragraph by index.
+
+        Args:
+            index: Zero-based index of the paragraph to remove.
+
+        Raises:
+            IndexError: If index is out of bounds.
+        """
         del self._paragraph_text[index]
         del self._paragraph_styles[index]
 
     def paragraph(self, index: int) -> str:
+        """Get a specific paragraph by index.
+
+        Args:
+            index: Zero-based paragraph index.
+
+        Returns:
+            Text content of the paragraph.
+
+        Raises:
+            IndexError: If index is out of bounds.
+        """
         return self._paragraph_text[index]
 
     # Merge -------------------------------------------------------------
     def merge(self, other: Cell) -> Cell:
+        """Merge this cell with another cell, creating a merged region.
+
+        Args:
+            other: Another cell to merge with (must be in the same table).
+
+        Returns:
+            The top-left cell of the merged region.
+
+        Raises:
+            ValueError: If cells belong to different tables.
+        """
         if self.table is not other.table:
             raise ValueError("Cells belong to different tables")
         top = min(self._row_index, other._row_index)

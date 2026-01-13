@@ -56,15 +56,5 @@ pytest
 - Example-driven smoke tests live in `examples/`
 - Continuous Integration runs linting (`ruff`) and tests on every push
 
-## Contributing
-We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for details on
-our development workflow, coding standards, and how to propose changes. For
-questions or feature requests, open an issue or start a discussion.
-
-## Code of Conduct
-This project adheres to the [Contributor Covenant](CODE_OF_CONDUCT.md). By
-participating, you are expected to uphold this code. Report unacceptable
-behavior to the maintainers listed in that document.
-
 ## License
 InkGen is released under the terms of the [MIT License](LICENSE).

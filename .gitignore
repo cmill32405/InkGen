@@ -54,3 +54,7 @@ examples/output/
 # OS-specific files
 .DS_Store
 Thumbs.db
+
+#mkdocs
+mkdocs.yml
+site/

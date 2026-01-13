@@ -1027,8 +1027,12 @@ class RegularPolygonDrawingComponent(PolarCoordinateDrawingComponent):
                         "corner_radius": float(round(self.corner_radius, PRECISION))}}
         return parameter_dict
 
-    def _get_points(self):
+    def _get_points(self) -> list[tuple[float, float]]:
+        """Calculate the corner points of the regular polygon.
 
+        Returns:
+            List of (x, y) coordinates for each vertex of the polygon.
+        """
         points = []
         for p in range(0, self.sides):
             points.append(self._rect(self.length, (self.angle + 90 + p*360/self.sides)%360))
@@ -1175,6 +1179,17 @@ class PathCommand:
         self.points = points or []
 
     def _coerce_point(self, point: tuple[float, float]) -> tuple[float, float]:
+        """Validate and normalize a point to a tuple of two floats.
+
+        Args:
+            point: Point coordinates as a 2-element sequence.
+
+        Returns:
+            Tuple of (x, y) as floats.
+
+        Raises:
+            ValueError: If point does not have exactly 2 elements.
+        """
         if len(point) != 2:
             raise ValueError("Points must contain two numeric values.")
         return (float(point[0]), float(point[1]))
@@ -1186,6 +1201,15 @@ class PathCommand:
 
     @type.setter
     def type(self, value: str) -> None:
+        """Set the path command type.
+
+        Args:
+            value: Command type string (e.g., "M", "L", "C").
+
+        Raises:
+            TypeError: If value is not a string.
+            ValueError: If value is not a valid SVG path command.
+        """
         if not isinstance(value, str):
             raise TypeError("Command type must be a string.")
         normalized = value.strip().upper()
@@ -1195,7 +1219,11 @@ class PathCommand:
 
     @property
     def points(self) -> list[tuple[float, float]]:
-        """Read-only copy of the points associated with the command."""
+        """Read-only copy of the points associated with the command.
+
+        Returns:
+            List of (x, y) coordinate tuples, rounded to PRECISION.
+        """
         return [
             (float(round(x, PRECISION)), float(round(y, PRECISION)))
             for x, y in self._points
@@ -1203,6 +1231,11 @@ class PathCommand:
 
     @points.setter
     def points(self, values: list[tuple[float, float]]) -> None:
+        """Set the points for this command.
+
+        Args:
+            values: List of (x, y) coordinate tuples.
+        """
         self._points = [self._coerce_point(point) for point in values]
 
     def add_point(self, point: tuple[float, float]) -> None:

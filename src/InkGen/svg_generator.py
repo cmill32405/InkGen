@@ -48,9 +48,25 @@ try:
     from shapely.validation import make_valid as _shapely_make_valid
 except ImportError:
     def _normalize_geometry(geom):
+        """Normalize geometry using buffer(0) fallback.
+
+        Args:
+            geom: Shapely geometry object.
+
+        Returns:
+            Normalized geometry.
+        """
         return geom.buffer(0)
 else:
     def _normalize_geometry(geom):
+        """Normalize geometry using shapely's make_valid.
+
+        Args:
+            geom: Shapely geometry object.
+
+        Returns:
+            Validated and normalized geometry.
+        """
         return _shapely_make_valid(geom)
 
 PRECISION = 3
@@ -1322,14 +1338,44 @@ class TableSVG(ComponentGroupSVG):
         text_styles: dict[str, TextStyle],
         cell_padding: float | tuple[float, float, float, float] | None = None,
     ) -> TableSVG:
+        """Create a TableSVG from a Table instance.
+
+        Args:
+            table: Table object to render.
+            group_label: Optional label for the component group. Defaults to
+                        "Table_{table.id}" if not provided.
+            border_style: Drawing style for table borders.
+            text_styles: Dictionary mapping style IDs to TextStyle objects.
+            cell_padding: Padding for cells (single float or 4-tuple).
+
+        Returns:
+            TableSVG instance ready for rendering.
+        """
         label = group_label if group_label is not None else f"Table_{table.id}"
         return cls(table, label, border_style, text_styles, cell_padding)
 
     @property
     def table(self) -> Table:
+        """The underlying Table object.
+
+        Returns:
+            Table instance being rendered.
+        """
         return self._table
 
     def _horizontal_position(self, left: float, width: float, pad_left: float, pad_right: float, style: TextStyle) -> float:
+        """Calculate horizontal text position based on alignment.
+
+        Args:
+            left: Left edge of the cell.
+            width: Total cell width.
+            pad_left: Left padding.
+            pad_right: Right padding.
+            style: TextStyle with alignment information.
+
+        Returns:
+            X coordinate for text placement.
+        """
         align = getattr(style, 'text_align', 'start') or 'start'
         align = align.lower()
         interior = max(width - pad_left - pad_right, 0.0)
@@ -1341,6 +1387,18 @@ class TableSVG(ComponentGroupSVG):
 
     @staticmethod
     def _normalize_padding(value: float | tuple[float, float, float, float] | list[float]) -> tuple[float, float, float, float]:
+        """Normalize padding value to a 4-tuple.
+
+        Args:
+            value: Either a single float (applied to all sides) or a 4-element
+                  sequence of floats.
+
+        Returns:
+            Tuple of (top, right, bottom, left) padding values.
+
+        Raises:
+            ValueError: If value is not a float or a 4-element sequence.
+        """
         if isinstance(value, (int, float)):
             pad = float(value)
             return (pad, pad, pad, pad)
@@ -1349,6 +1407,7 @@ class TableSVG(ComponentGroupSVG):
         raise ValueError('Padding must be a float or an iterable of four floats')
 
     def _apply_autofit(self) -> None:
+        """Apply autofit rules to scale text or expand cells as needed."""
         iterations = 0
         changed = True
         while changed and iterations < 5:
@@ -1399,6 +1458,19 @@ class TableSVG(ComponentGroupSVG):
                             self._cell_style_overrides[(row_index, column_index, line_idx)] = override
 
     def _collect_lines(self, row_index: int, column_index: int, *, apply_overrides: bool) -> list[tuple[str, TextStyle]]:
+        """Collect text lines from a cell with their styles.
+
+        Args:
+            row_index: Zero-based row index.
+            column_index: Zero-based column index.
+            apply_overrides: If True, apply autofit scaling overrides.
+
+        Returns:
+            List of (text, TextStyle) tuples for each non-empty paragraph.
+
+        Raises:
+            KeyError: If a referenced style ID is not in text_styles.
+        """
         cell = self._table.cell(row_index, column_index)
         lines: list[tuple[str, TextStyle]] = []
         for idx, (text, style_id) in enumerate(zip(cell.paragraphs, cell.paragraph_styles, strict=False)):
@@ -1413,6 +1485,15 @@ class TableSVG(ComponentGroupSVG):
         return lines
 
     def _scale_style(self, style: TextStyle, factor: float) -> TextStyle:
+        """Create a scaled copy of a text style, caching results.
+
+        Args:
+            style: Original TextStyle to scale.
+            factor: Scaling factor to apply to font size.
+
+        Returns:
+            New TextStyle with scaled font size, other properties copied.
+        """
         rounded = round(factor, 4)
         key = (style.name, rounded)
         if key in self._scaled_styles:
@@ -1439,6 +1520,15 @@ class TableSVG(ComponentGroupSVG):
         return clone
 
     def _measure_text_width(self, text: str, style: TextStyle) -> float:
+        """Estimate text width in document units.
+
+        Args:
+            text: Text string to measure.
+            style: TextStyle with font information.
+
+        Returns:
+            Estimated width in document units (mm).
+        """
         size = getattr(style.font, 'size', 10.0)
         try:
             size_value = float(size)
@@ -1450,6 +1540,15 @@ class TableSVG(ComponentGroupSVG):
         return max(base_width + space_bonus, 0.1)
 
     def _line_metrics(self, text: str, style: TextStyle) -> tuple[float, float, float]:
+        """Calculate line height and baseline offsets for text.
+
+        Args:
+            text: Text string to measure.
+            style: TextStyle with font information.
+
+        Returns:
+            Tuple of (line_height, top_offset, bottom_offset) in document units.
+        """
         component = TextSVG(text, (0.0, 0.0), style)
         outline = component._compute_outline()
         points = outline.get('points') or outline.get('bbox') or outline.get('convex_hull') or []
@@ -1466,6 +1565,7 @@ class TableSVG(ComponentGroupSVG):
         return line_height, top_offset, bottom_offset
 
     def _build_components(self) -> None:
+        """Build SVG components for the table (borders and text)."""
         if not self._table.row_count or not self._table.column_count:
             return
         for row_index in range(self._table.row_count):
@@ -1515,6 +1615,14 @@ class TableSVG(ComponentGroupSVG):
                     self.add_component(TextSVG(text_value, (text_x, baseline), style))
 
     def _baseline_shift(self, style: TextStyle) -> float:
+        """Calculate baseline offset from top of text.
+
+        Args:
+            style: TextStyle with font information.
+
+        Returns:
+            Distance from top of text to baseline in document units.
+        """
         size = getattr(style.font, 'size', 10.0)
         try:
             size_value = float(size)
@@ -1525,6 +1633,14 @@ class TableSVG(ComponentGroupSVG):
         return max(size_value * mm_per_point * ascent_ratio, 0.2)
 
     def _line_height(self, style: TextStyle) -> float:
+        """Calculate total line height including spacing.
+
+        Args:
+            style: TextStyle with font size and line spacing.
+
+        Returns:
+            Total line height in document units.
+        """
         size = getattr(style.font, "size", 10.0)
         try:
             size_value = float(size)
