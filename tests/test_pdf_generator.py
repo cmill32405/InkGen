@@ -182,3 +182,45 @@ def test_document_pdf_round_trips_parameters_and_bytes(drawing_style: DrawingSty
 
     assert recreated.parameters == document.parameters
     assert recreated.to_pdf_bytes() == document.to_pdf_bytes()
+
+
+@pytest.mark.condition("PDF-P1")
+def test_document_pdf_outputs_one_pdf_page_per_inkgen_page(drawing_style: DrawingStyle) -> None:
+    """PDF-P1: DocumentPDF assembles one PDF page for each InkGen page."""
+    canvas = Canvas(100.0, 80.0)
+    document = DocumentPDF(canvas)
+
+    for page_index in range(2):
+        document.add_page()
+        group = ComponentGroupPDF(f"page_{page_index + 1}")
+        group.add_component(RectanglePDF((10.0 + page_index, 20.0), 30.0, 40.0, 0.0, drawing_style))
+        document.page(page_index + 1).layer("base").add_component_group(group)
+
+    payload = document.to_pdf_bytes()
+
+    assert payload.count(b"/Type /Page ") == 2
+    assert b"/Type /Pages" in payload
+    assert b"/Count 2" in payload
+    assert payload.count(b"/MediaBox [0 0 100 80]") == 2
+    assert payload.count(b"1 0 0 -1 0 80 cm") == 2
+
+
+@pytest.mark.condition("PDF-P1")
+def test_document_pdf_create_pdf_writes_bytes_and_rejects_missing_directory(
+    tmp_path,
+    drawing_style: DrawingStyle,
+) -> None:
+    """PDF-P1: create_pdf writes deterministic bytes and fails loudly on bad paths."""
+    canvas = Canvas(100.0, 80.0)
+    document = DocumentPDF(canvas)
+    document.add_page()
+    group = ComponentGroupPDF("base")
+    group.add_component(RectanglePDF((10.0, 20.0), 30.0, 40.0, 0.0, drawing_style))
+    document.page(1).layer("base").add_component_group(group)
+
+    target = tmp_path / "seed.pdf"
+    document.create_pdf(str(target))
+
+    assert target.read_bytes() == document.to_pdf_bytes()
+    with pytest.raises(ValueError, match="file path does not exist"):
+        document.create_pdf(str(tmp_path / "missing" / "seed.pdf"))
