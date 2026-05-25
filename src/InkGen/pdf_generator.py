@@ -78,9 +78,9 @@ class _PDFObjectWriter:
 
         xref_offset = len(output)
         output.extend(f"xref\n0 {len(self._objects) + 1}\n".encode("ascii"))
-        output.extend(b"0000000000 65535 f \n")
+        output.extend(b"0000000000 65535 f\n")
         for offset in offsets[1:]:
-            output.extend(f"{offset:010d} 00000 n \n".encode("ascii"))
+            output.extend(f"{offset:010d} 00000 n\n".encode("ascii"))
         output.extend(
             (
                 f"trailer\n<< /Size {len(self._objects) + 1} /Root {root_id} 0 R /Info {info_id} 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n"
