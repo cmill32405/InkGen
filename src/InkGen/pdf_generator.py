@@ -28,7 +28,7 @@ from InkGen.component import (
 from InkGen.component import CubicBezier as CubicBezierComponent
 from InkGen.component import Path as PathComponent
 from InkGen.component import QuadraticBezier as QuadraticBezierComponent
-from InkGen.document import Document, Layers
+from InkGen.document import Document, Layer, Layers
 from InkGen.style import DrawingStyle, TextStyle
 
 PDF_FIXED_DATE = "D:20000101000000Z"
@@ -177,6 +177,22 @@ def _drawing_pdf(style: DrawingStyle, path_operators: list[str], *, fill: bool =
     return "\n".join(operators)
 
 
+def _primitive_parameters(name: str, *, values: dict[str, object], style: DrawingStyle | TextStyle) -> dict[str, dict[str, object]]:
+    """Return a serialization dictionary for a PDF primitive component."""
+    payload = dict(values)
+    payload["style"] = style.parameters
+    return {name: payload}
+
+
+def _path_command_from_dict(data: dict[str, object]) -> PathCommand:
+    """Recreate a PathCommand from serialized command parameters."""
+    command = PathCommand(str(data["type"]), data.get("points", []))
+    flags = data.get("flags")
+    if flags:
+        command.flags = flags
+    return command
+
+
 class RectanglePDF(WidthHeightDrawingComponent, PDFGeneratorInterface):
     """PDF representation of a rectangle component."""
 
@@ -224,6 +240,19 @@ class LinePDF(StandardDrawingComponent, PDFGeneratorInterface):
     def __init__(self, point_1: tuple[float, float], point_2: tuple[float, float], style: DrawingStyle) -> None:
         super().__init__(point_1=point_1, point_2=point_2, style=style)
 
+    @classmethod
+    def create_from_dict(cls, data: dict, style: DrawingStyle | None = None) -> LinePDF:
+        """Recreate a LinePDF from serialized parameters."""
+        payload = data["LinePDF"]
+        if style is None:
+            style = DrawingStyle.create_from_dict(payload["style"])
+        return cls(tuple(payload["point_1"]), tuple(payload["point_2"]), style)
+
+    @property
+    def parameters(self) -> dict[str, dict[str, object]]:
+        """Return serialized geometry/style information."""
+        return _primitive_parameters("LinePDF", values={"point_1": self.point_1, "point_2": self.point_2}, style=self.style)
+
     def generate_pdf(self, context: PDFRenderContext | None = None) -> str:
         """Generate PDF operators for this line."""
         path = [
@@ -256,6 +285,38 @@ class ArcPDF(ArcComponent, PDFGeneratorInterface):
             rotation=rotation,
         )
 
+    @classmethod
+    def create_from_dict(cls, data: dict, style: DrawingStyle | None = None) -> ArcPDF:
+        """Recreate an ArcPDF from serialized parameters."""
+        payload = data["ArcPDF"]
+        if style is None:
+            style = DrawingStyle.create_from_dict(payload["style"])
+        return cls(
+            center=tuple(payload["center"]),
+            radius_x=payload["radius_x"],
+            radius_y=payload["radius_y"],
+            start_angle=payload["start_angle"],
+            end_angle=payload["end_angle"],
+            style=style,
+            rotation=payload.get("rotation", 0.0),
+        )
+
+    @property
+    def parameters(self) -> dict[str, dict[str, object]]:
+        """Return serialized geometry/style information."""
+        return _primitive_parameters(
+            "ArcPDF",
+            values={
+                "center": self.center,
+                "radius_x": self.radius_x,
+                "radius_y": self.radius_y,
+                "start_angle": self.start_angle,
+                "end_angle": self.end_angle,
+                "rotation": self.rotation,
+            },
+            style=self.style,
+        )
+
     def generate_pdf(self, context: PDFRenderContext | None = None) -> str:
         """Generate PDF operators for this arc using InkGen's sampled points."""
         return _drawing_pdf(self.style, _path_from_points(list(self.points), close=False), fill=False)
@@ -272,6 +333,23 @@ class QuadraticBezierPDF(QuadraticBezierComponent, PDFGeneratorInterface):
         style: DrawingStyle,
     ) -> None:
         super().__init__(start_point=start_point, control_point=control_point, end_point=end_point, style=style)
+
+    @classmethod
+    def create_from_dict(cls, data: dict, style: DrawingStyle | None = None) -> QuadraticBezierPDF:
+        """Recreate a QuadraticBezierPDF from serialized parameters."""
+        payload = data["QuadraticBezierPDF"]
+        if style is None:
+            style = DrawingStyle.create_from_dict(payload["style"])
+        return cls(tuple(payload["start_point"]), tuple(payload["control_point"]), tuple(payload["end_point"]), style)
+
+    @property
+    def parameters(self) -> dict[str, dict[str, object]]:
+        """Return serialized geometry/style information."""
+        return _primitive_parameters(
+            "QuadraticBezierPDF",
+            values={"start_point": self.start_point, "control_point": self.control_point, "end_point": self.end_point},
+            style=self.style,
+        )
 
     def generate_pdf(self, context: PDFRenderContext | None = None) -> str:
         """Generate PDF operators for this quadratic Bezier."""
@@ -298,6 +376,34 @@ class CubicBezierPDF(CubicBezierComponent, PDFGeneratorInterface):
             start_point=start_point, control_point1=control_point1, control_point2=control_point2, end_point=end_point, style=style
         )
 
+    @classmethod
+    def create_from_dict(cls, data: dict, style: DrawingStyle | None = None) -> CubicBezierPDF:
+        """Recreate a CubicBezierPDF from serialized parameters."""
+        payload = data["CubicBezierPDF"]
+        if style is None:
+            style = DrawingStyle.create_from_dict(payload["style"])
+        return cls(
+            tuple(payload["start_point"]),
+            tuple(payload["control_point1"]),
+            tuple(payload["control_point2"]),
+            tuple(payload["end_point"]),
+            style,
+        )
+
+    @property
+    def parameters(self) -> dict[str, dict[str, object]]:
+        """Return serialized geometry/style information."""
+        return _primitive_parameters(
+            "CubicBezierPDF",
+            values={
+                "start_point": self.start_point,
+                "control_point1": self.control_point1,
+                "control_point2": self.control_point2,
+                "end_point": self.end_point,
+            },
+            style=self.style,
+        )
+
     def generate_pdf(self, context: PDFRenderContext | None = None) -> str:
         """Generate PDF operators for this cubic Bezier."""
         path = [
@@ -316,6 +422,27 @@ class PathPDF(PathComponent, PDFGeneratorInterface):
 
     def __init__(self, style: DrawingStyle, commands: list[PathCommand] | None = None) -> None:
         super().__init__(style=style, commands=commands)
+
+    @classmethod
+    def create_from_dict(cls, data: dict, style: DrawingStyle | None = None) -> PathPDF:
+        """Recreate a PathPDF from serialized parameters."""
+        payload = data["PathPDF"]
+        if style is None:
+            style = DrawingStyle.create_from_dict(payload["style"])
+        commands = [_path_command_from_dict(command) for command in payload.get("commands", [])]
+        return cls(style=style, commands=commands)
+
+    @property
+    def parameters(self) -> dict[str, dict[str, object]]:
+        """Return serialized geometry/style information."""
+        serialized = []
+        for command in self.commands:
+            entry = dict(command.parameters)
+            flags = getattr(command, "flags", None)
+            if flags is not None:
+                entry["flags"] = flags
+            serialized.append(entry)
+        return _primitive_parameters("PathPDF", values={"commands": serialized}, style=self.style)
 
     def _command_operators(self) -> list[str]:
         operators: list[str] = []
@@ -383,6 +510,36 @@ class RegularPolygonPDF(RegularPolygonDrawingComponent, PDFGeneratorInterface):
     ) -> None:
         super().__init__(position=position, sides=sides, radius=radius, style=style, angle=angle, corner_radius=corner_radius)
 
+    @classmethod
+    def create_from_dict(cls, data: dict, style: DrawingStyle | None = None) -> RegularPolygonPDF:
+        """Recreate a RegularPolygonPDF from serialized parameters."""
+        payload = data["RegularPolygonPDF"]
+        if style is None:
+            style = DrawingStyle.create_from_dict(payload["style"])
+        return cls(
+            tuple(payload["position"]),
+            payload["sides"],
+            payload["radius"],
+            style,
+            payload.get("angle", 0.0),
+            payload.get("corner_radius", 0.0),
+        )
+
+    @property
+    def parameters(self) -> dict[str, dict[str, object]]:
+        """Return serialized geometry/style information."""
+        return _primitive_parameters(
+            "RegularPolygonPDF",
+            values={
+                "position": self.position,
+                "sides": self.sides,
+                "radius": self.radius,
+                "angle": self.angle,
+                "corner_radius": self.corner_radius,
+            },
+            style=self.style,
+        )
+
     def generate_pdf(self, context: PDFRenderContext | None = None) -> str:
         """Generate PDF operators for this regular polygon."""
         return _drawing_pdf(self.style, _path_from_points(self._get_points(), close=True))
@@ -393,6 +550,19 @@ class PolygonalPDF(PolygonalDrawingComponent, PDFGeneratorInterface):
 
     def __init__(self, points: list[tuple[float, float]], style: DrawingStyle) -> None:
         super().__init__(points=points, style=style)
+
+    @classmethod
+    def create_from_dict(cls, data: dict, style: DrawingStyle | None = None) -> PolygonalPDF:
+        """Recreate a PolygonalPDF from serialized parameters."""
+        payload = data["PolygonalPDF"]
+        if style is None:
+            style = DrawingStyle.create_from_dict(payload["style"])
+        return cls([tuple(point) for point in payload["points"]], style)
+
+    @property
+    def parameters(self) -> dict[str, dict[str, object]]:
+        """Return serialized geometry/style information."""
+        return _primitive_parameters("PolygonalPDF", values={"points": self.points}, style=self.style)
 
     def generate_pdf(self, context: PDFRenderContext | None = None) -> str:
         """Generate PDF operators for this polygon."""
@@ -412,6 +582,19 @@ class CirclePDF(SingleDimensionDrawingComponent, PDFGeneratorInterface):
     def radius(self) -> float:
         """Return the circle radius."""
         return self.size
+
+    @classmethod
+    def create_from_dict(cls, data: dict, style: DrawingStyle | None = None) -> CirclePDF:
+        """Recreate a CirclePDF from serialized parameters."""
+        payload = data["CirclePDF"]
+        if style is None:
+            style = DrawingStyle.create_from_dict(payload["style"])
+        return cls(tuple(payload["position"]), payload["radius"], style)
+
+    @property
+    def parameters(self) -> dict[str, dict[str, object]]:
+        """Return serialized geometry/style information."""
+        return _primitive_parameters("CirclePDF", values={"position": self.position, "radius": self.radius}, style=self.style)
 
     def generate_pdf(self, context: PDFRenderContext | None = None) -> str:
         """Generate PDF operators for this circle using cubic Bezier arcs."""
@@ -434,6 +617,19 @@ class TextPDF(TextComponent, PDFGeneratorInterface):
 
     def __init__(self, text: str, position: tuple[float, float], style: TextStyle) -> None:
         super().__init__(text=text, position=position, style=style)
+
+    @classmethod
+    def create_from_dict(cls, data: dict, style: TextStyle | None = None) -> TextPDF:
+        """Recreate a TextPDF from serialized parameters."""
+        payload = data["TextPDF"]
+        if style is None:
+            style = TextStyle.create_from_dict(payload["style"])
+        return cls(payload["text"], tuple(payload["position"]), style)
+
+    @property
+    def parameters(self) -> dict[str, dict[str, object]]:
+        """Return serialized text/style information."""
+        return _primitive_parameters("TextPDF", values={"text": self.text, "position": self.position}, style=self.style)
 
     def generate_pdf(self, context: PDFRenderContext | None = None) -> str:
         """Generate PDF operators for this text."""
@@ -580,9 +776,11 @@ class DocumentPDF(Document):
     @classmethod
     def create_from_dict(cls, data: dict, styles: dict | None = None) -> DocumentPDF:
         """Recreate a DocumentPDF from serialized parameters."""
+        if styles is None:
+            styles = {}
         document = cls(Canvas.create_from_dict(data["DocumentPDF"]["canvas"]))
         for page_payload in data["DocumentPDF"]["pages"]:
-            page = Layers.create_from_dict(page_payload, styles)
+            page = _layers_pdf_from_dict(page_payload, styles)
             document.add_page(position=-1, page=page)
         return document
 
@@ -595,3 +793,26 @@ class DocumentPDF(Document):
                 "pages": [self.page(page).parameters for page in list(self._pages.keys())],
             }
         }
+
+
+def _layer_pdf_from_dict(data: dict, styles: dict[str, object]) -> Layer:
+    """Recreate a Layer containing ComponentGroupPDF instances."""
+    payload = data["Layer"]
+    layer = Layer(payload["layer_name"], Canvas.create_from_dict(payload["canvas"]), payload["model"])
+    for group_payload in payload["component_groups"]:
+        group = ComponentGroupPDF.create_from_dict(group_payload, styles)
+        settings = payload["group_collision_settings"].get(group.group_label, {})
+        layer.add_component_group(group, settings.get("allow_collision", True), settings.get("strict", False))
+    return layer
+
+
+def _layers_pdf_from_dict(data: dict, styles: dict[str, object]) -> Layers:
+    """Recreate a Layers page containing PDF component groups."""
+    payload = data["Layers"]
+    layers = Layers(Canvas.create_from_dict(payload["canvas"]))
+    if "base" in layers.layers:
+        layers.remove_layer("base")
+    for _, layer_payload in payload["layers"].items():
+        layer = _layer_pdf_from_dict(layer_payload, styles)
+        layers.add_layer(layer=layer)
+    return layers

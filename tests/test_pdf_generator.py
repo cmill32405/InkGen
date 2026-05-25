@@ -123,3 +123,62 @@ def test_component_group_pdf_rejects_non_pdf_components() -> None:
 
     with pytest.raises(TypeError, match="does not implement generate_pdf"):
         group.generate_pdf()
+
+
+@pytest.mark.condition("PDF-P1")
+def test_pdf_primitives_round_trip_parameters(drawing_style: DrawingStyle, text_style: TextStyle) -> None:
+    """PDF-P1: PDF primitives recreate from their own serialized parameters."""
+    commands = [
+        PathCommand("M", [(1.0, 2.0)]),
+        PathCommand("L", [(3.0, 4.0)]),
+        PathCommand("Z", []),
+    ]
+    primitives = [
+        (RectanglePDF((10.0, 20.0), 30.0, 40.0, 0.0, drawing_style), drawing_style),
+        (LinePDF((1.0, 1.0), (2.0, 2.0), drawing_style), drawing_style),
+        (ArcPDF((10.0, 10.0), 5.0, 3.0, 0.0, 90.0, drawing_style), drawing_style),
+        (QuadraticBezierPDF((0.0, 0.0), (1.0, 1.0), (2.0, 0.0), drawing_style), drawing_style),
+        (CubicBezierPDF((0.0, 0.0), (0.0, 1.0), (1.0, 1.0), (1.0, 0.0), drawing_style), drawing_style),
+        (PathPDF(drawing_style, commands=commands), drawing_style),
+        (RegularPolygonPDF((10.0, 10.0), 3, 5.0, drawing_style), drawing_style),
+        (PolygonalPDF([(0.0, 0.0), (1.0, 0.0), (1.0, 1.0)], drawing_style), drawing_style),
+        (CirclePDF((10.0, 10.0), 5.0, drawing_style), drawing_style),
+        (TextPDF("Seed", (15.0, 25.0), text_style), text_style),
+    ]
+
+    for primitive, style in primitives:
+        recreated = primitive.__class__.create_from_dict(primitive.parameters, style)
+        assert recreated.parameters == primitive.parameters
+        assert recreated.generate_pdf() == primitive.generate_pdf()
+
+
+@pytest.mark.condition("PDF-P1")
+def test_component_group_pdf_round_trips_pdf_children(drawing_style: DrawingStyle, text_style: TextStyle) -> None:
+    """PDF-P1: ComponentGroupPDF recreates child PDF components from parameters."""
+    group = ComponentGroupPDF("roundtrip")
+    group.add_component(RectanglePDF((10.0, 20.0), 30.0, 40.0, 0.0, drawing_style))
+    group.add_component(TextPDF("Seed", (15.0, 25.0), text_style))
+
+    styles = {drawing_style.name: drawing_style, text_style.name: text_style}
+    recreated = ComponentGroupPDF.create_from_dict(group.parameters, styles)
+
+    assert recreated.parameters == group.parameters
+    assert recreated.generate_pdf() == group.generate_pdf()
+
+
+@pytest.mark.condition("PDF-P1")
+def test_document_pdf_round_trips_parameters_and_bytes(drawing_style: DrawingStyle, text_style: TextStyle) -> None:
+    """PDF-P1: DocumentPDF recreates pages/layers/groups and preserves deterministic bytes."""
+    canvas = Canvas(100.0, 80.0)
+    document = DocumentPDF(canvas)
+    document.add_page()
+    group = ComponentGroupPDF("roundtrip")
+    group.add_component(RectanglePDF((10.0, 20.0), 30.0, 40.0, 0.0, drawing_style))
+    group.add_component(TextPDF("Seed", (15.0, 25.0), text_style))
+    document.page(1).layer("base").add_component_group(group)
+
+    styles = {drawing_style.name: drawing_style, text_style.name: text_style}
+    recreated = DocumentPDF.create_from_dict(document.parameters, styles)
+
+    assert recreated.parameters == document.parameters
+    assert recreated.to_pdf_bytes() == document.to_pdf_bytes()
