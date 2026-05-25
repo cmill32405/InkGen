@@ -104,6 +104,33 @@ def test_pdf_primitives_emit_content_stream_operators(drawing_style: DrawingStyl
 
 
 @pytest.mark.condition("PDF-P1")
+def test_path_pdf_emits_supported_svg_path_commands(drawing_style: DrawingStyle) -> None:
+    """PDF-P1: PathPDF maps supported SVG-style path commands to PDF operators."""
+    path = PathPDF(
+        drawing_style,
+        commands=[
+            PathCommand("M", [(1.0, 2.0)]),
+            PathCommand("H", [(5.0, 0.0)]),
+            PathCommand("V", [(0.0, 6.0)]),
+            PathCommand("Q", [(7.0, 8.0), (9.0, 10.0)]),
+            PathCommand("C", [(11.0, 12.0), (13.0, 14.0), (15.0, 16.0)]),
+            PathCommand("A", [(17.0, 18.0)]),
+            PathCommand("Z", []),
+        ],
+    )
+
+    content = path.generate_pdf()
+
+    assert "1 2 m" in content
+    assert "5 2 l" in content
+    assert "5 6 l" in content
+    assert "6.333333 7.333333 7.666667 8.666667 9 10 c" in content
+    assert "11 12 13 14 15 16 c" in content
+    assert "17 18 l" in content
+    assert "\nh\n" in content
+
+
+@pytest.mark.condition("PDF-P1")
 def test_document_pdf_is_deterministic_and_flips_page_coordinates_once(drawing_style: DrawingStyle, text_style: TextStyle) -> None:
     """PDF-P1: DocumentPDF emits stable bytes with a page-level SVG-to-PDF coordinate flip."""
     canvas = Canvas(100.0, 80.0)
