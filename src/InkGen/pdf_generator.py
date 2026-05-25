@@ -30,6 +30,7 @@ from InkGen.component import Path as PathComponent
 from InkGen.component import QuadraticBezier as QuadraticBezierComponent
 from InkGen.document import Document, Layer, Layers
 from InkGen.style import DrawingStyle, TextStyle
+from InkGen.svg_generator import LabelGenerator, SegmentGenerator
 
 PDF_FIXED_DATE = "D:20000101000000Z"
 
@@ -651,7 +652,7 @@ class TextPDF(TextComponent, PDFGeneratorInterface):
         )
 
 
-class ComponentGroupPDF(ComponentGroup):
+class ComponentGroupPDF(ComponentGroup, LabelGenerator, SegmentGenerator):
     """Component group that serializes child PDF components."""
 
     @classmethod
@@ -696,6 +697,14 @@ class ComponentGroupPDF(ComponentGroup):
                 raise TypeError(f"Component {component.__class__.__name__} does not implement generate_pdf().")
             operators.append(generate_pdf(context))
         return "\n".join(operators)
+
+    def generate_label(self) -> dict[str, list[tuple[float, float]]]:
+        """Generate renderer-agnostic label bounding boxes for this group."""
+        return {self.group_label: self.bbox}
+
+    def generate_segmentation_mask(self) -> dict[str, list[tuple[float, float]]]:
+        """Generate renderer-agnostic segmentation hulls for this group."""
+        return {self.group_label: self.convex_hull}
 
 
 class DocumentPDF(Document):

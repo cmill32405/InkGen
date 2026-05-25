@@ -27,6 +27,7 @@ from InkGen.pdf_generator import (
     TextPDF,
 )
 from InkGen.style import DrawingStyle, Font, TextStyle
+from InkGen.svg_generator import LabelGenerator, SegmentGenerator
 
 
 @pytest.fixture
@@ -64,6 +65,8 @@ def test_pdf_backend_has_parallel_primitive_mixins() -> None:
     ]
 
     assert all(issubclass(primitive, PDFGeneratorInterface) for primitive in primitive_classes)
+    assert issubclass(ComponentGroupPDF, LabelGenerator)
+    assert issubclass(ComponentGroupPDF, SegmentGenerator)
 
 
 @pytest.mark.condition("PDF-P1")
@@ -207,6 +210,16 @@ def test_component_group_pdf_round_trips_pdf_children(drawing_style: DrawingStyl
 
     assert recreated.parameters == group.parameters
     assert recreated.generate_pdf() == group.generate_pdf()
+
+
+@pytest.mark.condition("PDF-P1")
+def test_component_group_pdf_exposes_renderer_agnostic_truth(drawing_style: DrawingStyle) -> None:
+    """PDF-P1: ComponentGroupPDF exposes labels and masks using shared geometry."""
+    group = ComponentGroupPDF("truth")
+    group.add_component(RectanglePDF((10.0, 20.0), 30.0, 40.0, 0.0, drawing_style))
+
+    assert group.generate_label() == {"truth": group.bbox}
+    assert group.generate_segmentation_mask() == {"truth": group.convex_hull}
 
 
 @pytest.mark.condition("PDF-P1")
