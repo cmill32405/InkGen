@@ -8,7 +8,7 @@ import uuid
 import pytest
 
 from InkGen.boundary import Canvas
-from InkGen.component import PathCommand
+from InkGen.component import ComponentGroup, PathCommand
 from InkGen.pdf_generator import (
     ArcPDF,
     CirclePDF,
@@ -224,3 +224,41 @@ def test_document_pdf_create_pdf_writes_bytes_and_rejects_missing_directory(
     assert target.read_bytes() == document.to_pdf_bytes()
     with pytest.raises(ValueError, match="file path does not exist"):
         document.create_pdf(str(tmp_path / "missing" / "seed.pdf"))
+
+
+@pytest.mark.condition("PDF-P1")
+def test_text_pdf_escapes_literal_string_control_characters(text_style: TextStyle) -> None:
+    """PDF-P1: TextPDF escapes literal-string delimiter and control characters."""
+    content = TextPDF("A\\B(C)\r\nD", (1.0, 2.0), text_style).generate_pdf()
+
+    assert r"(A\\B\(C\)\r\nD) Tj" in content
+
+
+@pytest.mark.condition("PDF-P1")
+def test_drawing_style_without_visible_paint_emits_noop_path(drawing_style: DrawingStyle) -> None:
+    """PDF-P1: Invisible drawing styles emit a no-op paint operator."""
+    drawing_style.stroke = "none"
+    drawing_style.fill = "none"
+
+    content = RectanglePDF((10.0, 20.0), 30.0, 40.0, 0.0, drawing_style).generate_pdf()
+
+    assert content.endswith("\nn\nQ")
+
+
+@pytest.mark.condition("PDF-P1")
+def test_document_pdf_rejects_non_pdf_child_in_standard_group(drawing_style: DrawingStyle) -> None:
+    """PDF-P1: DocumentPDF fails loudly when the live page path contains a non-PDF child."""
+
+    class NonPdfComponent:
+        id = 12345
+
+    canvas = Canvas(100.0, 80.0)
+    document = DocumentPDF(canvas)
+    document.add_page()
+    group = ComponentGroup("mixed")
+    group.add_component(RectanglePDF((10.0, 20.0), 30.0, 40.0, 0.0, drawing_style))
+    document.page(1).layer("base").add_component_group(group)
+    group._components[NonPdfComponent.id] = NonPdfComponent()
+
+    with pytest.raises(TypeError, match="does not implement generate_pdf"):
+        document.to_pdf_bytes()
