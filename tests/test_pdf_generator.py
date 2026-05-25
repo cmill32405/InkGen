@@ -7,6 +7,8 @@ import uuid
 
 import pytest
 
+import InkGen.pdf_generator as pdf_generator_module
+import InkGen.svg_generator as svg_generator_module
 from InkGen.boundary import Canvas
 from InkGen.component import ComponentGroup, PathCommand
 from InkGen.pdf_generator import (
@@ -62,6 +64,20 @@ def test_pdf_backend_has_parallel_primitive_mixins() -> None:
     ]
 
     assert all(issubclass(primitive, PDFGeneratorInterface) for primitive in primitive_classes)
+
+
+@pytest.mark.condition("PDF-P1")
+def test_pdf_backend_primitive_surface_matches_svg_backend() -> None:
+    """PDF-P1: The PDF primitive surface stays paired with the SVG primitive surface."""
+    non_primitive_stems = {"ComponentGroup", "Document", "SVGComponent", "Table"}
+    svg_stems = {
+        name.removesuffix("SVG") for name, value in vars(svg_generator_module).items() if isinstance(value, type) and name.endswith("SVG")
+    } - non_primitive_stems
+    pdf_stems = {
+        name.removesuffix("PDF") for name, value in vars(pdf_generator_module).items() if isinstance(value, type) and name.endswith("PDF")
+    } - non_primitive_stems
+
+    assert pdf_stems == svg_stems
 
 
 @pytest.mark.condition("PDF-P1")
