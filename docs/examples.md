@@ -58,6 +58,24 @@ python examples/test_svg_drawing.py
 
 Output: `examples/output/test_svg_draw.svg`
 
+## 4. `pdf_visual_spotcheck.py`
+
+Generates a matched SVG/PDF pair from the same simple geometry so the PDF
+backend can be visually compared against the established SVG backend.
+
+- Demonstrates `DocumentSVG` and `DocumentPDF` over matched coordinates.
+- Exercises rectangle, line, circle, and text placement.
+- Uses InkGen's dependency-free PDF backend; no external PDF library is added.
+
+```bash
+python examples/pdf_visual_spotcheck.py
+```
+
+Outputs:
+
+- `examples/output/pdf_visual_spotcheck.svg`
+- `examples/output/pdf_visual_spotcheck.pdf`
+
 ## Understanding the Output
 
 Each example script generates multiple artifacts:

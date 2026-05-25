@@ -11,6 +11,7 @@ nav:
       - Document Structure: components/document-structure.md
   - Text & Layout: text-and-layout.md
   - Examples: examples.md
+  - PDF Generation: pdf-generation.md
   - Architecture Diagrams: architecture-diagrams.md
   - Notes:
       - Mask Alignment Findings: mask_alignment_findings.md
