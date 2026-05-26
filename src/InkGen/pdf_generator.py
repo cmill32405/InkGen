@@ -29,6 +29,13 @@ from InkGen.component import CubicBezier as CubicBezierComponent
 from InkGen.component import Path as PathComponent
 from InkGen.component import QuadraticBezier as QuadraticBezierComponent
 from InkGen.document import Document, Layer, Layers
+from InkGen.extraction_truth import (
+    extraction_truth_json,
+    records_for_annotated_target,
+    restore_extraction_truth_annotations,
+    serialize_extraction_truth_annotations,
+    sort_extraction_truth_records,
+)
 from InkGen.style import DrawingStyle, TextStyle
 from InkGen.svg_generator import LabelGenerator, SegmentGenerator
 
@@ -658,35 +665,47 @@ class ComponentGroupPDF(ComponentGroup, LabelGenerator, SegmentGenerator):
     @classmethod
     def create_from_dict(cls, data: dict, styles: dict | None = None) -> ComponentGroupPDF:
         """Recreate a ComponentGroupPDF from serialized parameters."""
-        group = cls(data["ComponentGroupPDF"]["group_label"])
+        payload = data["ComponentGroupPDF"]
+        group = cls(payload["group_label"])
+        restore_extraction_truth_annotations(group, payload.get("extraction_truth", []))
         if styles is None:
             styles = {}
-        for component_data in data["ComponentGroupPDF"]["components"]:
+        component_annotations = payload.get("component_extraction_truth", [])
+        for index, component_data in enumerate(payload["components"]):
             style = None
             component_class_name = list(component_data.keys())[0]
-            payload = component_data[component_class_name]
-            if "style" in payload:
-                style_name = list(payload["style"].keys())[0]
-                stored_name = payload["style"][style_name]["name"]
+            component_payload = component_data[component_class_name]
+            if "style" in component_payload:
+                style_name = list(component_payload["style"].keys())[0]
+                stored_name = component_payload["style"][style_name]["name"]
                 if stored_name not in styles:
                     style_class = getattr(sys.modules[__name__], style_name)
-                    style = style_class.create_from_dict(payload["style"])
+                    style = style_class.create_from_dict(component_payload["style"])
                     styles[stored_name] = style
                 else:
                     style = styles[stored_name]
             component_class = getattr(sys.modules[__name__], component_class_name)
-            group.add_component(component_class.create_from_dict(component_data, style))
+            component = component_class.create_from_dict(component_data, style)
+            if index < len(component_annotations):
+                restore_extraction_truth_annotations(component, component_annotations[index])
+            group.add_component(component)
         return group
 
     @property
     def parameters(self) -> dict[str, dict[str, object]]:
         """Return serialized group information."""
-        return {
-            "ComponentGroupPDF": {
-                "group_label": self.group_label,
-                "components": [component.parameters for component in self._components.values()],
-            }
+        components = list(self._components.values())
+        group_payload: dict[str, object] = {
+            "group_label": self.group_label,
+            "components": [component.parameters for component in components],
         }
+        annotations = serialize_extraction_truth_annotations(self)
+        if annotations:
+            group_payload["extraction_truth"] = annotations
+        component_annotations = [serialize_extraction_truth_annotations(component) for component in components]
+        if any(component_annotations):
+            group_payload["component_extraction_truth"] = component_annotations
+        return {"ComponentGroupPDF": group_payload}
 
     def generate_pdf(self, context: PDFRenderContext | None = None) -> str:
         """Generate PDF operators for all child components."""
@@ -782,13 +801,49 @@ class DocumentPDF(Document):
         operators.append("Q")
         return "\n".join(operators)
 
+    def extraction_truth(self) -> list[dict[str, object]]:
+        """Emit semantic extraction truth in rendered PDF point coordinates."""
+        records = records_for_annotated_target(
+            self,
+            page=0,
+            canvas_height=self._canvas.height,
+        )
+        for page_number in range(1, self.pages + 1):
+            page = self.page(page_number)
+            for layer_name in sorted(page.layers):
+                layer = page.layer(layer_name)
+                for group_label in sorted(layer.component_groups):
+                    group = layer.group(layer.component_groups[group_label])
+                    records.extend(
+                        records_for_annotated_target(
+                            group,
+                            page=page_number,
+                            canvas_height=page._canvas.height,
+                        )
+                    )
+                    for component in group.components():
+                        records.extend(
+                            records_for_annotated_target(
+                                component,
+                                page=page_number,
+                                canvas_height=page._canvas.height,
+                            )
+                        )
+        return [record.to_dict() for record in sort_extraction_truth_records(records)]
+
+    def extraction_truth_json(self) -> str:
+        """Serialize this document's extraction truth to deterministic JSON."""
+        return extraction_truth_json(self.extraction_truth())
+
     @classmethod
     def create_from_dict(cls, data: dict, styles: dict | None = None) -> DocumentPDF:
         """Recreate a DocumentPDF from serialized parameters."""
         if styles is None:
             styles = {}
-        document = cls(Canvas.create_from_dict(data["DocumentPDF"]["canvas"]))
-        for page_payload in data["DocumentPDF"]["pages"]:
+        payload = data["DocumentPDF"]
+        document = cls(Canvas.create_from_dict(payload["canvas"]))
+        restore_extraction_truth_annotations(document, payload.get("extraction_truth", []))
+        for page_payload in payload["pages"]:
             page = _layers_pdf_from_dict(page_payload, styles)
             document.add_page(position=-1, page=page)
         return document
@@ -796,12 +851,14 @@ class DocumentPDF(Document):
     @property
     def parameters(self) -> dict[str, dict[str, object]]:
         """Return serialized document information."""
-        return {
-            "DocumentPDF": {
-                "canvas": self._canvas.parameters,
-                "pages": [self.page(page).parameters for page in list(self._pages.keys())],
-            }
+        document_payload: dict[str, object] = {
+            "canvas": self._canvas.parameters,
+            "pages": [self.page(page).parameters for page in list(self._pages.keys())],
         }
+        annotations = serialize_extraction_truth_annotations(self)
+        if annotations:
+            document_payload["extraction_truth"] = annotations
+        return {"DocumentPDF": document_payload}
 
 
 def _layer_pdf_from_dict(data: dict, styles: dict[str, object]) -> Layer:

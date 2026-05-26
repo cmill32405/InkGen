@@ -12,6 +12,7 @@ nav:
   - Text & Layout: text-and-layout.md
   - Examples: examples.md
   - PDF Generation: pdf-generation.md
+  - Extraction Truth: extraction-truth.md
   - Architecture Diagrams: architecture-diagrams.md
   - Notes:
       - Mask Alignment Findings: mask_alignment_findings.md

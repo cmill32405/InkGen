@@ -17,6 +17,11 @@ the page content-stream level, and text rendering counter-flips glyphs so text
 stays upright. PDF metadata dates and object ordering are fixed so repeated
 renders of the same document produce deterministic bytes.
 
+Semantic extraction-truth annotations can be attached through
+`InkGen.extraction_truth` and emitted with `DocumentPDF.extraction_truth()`. Those
+records use rendered PDF point coordinates (`pdf_points_bottom_left`) so they can
+be compared directly with parser output.
+
 ## Example
 
 ```python
