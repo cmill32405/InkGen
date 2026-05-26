@@ -8,9 +8,11 @@ synthetic engineering schematics for experimentation and analysis.
 ## Features
 - SVG components for common drawing primitives (rectangles, polygons, tables, etc.)
 - Dependency-free PDF components that parallel the SVG primitive backend
+- Renderer-neutral drawing recipes that can materialize synthetic overlays as SVG, PDF, or DXF
+- Dependency-free DOCX/HTML/RTF/TXT document export paths for paragraphs, tables, and drawing primitive groups
 - Semantic extraction-truth annotations for generated PDF fixtures
 - Document and layer abstractions for multi-page drawings
-- Text fitting, zoning, and annotation helpers tailored for technical diagrams
+- Text fitting, paragraph layout, zoning, and annotation helpers tailored for technical diagrams
 - Configurable styling pipeline for synthetic data generation workflows
 - Example scripts that generate ready-to-use SVG artifacts
 

@@ -17,6 +17,22 @@ the page content-stream level, and text rendering counter-flips glyphs so text
 stays upright. PDF metadata dates and object ordering are fixed so repeated
 renders of the same document produce deterministic bytes.
 
+Higher-level synthetic drawing helpers should use `InkGen.drawing_components`
+when they need to target multiple formats. For example, `ZoningDrawing` stores a
+renderer-neutral zoning recipe and can materialize either `ComponentGroupSVG` or
+`ComponentGroupPDF` from the same geometry.
+
+`SVGComponent` remains SVG-only. The PDF backend does not currently embed or
+convert arbitrary external SVG files into PDF operators.
+
+For CAD-oriented interchange, use `InkGen.dxf_generator.DXFDocument` with
+renderer-neutral drawing groups. DXF is separate from PDF because it represents
+drawing entities, not paged document graphics.
+
+The renderer-neutral drawing class system is scoped to SVG, PDF, and DXF. Flow
+documents use those same primitive groups as document blocks when DOCX, HTML,
+RTF, or plain-text fixtures need embedded diagrams.
+
 Semantic extraction-truth annotations can be attached through
 `InkGen.extraction_truth` and emitted with `DocumentPDF.extraction_truth()`. Those
 records use rendered PDF point coordinates (`pdf_points_bottom_left`) so they can
@@ -42,6 +58,29 @@ group.add_component(TextPDF("Seed", (15.0, 25.0), text_style))
 document.page(1).layer("base").add_component_group(group)
 
 document.create_pdf("examples/output/seed.pdf")
+```
+
+## Renderer-Neutral Synthetic Drawings
+
+```python
+from InkGen.boundary import Canvas
+from InkGen.drawing_components import OutputFormat, ZoningDrawing
+from InkGen.pdf_generator import DocumentPDF
+from InkGen.style import DrawingStyle, Font, TextStyle
+
+canvas = Canvas(210.0, 297.0, "mm")
+zoning = ZoningDrawing(
+    canvas,
+    line_style=DrawingStyle("zone_lines", stroke="#999999", fill="none", stroke_width=0.2),
+    text_style=TextStyle("zone_text", Font(size=6.0)),
+    horizontal_zones=10,
+    vertical_zones=8,
+)
+
+document = DocumentPDF(canvas)
+document.add_page()
+document.page(1).layer("base").add_component_group(zoning.to_group(OutputFormat.PDF))
+document.create_pdf("examples/output/zoning.pdf")
 ```
 
 ## Visual Spot Check
@@ -76,4 +115,5 @@ The PDF backend is covered by PDF-P1 tests for:
 - Invisible style no-op painting
 - Live-path rejection of non-PDF children
 - Renderer-agnostic group truth geometry via labels and segmentation masks
+- Renderer-neutral zoning recipes that emit PDF-safe component groups
 - Visual spot-check artifact generation

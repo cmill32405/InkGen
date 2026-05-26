@@ -81,10 +81,10 @@ def _primitive_parameters(name: str, *, values: dict[str, object], style: Drawin
 
 def _coerce_command_points(points: list[tuple[float, float]]) -> list[str]:
     """Convert points to SVG coordinate strings.
-    
+
     Args:
         points: List of (x, y) coordinate tuples.
-        
+
     Returns:
         List of formatted coordinate strings in "x,y" format.
     """
@@ -1653,7 +1653,7 @@ class TableSVG(ComponentGroupSVG):
             spacing_value = 1.0
         mm_per_point = 25.4 / 72.0
         return max(size_value * spacing_value * mm_per_point, 0.1)
-    
+
 
 class IncludeLayer(Flag):
     BASE = auto()

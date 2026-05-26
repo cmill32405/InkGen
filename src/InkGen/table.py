@@ -405,13 +405,13 @@ class Table(Component):
 
 def _normalize_padding(value: float | tuple[float, float, float, float] | list[float]) -> tuple[float, float, float, float]:
     """Normalize padding value to a 4-tuple.
-    
+
     Args:
         value: Either a single float (applied to all sides) or a 4-tuple/list of floats.
-        
+
     Returns:
         A 4-tuple of floats representing (top, right, bottom, left) padding.
-        
+
     Raises:
         ValueError: If value is not a float or a 4-element sequence.
     """

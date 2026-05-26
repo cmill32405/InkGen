@@ -24,12 +24,12 @@ def set_add_one_pixel_margin_default(enabled: bool) -> None:
 
 def _px_to_units(px: float, units: str = "mm", dpi: float = 96.0) -> float:
     """Convert pixels to document units.
-    
+
     Args:
         px: Value in pixels.
         units: Target unit system ("mm", "in", or "px").
         dpi: Dots per inch (default 96.0 for CSS pixels).
-        
+
     Returns:
         Converted value in the specified units.
     """
@@ -67,12 +67,12 @@ def sample_path_points(d: str, px_step: float = 0.5, *, units: str = "mm", dpi: 
 
 def _shape_with_harfbuzz(font_bytes: bytes, text: str, features: dict[str, bool] | None = None) -> tuple[list[int], list[tuple[int, int]], int]:
     """Shape text with HarfBuzz and return glyph information.
-    
+
     Args:
         font_bytes: Raw font file bytes.
         text: Text string to shape.
         features: Optional OpenType feature flags.
-        
+
     Returns:
         Tuple of (glyph_ids, positions, upem) where:
         - glyph_ids: List of glyph indices
@@ -119,7 +119,7 @@ def _glyphs_to_svg_path(
     y_down: bool = True
 ) -> str:
     """Build a single SVG path `d` for all glyph outlines positioned & scaled.
-    
+
     Args:
         tt: FontTools TTFont object.
         gids: List of glyph indices.
@@ -128,7 +128,7 @@ def _glyphs_to_svg_path(
         size_px: Font size in pixels.
         origin: (x, y) origin point for positioning.
         y_down: If True, flip Y-axis (SVG convention).
-        
+
     Returns:
         SVG path data string.
     """
@@ -155,11 +155,11 @@ def _glyphs_to_svg_path(
 
 def _sample_svg_path(d: str, step_px: float = 0.75) -> list[tuple[float, float]]:
     """Sample the SVG path densely enough that the convex hull & bbox are pixel-tight.
-    
+
     Args:
         d: SVG path data string.
         step_px: Target arc-length step in pixels.
-        
+
     Returns:
         List of (x, y) coordinate tuples sampled along the path.
     """

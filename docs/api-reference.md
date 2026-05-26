@@ -41,6 +41,38 @@ This section provides a high-level index of the primary modules and classes expo
 - `TextBlock`, `TextFitter`, `FittingResult`.
 - Helper functions for outlining text (`outline_for_text`, `sample_path_points`).
 
+## Paragraphs (`InkGen.paragraph`)
+
+- `Paragraph`: Word-like paragraph layout model with alignment, indentation,
+  spacing, tab stops, and pagination flags.
+- `ParagraphAlignment`, `LineSpacingRule`, `TabStop`, `ParagraphLine`.
+
+## Drawing Components (`InkGen.drawing_components`)
+
+- `DrawingComponentGroup`: Renderer-neutral collection of drawing primitives.
+- `RectangleDrawing`, `LineDrawing`, `TextDrawing`, `ArcDrawing`,
+  `QuadraticBezierDrawing`, `CubicBezierDrawing`, `PathDrawing`,
+  `RegularPolygonDrawing`, `PolygonalDrawing`, and `CircleDrawing`.
+- Drawing groups materialize to SVG and PDF component groups directly, and to
+  DXF through `DXFDocument`.
+- `ZoningDrawing`: Renderer-neutral zoning overlay recipe.
+
+## Document Outputs (`InkGen.document_outputs`)
+
+- `FlowDocument`: Ordered flow document exporter for paragraphs, tables, and
+  drawing primitive groups.
+- `DocumentOutputFormat`: Supported document output labels.
+- Formats currently implemented: DOCX, HTML, RTF, and plain text. DOCX uses
+  native WordprocessingML tables and VML drawing groups so no additional document
+  library dependency is required.
+
+## DXF Output (`InkGen.dxf_generator`)
+
+- `DXFDocument`: ASCII DXF exporter for renderer-neutral drawing groups.
+- `DXFRenderContext`: Coordinate conversion settings for DXF output.
+- Circles export as `CIRCLE`; other supported linework, curves, polygons, and
+  paths export as `LINE`, `TEXT`, or sampled `LWPOLYLINE` entities.
+
 ## CAD Component Groups (`InkGen.cad_component_groups`)
 
 - `Zoning`: Grid layout utility for engineering drawings.

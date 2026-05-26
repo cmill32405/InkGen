@@ -4,7 +4,9 @@ InkGen provides utilities for laying out text, zoning drawings, and managing tab
 
 - `src/InkGen/text_fitter.py`
 - `src/InkGen/text_outline.py`
+- `src/InkGen/paragraph.py`
 - `src/InkGen/cad_component_groups.py`
+- `src/InkGen/drawing_components.py`
 - `src/InkGen/table.py`
 
 ## Text Fitting Workflow
@@ -79,17 +81,75 @@ convex_hull = outline["convex_hull"]
 
 This data is useful for collision checking and annotation overlays.
 
-## Zoning and CAD Layouts
+## Paragraphs
 
-`cad_component_groups.Zoning` builds grid-based zoning overlays commonly seen on engineering drawings. The zoning component exposes margins, zone width, and label configuration options:
+`Paragraph` stores Word-like paragraph settings separately from any renderer.
+It supports alignment, first-line and hanging indents, left/right indents,
+before/after spacing, line spacing rules, tab stops, and pagination flags such
+as keep-with-next and page-break-before.
 
 ```python
-from InkGen.cad_component_groups import Zoning
+from InkGen.paragraph import LineSpacingRule, Paragraph, ParagraphAlignment
+from InkGen.style import TextStyle, Font
+
+body_style = TextStyle("Body", Font("Arial", size=10))
+paragraph = Paragraph(
+    "This paragraph can be materialized as SVG or PDF text lines.",
+    position=(20, 40),
+    width=120,
+    style=body_style,
+    alignment=ParagraphAlignment.LEFT,
+    first_line_indent=6,
+    space_before=2,
+    space_after=3,
+    line_spacing=1.15,
+    line_spacing_rule=LineSpacingRule.MULTIPLE,
+    keep_with_next=True,
+)
+paragraph.add_tab_stop(30)
+
+drawing_group = paragraph.to_drawing_group("BodyParagraph")
+pdf_group = drawing_group.to_group("pdf")
+svg_group = drawing_group.to_group("svg")
+```
+
+## Flow Documents
+
+`FlowDocument` collects ordered paragraph, table, and drawing primitive blocks
+and exports dependency-free document files. DOCX is the primary bridge for Word
+and Google Docs workflows. HTML, RTF, and plain text are also supported for
+lighter interchange. Google Docs itself is a hosted editor rather than a local
+file format, so the portable paths are the formats it can import/export.
+
+```python
+from InkGen.document_outputs import FlowDocument
+
+flow_doc = FlowDocument(title="Inspection Notes")
+flow_doc.add_paragraph(paragraph)
+flow_doc.add_table(table)
+flow_doc.add_drawing_group(drawing_group)
+
+flow_doc.create_docx("examples/output/inspection_notes.docx")
+flow_doc.create_html("examples/output/inspection_notes.html")
+flow_doc.create_rtf("examples/output/inspection_notes.rtf")
+flow_doc.create_text("examples/output/inspection_notes.txt")
+```
+
+## Zoning and CAD Layouts
+
+`cad_component_groups.Zoning` is the legacy SVG-oriented zoning helper. New
+multi-format synthetic drawings should use `drawing_components.ZoningDrawing`,
+which builds the same kind of grid overlay from renderer-neutral primitives and
+then emits SVG or PDF component groups. The same primitive groups can be exported
+as DXF through `DXFDocument`.
+
+```python
+from InkGen.drawing_components import OutputFormat, ZoningDrawing
 from InkGen.style import DrawingStyle, TextStyle, Font
 
 zoning_style = DrawingStyle("ZoneLines", stroke="#999", stroke_width=0.2)
 zoning_text = TextStyle("ZoneLabels", Font("Arial", weight="bold", size=6))
-zoning = Zoning(
+zoning = ZoningDrawing(
     canvas,
     line_style=zoning_style,
     text_style=zoning_text,
@@ -97,6 +157,8 @@ zoning = Zoning(
     horizontal_zones=10,
     vertical_zones=8,
 )
+pdf_group = zoning.to_group(OutputFormat.PDF)
+svg_group = zoning.to_group(OutputFormat.SVG)
 ```
 
 ## Tables
@@ -139,9 +201,9 @@ Set `table.autofit = True` to enable auto-fit rules. Per-row and per-column rule
 
 Most practical documents combine these layout utilities:
 
-1. Use `Zoning` to draw grid overlays and annotation callouts.
+1. Use `ZoningDrawing` to draw grid overlays and annotation callouts across SVG/PDF/DXF outputs.
 2. Fit descriptive text into complex components with `TextFitter`.
 3. Add revision tables or bills of materials using the `Table` API.
-4. Render everything through `DocumentSVG`, optionally exporting masks and labels for machine learning pipelines.
+4. Render drawings through `DocumentSVG`, `DocumentPDF`, or `DXFDocument`, and render flow documents through `FlowDocument`.
 
 See the [Examples](examples.md) section for end-to-end walkthroughs.
