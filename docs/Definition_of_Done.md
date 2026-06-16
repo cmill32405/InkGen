@@ -119,8 +119,10 @@ Examples:
 | Output is inspectable | Can a human inspect the generated artifact or record? | Example output, JSON emit, diagram, or docs |
 | No hidden dependency creep | Were new dependencies avoided or explicitly approved? | Dependency diff or statement that no dependency files changed |
 | Dependency integrity is checked | What callers, suppliers, contracts, and artifacts can this change affect? | Dependency impact notes and at least one dependent-path test when a contract changes |
+| Architecture impact is checked | Did the change add, remove, or redirect dependencies, layers, responsibilities, public contracts, or artifact flows? | Architecture impact notes, graph/source evidence, and updated rule or ADR when needed |
 | ADR impact is checked | Does this change create, modify, or contradict an architecture decision? | New/updated ADR or statement that no ADR is affected |
 | Complexity is justified | Is this the smallest design that satisfies the proven requirement? | Complexity review notes and any intentional simplicity/deferred-complexity comments |
+| Test applicability is explicit | Which test classes are required by this change surface, and which are not applicable? | Test applicability matrix with evidence or reasoned exclusions |
 | Verification gate passes | Do tests, lint, format, docs, and coverage pass? | Exact commands and summarized results |
 | Residual risk is stated | What remains unproven or intentionally deferred? | Short residual-risk note |
 
@@ -169,6 +171,41 @@ find dependency risks and then decide based on the local design.
 
 Violating a SOLID heuristic is not automatically wrong. It is a prompt to either
 improve the design or document why the tradeoff is acceptable.
+
+## Architecture Impact Done
+
+Dependency evidence identifies edges. Architecture impact evidence decides
+whether those edges still form the intended system. A change is not done until
+its structural blast radius is bounded by source evidence, tests, and design
+rules or ADRs.
+
+| Check | Questions |
+|---|---|
+| Affected surface | Which modules, classes, functions, public APIs, docs, generated artifacts, fixtures, and tests are in the blast radius? |
+| Incoming graph | Who imports, calls, subclasses, serializes, parses, renders, documents, or otherwise depends on this artifact? |
+| Outgoing graph | What modules, types, files, formats, external libraries, and runtime assumptions does this artifact rely on? |
+| Before/after structure | Did the change add an edge, remove an edge, move responsibility, redirect a public path, or alter layer direction? |
+| Cycle check | Did the change introduce an import cycle, conceptual cycle, bidirectional ownership, or mutually dependent format contract? |
+| Layer/forbidden-edge check | Does any dependency violate the dependency map, ADRs, or an explicit renderer/document/parser boundary? |
+| Coupling/hub check | Did one module, class, or renderer become a high-degree hub, god object, or dumping ground for unrelated decisions? |
+| Redundancy check | Did the change duplicate an existing component, rule, serializer, truth emitter, coordinate transform, or output contract? |
+| Test-gap/hotspot check | Did the change touch weakly tested, frequently changed, proof-critical, security-sensitive, or parser-facing code? |
+| Evidence source | Which edges came from AST/imports, direct code reads, tests, search, diagrams, memory, or inference? |
+| Confidence/freshness | Are graph facts current and source-backed, or stale/inferred and therefore requiring a direct code read? |
+| Rule/ADR update | Should a recurring architecture constraint become an executable check, or should an ADR be added, updated, superseded, or rejected? |
+
+Report architecture impact with:
+
+```text
+Architecture impact:
+- Affected surface:
+- Incoming dependencies:
+- Outgoing dependencies:
+- Before/after edge changes:
+- Cycle/layer/coupling/redundancy result:
+- Evidence source and freshness:
+- ADR/rule impact:
+```
 
 ## Comprehensiveness Done
 
@@ -241,6 +278,34 @@ Mutation:
 - Mutants excluded/equivalent:
 - Gate result:
 ```
+
+## Test Applicability Done
+
+Not every slice needs every kind of test, but every slice must make that
+decision explicit. "Not applicable" is acceptable only when the change surface
+does not expose that risk or the exclusion is already part of the declared
+domain.
+
+| Test class | Required when | Evidence |
+|---|---|---|
+| Unit | Pure functions, value objects, small class contracts, validation branches, or deterministic helpers changed. | Direct tests for normal, invalid, and boundary behavior. |
+| Behavioral/condition | A design condition, user-visible feature, parser-facing behavior, or proof obligation changed. | Condition-marked test tied to the requirement. |
+| Failure-mode | Invalid state, malformed input, unsupported option, missing file, dependency failure, or external tool failure is possible. | Negative test asserting exception, log, preserved state, or recovery behavior. |
+| Integration/live-path | Behavior crosses modules, public APIs, renderers, parsers, file formats, storage, subprocesses, or other IO boundaries. | Test through the public path a caller or downstream system uses. |
+| Contract/API compatibility | Public signatures, serialized parameters, truth schemas, generated artifacts, fixtures, or backwards-compatible behavior changed. | Compatibility, round-trip, legacy fixture, or old-caller regression test. |
+| Property/fuzz | Behavior has broad input spaces, parsers, coordinate math, geometry, layout, serialization, normalization, ordering, or invariant claims. | Property test, fuzz test, exhaustive finite-domain test, or mathematical proof. |
+| Mutation | Proof-critical logic, guards, dispatch rules, formulas, serialization, or parser/generator truth logic changed. | Automated mutation report with no surviving non-equivalent proof-critical mutants. |
+| Security/adversarial | Code handles untrusted input, paths, filenames, archives, templates, fonts, images, subprocesses, network, secrets, auth, deserialization, or generated active content. | Security regression test, adversarial fixture, scanner result, or explicit non-applicability note. |
+| Performance/resource | Code can process large documents, many components, repeated renders, caches, recursive structures, loops, or user-sized inputs. | Budgeted regression test, benchmark, timeout/memory guard, or documented bound. |
+| Concurrency/race | Shared mutable state, caches, sessions, background workers, temp files, locks, or parallel generation are involved. | Race/concurrency test, lock-path test, or proof that state is isolated. |
+| Golden artifact/visual | SVG, PDF, DXF, DOCX, JSON truth, diagrams, or UI-like visual artifacts are generated. | Deterministic artifact check, parser round trip, visual/render inspection, or fixture comparison. |
+| Regression | A bug, incident, surviving mutant, user report, or production failure motivated the change. | Named regression test that fails on the old behavior. |
+
+Use this matrix in report-outs:
+
+| Test class | Applicable? | Reason | Evidence |
+|---|---|---|---|
+| `<class>` | yes / no | `<risk surface or exclusion>` | `<test, proof, scanner, or none>` |
 
 ## Complexity Done
 
@@ -430,6 +495,7 @@ or existence.
 | Assertion quality | Are assertions about observable behavior, not implementation trivia? |
 | No over-mocking | Are real value objects and serializers used where practical? |
 | Stable fixtures | Are generated fixtures deterministic and protected from EOL or timestamp churn? |
+| Applicability matrix | Are integration, contract, security, property/fuzz, mutation, performance, concurrency, golden artifact, and regression tests marked applicable or not applicable? |
 | Coverage | Does coverage show the new code is executed? |
 | Isolation | Do tests avoid relying on global state, current time, random names, or machine-specific paths unless controlled? |
 
@@ -515,8 +581,10 @@ Proof:
   - Behavioral: <tests and condition ids>
   - Functional: <public path or integration path exercised>
   - Dependency: <callers/suppliers/contracts checked>
+  - Architecture: <affected surface, edge changes, cycle/layer/coupling/redundancy result>
   - Complexity: <what was reused, avoided, deleted, or intentionally simplified>
   - Comprehensiveness: <domain partitions, edge classes, invariants, and exclusions mapped>
+  - Test applicability: <test classes required, excluded, and evidence for each>
   - Mutation: <tool, source paths, killed/survived/equivalent/excluded, gate result>
 - Proof obligations:
   - <claim>: <proven | supported by evidence | contradicted | unproven>

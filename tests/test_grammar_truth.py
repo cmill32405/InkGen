@@ -36,6 +36,11 @@ def _document_with_group(group: ComponentGroupPDF) -> DocumentPDF:
     return document
 
 
+class _TargetWithBBox:
+    def __init__(self, bbox: object) -> None:
+        self.bbox = bbox
+
+
 @pytest.mark.condition("PDF-P3")
 def test_document_pdf_emits_grammar_truth_in_pdf_coordinates() -> None:
     """PDF-P3: Grammar-truth bboxes emit in rendered PDF bottom-left coordinates."""
@@ -305,3 +310,60 @@ def test_grammar_truth_sorting_handles_none_instance_id() -> None:
     sorted_records = sort_grammar_truth_records(records)
 
     assert sorted_records == records
+
+
+@pytest.mark.condition("PDF-P3")
+def test_grammar_truth_bbox_property_cases_emit_pdf_coordinates() -> None:
+    """PDF-P3: Bounded bbox partitions obey the PDF coordinate theorem."""
+    cases = [
+        ((10, 5, 40, 25), 80.0, [10.0, 55.0, 40.0, 75.0]),
+        ((40, 25, 10, 5), 80.0, [10.0, 55.0, 40.0, 75.0]),
+        ([(-5, 2), (15, 10), (8, 20)], 30.0, [-5.0, 10.0, 15.0, 28.0]),
+        ([(1.25, 2.5, "ignored"), (4.75, 8.5, "ignored")], 10.0, [1.25, 1.5, 4.75, 7.5]),
+        ((0, 0, 0, 0), 12.0, [0.0, 12.0, 0.0, 12.0]),
+    ]
+
+    for index, (bbox, canvas_height, expected) in enumerate(cases):
+        target = _TargetWithBBox(bbox)
+        annotate_grammar_truth(target, f"BBOX-{index}", "cue")
+
+        records = records_for_annotated_target(target, page=2, canvas_height=canvas_height)
+
+        assert records[0].page == 2
+        assert records[0].bbox == expected
+
+
+@pytest.mark.condition("PDF-P3")
+def test_grammar_truth_annotation_property_cases_round_trip_and_sort_deterministically() -> None:
+    """PDF-P3: Bounded valid annotation partitions round-trip and sort deterministically."""
+    kinds = ("cue", "construct", "link", "assessment")
+    channels = ("body", "metadata")
+    values = (None, "text", {"b": 2, "a": [1, 3]})
+    records: list[GrammarTruthRecord] = []
+
+    for index, (kind, source_channel, value) in enumerate(
+        (kind, source_channel, value)
+        for kind in kinds
+        for source_channel in channels
+        for value in values
+    ):
+        annotation = GrammarTruthAnnotation(
+            f"COND-{index}",
+            kind,
+            value=value,
+            links_to="target" if kind == "link" else None,
+            source_channel=source_channel,
+            instance_id=f"instance-{index}" if index % 2 else None,
+        )
+
+        assert GrammarTruthAnnotation.from_dict(annotation.to_dict()) == annotation
+
+        page = 7 if source_channel == "body" else 0
+        bbox = [1.0, 2.0, 3.0, 4.0] if source_channel == "body" else None
+        records.append(GrammarTruthRecord.from_annotation(annotation, page=page, bbox=bbox))
+
+    sorted_once = sort_grammar_truth_records(records)
+    sorted_twice = sort_grammar_truth_records(reversed(records))
+
+    assert sorted_once == sorted_twice
+    assert grammar_truth_json(sorted_once) == grammar_truth_json(sorted_twice)

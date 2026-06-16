@@ -9,6 +9,102 @@ The slice adds grammar cue, construct, link, and assessment annotations that can
 be attached to InkGen PDF documents, component groups, and components. The
 public output is `DocumentPDF.grammar_truth()` and `DocumentPDF.grammar_truth_json()`.
 
+## Architecture Impact
+
+This report applies the Architecture Impact Done gate for the grammar-truth/PDF
+slice.
+
+Affected surface:
+
+- `src/InkGen/grammar_truth.py`: grammar annotation and record contracts.
+- `src/InkGen/pdf_render_contract.py`: closed PDF renderer guard contracts.
+- `src/InkGen/pdf_generator.py`: PDF grammar-truth emission, parameter
+  round-trip, and render-path guard use.
+- `src/InkGen/drawing_components.py`: renderer-neutral annotation propagation
+  to concrete PDF groups and components.
+- `tests/test_grammar_truth.py` and `tests/test_pdf_generator.py`: behavioral,
+  compatibility, live-path, and guard coverage.
+- `tests/mutation/grammar_truth_cosmic_ray.toml`: mutation gate for
+  proof-critical grammar emitter and PDF render-contract logic.
+- `docs/dependency-map.md`, ADR-0001, ADR-0002, and this proof note:
+  architecture, decision, and proof evidence.
+
+Incoming dependencies:
+
+- Downstream Document Intelligence parser validation relies on stable
+  grammar-truth records, PDF coordinate frames, and deterministic parser-facing
+  fixture output.
+- Public callers rely on `DocumentPDF.grammar_truth()`,
+  `DocumentPDF.grammar_truth_json()`, `parameters`, and `create_from_dict()`
+  preserving annotated and unannotated recipes.
+- Renderer-neutral drawing recipes rely on `DrawingComponentGroup.to_group()`
+  to materialize annotations onto concrete output-format objects.
+- PDF noninterference proof obligations rely on `DocumentPDF.to_pdf_bytes()`
+  rendering through the closed built-in PDF component domain.
+
+Outgoing dependencies:
+
+- `grammar_truth.py` depends on extraction-truth constants and bbox conversion
+  semantics for `body` source records in the `pdf_points_bottom_left` coordinate
+  frame.
+- `pdf_generator.py` depends on grammar-truth serialization helpers and
+  `pdf_render_contract.py` guard functions.
+- `pdf_render_contract.py` depends only on component abstractions and runtime
+  type checks; it must remain small enough to mutation-test directly.
+- `drawing_components.py` depends on concrete renderer materialization through
+  `to_component(output_format)` and copies annotation state onto the concrete
+  target.
+
+Before/after edge changes:
+
+- The slice intentionally added the known cross-layer edge
+  `pdf_generator.py -> grammar_truth.py` so PDF documents can emit
+  parser-facing grammar records.
+- The slice intentionally added the edge
+  `pdf_generator.py -> pdf_render_contract.py` so the proof-critical closed PDF
+  renderer domain is enforced by a small guard module.
+- The slice reused the existing
+  `drawing_components.py -> pdf_generator.py` materialization edge and added
+  grammar annotation propagation across that boundary.
+- No new third-party dependency edge was introduced.
+
+Cycle/layer/coupling/redundancy result:
+
+- Cycle check: no intended cycle is introduced. Truth emitters do not import
+  PDF renderers; renderers consume truth emitters.
+- Layer check: concrete PDF renderers may depend on truth emitters and render
+  contracts according to `docs/dependency-map.md`.
+- Coupling check: proof-critical renderer-domain checks are isolated in
+  `pdf_render_contract.py` instead of broadening `grammar_truth.py` or making
+  the truth emitter own PDF rendering.
+- Redundancy check: grammar truth reuses extraction-truth coordinate constants
+  and conversion semantics rather than introducing a second PDF coordinate
+  convention.
+
+Evidence source and freshness:
+
+- Source-backed: `src/InkGen/grammar_truth.py`,
+  `src/InkGen/pdf_render_contract.py`, `src/InkGen/pdf_generator.py`, and
+  `src/InkGen/drawing_components.py` were the implementation files changed for
+  the slice.
+- Test-backed: `tests/test_grammar_truth.py`, `tests/test_pdf_generator.py`,
+  and the Cosmic Ray report listed below cover the affected live paths and
+  proof-critical guards.
+- Design-backed: `docs/dependency-map.md`, ADR-0001, and ADR-0002 define the
+  intended dependency direction and accepted boundary changes.
+- No architecture claim in this section relies only on stale memory.
+
+ADR/rule impact:
+
+- ADR-0001 accepts registry-agnostic PDF grammar truth annotations and the
+  grammar-truth public API.
+- ADR-0002 accepts the closed PDF renderer domain needed for PO-GT-004.
+- `docs/dependency-map.md` records the new known cross-layer edges and public
+  contracts to protect.
+- No further ADR is required for this slice unless a future change adds a new
+  grammar kind, extends the built-in PDF component set, changes the coordinate
+  frame, or reopens arbitrary custom PDF rendering.
+
 ## Domain Definitions
 
 - `BODY_SOURCE_CHANNEL` is the string `"body"`.
@@ -42,6 +138,26 @@ The proof set is comprehensive only for the following declared partitions.
 | Non-`ComponentGroupPDF` group on a PDF page | Reject before rendering | PO-GT-004 domain guard | `test_document_pdf_rejects_non_pdf_child_in_standard_group` | Must be killed or proven equivalent |
 | Renderer-neutral drawing annotations converted to PDF | Copy annotations onto concrete PDF group/components | PO-GT-005 | `test_neutral_drawing_annotations_materialize_to_pdf_grammar_truth` | Must be killed or proven equivalent |
 | Monkey-patched renderers, hostile private mutation beyond tested guards, non-reflexive annotation values, and future components not added to the closed tuple/proof note | Excluded from proven domain | Explicit exclusions in PO-GT-003 through PO-GT-005 | none | Out of scope |
+
+## Test Applicability Matrix
+
+This report applies the Test Applicability Done gate for the grammar-truth/PDF
+slice.
+
+| Test class | Applicable? | Reason | Evidence |
+|---|---|---|---|
+| Unit | yes | Grammar annotations, record serialization, sorting, helper contracts, and render-contract guards are small deterministic units. | `tests/test_grammar_truth.py`; `test_pdf_render_contract_helpers_keep_keyword_only_message` |
+| Behavioral/condition | yes | The slice implements PDF-P3 grammar-truth behavior. | All grammar-truth tests are marked `@pytest.mark.condition("PDF-P3")`; PDF guard tests use PDF-P1/PDF-P3 markers where the guard crosses the existing PDF backend. |
+| Failure-mode | yes | Invalid condition ids, invalid kinds, invalid optional fields, unsupported components, non-PDF groups, and bad file paths must fail loudly. | `test_grammar_truth_rejects_empty_condition_and_invalid_kind`; `test_grammar_truth_rejects_invalid_optional_fields`; `test_component_group_pdf_rejects_non_pdf_components`; `test_document_pdf_rejects_non_pdf_child_in_standard_group`; existing `test_document_pdf_create_pdf_writes_bytes_and_rejects_missing_directory` |
+| Integration/live-path | yes | Grammar truth must be reachable through public PDF document and renderer-neutral drawing paths, not only helper calls. | `test_document_pdf_emits_grammar_truth_in_pdf_coordinates`; `test_grammar_truth_round_trips_with_document_pdf_parameters`; `test_neutral_drawing_annotations_materialize_to_pdf_grammar_truth`; `test_grammar_truth_annotations_do_not_change_pdf_bytes` |
+| Contract/API compatibility | yes | Public grammar APIs, `DocumentPDF.parameters`, legacy unannotated parameters, and closed PDF component contracts changed. | `test_grammar_truth_round_trips_with_document_pdf_parameters`; `test_unannotated_pdf_parameters_do_not_gain_grammar_truth_keys`; `test_grammar_truth_public_helpers_keep_keyword_only_contracts`; PDF round-trip tests in `tests/test_pdf_generator.py` |
+| Property/fuzz | yes | Coordinate conversion, sorting determinism, and serialization have invariant-like behavior. InkGen does not currently include a property-test dependency, so this slice uses deterministic bounded property-style tests over declared domain partitions rather than randomized fuzzing. | PO-GT-001 through PO-GT-005; `test_grammar_truth_bbox_property_cases_emit_pdf_coordinates`; `test_grammar_truth_annotation_property_cases_round_trip_and_sort_deterministically`; sorting tests for `None` and dictionary values. |
+| Mutation | yes | Grammar emitter and render-contract guards are proof-critical. | Cosmic Ray 8.4.6 report below: 203 work items, 115 killed, 88 deterministic annotation-only skips, 0 survived. |
+| Security/adversarial | limited yes | The slice does not add network, auth, deserialization of untrusted formats, subprocesses, SQL, templates, fonts, images, or active generated content. It does touch user-visible values, file output paths through existing PDF generation, and unsupported renderer injection boundaries. | Invalid schema tests; unsupported-component rejection tests; existing bad-directory PDF write test; no new dependency files or active-content surface. |
+| Performance/resource | no | Grammar annotation emission walks existing document/group/component structures and adds no unbounded parser, search, cache, network, or large-input algorithm beyond normal PDF generation. | Not applicable for this slice; no performance budget changed. |
+| Concurrency/race | no | The slice adds no shared mutable global state, sessions, background workers, locks, queues, caches, temp-file coordination, or parallel generation behavior. | Not applicable for this slice. |
+| Golden artifact/visual | yes | PDF bytes and parser-facing truth records must remain deterministic and inspectable. | `test_grammar_truth_annotations_do_not_change_pdf_bytes`; `test_document_pdf_is_deterministic_and_flips_page_coordinates_once`; `test_document_pdf_round_trips_parameters_and_bytes`; deterministic JSON/sorting tests. |
+| Regression | yes | The slice was driven by downstream parser-proof needs and mutation-discovered risk around equality, ordering, contracts, and PDF noninterference. | `test_body_source_channel_uses_value_equality_not_identity`; `test_non_body_source_channels_suppress_page_and_bbox_regardless_of_sort_order`; mutation gate listed below. |
 
 ## Invariants, Preconditions, And Postconditions
 
