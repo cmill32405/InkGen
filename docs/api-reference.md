@@ -66,6 +66,17 @@ This section provides a high-level index of the primary modules and classes expo
   native WordprocessingML tables and VML drawing groups so no additional document
   library dependency is required.
 
+## Grammar Truth (`InkGen.grammar_truth`)
+
+- `GrammarTruthAnnotation`: Registry-agnostic condition label attached to a
+  document, component group, or component.
+- `GrammarTruthRecord`: Emitted scorer record with rendered PDF coordinates.
+- `annotate_grammar_truth()`: Adds condition truth for `cue`, `construct`,
+  `link`, or `assessment` records.
+- `DocumentPDF.grammar_truth()`: Emits deterministic records using
+  `pdf_points_bottom_left` coordinates. Whole-document assessments use
+  `page: 0` and `bbox: None`.
+
 ## DXF Output (`InkGen.dxf_generator`)
 
 - `DXFDocument`: ASCII DXF exporter for renderer-neutral drawing groups.

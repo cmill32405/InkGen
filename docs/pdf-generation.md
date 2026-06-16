@@ -17,6 +17,13 @@ the page content-stream level, and text rendering counter-flips glyphs so text
 stays upright. PDF metadata dates and object ordering are fixed so repeated
 renders of the same document produce deterministic bytes.
 
+The PDF render path is intentionally closed. `DocumentPDF` renders
+`ComponentGroupPDF` groups, and `ComponentGroupPDF` accepts/renders only the
+built-in PDF primitive component classes listed above. Custom dynamic
+`generate_pdf()` components are outside the supported and proven PDF renderer
+contract. This constraint keeps rendered bytes deterministic and supports the
+grammar-truth noninterference proof in `docs/proofs/grammar-truth.md`.
+
 Higher-level synthetic drawing helpers should use `InkGen.drawing_components`
 when they need to target multiple formats. For example, `ZoningDrawing` stores a
 renderer-neutral zoning recipe and can materialize either `ComponentGroupSVG` or
@@ -38,10 +45,18 @@ Semantic extraction-truth annotations can be attached through
 records use rendered PDF point coordinates (`pdf_points_bottom_left`) so they can
 be compared directly with parser output.
 
+Grammar truth annotations can be attached through `InkGen.grammar_truth` and
+emitted with `DocumentPDF.grammar_truth()`. The emit is registry-agnostic: InkGen
+validates only a non-empty `condition_id` and `kind` values of `cue`,
+`construct`, `link`, or `assessment`. Doc-level assessments such as OOD safety or
+form orientation use `page: 0` and `bbox: None`; body records reuse the same
+rendered PDF point coordinate frame as extraction truth.
+
 ## Example
 
 ```python
 from InkGen.boundary import Canvas
+from InkGen.grammar_truth import annotate_grammar_truth
 from InkGen.pdf_generator import ComponentGroupPDF, DocumentPDF, RectanglePDF, TextPDF
 from InkGen.style import DrawingStyle, Font, TextStyle
 
@@ -55,9 +70,11 @@ text_style = TextStyle("pdf_text", font=Font(size=12.0))
 group = ComponentGroupPDF("panel")
 group.add_component(RectanglePDF((10.0, 20.0), 30.0, 40.0, 0.0, drawing_style))
 group.add_component(TextPDF("Seed", (15.0, 25.0), text_style))
+annotate_grammar_truth(group, "B1", "cue", value="heading_level")
 document.page(1).layer("base").add_component_group(group)
 
 document.create_pdf("examples/output/seed.pdf")
+truth = document.grammar_truth()
 ```
 
 ## Renderer-Neutral Synthetic Drawings
@@ -116,4 +133,5 @@ The PDF backend is covered by PDF-P1 tests for:
 - Live-path rejection of non-PDF children
 - Renderer-agnostic group truth geometry via labels and segmentation masks
 - Renderer-neutral zoning recipes that emit PDF-safe component groups
+- Grammar truth records for cues, constructs, links, and assessments
 - Visual spot-check artifact generation

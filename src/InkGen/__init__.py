@@ -20,6 +20,12 @@ from .drawing_components import (
     TextDrawing,
 )
 from .dxf_generator import DXFDocument, DXFRenderContext
+from .grammar_truth import (
+    GrammarTruthAnnotation,
+    GrammarTruthRecord,
+    annotate_grammar_truth,
+    grammar_truth_json,
+)
 from .paragraph import LineSpacingRule, Paragraph, ParagraphAlignment, ParagraphLine, TabStop
 from .style import DrawingStyle, Font, Style, TextStyle
 from .svg_generator import (
@@ -75,6 +81,8 @@ __all__ = [
     "FitterShape",
     "FittingResult",
     "Font",
+    "GrammarTruthAnnotation",
+    "GrammarTruthRecord",
     "IncludeLayer",
     "Layer",
     "Layers",
@@ -108,6 +116,8 @@ __all__ = [
     "TextSVG",
     "TextDrawing",
     "Zoning",
+    "annotate_grammar_truth",
     "component_to_fitter_shape",
+    "grammar_truth_json",
     "outline_for_text",
 ]

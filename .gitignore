@@ -1,5 +1,6 @@
 # Virtual environments
 .venv/
+.venv-*/
 venv/
 env/
 Env/
@@ -36,6 +37,9 @@ htmlcov/
 dmypy.json
 .pytype/
 .pyre/
+mutants/
+*.sqlite
+*.sqlite-journal
 
 # Local configuration / IDE
 .idea/

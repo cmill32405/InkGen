@@ -13,6 +13,13 @@ nav:
   - Examples: examples.md
   - PDF Generation: pdf-generation.md
   - Extraction Truth: extraction-truth.md
+  - Definition of Done: Definition_of_Done.md
+  - Dependency Map: dependency-map.md
+  - Architecture Decisions:
+      - ADR-0001 PDF Grammar Truth: adr/0001-pdf-grammar-truth-annotations.md
+      - ADR-0002 Closed PDF Renderer: adr/0002-closed-pdf-renderer-domain.md
+  - Proof Notes:
+      - Grammar Truth: proofs/grammar-truth.md
   - Architecture Diagrams: architecture-diagrams.md
   - Notes:
       - Mask Alignment Findings: mask_alignment_findings.md

@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from InkGen.boundary import Canvas
 from InkGen.component import Arc as ArcComponent
 from InkGen.component import (
+    Component,
     ComponentGroup,
     PathCommand,
     PolygonalDrawingComponent,
@@ -31,11 +32,23 @@ from InkGen.component import QuadraticBezier as QuadraticBezierComponent
 from InkGen.document import Document, Layer, Layers
 from InkGen.extraction_truth import (
     extraction_truth_json,
-    records_for_annotated_target,
     restore_extraction_truth_annotations,
     serialize_extraction_truth_annotations,
     sort_extraction_truth_records,
 )
+from InkGen.extraction_truth import (
+    records_for_annotated_target as extraction_records_for_annotated_target,
+)
+from InkGen.grammar_truth import (
+    grammar_truth_json,
+    restore_grammar_truth_annotations,
+    serialize_grammar_truth_annotations,
+    sort_grammar_truth_records,
+)
+from InkGen.grammar_truth import (
+    records_for_annotated_target as grammar_records_for_annotated_target,
+)
+from InkGen.pdf_render_contract import ensure_builtin_pdf_component, ensure_pdf_group
 from InkGen.style import DrawingStyle, TextStyle
 from InkGen.svg_generator import LabelGenerator, SegmentGenerator
 
@@ -47,6 +60,7 @@ class PDFGeneratorInterface(metaclass=abc.ABCMeta):
 
     @classmethod
     def __subclasshook__(cls, subclass: type) -> bool:
+        """Return whether a subclass provides a callable PDF generator."""
         return hasattr(subclass, "generate_pdf") and callable(subclass.generate_pdf) or NotImplemented
 
     @abc.abstractmethod
@@ -185,7 +199,7 @@ def _drawing_pdf(style: DrawingStyle, path_operators: list[str], *, fill: bool =
     return "\n".join(operators)
 
 
-def _primitive_parameters(name: str, *, values: dict[str, object], style: DrawingStyle | TextStyle) -> dict[str, dict[str, object]]:
+def _primitive_parameters(name: str, *, values: dict[str, object], style: DrawingStyle**TextStyle) -> dict[str, dict[str, object]]:
     """Return a serialization dictionary for a PDF primitive component."""
     payload = dict(values)
     payload["style"] = style.parameters
@@ -212,6 +226,7 @@ class RectanglePDF(WidthHeightDrawingComponent, PDFGeneratorInterface):
         corner_radii: float | tuple[float, float],
         style: DrawingStyle,
     ) -> None:
+        """Create a PDF rectangle with position, size, corner radii, and style."""
         super().__init__(position, width, height, style)
         self.corner_radii = corner_radii
 
@@ -246,6 +261,7 @@ class LinePDF(StandardDrawingComponent, PDFGeneratorInterface):
     """PDF representation of a line component."""
 
     def __init__(self, point_1: tuple[float, float], point_2: tuple[float, float], style: DrawingStyle) -> None:
+        """Create a PDF line between two points."""
         super().__init__(point_1=point_1, point_2=point_2, style=style)
 
     @classmethod
@@ -283,6 +299,7 @@ class ArcPDF(ArcComponent, PDFGeneratorInterface):
         style: DrawingStyle,
         rotation: float = 0.0,
     ) -> None:
+        """Create a PDF elliptical arc."""
         super().__init__(
             center=center,
             radius_x=radius_x,
@@ -340,6 +357,7 @@ class QuadraticBezierPDF(QuadraticBezierComponent, PDFGeneratorInterface):
         end_point: tuple[float, float],
         style: DrawingStyle,
     ) -> None:
+        """Create a PDF quadratic Bezier curve."""
         super().__init__(start_point=start_point, control_point=control_point, end_point=end_point, style=style)
 
     @classmethod
@@ -380,6 +398,7 @@ class CubicBezierPDF(CubicBezierComponent, PDFGeneratorInterface):
         end_point: tuple[float, float],
         style: DrawingStyle,
     ) -> None:
+        """Create a PDF cubic Bezier curve."""
         super().__init__(
             start_point=start_point, control_point1=control_point1, control_point2=control_point2, end_point=end_point, style=style
         )
@@ -429,6 +448,7 @@ class PathPDF(PathComponent, PDFGeneratorInterface):
     """PDF representation of a generic path built from commands."""
 
     def __init__(self, style: DrawingStyle, commands: list[PathCommand] | None = None) -> None:
+        """Create a PDF path from SVG-style path commands."""
         super().__init__(style=style, commands=commands)
 
     @classmethod
@@ -516,6 +536,7 @@ class RegularPolygonPDF(RegularPolygonDrawingComponent, PDFGeneratorInterface):
         angle: float = 0.0,
         corner_radius: float = 0.0,
     ) -> None:
+        """Create a PDF regular polygon."""
         super().__init__(position=position, sides=sides, radius=radius, style=style, angle=angle, corner_radius=corner_radius)
 
     @classmethod
@@ -557,6 +578,7 @@ class PolygonalPDF(PolygonalDrawingComponent, PDFGeneratorInterface):
     """PDF representation of an irregular polygon."""
 
     def __init__(self, points: list[tuple[float, float]], style: DrawingStyle) -> None:
+        """Create a PDF polygon from explicit points."""
         super().__init__(points=points, style=style)
 
     @classmethod
@@ -581,6 +603,7 @@ class CirclePDF(SingleDimensionDrawingComponent, PDFGeneratorInterface):
     """PDF representation of a circle component."""
 
     def __init__(self, position: tuple[float, float], radius: float, style: DrawingStyle) -> None:
+        """Create a PDF circle."""
         if isinstance(radius, (float, int)) and radius > 0:
             super().__init__(position, radius, style)
         else:
@@ -624,6 +647,7 @@ class TextPDF(TextComponent, PDFGeneratorInterface):
     """PDF representation of a text component."""
 
     def __init__(self, text: str, position: tuple[float, float], style: TextStyle) -> None:
+        """Create a PDF text component."""
         super().__init__(text=text, position=position, style=style)
 
     @classmethod
@@ -659,8 +683,31 @@ class TextPDF(TextComponent, PDFGeneratorInterface):
         )
 
 
+PDF_RENDER_COMPONENT_TYPES = (
+    RectanglePDF,
+    LinePDF,
+    ArcPDF,
+    QuadraticBezierPDF,
+    CubicBezierPDF,
+    PathPDF,
+    RegularPolygonPDF,
+    PolygonalPDF,
+    CirclePDF,
+    TextPDF,
+)
+
+
 class ComponentGroupPDF(ComponentGroup, LabelGenerator, SegmentGenerator):
     """Component group that serializes child PDF components."""
+
+    def add_component(self, component: Component) -> None:
+        """Add a built-in PDF component to the group."""
+        ensure_builtin_pdf_component(
+            component,
+            PDF_RENDER_COMPONENT_TYPES,
+            message="ComponentGroupPDF only accepts built-in PDF components.",
+        )
+        super().add_component(component)
 
     @classmethod
     def create_from_dict(cls, data: dict, styles: dict | None = None) -> ComponentGroupPDF:
@@ -668,9 +715,11 @@ class ComponentGroupPDF(ComponentGroup, LabelGenerator, SegmentGenerator):
         payload = data["ComponentGroupPDF"]
         group = cls(payload["group_label"])
         restore_extraction_truth_annotations(group, payload.get("extraction_truth", []))
+        restore_grammar_truth_annotations(group, payload.get("grammar_truth", []))
         if styles is None:
             styles = {}
         component_annotations = payload.get("component_extraction_truth", [])
+        component_grammar_annotations = payload.get("component_grammar_truth", [])
         for index, component_data in enumerate(payload["components"]):
             style = None
             component_class_name = list(component_data.keys())[0]
@@ -688,6 +737,8 @@ class ComponentGroupPDF(ComponentGroup, LabelGenerator, SegmentGenerator):
             component = component_class.create_from_dict(component_data, style)
             if index < len(component_annotations):
                 restore_extraction_truth_annotations(component, component_annotations[index])
+            if index < len(component_grammar_annotations):
+                restore_grammar_truth_annotations(component, component_grammar_annotations[index])
             group.add_component(component)
         return group
 
@@ -705,16 +756,24 @@ class ComponentGroupPDF(ComponentGroup, LabelGenerator, SegmentGenerator):
         component_annotations = [serialize_extraction_truth_annotations(component) for component in components]
         if any(component_annotations):
             group_payload["component_extraction_truth"] = component_annotations
+        grammar_annotations = serialize_grammar_truth_annotations(self)
+        if grammar_annotations:
+            group_payload["grammar_truth"] = grammar_annotations
+        component_grammar_annotations = [serialize_grammar_truth_annotations(component) for component in components]
+        if any(component_grammar_annotations):
+            group_payload["component_grammar_truth"] = component_grammar_annotations
         return {"ComponentGroupPDF": group_payload}
 
     def generate_pdf(self, context: PDFRenderContext | None = None) -> str:
         """Generate PDF operators for all child components."""
         operators: list[str] = []
         for component in self.components():
-            generate_pdf = getattr(component, "generate_pdf", None)
-            if generate_pdf is None:
-                raise TypeError(f"Component {component.__class__.__name__} does not implement generate_pdf().")
-            operators.append(generate_pdf(context))
+            ensure_builtin_pdf_component(
+                component,
+                PDF_RENDER_COMPONENT_TYPES,
+                message="ComponentGroupPDF only renders built-in PDF components.",
+            )
+            operators.append(component.generate_pdf(context))
         return "\n".join(operators)
 
     def generate_label(self) -> dict[str, list[tuple[float, float]]]:
@@ -790,20 +849,18 @@ class DocumentPDF(Document):
             layer = page.layer(layer_name)
             for _, group_id in layer.component_groups.items():
                 group = layer.group(group_id)
-                if hasattr(group, "generate_pdf"):
-                    operators.append(group.generate_pdf(context))
-                    continue
-                for component in group.components():
-                    generate_pdf = getattr(component, "generate_pdf", None)
-                    if generate_pdf is None:
-                        raise TypeError(f"Component {component.__class__.__name__} does not implement generate_pdf().")
-                    operators.append(generate_pdf(context))
+                ensure_pdf_group(
+                    group,
+                    ComponentGroupPDF,
+                    message="DocumentPDF pages must contain ComponentGroupPDF groups.",
+                )
+                operators.append(group.generate_pdf(context))
         operators.append("Q")
         return "\n".join(operators)
 
     def extraction_truth(self) -> list[dict[str, object]]:
         """Emit semantic extraction truth in rendered PDF point coordinates."""
-        records = records_for_annotated_target(
+        records = extraction_records_for_annotated_target(
             self,
             page=0,
             canvas_height=self._canvas.height,
@@ -815,7 +872,7 @@ class DocumentPDF(Document):
                 for group_label in sorted(layer.component_groups):
                     group = layer.group(layer.component_groups[group_label])
                     records.extend(
-                        records_for_annotated_target(
+                        extraction_records_for_annotated_target(
                             group,
                             page=page_number,
                             canvas_height=page._canvas.height,
@@ -823,7 +880,7 @@ class DocumentPDF(Document):
                     )
                     for component in group.components():
                         records.extend(
-                            records_for_annotated_target(
+                            extraction_records_for_annotated_target(
                                 component,
                                 page=page_number,
                                 canvas_height=page._canvas.height,
@@ -835,6 +892,40 @@ class DocumentPDF(Document):
         """Serialize this document's extraction truth to deterministic JSON."""
         return extraction_truth_json(self.extraction_truth())
 
+    def grammar_truth(self) -> list[dict[str, object]]:
+        """Emit grammar cue and construct truth in rendered PDF point coordinates."""
+        records = grammar_records_for_annotated_target(
+            self,
+            page=0,
+            canvas_height=self._canvas.height,
+        )
+        for page_number in range(1, self.pages + 1):
+            page = self.page(page_number)
+            for layer_name in sorted(page.layers):
+                layer = page.layer(layer_name)
+                for group_label in sorted(layer.component_groups):
+                    group = layer.group(layer.component_groups[group_label])
+                    records.extend(
+                        grammar_records_for_annotated_target(
+                            group,
+                            page=page_number,
+                            canvas_height=page._canvas.height,
+                        )
+                    )
+                    for component in group.components():
+                        records.extend(
+                            grammar_records_for_annotated_target(
+                                component,
+                                page=page_number,
+                                canvas_height=page._canvas.height,
+                            )
+                        )
+        return [record.to_dict() for record in sort_grammar_truth_records(records)]
+
+    def grammar_truth_json(self) -> str:
+        """Serialize this document's grammar truth to deterministic JSON."""
+        return grammar_truth_json(self.grammar_truth())
+
     @classmethod
     def create_from_dict(cls, data: dict, styles: dict | None = None) -> DocumentPDF:
         """Recreate a DocumentPDF from serialized parameters."""
@@ -843,6 +934,7 @@ class DocumentPDF(Document):
         payload = data["DocumentPDF"]
         document = cls(Canvas.create_from_dict(payload["canvas"]))
         restore_extraction_truth_annotations(document, payload.get("extraction_truth", []))
+        restore_grammar_truth_annotations(document, payload.get("grammar_truth", []))
         for page_payload in payload["pages"]:
             page = _layers_pdf_from_dict(page_payload, styles)
             document.add_page(position=-1, page=page)
@@ -858,6 +950,9 @@ class DocumentPDF(Document):
         annotations = serialize_extraction_truth_annotations(self)
         if annotations:
             document_payload["extraction_truth"] = annotations
+        grammar_annotations = serialize_grammar_truth_annotations(self)
+        if grammar_annotations:
+            document_payload["grammar_truth"] = grammar_annotations
         return {"DocumentPDF": document_payload}
 
 

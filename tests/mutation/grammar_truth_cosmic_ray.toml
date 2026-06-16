@@ -1,0 +1,18 @@
+[cosmic-ray]
+module-path = [
+  "src/InkGen/grammar_truth.py",
+  "src/InkGen/pdf_render_contract.py",
+]
+timeout = 20.0
+excluded-modules = []
+test-command = "python -m pytest -x tests/test_grammar_truth.py tests/test_pdf_generator.py"
+
+[cosmic-ray.distributor]
+name = "local"
+
+[cosmic-ray.filters.operators-filter]
+exclude-operators = [
+  # The grammar module uses postponed type annotations. These mutants alter
+  # `X | None` annotations, not runtime behavior in this slice.
+  "core/ReplaceBinaryOperator_BitOr_.*",
+]

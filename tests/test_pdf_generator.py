@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import re
 import uuid
+from pathlib import Path
 
 import pytest
 
 import InkGen.pdf_generator as pdf_generator_module
 import InkGen.svg_generator as svg_generator_module
 from InkGen.boundary import Canvas
-from InkGen.component import ComponentGroup, PathCommand
+from InkGen.component import Component, ComponentGroup, PathCommand
 from InkGen.pdf_generator import (
     ArcPDF,
     CirclePDF,
@@ -26,6 +27,7 @@ from InkGen.pdf_generator import (
     RegularPolygonPDF,
     TextPDF,
 )
+from InkGen.pdf_render_contract import ensure_builtin_pdf_component, ensure_pdf_group
 from InkGen.style import DrawingStyle, Font, TextStyle
 from InkGen.svg_generator import LabelGenerator, SegmentGenerator
 
@@ -159,16 +161,30 @@ def test_document_pdf_is_deterministic_and_flips_page_coordinates_once(drawing_s
 
 @pytest.mark.condition("PDF-P1")
 def test_component_group_pdf_rejects_non_pdf_components() -> None:
-    """PDF-P1: ComponentGroupPDF rendering fails loudly when a component lacks generate_pdf."""
+    """PDF-P1: ComponentGroupPDF rejects components outside the closed PDF set."""
 
-    class NonPdfComponent:
-        id = 999
+    class CustomPDFComponent(Component):
+        def generate_pdf(self, context: object | None = None) -> str:
+            return "custom"
 
     group = ComponentGroupPDF("bad")
-    group._components[999] = NonPdfComponent()
+    custom = CustomPDFComponent()
 
-    with pytest.raises(TypeError, match="does not implement generate_pdf"):
+    with pytest.raises(TypeError, match="only accepts built-in PDF components"):
+        group.add_component(custom)
+
+    group._components[custom.id] = custom
+    with pytest.raises(TypeError, match="only renders built-in PDF components"):
         group.generate_pdf()
+
+
+@pytest.mark.condition("PDF-P3")
+def test_pdf_render_contract_helpers_keep_keyword_only_message() -> None:
+    """PDF-P3: PDF render-contract guards keep diagnostic messages keyword-only."""
+    with pytest.raises(TypeError, match="positional"):
+        ensure_builtin_pdf_component(Component(), (), "message")
+    with pytest.raises(TypeError, match="positional"):
+        ensure_pdf_group(object(), object, "message")
 
 
 @pytest.mark.condition("PDF-P1")
@@ -263,7 +279,7 @@ def test_document_pdf_outputs_one_pdf_page_per_inkgen_page(drawing_style: Drawin
 
 @pytest.mark.condition("PDF-P1")
 def test_document_pdf_create_pdf_writes_bytes_and_rejects_missing_directory(
-    tmp_path,
+    tmp_path: Path,
     drawing_style: DrawingStyle,
 ) -> None:
     """PDF-P1: create_pdf writes deterministic bytes and fails loudly on bad paths."""
@@ -303,18 +319,13 @@ def test_drawing_style_without_visible_paint_emits_noop_path(drawing_style: Draw
 
 @pytest.mark.condition("PDF-P1")
 def test_document_pdf_rejects_non_pdf_child_in_standard_group(drawing_style: DrawingStyle) -> None:
-    """PDF-P1: DocumentPDF fails loudly when the live page path contains a non-PDF child."""
-
-    class NonPdfComponent:
-        id = 12345
-
+    """PDF-P1: DocumentPDF fails loudly when a page contains a non-PDF group."""
     canvas = Canvas(100.0, 80.0)
     document = DocumentPDF(canvas)
     document.add_page()
     group = ComponentGroup("mixed")
     group.add_component(RectanglePDF((10.0, 20.0), 30.0, 40.0, 0.0, drawing_style))
     document.page(1).layer("base").add_component_group(group)
-    group._components[NonPdfComponent.id] = NonPdfComponent()
 
-    with pytest.raises(TypeError, match="does not implement generate_pdf"):
+    with pytest.raises(TypeError, match="DocumentPDF pages must contain ComponentGroupPDF"):
         document.to_pdf_bytes()

@@ -265,6 +265,8 @@ class DrawingComponentGroup:
 
     def to_group(self, output_format: OutputFormat | str) -> ComponentGroup:
         """Materialize the recipe as a concrete InkGen component group."""
+        from InkGen.grammar_truth import copy_grammar_truth_annotations
+
         target = normalize_output_format(output_format)
         if target is OutputFormat.SVG:
             from InkGen.svg_generator import ComponentGroupSVG
@@ -274,8 +276,11 @@ class DrawingComponentGroup:
             from InkGen.pdf_generator import ComponentGroupPDF
 
             group = ComponentGroupPDF(self.group_label)
+        copy_grammar_truth_annotations(self, group)
         for component in self.components:
-            group.add_component(component.to_component(target))
+            concrete = component.to_component(target)
+            copy_grammar_truth_annotations(component, concrete)
+            group.add_component(concrete)
         return group
 
 
