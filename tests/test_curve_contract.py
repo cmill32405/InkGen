@@ -2,10 +2,51 @@
 
 from __future__ import annotations
 
+import math
+from uuid import uuid4
+
 import pytest
 
-from InkGen.component import PRECISION, QuadraticBezier
+from InkGen.component import PRECISION, Arc, QuadraticBezier
+from InkGen.drawing_components import ArcDrawing, DrawingComponentGroup, OutputFormat
+from InkGen.dxf_generator import DXFDocument
+from InkGen.pdf_generator import ArcPDF
 from InkGen.style import DrawingStyle
+
+
+def _arc_point(
+    center: tuple[float, float],
+    radius_x: float,
+    radius_y: float,
+    angle: float,
+    rotation: float,
+) -> tuple[float, float]:
+    theta = math.radians(angle)
+    rotation_rad = math.radians(rotation)
+    x = radius_x * math.cos(theta)
+    y = radius_y * math.sin(theta)
+    x_rot = x * math.cos(rotation_rad) - y * math.sin(rotation_rad)
+    y_rot = x * math.sin(rotation_rad) + y * math.cos(rotation_rad)
+    return (
+        float(round(center[0] + x_rot, PRECISION)),
+        float(round(center[1] + y_rot, PRECISION)),
+    )
+
+
+def _dxf_polyline_vertices(payload: str) -> list[tuple[float, float]]:
+    lines = payload.splitlines()
+    vertices: list[tuple[float, float]] = []
+    index = 0
+    while index < len(lines) - 1:
+        if lines[index] == "10":
+            x = float(lines[index + 1])
+            assert lines[index + 2] == "20"
+            y = float(lines[index + 3])
+            vertices.append((x, y))
+            index += 4
+        else:
+            index += 1
+    return vertices
 
 
 def _quadratic_point(
@@ -24,7 +65,108 @@ def _quadratic_point(
 @pytest.fixture
 def drawing_style() -> DrawingStyle:
     """Return a drawing style for curve contract tests."""
-    return DrawingStyle(name="curve_contract", stroke="#000000", stroke_width=0.2, fill="none")
+    return DrawingStyle(name=f"curve_contract_{uuid4().hex}", stroke="#000000", stroke_width=0.2, fill="none")
+
+
+@pytest.mark.condition("ARC-P1")
+def test_arc_samples_follow_ellipse_rotation_formula(drawing_style: DrawingStyle) -> None:
+    """ARC-P1: Arc samples follow the rotated ellipse formula."""
+    cases = [
+        ((0.0, 0.0), 10.0, 5.0, 0.0, 90.0, 0.0),
+        ((4.0, -3.0), 8.0, 2.5, -45.0, 135.0, 30.0),
+        ((2.0, 7.0), 3.5, 9.0, 180.0, 0.0, -15.0),
+    ]
+
+    for center, radius_x, radius_y, start_angle, end_angle, rotation in cases:
+        arc = Arc(center, radius_x, radius_y, start_angle, end_angle, drawing_style, rotation)
+        points = arc.points
+        sample_count = len(points) - 1
+
+        assert sample_count == 32
+        assert points[0] == _arc_point(center, radius_x, radius_y, start_angle, rotation)
+        assert points[-1] == _arc_point(center, radius_x, radius_y, end_angle, rotation)
+        for index, point in enumerate(points):
+            angle = start_angle + (end_angle - start_angle) * (index / sample_count)
+            assert point == _arc_point(center, radius_x, radius_y, angle, rotation)
+
+
+@pytest.mark.condition("ARC-P1")
+def test_arc_equal_start_and_end_angle_emits_single_sample(drawing_style: DrawingStyle) -> None:
+    """ARC-P1: A zero-span arc emits one rotated ellipse point."""
+    arc = Arc((1.0, 2.0), 4.0, 6.0, 45.0, 45.0, drawing_style, rotation=90.0)
+
+    assert arc.points == [_arc_point((1.0, 2.0), 4.0, 6.0, 45.0, 90.0)]
+
+
+@pytest.mark.condition("ARC-P1")
+def test_arc_tiny_nonzero_angle_span_still_samples_curve(drawing_style: DrawingStyle) -> None:
+    """ARC-P1: A tiny non-zero angle span is not collapsed to one point."""
+    arc = Arc((0.0, 0.0), 10.0, 5.0, 0.0, 0.1, drawing_style)
+
+    assert len(arc.points) == 33
+    assert arc.points[0] == _arc_point((0.0, 0.0), 10.0, 5.0, 0.0, 0.0)
+    assert arc.points[-1] == _arc_point((0.0, 0.0), 10.0, 5.0, 0.1, 0.0)
+
+
+@pytest.mark.condition("ARC-P1")
+def test_arc_rejects_non_positive_radii(drawing_style: DrawingStyle) -> None:
+    """ARC-P1: Arc radii fail at the boundary when non-positive."""
+    with pytest.raises(ValueError, match="radius_x must be greater than zero"):
+        Arc((0.0, 0.0), 0.0, 1.0, 0.0, 90.0, drawing_style)
+    with pytest.raises(ValueError, match="radius_y must be greater than zero"):
+        Arc((0.0, 0.0), 1.0, -1.0, 0.0, 90.0, drawing_style)
+
+    arc = Arc((0.0, 0.0), 1.0, 1.0, 0.0, 90.0, drawing_style)
+    with pytest.raises(ValueError, match="radius_x must be greater than zero"):
+        arc.radius_x = -0.5
+    with pytest.raises(ValueError, match="radius_y must be greater than zero"):
+        arc.radius_y = 0.0
+
+
+@pytest.mark.condition("ARC-P1")
+def test_arc_pdf_emits_sampled_open_polyline(drawing_style: DrawingStyle) -> None:
+    """ARC-P1: ArcPDF renders InkGen's sampled arc points as an open PDF path."""
+    drawing_style.fill = "#ffffff"
+    arc = ArcPDF((0.0, 0.0), 10.0, 5.0, 0.0, 90.0, drawing_style)
+    points = arc.points
+
+    content = arc.generate_pdf()
+
+    assert content.endswith("\nS\nQ")
+    assert "\nh\n" not in content
+    assert f"{points[0][0]:g} {points[0][1]:g} m" in content
+    assert f"{points[-1][0]:g} {points[-1][1]:g} l" in content
+    assert content.count(" l") == len(points) - 1
+
+
+@pytest.mark.condition("ARC-P1")
+def test_arc_drawing_materializes_pdf_component(drawing_style: DrawingStyle) -> None:
+    """ARC-P1: Neutral arc recipes materialize to ArcPDF for PDF output."""
+    arc = ArcDrawing((0.0, 0.0), 10.0, 5.0, 0.0, 90.0, drawing_style)
+
+    concrete = arc.to_component(OutputFormat.PDF)
+
+    assert isinstance(concrete, ArcPDF)
+    assert concrete.points == ArcPDF((0.0, 0.0), 10.0, 5.0, 0.0, 90.0, drawing_style).points
+
+
+@pytest.mark.condition("ARC-P1")
+def test_dxf_arc_drawing_reuses_pdf_sample_points(drawing_style: DrawingStyle) -> None:
+    """ARC-P1: DXF arc export uses the neutral arc's PDF-sampled points."""
+    arc = ArcDrawing((0.0, 0.0), 10.0, 5.0, 0.0, 90.0, drawing_style)
+    group = DrawingComponentGroup("arc")
+    group.add_component(arc)
+    expected_points = arc.to_component(OutputFormat.PDF).points
+
+    document = DXFDocument()
+    document.add_group(group)
+    payload = document.to_dxf_string()
+
+    assert "\nLWPOLYLINE\n" in payload
+    assert "\n8\narc\n" in payload
+    assert f"\n90\n{len(expected_points)}\n" in payload
+    assert "\n70\n0\n" in payload
+    assert _dxf_polyline_vertices(payload) == expected_points
 
 
 @pytest.mark.condition("CURVE-P1")
