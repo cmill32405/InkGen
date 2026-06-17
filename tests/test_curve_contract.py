@@ -7,10 +7,10 @@ from uuid import uuid4
 
 import pytest
 
-from InkGen.component import PRECISION, Arc, QuadraticBezier
-from InkGen.drawing_components import ArcDrawing, DrawingComponentGroup, OutputFormat
+from InkGen.component import PRECISION, Arc, CubicBezier, QuadraticBezier
+from InkGen.drawing_components import ArcDrawing, CubicBezierDrawing, DrawingComponentGroup, OutputFormat
 from InkGen.dxf_generator import DXFDocument
-from InkGen.pdf_generator import ArcPDF
+from InkGen.pdf_generator import ArcPDF, CubicBezierPDF
 from InkGen.style import DrawingStyle
 
 
@@ -59,6 +59,20 @@ def _quadratic_point(
     return (
         one_minus_t**2 * start[0] + 2 * one_minus_t * t * control[0] + t**2 * end[0],
         one_minus_t**2 * start[1] + 2 * one_minus_t * t * control[1] + t**2 * end[1],
+    )
+
+
+def _cubic_point(
+    start: tuple[float, float],
+    control_1: tuple[float, float],
+    control_2: tuple[float, float],
+    end: tuple[float, float],
+    t: float,
+) -> tuple[float, float]:
+    one_minus_t = 1.0 - t
+    return (
+        one_minus_t**3 * start[0] + 3 * one_minus_t**2 * t * control_1[0] + 3 * one_minus_t * t**2 * control_2[0] + t**3 * end[0],
+        one_minus_t**3 * start[1] + 3 * one_minus_t**2 * t * control_1[1] + 3 * one_minus_t * t**2 * control_2[1] + t**3 * end[1],
     )
 
 
@@ -199,3 +213,104 @@ def test_quadratic_bezier_samples_follow_formula_and_control_bounds(
             )
             assert min_x <= point[0] <= max_x
             assert min_y <= point[1] <= max_y
+
+
+@pytest.mark.condition("CUBIC-P1")
+def test_cubic_bezier_samples_follow_formula_and_control_bounds(
+    drawing_style: DrawingStyle,
+) -> None:
+    """CUBIC-P1: Cubic Bezier samples are convex combinations of controls."""
+    cases = [
+        ((0.0, 0.0), (0.0, 1.0), (1.0, 1.0), (1.0, 0.0)),
+        ((-4.0, 3.0), (5.0, 12.0), (8.0, -6.0), (10.0, 2.0)),
+        ((5.5, -1.25), (5.5, 8.75), (2.0, 4.0), (5.5, 3.5)),
+    ]
+
+    for start, control_1, control_2, end in cases:
+        bezier = CubicBezier(start, control_1, control_2, end, drawing_style)
+        points = bezier.points
+        sample_count = len(points) - 1
+        min_x = min(start[0], control_1[0], control_2[0], end[0])
+        max_x = max(start[0], control_1[0], control_2[0], end[0])
+        min_y = min(start[1], control_1[1], control_2[1], end[1])
+        max_y = max(start[1], control_1[1], control_2[1], end[1])
+
+        assert sample_count == 32
+        assert points[0] == start
+        assert points[-1] == end
+        for index, point in enumerate(points):
+            expected = _cubic_point(start, control_1, control_2, end, index / sample_count)
+            assert point == (
+                pytest.approx(round(expected[0], PRECISION), abs=1e-9),
+                pytest.approx(round(expected[1], PRECISION), abs=1e-9),
+            )
+            assert min_x <= point[0] <= max_x
+            assert min_y <= point[1] <= max_y
+
+
+@pytest.mark.condition("CUBIC-P1")
+def test_cubic_bezier_rejects_malformed_points(drawing_style: DrawingStyle) -> None:
+    """CUBIC-P1: Cubic Bezier point validation rejects malformed coordinates."""
+    with pytest.raises(ValueError, match="Point must contain two numeric values."):
+        CubicBezier((0.0,), (1.0, 2.0), (3.0, 4.0), (5.0, 6.0), drawing_style)
+    with pytest.raises(ValueError, match="Point must contain two numeric values."):
+        CubicBezier((0.0, 1.0, 2.0), (1.0, 2.0), (3.0, 4.0), (5.0, 6.0), drawing_style)
+
+    bezier = CubicBezier((0.0, 1.0), (2.0, 3.0), (4.0, 5.0), (6.0, 7.0), drawing_style)
+    with pytest.raises(ValueError, match="Point must contain two numeric values."):
+        bezier.control_point1 = (1.0,)
+    with pytest.raises(ValueError, match="Point must contain two numeric values."):
+        bezier.control_point2 = (1.0, 2.0, 3.0)
+
+
+@pytest.mark.condition("CUBIC-P1")
+def test_cubic_bezier_pdf_emits_exact_cubic_operator(drawing_style: DrawingStyle) -> None:
+    """CUBIC-P1: CubicBezierPDF renders one open PDF cubic path command."""
+    drawing_style.fill = "#ffffff"
+    bezier = CubicBezierPDF((1.0, 2.0), (3.0, 7.0), (6.0, 11.0), (10.0, 5.0), drawing_style)
+
+    content = bezier.generate_pdf()
+
+    assert "1 2 m" in content
+    assert "3 7 6 11 10 5 c" in content
+    assert "\nh\n" not in content
+    assert content.endswith("\nS\nQ")
+
+
+@pytest.mark.condition("CUBIC-P1")
+def test_cubic_drawing_materializes_pdf_component(drawing_style: DrawingStyle) -> None:
+    """CUBIC-P1: Neutral cubic recipes materialize to CubicBezierPDF for PDF output."""
+    bezier = CubicBezierDrawing((0.0, 0.0), (0.0, 4.0), (8.0, 4.0), (8.0, 0.0), drawing_style)
+
+    concrete = bezier.to_component(OutputFormat.PDF)
+
+    assert isinstance(concrete, CubicBezierPDF)
+    assert (
+        concrete.points
+        == CubicBezierPDF(
+            (0.0, 0.0),
+            (0.0, 4.0),
+            (8.0, 4.0),
+            (8.0, 0.0),
+            drawing_style,
+        ).points
+    )
+
+
+@pytest.mark.condition("CUBIC-P1")
+def test_dxf_cubic_bezier_reuses_pdf_sample_points(drawing_style: DrawingStyle) -> None:
+    """CUBIC-P1: DXF cubic export uses the neutral cubic's PDF-sampled points."""
+    bezier = CubicBezierDrawing((0.0, 0.0), (0.0, 4.0), (8.0, 4.0), (8.0, 0.0), drawing_style)
+    group = DrawingComponentGroup("cubic")
+    group.add_component(bezier)
+    expected_points = bezier.to_component(OutputFormat.PDF).points
+
+    document = DXFDocument()
+    document.add_group(group)
+    payload = document.to_dxf_string()
+
+    assert "\nLWPOLYLINE\n" in payload
+    assert "\n8\ncubic\n" in payload
+    assert f"\n90\n{len(expected_points)}\n" in payload
+    assert "\n70\n0\n" in payload
+    assert _dxf_polyline_vertices(payload) == expected_points

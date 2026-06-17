@@ -22,6 +22,7 @@ nav:
       - Grammar Truth: proofs/grammar-truth.md
       - Quadratic Bezier Renderer Contract: proofs/quadratic-bezier-renderer-contract.md
       - Arc Renderer Contract: proofs/arc-renderer-contract.md
+      - Cubic Bezier Renderer Contract: proofs/cubic-bezier-renderer-contract.md
   - Architecture Diagrams: architecture-diagrams.md
   - Notes:
       - Mask Alignment Findings: mask_alignment_findings.md
