@@ -50,6 +50,33 @@ def _stream(pdf_bytes: bytes) -> str:
     return match.group("content").decode("latin-1")
 
 
+def _quadratic_point(
+    start: tuple[float, float],
+    control: tuple[float, float],
+    end: tuple[float, float],
+    t: float,
+) -> tuple[float, float]:
+    one_minus_t = 1.0 - t
+    return (
+        one_minus_t**2 * start[0] + 2 * one_minus_t * t * control[0] + t**2 * end[0],
+        one_minus_t**2 * start[1] + 2 * one_minus_t * t * control[1] + t**2 * end[1],
+    )
+
+
+def _cubic_point(
+    start: tuple[float, float],
+    control_1: tuple[float, float],
+    control_2: tuple[float, float],
+    end: tuple[float, float],
+    t: float,
+) -> tuple[float, float]:
+    one_minus_t = 1.0 - t
+    return (
+        one_minus_t**3 * start[0] + 3 * one_minus_t**2 * t * control_1[0] + 3 * one_minus_t * t**2 * control_2[0] + t**3 * end[0],
+        one_minus_t**3 * start[1] + 3 * one_minus_t**2 * t * control_1[1] + 3 * one_minus_t * t**2 * control_2[1] + t**3 * end[1],
+    )
+
+
 @pytest.mark.condition("PDF-P1")
 def test_pdf_backend_has_parallel_primitive_mixins() -> None:
     """PDF-P1: Every Phase 1 SVG primitive has a parallel PDF primitive."""
@@ -133,6 +160,46 @@ def test_path_pdf_emits_supported_svg_path_commands(drawing_style: DrawingStyle)
     assert "11 12 13 14 15 16 c" in content
     assert "17 18 l" in content
     assert "\nh\n" in content
+
+
+@pytest.mark.condition("CURVE-P1")
+def test_pdf_quadratic_to_cubic_conversion_is_curve_equivalent() -> None:
+    """CURVE-P1: PDF quadratic conversion preserves the quadratic Bezier curve."""
+    cases = [
+        ((0.0, 0.0), (1.0, 1.0), (2.0, 0.0)),
+        ((-3.0, 4.0), (8.0, -2.0), (12.0, 6.0)),
+        ((5.5, -1.25), (5.5, 8.75), (5.5, 3.5)),
+    ]
+    samples = (0.0, 0.125, 0.25, 0.5, 0.75, 0.875, 1.0)
+
+    for start, control, end in cases:
+        control_1, control_2 = pdf_generator_module._quadratic_to_cubic(start, control, end)
+
+        assert control_1 == (
+            pytest.approx(start[0] + (2.0 / 3.0) * (control[0] - start[0])),
+            pytest.approx(start[1] + (2.0 / 3.0) * (control[1] - start[1])),
+        )
+        assert control_2 == (
+            pytest.approx(end[0] + (2.0 / 3.0) * (control[0] - end[0])),
+            pytest.approx(end[1] + (2.0 / 3.0) * (control[1] - end[1])),
+        )
+        for t in samples:
+            quadratic = _quadratic_point(start, control, end, t)
+            cubic = _cubic_point(start, control_1, control_2, end, t)
+            assert cubic == (pytest.approx(quadratic[0]), pytest.approx(quadratic[1]))
+
+
+@pytest.mark.condition("CURVE-P1")
+def test_quadratic_bezier_pdf_emits_equivalent_cubic_operator(drawing_style: DrawingStyle) -> None:
+    """CURVE-P1: QuadraticBezierPDF emits the mathematically equivalent cubic operator."""
+    drawing_style.fill = "#ffffff"
+    curve = QuadraticBezierPDF((1.0, 2.0), (4.0, 11.0), (10.0, 2.0), drawing_style)
+
+    content = curve.generate_pdf()
+
+    assert "1 2 m" in content
+    assert "3 8 6 8 10 2 c" in content
+    assert content.endswith("\nS\nQ")
 
 
 @pytest.mark.condition("PDF-P1")

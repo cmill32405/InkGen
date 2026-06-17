@@ -20,6 +20,7 @@ nav:
       - ADR-0002 Closed PDF Renderer: adr/0002-closed-pdf-renderer-domain.md
   - Proof Notes:
       - Grammar Truth: proofs/grammar-truth.md
+      - Quadratic Bezier Renderer Contract: proofs/quadratic-bezier-renderer-contract.md
   - Architecture Diagrams: architecture-diagrams.md
   - Notes:
       - Mask Alignment Findings: mask_alignment_findings.md
