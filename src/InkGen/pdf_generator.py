@@ -478,6 +478,14 @@ class PathPDF(PathComponent, PDFGeneratorInterface):
         for command in self.commands:
             command_type = command.type.upper()
             points = list(command.points)
+            if command_type in {"S", "T"}:
+                raise ValueError(f"PathPDF does not support path command {command_type}.")
+            if command_type == "C" and len(points) % 3:
+                raise ValueError("PathPDF command C requires points in groups of three.")
+            if command_type == "Q" and len(points) % 2:
+                raise ValueError("PathPDF command Q requires points in groups of two.")
+            if command_type == "A" and not points:
+                raise ValueError("PathPDF command A requires an endpoint.")
             if command_type == "M" and points:
                 current_point = points[-1]
                 operators.append(f"{_number(current_point[0])} {_number(current_point[1])} m")
@@ -493,26 +501,24 @@ class PathPDF(PathComponent, PDFGeneratorInterface):
                 for point in points:
                     current_point = (current_point[0], point[1])
                     operators.append(f"{_number(current_point[0])} {_number(current_point[1])} l")
-            elif command_type == "C" and len(points) >= 3:
+            elif command_type == "C":
                 for index in range(0, len(points), 3):
                     segment = points[index : index + 3]
-                    if len(segment) == 3:
-                        c1, c2, end = segment
-                        current_point = end
-                        operators.append(
-                            f"{_number(c1[0])} {_number(c1[1])} {_number(c2[0])} {_number(c2[1])} {_number(end[0])} {_number(end[1])} c"
-                        )
-            elif command_type == "Q" and len(points) >= 2:
+                    c1, c2, end = segment
+                    current_point = end
+                    operators.append(
+                        f"{_number(c1[0])} {_number(c1[1])} {_number(c2[0])} {_number(c2[1])} {_number(end[0])} {_number(end[1])} c"
+                    )
+            elif command_type == "Q":
                 for index in range(0, len(points), 2):
                     segment = points[index : index + 2]
-                    if len(segment) == 2:
-                        control, end = segment
-                        c1, c2 = _quadratic_to_cubic(current_point, control, end)
-                        current_point = end
-                        operators.append(
-                            f"{_number(c1[0])} {_number(c1[1])} {_number(c2[0])} {_number(c2[1])} {_number(end[0])} {_number(end[1])} c"
-                        )
-            elif command_type == "A" and points:
+                    control, end = segment
+                    c1, c2 = _quadratic_to_cubic(current_point, control, end)
+                    current_point = end
+                    operators.append(
+                        f"{_number(c1[0])} {_number(c1[1])} {_number(c2[0])} {_number(c2[1])} {_number(end[0])} {_number(end[1])} c"
+                    )
+            elif command_type == "A":
                 current_point = points[-1]
                 operators.append(f"{_number(current_point[0])} {_number(current_point[1])} l")
             elif command_type == "Z":

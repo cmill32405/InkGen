@@ -25,6 +25,7 @@ nav:
       - Cubic Bezier Renderer Contract: proofs/cubic-bezier-renderer-contract.md
       - Regular Polygon Renderer Contract: proofs/regular-polygon-renderer-contract.md
       - Circle Renderer Contract: proofs/circle-renderer-contract.md
+      - Path Renderer Contract: proofs/path-renderer-contract.md
   - Architecture Diagrams: architecture-diagrams.md
   - Notes:
       - Mask Alignment Findings: mask_alignment_findings.md
