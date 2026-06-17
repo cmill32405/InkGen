@@ -983,7 +983,7 @@ class RegularPolygonDrawingComponent(PolarCoordinateDrawingComponent):
         """
 
         self.sides = sides
-        if radius < 0:
+        if radius <= 0:
             raise ValueError("The radius should be greater than zero.")
         super().__init__(position=position, length=radius, angle=angle, style=style)
 
@@ -1068,6 +1068,8 @@ class RegularPolygonDrawingComponent(PolarCoordinateDrawingComponent):
             Value error to check the number of sides in polygon.
         """
 
+        if isinstance(sides, bool) or not isinstance(sides, int):
+            raise TypeError("For regular polygon sides must be an integer.")
         if sides >= 3:
             self._sides = sides
         else:
@@ -1098,10 +1100,11 @@ class RegularPolygonDrawingComponent(PolarCoordinateDrawingComponent):
         ValueError
             Ensures that radius is greater than zero.
         """
-        if value > 0:
-            self.length = value
-        else:
+        if value <= 0:
             raise ValueError("The radius should be greater than zero.")
+        if hasattr(self, "_corner_radius") and self.corner_radius > (value / 2):
+            raise ValueError("The corner rounding should not exceed half the radius.")
+        self.length = value
 
     @property
     def corner_radius(self) -> float:
@@ -1123,10 +1126,12 @@ class RegularPolygonDrawingComponent(PolarCoordinateDrawingComponent):
         value : float
             Corner Radius
         """
-        if value < (self.radius/2):
+        if value < 0:
+            raise ValueError("The corner rounding should be non-negative.")
+        if value <= (self.radius/2):
             self._corner_radius = value
         else:
-            raise ValueError("The corner rounding should not exced half the radius.")
+            raise ValueError("The corner rounding should not exceed half the radius.")
 
     @property
     def points(self) -> list[tuple[float, float]]:
