@@ -79,7 +79,9 @@ def test_output_svg_data_from_rectangle_svg(style_obj):
             width="100.0"
             height="100.0"
             x="50.0"
-            y="50.0" />"""
+            y="50.0"
+            rx="1.0"
+            ry="1.0" />"""
 
 def test_save_and_recreate_line_svg(style_obj):
     line = LineSVG((50.0, 50.0), (100.0, 100.0), style_obj)

@@ -20,6 +20,35 @@ PRECISION = 3
 DEFAULT_CURVE_SAMPLES = 32
 
 
+def normalize_rectangle_corner_radii(
+        corner_radii: float | int | tuple[float, float] | list[float],
+        width: float | int,
+        height: float | int) -> tuple[float, float]:
+    """Return validated horizontal and vertical rectangle corner radii."""
+    if isinstance(corner_radii, bool):
+        raise TypeError("Corner radii must be numeric values.")
+    if isinstance(corner_radii, (float, int)):
+        rx = float(corner_radii)
+        ry = float(corner_radii)
+    elif isinstance(corner_radii, (tuple, list)):
+        if len(corner_radii) != 2:
+            raise TypeError("Corner radii must be a scalar or a pair of numeric values.")
+        if any(isinstance(value, bool) or not isinstance(value, (float, int)) for value in corner_radii):
+            raise TypeError("Corner radii must be numeric values.")
+        rx = float(corner_radii[0])
+        ry = float(corner_radii[1])
+    else:
+        raise TypeError("Corner radii must be either a float or tuple of floats")
+
+    if not math.isfinite(rx) or not math.isfinite(ry):
+        raise ValueError("Corner radii must be finite.")
+    if rx < 0.0 or ry < 0.0:
+        raise ValueError("Corner radii must be greater than or equal to zero.")
+    if rx > (float(width) / 2.0) or ry > (float(height) / 2.0):
+        raise ValueError("Corner radius should not exceed half the width and height")
+    return rx, ry
+
+
 class Component:
     """
         Base class for creating synthetically generated objects. Includes automatically

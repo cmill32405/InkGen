@@ -25,6 +25,7 @@ from InkGen.component import (
     StandardDrawingComponent,
     TextComponent,
     WidthHeightDrawingComponent,
+    normalize_rectangle_corner_radii,
 )
 from InkGen.component import CubicBezier as CubicBezierComponent
 from InkGen.component import Path as PathComponent
@@ -178,6 +179,30 @@ def _path_from_points(points: list[tuple[float, float]], *, close: bool) -> list
     return commands
 
 
+def _rounded_rectangle_path(x: float, y: float, width: float, height: float, rx: float, ry: float) -> list[str]:
+    """Build PDF path operators for a rounded rectangle."""
+    if rx == 0.0 or ry == 0.0:
+        return [f"{_number(x)} {_number(y)} {_number(width)} {_number(height)} re"]
+
+    right = x + width
+    bottom = y + height
+    kappa = 0.5522847498307936
+    cx = rx * kappa
+    cy = ry * kappa
+    return [
+        f"{_number(x + rx)} {_number(y)} m",
+        f"{_number(right - rx)} {_number(y)} l",
+        f"{_number(right - rx + cx)} {_number(y)} {_number(right)} {_number(y + ry - cy)} {_number(right)} {_number(y + ry)} c",
+        f"{_number(right)} {_number(bottom - ry)} l",
+        f"{_number(right)} {_number(bottom - ry + cy)} {_number(right - rx + cx)} {_number(bottom)} {_number(right - rx)} {_number(bottom)} c",
+        f"{_number(x + rx)} {_number(bottom)} l",
+        f"{_number(x + rx - cx)} {_number(bottom)} {_number(x)} {_number(bottom - ry + cy)} {_number(x)} {_number(bottom - ry)} c",
+        f"{_number(x)} {_number(y + ry)} l",
+        f"{_number(x)} {_number(y + ry - cy)} {_number(x + rx - cx)} {_number(y)} {_number(x + rx)} {_number(y)} c",
+        "h",
+    ]
+
+
 def _quadratic_to_cubic(
     start: tuple[float, float],
     control: tuple[float, float],
@@ -251,9 +276,21 @@ class RectanglePDF(WidthHeightDrawingComponent, PDFGeneratorInterface):
             }
         }
 
+    @property
+    def corner_radii(self) -> float | tuple[float, float]:
+        """Return the requested rectangle corner radii."""
+        return self._corner_radii
+
+    @corner_radii.setter
+    def corner_radii(self, value: float | tuple[float, float]) -> None:
+        """Validate and update the requested rectangle corner radii."""
+        normalize_rectangle_corner_radii(value, self.width, self.height)
+        self._corner_radii = value
+
     def generate_pdf(self, context: PDFRenderContext | None = None) -> str:
         """Generate PDF operators for this rectangle."""
-        path = [f"{_number(self.position[0])} {_number(self.position[1])} {_number(self.width)} {_number(self.height)} re"]
+        rx, ry = normalize_rectangle_corner_radii(self.corner_radii, self.width, self.height)
+        path = _rounded_rectangle_path(self.position[0], self.position[1], self.width, self.height, rx, ry)
         return _drawing_pdf(self.style, path)
 
 

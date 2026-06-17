@@ -35,6 +35,7 @@ from InkGen.component import (
     StandardDrawingComponent,
     TextComponent,
     WidthHeightDrawingComponent,
+    normalize_rectangle_corner_radii,
 )
 from InkGen.component import CubicBezier as CubicBezierComponent
 from InkGen.component import Path as PathComponent
@@ -259,7 +260,7 @@ class RectangleSVG(WidthHeightDrawingComponent, DrawingGeneratorInterface):
     def _radius_check(self,
                       corner_radii: float | tuple[float, float],
                       width: float,
-                      height: float) -> bool:
+                      height: float) -> None:
         """ Private method to verify corner radius can be implemented.
 
         Parameters
@@ -271,30 +272,14 @@ class RectangleSVG(WidthHeightDrawingComponent, DrawingGeneratorInterface):
         height : float
             height of rectangle
 
-        Returns
-        -------
-        bool
-            Returns True if corner radii are valid.
+        Raises
+        ------
+        TypeError
+            If corner radii are not numeric scalar or pair values.
+        ValueError
+            If corner radii are outside valid rectangle bounds.
         """
-        if isinstance(corner_radii, (float, int)):
-
-            if corner_radii > (width/2):
-                return False
-
-            if corner_radii > (height/2):
-                return False
-        elif isinstance(corner_radii, (tuple, list)):
-
-            if corner_radii[0] > (width/2):
-                return False
-
-            if corner_radii[1] > (height/2):
-                return False
-
-        else:
-            raise TypeError("Corner Radii must be either a float or tuple of floats")
-
-        return True
+        normalize_rectangle_corner_radii(corner_radii, width, height)
 
     @property
     def corner_radii(self) -> float:
@@ -306,16 +291,14 @@ class RectangleSVG(WidthHeightDrawingComponent, DrawingGeneratorInterface):
         return self._corner_radii
 
     @corner_radii.setter
-    def corner_radii(self, value: float=0.0) -> None:
+    def corner_radii(self, value: float) -> None:
         """ Setter to update corner radii.
 
         Args:
             value (float): new radius.
         """
-        if self._radius_check(value, self.width, self.height):
-            self._corner_radii = value
-        else:
-            raise ValueError("Corner radius should not exceed half the width and height")
+        self._radius_check(value, self.width, self.height)
+        self._corner_radii = value
 
     def generate_svg(self) -> str:
         """ Creates a single rect object in XML for a SVG file.
@@ -337,13 +320,20 @@ class RectangleSVG(WidthHeightDrawingComponent, DrawingGeneratorInterface):
         """
         style = _style_properties(self.style)
 
+        rx, ry = normalize_rectangle_corner_radii(self.corner_radii, self.width, self.height)
+        radius_attributes = " "
+        if rx != 0.0 or ry != 0.0:
+            radius_attributes = f"""
+            rx="{rx}"
+            ry="{ry}" """
+
         return f"""<rect
             style="{style}"
             id="rect{self.id}"
             width="{self.width}"
             height="{self.height}"
             x="{self.position[0]}"
-            y="{self.position[1]}" />"""
+            y="{self.position[1]}"{radius_attributes}/>"""
 
 
 class LineSVG(StandardDrawingComponent, DrawingGeneratorInterface):

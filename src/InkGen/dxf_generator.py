@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import math
 import os
 from dataclasses import dataclass
 
+from InkGen.component import normalize_rectangle_corner_radii
 from InkGen.drawing_components import (
     ArcDrawing,
     CircleDrawing,
@@ -19,6 +21,8 @@ from InkGen.drawing_components import (
     RegularPolygonDrawing,
     TextDrawing,
 )
+
+ROUNDED_RECTANGLE_CORNER_SEGMENTS = 4
 
 
 @dataclass(frozen=True)
@@ -88,10 +92,7 @@ def _component_to_entities(component: object, context: DXFRenderContext) -> list
     if isinstance(component, LineDrawing):
         return [_line_entity(component.point_1, component.point_2, context)]
     if isinstance(component, RectangleDrawing):
-        x, y = component.position
-        x2 = x + component.width
-        y2 = y + component.height
-        points = [(x, y), (x2, y), (x2, y2), (x, y2)]
+        points = _rectangle_points(component)
         return [_lwpolyline_entity(points, context, closed=True)]
     if isinstance(component, CircleDrawing):
         return [_circle_entity(component, context)]
@@ -110,6 +111,58 @@ def _component_to_entities(component: object, context: DXFRenderContext) -> list
     if isinstance(component, TextDrawing):
         return [_text_entity(component, context)]
     raise TypeError(f"Unsupported DXF component: {component.__class__.__name__}")
+
+
+def _rectangle_points(component: RectangleDrawing) -> list[tuple[float, float]]:
+    """Return DXF polyline points for sharp or rounded rectangle drawings."""
+    x, y = component.position
+    width = component.width
+    height = component.height
+    right = x + width
+    bottom = y + height
+    rx, ry = normalize_rectangle_corner_radii(component.corner_radii, width, height)
+    if rx == 0.0 or ry == 0.0:
+        return [(x, y), (right, y), (right, bottom), (x, bottom)]
+
+    points: list[tuple[float, float]] = []
+
+    def append(point: tuple[float, float]) -> None:
+        rounded = (round(float(point[0]), 6), round(float(point[1]), 6))
+        if not points or points[-1] != rounded:
+            points.append(rounded)
+
+    append((x + rx, y))
+    append((right - rx, y))
+    _append_corner_arc(points, center=(right - rx, y + ry), rx=rx, ry=ry, start_degrees=-90.0, end_degrees=0.0)
+    append((right, bottom - ry))
+    _append_corner_arc(points, center=(right - rx, bottom - ry), rx=rx, ry=ry, start_degrees=0.0, end_degrees=90.0)
+    append((x + rx, bottom))
+    _append_corner_arc(points, center=(x + rx, bottom - ry), rx=rx, ry=ry, start_degrees=90.0, end_degrees=180.0)
+    append((x, y + ry))
+    _append_corner_arc(points, center=(x + rx, y + ry), rx=rx, ry=ry, start_degrees=180.0, end_degrees=270.0)
+    if points[-1] == points[0]:
+        points.pop()
+    return points
+
+
+def _append_corner_arc(
+        points: list[tuple[float, float]],
+        *,
+        center: tuple[float, float],
+        rx: float,
+        ry: float,
+        start_degrees: float,
+        end_degrees: float) -> None:
+    """Append sampled elliptical arc points for a rounded rectangle corner."""
+    step = (end_degrees - start_degrees) / ROUNDED_RECTANGLE_CORNER_SEGMENTS
+    for index in range(1, ROUNDED_RECTANGLE_CORNER_SEGMENTS + 1):
+        angle = math.radians(start_degrees + (step * index))
+        point = (
+            round(center[0] + (rx * math.cos(angle)), 6),
+            round(center[1] + (ry * math.sin(angle)), 6),
+        )
+        if not points or points[-1] != point:
+            points.append(point)
 
 
 def _line_entity(point_1: tuple[float, float], point_2: tuple[float, float], context: DXFRenderContext) -> str:
