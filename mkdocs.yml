@@ -14,6 +14,7 @@ nav:
   - PDF Generation: pdf-generation.md
   - Extraction Truth: extraction-truth.md
   - Definition of Done: Definition_of_Done.md
+  - Proof Workflow: Proof_Workflow.md
   - Dependency Map: dependency-map.md
   - Architecture Decisions:
       - ADR-0001 PDF Grammar Truth: adr/0001-pdf-grammar-truth-annotations.md
