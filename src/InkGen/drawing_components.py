@@ -259,7 +259,7 @@ class DrawingComponentGroup:
 
     def add_component(self, component: DrawingPrimitive) -> None:
         """Append a renderer-neutral primitive to the group."""
-        if not hasattr(component, "to_component"):
+        if not callable(getattr(component, "to_component", None)):
             raise TypeError("component must implement to_component(output_format)")
         self.components.append(component)
 
@@ -279,6 +279,8 @@ class DrawingComponentGroup:
         copy_grammar_truth_annotations(self, group)
         for component in self.components:
             concrete = component.to_component(target)
+            if not isinstance(concrete, Component):
+                raise TypeError("to_component(output_format) must return an InkGen Component")
             copy_grammar_truth_annotations(component, concrete)
             group.add_component(concrete)
         return group
