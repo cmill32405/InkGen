@@ -1788,9 +1788,23 @@ class TextComponent(Component):
             Coordinates.
         """
 
-        if isinstance(value, (tuple, list, set)) and len(value) == 2:
-            self._position = value
-            self._outline_cache = None
+        self._position = self._coerce_position(value)
+        self._outline_cache = None
+
+    def _coerce_position(self, value: tuple[float, float]) -> tuple[float, float]:
+        """Return a finite numeric text position pair."""
+        if not isinstance(value, (tuple, list)) or len(value) != 2:
+            raise ValueError("Text position must be a tuple of two finite numeric values.")
+        if any(isinstance(coordinate, bool) for coordinate in value):
+            raise TypeError("Text position coordinates must be numeric values, not booleans.")
+        try:
+            x = float(value[0])
+            y = float(value[1])
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Text position coordinates must be finite numeric values.") from exc
+        if not math.isfinite(x) or not math.isfinite(y):
+            raise ValueError("Text position coordinates must be finite numeric values.")
+        return x, y
 
     @property
     def style(self) -> TextStyle:

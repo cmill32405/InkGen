@@ -29,6 +29,7 @@ nav:
       - Path Renderer Contract: proofs/path-renderer-contract.md
       - Rectangle Renderer Contract: proofs/rectangle-renderer-contract.md
       - Polygonal Renderer Contract: proofs/polygonal-renderer-contract.md
+      - Text Renderer Contract: proofs/text-renderer-contract.md
   - Architecture Diagrams: architecture-diagrams.md
   - Notes:
       - Mask Alignment Findings: mask_alignment_findings.md
