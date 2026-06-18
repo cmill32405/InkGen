@@ -32,6 +32,7 @@ nav:
       - Text Renderer Contract: proofs/text-renderer-contract.md
       - Drawing Group Contract: proofs/drawing-group-contract.md
       - Flow Document Contract: proofs/flow-document-contract.md
+      - CAD Zoning Contract: proofs/cad-zoning-contract.md
   - Architecture Diagrams: architecture-diagrams.md
   - Notes:
       - Mask Alignment Findings: mask_alignment_findings.md

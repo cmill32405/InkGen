@@ -1,0 +1,13 @@
+[cosmic-ray]
+module-path = [
+  "src/InkGen/cad_component_groups.py",
+]
+timeout = 120.0
+excluded-modules = []
+test-command = "python -m pytest -x tests/test_cad_zoning_contract.py tests/test_cad_component_groups.py"
+
+[cosmic-ray.distributor]
+name = "local"
+
+[cosmic-ray.filters.operators-filter]
+exclude-operators = []

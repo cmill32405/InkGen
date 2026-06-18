@@ -160,7 +160,7 @@ class Zoning:
 
         for i in range(4):
             for j in range(3):
-                if self._parameters[priority[i][j]]:
+                if self._parameters[priority[i][j]] is not None:
                     self._margins[i] = self._parameters[priority[i][j]]
                     break
 
@@ -182,7 +182,7 @@ class Zoning:
 
         for i in range(4):
             for j in range(3):
-                if self._parameters[priority[i][j]]:
+                if self._parameters[priority[i][j]] is not None:
                     self._widths[i] = self._parameters[priority[i][j]]
                     break
 
