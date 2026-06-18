@@ -855,12 +855,12 @@ class PolygonalDrawingComponent(DrawingComponent):
             style (DrawingStyle): Object with information for visualizing components.
         """
 
-        if self._polygon_check(points):
-            self._polygon = Polygon(points)
-        else:
+        polygon = self._create_valid_polygon(points)
+        if polygon is None:
             raise InvalidPolygonError("Polygon must be a list with 3 or more tuples of \
                                       floating point values representing two dimensional \
                                       cartesian coordinates.")
+        self._polygon = polygon
 
         super().__init__(style)
 
@@ -904,12 +904,31 @@ class PolygonalDrawingComponent(DrawingComponent):
             bool: True if valid Polygon.
         """
 
-        if len(points) < 3:
-            return False
+        return self._create_valid_polygon(points) is not None
+
+    def _create_valid_polygon(self, points: list[tuple[float, float]]) -> Polygon | None:
+        if not isinstance(points, (list, tuple)) or len(points) < 3:
+            return None
+
+        normalized = []
         for point in points:
-            if len(point) != 2:
-                return False
-        return True
+            if not isinstance(point, (list, tuple)) or len(point) != 2:
+                return None
+            if any(isinstance(value, bool) for value in point):
+                return None
+            try:
+                x = float(point[0])
+                y = float(point[1])
+            except (TypeError, ValueError):
+                return None
+            if not math.isfinite(x) or not math.isfinite(y):
+                return None
+            normalized.append((x, y))
+
+        polygon = Polygon(normalized)
+        if polygon.is_empty or not polygon.is_valid or polygon.area <= 0.0:
+            return None
+        return polygon
 
     @property
     def bbox(self) ->  tuple[tuple[float, float], tuple[float, float]]:
@@ -945,12 +964,12 @@ class PolygonalDrawingComponent(DrawingComponent):
         Args:
             value (List[Tuple[float, float]]): list of points
         """
-        if self._polygon_check(value):
-            self._polygon = Polygon(value)
-        else:
+        polygon = self._create_valid_polygon(value)
+        if polygon is None:
             raise InvalidPolygonError("Polygon must be a list with 3 or more tuples of \
                                       floating point values representing two dimensional \
                                       cartesian coordinates.")
+        self._polygon = polygon
 
     @property
     def polygon(self) -> Polygon:
