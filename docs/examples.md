@@ -175,8 +175,8 @@ document.add_page()  # Page 1
 document.add_page()  # Page 2
 
 # Add different content to each page
-document.page(0).add_layer("title", title_layer)
-document.page(1).add_layer("content", content_layer)
+document.page(1).add_layer(layer=title_layer)
+document.page(2).add_layer(layer=content_layer)
 ```
 
 ## Automation and Testing

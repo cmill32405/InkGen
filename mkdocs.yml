@@ -21,6 +21,7 @@ nav:
       - ADR-0002 Closed PDF Renderer: adr/0002-closed-pdf-renderer-domain.md
   - Proof Notes:
       - Grammar Truth: proofs/grammar-truth.md
+      - Document Model Contract: proofs/document-model-contract.md
       - Quadratic Bezier Renderer Contract: proofs/quadratic-bezier-renderer-contract.md
       - Arc Renderer Contract: proofs/arc-renderer-contract.md
       - Cubic Bezier Renderer Contract: proofs/cubic-bezier-renderer-contract.md

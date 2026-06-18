@@ -287,6 +287,8 @@ class Layers:
             object: instance of the class.
         """
         layers = cls(Canvas.create_from_dict(data['Layers']['canvas']))
+        for layer_name in list(layers.layers):
+            layers.remove_layer(layer_name)
         for _, layer_payload in data['Layers']['layers'].items():
             layer = Layer.create_from_dict(layer_payload, styles)
             layers.add_layer(layer.layer_name, layer)
@@ -566,17 +568,18 @@ class Document:
             ValueError: Invalid position chosen for the position argument
             TypeError: Must use Layers objects for the page argument
         """
-        if position == -1:
+        page_number = self._validate_insert_position(position)
+        if page_number == -1:
             page_number = self.pages+1
-        elif position <= self.pages:
-            for p in range(self.pages, position-1, -1):
-                self._pages[p+1] = self._pages[p]
-                page_number = position
         else:
-            raise ValueError("Invalid position, should be either a value between 1 and self.pages or -1 for last page.")
+            p = self.pages
+            while p >= page_number:
+                self._pages[p+1] = self._pages[p]
+                p -= 1
 
-        if page:
+        if page is not None:
             if isinstance(page, Layers):
+                self._page_canvas_compatibility(page)
                 self._pages[page_number] = page
             else:
                 raise TypeError("page argument take a Layers object")
@@ -594,15 +597,11 @@ class Document:
             ValueError: If a page number that doesn't exist is passed
                         to the position argument.
         """
-        if position == self.pages:
-            del self._pages[position]
-        elif position < self.pages:
-            pages = self.pages
-            for p in range(position, self.pages):
-                self._pages[p] = self._pages[p+1]
-            del self._pages[pages]
-        else:
-            raise ValueError("Position must correlate to an existing page.")
+        position = self._validate_existing_position(position)
+        pages = self.pages
+        for p in range(position, pages):
+            self._pages[p] = self._pages[p+1]
+        del self._pages[pages]
 
     def page(self, position: int) -> Layers:
         """ Returns the layer object at the current position.
@@ -613,6 +612,7 @@ class Document:
         Returns:
             Layers: Layers object.
         """
+        position = self._validate_existing_position(position)
         return self._pages[position]
 
     @property
@@ -623,3 +623,28 @@ class Document:
             int: number of Layers objects in the document.
         """
         return len(list(self._pages.keys()))
+
+    def _validate_insert_position(self, position: int) -> int:
+        """Validate a page insertion position."""
+        if isinstance(position, bool) or not isinstance(position, int):
+            raise TypeError("position must be an integer page number")
+        if position == -1:
+            return -1
+        if 1 <= position <= self.pages:
+            return position
+        raise ValueError("Invalid position, should be either a value between 1 and self.pages or -1 for last page.")
+
+    def _validate_existing_position(self, position: int) -> int:
+        """Validate a page position that must already exist."""
+        if isinstance(position, bool) or not isinstance(position, int):
+            raise TypeError("position must be an integer page number")
+        if 1 <= position <= self.pages:
+            return position
+        raise ValueError("Position must correlate to an existing page.")
+
+    def _page_canvas_compatibility(self, page: Layers) -> None:
+        """Verify an inserted page uses the document canvas contract."""
+        canvas = page._canvas
+        if (canvas.height, canvas.width, canvas.units) == (self._canvas.height, self._canvas.width, self._canvas.units):
+            return
+        raise IncompatibleCanvas("Page must have the same canvas attributes as the document.")

@@ -109,9 +109,9 @@ canvas = Canvas(width=210, height=297, units="mm")
 # Create a document
 document = Document(canvas)
 
-# Create a layer
-layer = Layer("base", canvas)
-document.add_page(page=layer)
+# Create a document page
+document.add_page()
+layer = document.page(1).layer("base")
 
 # Create a style
 style = DrawingStyle(
@@ -140,7 +140,7 @@ layer.add_component_group(group)
 # Generate SVG
 doc_svg = DocumentSVG(canvas)
 doc_svg.add_page()
-doc_svg.page(0).add_layer("base", layer)
+doc_svg.page(1).layer("base").add_component_group(group)
 doc_svg.create_svg("output.svg")
 ```
 

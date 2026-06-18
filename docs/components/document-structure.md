@@ -48,8 +48,7 @@ from InkGen.svg_generator import DocumentSVG, IncludeLayer
 
 doc_svg = DocumentSVG(canvas)
 doc_svg.add_page()
-doc_svg.page(0).add_layer("base", base_layer)
-doc_svg.page(0).layer("base").add_component_group(group)
+doc_svg.page(1).layer("base").add_component_group(group)
 
 # Generate SVG with all layers
 doc_svg.create_svg("output.svg")
