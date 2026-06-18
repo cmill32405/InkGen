@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from math import isfinite
 
 from InkGen.component import Component
 from InkGen.drawing_components import DrawingComponentGroup, TextDrawing
@@ -44,8 +45,7 @@ class TabStop:
     leader: str | None = None
 
     def __post_init__(self) -> None:
-        if self.position < 0:
-            raise ValueError("Tab stop position must be non-negative")
+        object.__setattr__(self, "position", _coerce_finite_float(self.position, name="Tab stop position", minimum=0.0))
         if not isinstance(self.alignment, ParagraphAlignment):
             object.__setattr__(self, "alignment", ParagraphAlignment(self.alignment))
 
@@ -62,7 +62,7 @@ class TabStop:
     def create_from_dict(cls, data: dict[str, object]) -> TabStop:
         """Recreate a tab stop from serialized parameters."""
         return cls(
-            position=float(data["position"]),
+            position=data["position"],  # type: ignore[arg-type]
             alignment=ParagraphAlignment(str(data.get("alignment", ParagraphAlignment.LEFT.value))),
             leader=data.get("leader"),
         )
@@ -164,7 +164,10 @@ class Paragraph(Component):
     def position(self, value: tuple[float, float]) -> None:
         if not isinstance(value, (tuple, list)) or len(value) != 2:
             raise ValueError("Position must be a two-value tuple")
-        self._position = (float(value[0]), float(value[1]))
+        self._position = (
+            _coerce_finite_float(value[0], name="position"),
+            _coerce_finite_float(value[1], name="position"),
+        )
 
     @property
     def width(self) -> float:
@@ -205,7 +208,7 @@ class Paragraph(Component):
 
     @first_line_indent.setter
     def first_line_indent(self, value: float) -> None:
-        self._first_line_indent = float(value)
+        self._first_line_indent = _coerce_finite_float(value, name="first_line_indent")
 
     @property
     def hanging_indent(self) -> float:
@@ -259,9 +262,7 @@ class Paragraph(Component):
 
     @line_spacing.setter
     def line_spacing(self, value: float) -> None:
-        if not isinstance(value, (float, int)) or value <= 0:
-            raise ValueError("line_spacing must be greater than zero")
-        self._line_spacing = float(value)
+        self._line_spacing = _coerce_finite_float(value, name="line_spacing", minimum=0.0, include_minimum=False)
 
     @property
     def line_spacing_rule(self) -> LineSpacingRule:
@@ -318,7 +319,7 @@ class Paragraph(Component):
 
     @outline_level.setter
     def outline_level(self, value: int) -> None:
-        if not isinstance(value, int) or not 0 <= value <= 9:
+        if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 9:
             raise ValueError("outline_level must be an integer between 0 and 9")
         self._outline_level = value
 
@@ -337,7 +338,7 @@ class Paragraph(Component):
         """Add a tab stop to the paragraph."""
         if not isinstance(alignment, ParagraphAlignment):
             alignment = ParagraphAlignment(str(alignment).lower())
-        stop = TabStop(float(position), alignment, leader)
+        stop = TabStop(position, alignment, leader)
         self._tab_stops = tuple(sorted((*self._tab_stops, stop), key=lambda item: item.position))
         return stop
 
@@ -411,24 +412,24 @@ class Paragraph(Component):
         style_name = style_payload["TextStyle"]["name"]
         style = styles.get(style_name) or TextStyle.create_from_dict(style_payload)
         return cls(
-            str(payload["text"]),
+            payload["text"],
             position=tuple(payload["position"]),
-            width=float(payload["width"]),
+            width=payload["width"],
             style=style,
             alignment=ParagraphAlignment(str(payload["alignment"])),
-            first_line_indent=float(payload["first_line_indent"]),
-            hanging_indent=float(payload["hanging_indent"]),
-            left_indent=float(payload["left_indent"]),
-            right_indent=float(payload["right_indent"]),
-            space_before=float(payload["space_before"]),
-            space_after=float(payload["space_after"]),
-            line_spacing=float(payload["line_spacing"]),
+            first_line_indent=payload["first_line_indent"],
+            hanging_indent=payload["hanging_indent"],
+            left_indent=payload["left_indent"],
+            right_indent=payload["right_indent"],
+            space_before=payload["space_before"],
+            space_after=payload["space_after"],
+            line_spacing=payload["line_spacing"],
             line_spacing_rule=LineSpacingRule(str(payload["line_spacing_rule"])),
-            keep_together=bool(payload["keep_together"]),
-            keep_with_next=bool(payload["keep_with_next"]),
-            page_break_before=bool(payload["page_break_before"]),
-            widow_control=bool(payload["widow_control"]),
-            outline_level=int(payload["outline_level"]),
+            keep_together=payload["keep_together"],
+            keep_with_next=payload["keep_with_next"],
+            page_break_before=payload["page_break_before"],
+            widow_control=payload["widow_control"],
+            outline_level=payload["outline_level"],
             tab_stops=[TabStop.create_from_dict(stop) for stop in payload.get("tab_stops", [])],
         )
 
@@ -512,12 +513,34 @@ class Paragraph(Component):
         return float(self.style.font.size) * (25.4 / 72.0) * 0.78
 
     def _validate_non_negative(self, name: str, value: float) -> float:
-        if not isinstance(value, (float, int)) or value < 0:
-            raise ValueError(f"{name} must be non-negative")
-        return float(value)
+        return _coerce_finite_float(value, name=name, minimum=0.0)
 
     @staticmethod
     def _validate_bool(name: str, value: bool) -> bool:
         if not isinstance(value, bool):
             raise TypeError(f"{name} must be a bool")
         return value
+
+
+def _coerce_finite_float(
+    value: float,
+    *,
+    name: str,
+    minimum: float | None = None,
+    include_minimum: bool = True,
+) -> float:
+    """Coerce a paragraph measurement into a finite float."""
+    if isinstance(value, bool):
+        raise TypeError(f"{name} must be numeric")
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise TypeError(f"{name} must be numeric") from exc
+    if not isfinite(number):
+        raise ValueError(f"{name} must be finite")
+    if minimum is not None:
+        if include_minimum and number < minimum:
+            raise ValueError(f"{name} must be at least {minimum}")
+        if not include_minimum and number <= minimum:
+            raise ValueError(f"{name} must be greater than {minimum}")
+    return number
