@@ -1389,12 +1389,7 @@ class TableSVG(ComponentGroupSVG):
         Raises:
             ValueError: If value is not a float or a 4-element sequence.
         """
-        if isinstance(value, (int, float)):
-            pad = float(value)
-            return (pad, pad, pad, pad)
-        if isinstance(value, (tuple, list)) and len(value) == 4:
-            return tuple(float(v) for v in value)  # type: ignore[arg-type]
-        raise ValueError('Padding must be a float or an iterable of four floats')
+        return Table._normalize_padding(value)
 
     def _apply_autofit(self) -> None:
         """Apply autofit rules to scale text or expand cells as needed."""

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
+from math import isfinite
 
 from InkGen.component import Component
 
@@ -24,7 +25,7 @@ class Table(Component):
         autofit: bool = False,
     ) -> None:
         super().__init__()
-        self._position = (float(position[0]), float(position[1]))
+        self._position = _normalize_position(position)
         self._auto_fit = bool(autofit)
         self._autofit_queue: list[tuple[tuple[int, int], AutoFitRule, AutoFitRule]] = []
         self._autofit_suppressed = False
@@ -95,12 +96,7 @@ class Table(Component):
 
     @staticmethod
     def _normalize_padding(value: float | tuple[float, float, float, float] | list[float]) -> tuple[float, float, float, float]:
-        if isinstance(value, (int, float)):
-            pad = float(value)
-            return (pad, pad, pad, pad)
-        if isinstance(value, (tuple, list)) and len(value) == 4:
-            return tuple(float(v) for v in value)  # type: ignore[arg-type]
-        raise ValueError("Padding must be a float or an iterable of four floats")
+        return _normalize_padding(value)
 
     # ------------------------------------------------------------------
     # Core structural helpers
@@ -197,7 +193,7 @@ class Table(Component):
         Args:
             value: (x, y) coordinates for the top-left corner.
         """
-        self._position = (float(value[0]), float(value[1]))
+        self._position = _normalize_position(value)
 
     @property
     def width(self) -> float:
@@ -415,12 +411,46 @@ def _normalize_padding(value: float | tuple[float, float, float, float] | list[f
     Raises:
         ValueError: If value is not a float or a 4-element sequence.
     """
+    if isinstance(value, bool):
+        raise TypeError("Padding must be numeric")
     if isinstance(value, (int, float)):
-        pad = float(value)
+        pad = _coerce_finite_float(value, name="Padding", allow_negative=False)
         return (pad, pad, pad, pad)
     if isinstance(value, (tuple, list)) and len(value) == 4:
-        return tuple(float(v) for v in value)  # type: ignore[arg-type]
+        return tuple(
+            _coerce_finite_float(v, name="Padding", allow_negative=False)
+            for v in value
+        )  # type: ignore[arg-type]
     raise ValueError("Padding must be a float or an iterable of four floats")
+
+
+def _normalize_position(value: tuple[float, float]) -> tuple[float, float]:
+    """Normalize a table origin to finite numeric coordinates."""
+    if isinstance(value, (str, bytes)):
+        raise TypeError("Table position must be a two-value numeric sequence")
+    try:
+        x, y = value
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Table position must contain exactly two values") from exc
+    return (
+        _coerce_finite_float(x, name="Table position"),
+        _coerce_finite_float(y, name="Table position"),
+    )
+
+
+def _coerce_finite_float(value: float, *, name: str, allow_negative: bool = True) -> float:
+    """Coerce a public table dimension value into a finite float."""
+    if isinstance(value, bool):
+        raise TypeError(f"{name} must be numeric")
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise TypeError(f"{name} must be numeric") from exc
+    if not isfinite(number):
+        raise ValueError(f"{name} must be finite")
+    if not allow_negative and number < 0:
+        raise ValueError(f"{name} must be non-negative")
+    return number
 
 
 class Row:
@@ -429,7 +459,7 @@ class Row:
 
     def __init__(self, table: Table, height: float) -> None:
         self._table = table
-        self._height = float(height)
+        self._height = _coerce_finite_float(height, name="Row height", allow_negative=False)
         self._height_rule = AutoFitRule.EXPAND
         self._cells: list[Cell] = []
 
@@ -484,9 +514,7 @@ class Row:
         Raises:
             ValueError: If value is negative.
         """
-        if value < 0:
-            raise ValueError("Row height must be non-negative")
-        self._height = float(value)
+        self._height = _coerce_finite_float(value, name="Row height", allow_negative=False)
 
     @property
     def height_rule(self) -> AutoFitRule:
@@ -533,7 +561,7 @@ class Column:
 
     def __init__(self, table: Table, width: float) -> None:
         self._table = table
-        self._width = float(width)
+        self._width = _coerce_finite_float(width, name="Column width", allow_negative=False)
         self._width_rule = AutoFitRule.EXPAND
         self._cells: list[Cell] = []
 
@@ -588,9 +616,7 @@ class Column:
         Raises:
             ValueError: If value is negative.
         """
-        if value < 0:
-            raise ValueError("Column width must be non-negative")
-        self._width = float(value)
+        self._width = _coerce_finite_float(value, name="Column width", allow_negative=False)
 
     @property
     def width_rule(self) -> AutoFitRule:
