@@ -7,8 +7,33 @@ import itertools
 import os
 import platform
 import subprocess
+from math import isfinite
 
 from matplotlib import font_manager
+
+
+def _coerce_finite_float(value: float | int, name: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError(f"{name} must be a float or int.")
+
+    number = float(value)
+    if not isfinite(number):
+        raise ValueError(f"{name} must be finite.")
+    return number
+
+
+def _coerce_nonnegative_float(value: float | int, name: str) -> float:
+    number = _coerce_finite_float(value, name)
+    if number < 0.0:
+        raise ValueError(f"{name} must be greater than or equal to 0.0.")
+    return number
+
+
+def _coerce_opacity(value: float | int, name: str) -> float:
+    opacity = _coerce_finite_float(value, name)
+    if 0.0 <= opacity <= 1.0:
+        return opacity
+    raise ValueError(f"{name} must be between 0.0 and 1.0.")
 
 
 class Style:
@@ -67,19 +92,18 @@ class Style:
         bool
             returns True if valid color name or hex value, else false
         """
+        if not isinstance(color, str):
+            return False
+
         if color.lower() in DrawingStyle.colors:
             return True
 
         if color.lower() == "none":
             return True
 
-        if color[0] == "#" and len(color) == 7:
-            hex_color = True
-            for c in range(1,7):
-                if color[c] not in DrawingStyle.hex_values:
-                    hex_color = False
-            return hex_color
-        return False
+        if len(color) != 7 or not color.startswith("#"):
+            return False
+        return all(character in DrawingStyle.hex_values for character in color[1:])
 
     @classmethod
     def _get_hex_color(cls, color: str) -> str:
@@ -91,11 +115,13 @@ class Style:
         Returns:
             Lowercase hex color code, or "none" if invalid.
         """
-        if color[0] == "#" and len(color) == 7:
-            return color.lower()
-        if color.lower() in Style.colors:
-            return Style.hex_lookup[color.lower()].lower()
-        return "none"
+        if not cls._is_color(color):
+            return "none"
+
+        normalized = color.lower()
+        if normalized in Style.colors:
+            return Style.hex_lookup[normalized].lower()
+        return normalized
 
     @property
     def name(self) -> str:
@@ -187,22 +213,16 @@ class DrawingStyle(Style):
         else:
             raise ValueError("Invalid stroke color. Must be color name/hex or none")
 
-        self._stroke_width = stroke_width
+        self._stroke_width = _coerce_nonnegative_float(stroke_width, "stroke_width")
 
         if Style._is_color(fill):
             self._fill = Style._get_hex_color(fill)
         else:
             raise ValueError("Invalid fill value.  Must be color name/hex or none")
 
-        if 0.0 <= stroke_opacity <= 1.0:
-            self._stroke_opacity = stroke_opacity
-        else:
-            raise ValueError("Invalid stroke opactity value, should be between 0.0 and 1.0.")
+        self._stroke_opacity = _coerce_opacity(stroke_opacity, "stroke_opacity")
 
-        if 0.0 <= fill_opacity <= 1.0:
-            self._fill_opacity = fill_opacity
-        else:
-            raise ValueError("Invalid fill opactity value, should be between 0.0 and 1.0.")
+        self._fill_opacity = _coerce_opacity(fill_opacity, "fill_opacity")
 
         super().__init__(name=name)
 
@@ -295,7 +315,7 @@ class DrawingStyle(Style):
         stroke_width : float
             stroke width value
         """
-        self._stroke_width = stroke_width
+        self._stroke_width = _coerce_nonnegative_float(stroke_width, "stroke_width")
 
     @property
     def stroke_opacity(self) -> float:
@@ -322,10 +342,7 @@ class DrawingStyle(Style):
         ValueError
             Error if opacity value is not between 0.0 and 1.0
         """
-        if 0.0 <= opacity <= 1.0:
-            self._stroke_opacity = opacity
-        else:
-            raise ValueError("Invalid stroke opactity value, should be between 0.0 and 1.0.")
+        self._stroke_opacity = _coerce_opacity(opacity, "stroke_opacity")
 
     @property
     def fill_opacity(self) -> float:
@@ -352,10 +369,7 @@ class DrawingStyle(Style):
         ValueError
             Error if opacity value is not between 0.0 and 1.0
         """
-        if 0.0 <= opacity <= 1.0:
-            self._fill_opacity = opacity
-        else:
-            raise ValueError("Invalid fill opactity value, should be between 0.0 and 1.0.")
+        self._fill_opacity = _coerce_opacity(opacity, "fill_opacity")
 
     @property
     def parameters(self) -> dict:
