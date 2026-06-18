@@ -9,7 +9,7 @@ from html import escape as html_escape
 from io import BytesIO
 from xml.sax.saxutils import escape as xml_escape
 
-from InkGen.component import PathCommand
+from InkGen.component import Component, PathCommand
 from InkGen.drawing_components import (
     ArcDrawing,
     CircleDrawing,
@@ -27,6 +27,8 @@ from InkGen.drawing_components import (
 from InkGen.paragraph import LineSpacingRule, Paragraph, ParagraphAlignment
 from InkGen.style import DrawingStyle, TextStyle
 from InkGen.table import Table
+
+DOCX_FIXED_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
 
 
 class DocumentOutputFormat(str, Enum):
@@ -132,11 +134,11 @@ class FlowDocument:
 
         buffer = BytesIO()
         with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as package:
-            package.writestr("[Content_Types].xml", content_types)
-            package.writestr("_rels/.rels", package_relationships)
-            package.writestr("word/document.xml", document_xml)
-            package.writestr("word/styles.xml", styles_xml)
-            package.writestr("word/_rels/document.xml.rels", document_relationships)
+            _write_docx_part(package, "[Content_Types].xml", content_types)
+            _write_docx_part(package, "_rels/.rels", package_relationships)
+            _write_docx_part(package, "word/document.xml", document_xml)
+            _write_docx_part(package, "word/styles.xml", styles_xml)
+            _write_docx_part(package, "word/_rels/document.xml.rels", document_relationships)
         return buffer.getvalue()
 
     def create_docx(self, filepath: str) -> None:
@@ -416,7 +418,7 @@ def _drawing_html(group: DrawingComponentGroup) -> str:
     height = max(max_y - min_y, 1.0)
     payload = []
     for component in group.components:
-        svg_component = component.to_component(OutputFormat.SVG)
+        svg_component = _materialize_drawing_component(component, OutputFormat.SVG)
         generate_svg = getattr(svg_component, "generate_svg", None)
         if generate_svg is not None:
             payload.append(generate_svg())
@@ -434,7 +436,7 @@ def _drawing_bounds(group: DrawingComponentGroup) -> tuple[float, float, float, 
             radius = component.radius
             points.extend([(x - radius, y - radius), (x + radius, y + radius)])
             continue
-        concrete = component.to_component(OutputFormat.PDF)
+        concrete = _materialize_drawing_component(component, OutputFormat.PDF)
         points.extend(getattr(concrete, "points", []))
     if not points:
         return 0.0, 0.0, 1.0, 1.0
@@ -460,7 +462,7 @@ def _component_vml(component: object, min_x: float, min_y: float) -> str:
             f'width:80mm;height:10mm"><v:textbox><w:txbxContent><w:p><w:r><w:t>{xml_escape(component.text)}</w:t></w:r></w:p>'
             "</w:txbxContent></v:textbox></v:shape>"
         )
-    concrete = component.to_component(OutputFormat.PDF)
+    concrete = _materialize_drawing_component(component, OutputFormat.PDF)
     points = getattr(concrete, "points", [])
     if not points:
         return ""
@@ -536,6 +538,22 @@ def _vml_number(value: float) -> str:
     if abs(numeric - round(numeric)) < 1e-9:
         return str(int(round(numeric)))
     return f"{numeric:.3f}".rstrip("0").rstrip(".")
+
+
+def _materialize_drawing_component(component: object, output_format: OutputFormat) -> Component:
+    materializer = getattr(component, "to_component", None)
+    if not callable(materializer):
+        raise TypeError("drawing components must implement to_component(output_format)")
+    concrete = materializer(output_format)
+    if not isinstance(concrete, Component):
+        raise TypeError("to_component(output_format) must return an InkGen Component")
+    return concrete
+
+
+def _write_docx_part(package: zipfile.ZipFile, name: str, payload: str) -> None:
+    info = zipfile.ZipInfo(name, date_time=DOCX_FIXED_TIMESTAMP)
+    info.compress_type = zipfile.ZIP_DEFLATED
+    package.writestr(info, payload)
 
 
 def _mm_to_twips(value: float) -> int:
