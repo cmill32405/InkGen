@@ -2,14 +2,74 @@
 
 from __future__ import annotations
 
+from math import isfinite
+
 from shapely import MultiPoint, Polygon, get_coordinates
+from shapely.errors import GEOSException
 
 from InkGen.errors import IllegalArgumentError, InvalidConvexHull
 
 
+def _coerce_finite_number(value: float | int, name: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError(f"The {name} argument should be a float or int")
+
+    number = float(value)
+    if not isfinite(number):
+        raise IllegalArgumentError(f"The {name} argument should be finite")
+    return number
+
+
+def _coerce_positive_number(value: float | int, name: str) -> float:
+    number = _coerce_finite_number(value, name)
+    if number <= 0:
+        raise IllegalArgumentError(f"The {name} argument should be greater than zero")
+    return number
+
+
+def _normalize_hull(hull: list[tuple[float, float]], name: str = "hull") -> list[tuple[float, float]]:
+    if isinstance(hull, (str, bytes)):
+        raise InvalidConvexHull(f"The {name} argument must be coordinate pairs")
+
+    try:
+        raw_points = list(hull)
+    except TypeError as exc:
+        raise InvalidConvexHull(f"The {name} argument must be coordinate pairs") from exc
+
+    if len(raw_points) < 3:
+        raise InvalidConvexHull(f"The {name} argument must include at least three coordinate pairs")
+
+    points = []
+    for index, point in enumerate(raw_points):
+        if isinstance(point, (str, bytes)):
+            raise InvalidConvexHull(f"The {name} argument must be coordinate pairs")
+        try:
+            x, y = point
+        except (TypeError, ValueError) as exc:
+            raise InvalidConvexHull(f"The {name} argument must be coordinate pairs") from exc
+
+        try:
+            points.append(
+                (
+                    _coerce_finite_number(x, f"{name}[{index}][0]"),
+                    _coerce_finite_number(y, f"{name}[{index}][1]"),
+                )
+            )
+        except (IllegalArgumentError, TypeError) as exc:
+            raise InvalidConvexHull(f"The {name} argument must contain finite numeric coordinate pairs") from exc
+
+    if len(set(points)) < 3:
+        raise InvalidConvexHull(f"The {name} argument must include at least three distinct coordinate pairs")
+
+    if points[0] == points[-1]:
+        points = points[:-1]
+
+    return points
+
+
 class Boundary:
     """
-        Class for storing boundary information for constraining component points.
+    Class for storing boundary information for constraining component points.
     """
 
     def __init__(self, hull: list[tuple[float, float]], outer_boundary: bool = False) -> None:
@@ -18,14 +78,18 @@ class Boundary:
             raise TypeError("The outer_boundary argument is required to be a boolean.")
 
         self._outer = outer_boundary
-        self._boundary_polygon = Polygon(hull)
+        try:
+            self._boundary_points = _normalize_hull(hull)
+            self._boundary_polygon = MultiPoint(self._boundary_points).convex_hull
+        except GEOSException as exc:
+            raise InvalidConvexHull("The hull argument is not a valid convex hull") from exc
 
-        if not self._hull_check():
+        if self._boundary_polygon.is_empty or self._boundary_polygon.area <= 0 or not self._hull_check():
             raise InvalidConvexHull("The hull argument is not a valid convex hull")
 
     @classmethod
     def create_from_dict(cls, data: dict) -> Boundary:
-        """ Class method to recreate the object from its serialization dict.
+        """Class method to recreate the object from its serialization dict.
 
         Args:
             data (dict): Dictionary created via obj.parameters property.
@@ -33,21 +97,19 @@ class Boundary:
         Returns:
             Boundary: instance of the class.
         """
-        boundary = cls(data['Boundary']['hull'], data['Boundary']['outer_boundary'])
+        boundary = cls(data["Boundary"]["hull"], data["Boundary"]["outer_boundary"])
         return boundary
 
     @property
     def parameters(self) -> dict:
-        """ Parameters for the object as a dictionary for serialization.
+        """Parameters for the object as a dictionary for serialization.
 
         Returns:
             dict: dictionary with class name as top level key, that
             includes a dictionary with each parameter name as key and
             value as value.
         """
-        parameter_dict = {"Boundary":
-                       {"hull": self.boundary_points,
-                        "outer_boundary": self._outer}}
+        parameter_dict = {"Boundary": {"hull": self.boundary_points, "outer_boundary": self._outer}}
         return parameter_dict
 
     def _hull_check(self) -> bool:
@@ -56,8 +118,8 @@ class Boundary:
         Returns:
             bool: True if the polygon is a valid convex hull, False otherwise.
         """
-        hull = get_coordinates(self._boundary_polygon.convex_hull)
-        for point in get_coordinates(self._boundary_polygon):
+        hull = {tuple(point) for point in get_coordinates(self._boundary_polygon.convex_hull)}
+        for point in self._boundary_points:
             if point not in hull:
                 return False
         return True
@@ -71,10 +133,7 @@ class Boundary:
         list[tuple[float, float]]
             List of x, y coordinates for each point of the hull.
         """
-        coordinates = []
-        for coord in get_coordinates(self._boundary_polygon):
-            coordinates.append((coord[0], coord[1]))
-        return coordinates[:-1]
+        return self._boundary_points.copy()
 
     @property
     def boundary_type(self) -> str:
@@ -104,7 +163,18 @@ class Boundary:
             bool: True if there is no interference between the points provided and the boundary.
         """
 
-        points_geometry = MultiPoint(points)
+        if not isinstance(strict, bool):
+            raise TypeError("The strict argument is required to be a boolean.")
+
+        try:
+            raw_points = list(points)
+        except TypeError as exc:
+            raise InvalidConvexHull("The points argument must be coordinate pairs") from exc
+
+        if not raw_points:
+            return False
+
+        points_geometry = MultiPoint(_normalize_hull(raw_points, "points"))
         polygon = Polygon(get_coordinates(points_geometry.convex_hull))
         if self._outer:
             if strict:
@@ -118,14 +188,11 @@ class Boundary:
 
 class Canvas(Boundary):
     """
-        Class for storing information about a drawing space including the
-        dimensions and units of the space.
+    Class for storing information about a drawing space including the
+    dimensions and units of the space.
     """
 
-    def __init__(self,
-                 canvas_width: float | int,
-                 canvas_height: float | int,
-                 units: str = "mm") -> None:
+    def __init__(self, canvas_width: float | int, canvas_height: float | int, units: str = "mm") -> None:
         """
             Creates Canvas object to store dimensions and unit of measure for a space.
 
@@ -149,28 +216,27 @@ class Canvas(Boundary):
             following values: mm, in, metric, imperial, millimeters, inches, millimeter, or inch
         """
 
-        if not isinstance(canvas_width, (int, float)):
-            raise TypeError("The canvas_width argument should be a float or int")
+        width = _coerce_positive_number(canvas_width, "canvas_width")
+        height = _coerce_positive_number(canvas_height, "canvas_height")
 
-        if not isinstance(canvas_height, (int, float)):
-            raise TypeError("The canvas_height argument should be a float or int")
+        if not isinstance(units, str):
+            raise TypeError("The units argument should be a string")
 
         if units.lower() in ["mm", "metric", "millimeters", "millimeter"]:
             self._units = "mm"
         elif units.lower() in ["in", "imperial", "inches", "inch"]:
             self._units = "in"
         else:
-            raise IllegalArgumentError(f"{units} is not a valid value for the units argument.  \
-                                       Use mm, in, metric, or imperial.")
+            raise IllegalArgumentError(
+                f"{units} is not a valid value for the units argument.  \
+                                       Use mm, in, metric, or imperial."
+            )
 
-        super().__init__([(0,0),
-                          (canvas_width, 0),
-                          (0, canvas_height),
-                          (canvas_width, canvas_height)])
+        super().__init__([(0.0, 0.0), (width, 0.0), (width, height), (0.0, height)])
 
     @classmethod
     def create_from_dict(cls, data: dict) -> Canvas:
-        """ Class method to recreate the object from its serialization dict.
+        """Class method to recreate the object from its serialization dict.
 
         Args:
             data (dict): Dictionary created via obj.parameters property.
@@ -178,38 +244,34 @@ class Canvas(Boundary):
         Returns:
             Canvas: instance of the class.
         """
-        canvas = cls(canvas_width=data["Canvas"]["width"],
-                        canvas_height=data["Canvas"]["height"],
-                        units=data["Canvas"]["units"])
+        canvas = cls(canvas_width=data["Canvas"]["width"], canvas_height=data["Canvas"]["height"], units=data["Canvas"]["units"])
         return canvas
 
     @property
     def width(self) -> float:
-        """ Readonly property for canvas width.
+        """Readonly property for canvas width.
 
         Returns
         -------
         float
             Canvas width
         """
-        extrema = get_coordinates(self._boundary_polygon)[3]
-        return extrema[0]
+        return self._boundary_polygon.bounds[2]
 
     @property
     def height(self) -> float:
-        """ Readonly property for canvas height
+        """Readonly property for canvas height
 
         Returns
         -------
         float
             Canvas Height
         """
-        extrema = get_coordinates(self._boundary_polygon)[3]
-        return extrema[1]
+        return self._boundary_polygon.bounds[3]
 
     @property
     def units(self) -> str:
-        """ Readonly property for canvas unit of measure
+        """Readonly property for canvas unit of measure
 
         Returns
         -------
@@ -220,15 +282,12 @@ class Canvas(Boundary):
 
     @property
     def parameters(self) -> dict:
-        """ Parameters for the object as a dictionary for serialization.
+        """Parameters for the object as a dictionary for serialization.
 
         Returns:
             dict: dictionary with class name as top level key, that
             includes a dictionary with each parameter name as key and
             value as value.
         """
-        parameter_dict = {"Canvas":
-                       {"width": float(self.width),
-                        "height": float(self.height),
-                        "units": self.units}}
+        parameter_dict = {"Canvas": {"width": float(self.width), "height": float(self.height), "units": self.units}}
         return parameter_dict
