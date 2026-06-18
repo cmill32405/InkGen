@@ -210,8 +210,8 @@ class StandardDrawingComponent(DrawingComponent):
             style (DrawingStyle): Style Information for Drawing Component
         """
         super().__init__(style = style)
-        p1 = Point(point_1)
-        p2 = Point(point_2)
+        p1 = Point(self._coerce_point(point_1))
+        p2 = Point(self._coerce_point(point_2))
         self._check_inputs(p1, p2)
 
         self._p1 = p1
@@ -271,6 +271,27 @@ class StandardDrawingComponent(DrawingComponent):
         """
         return point.coords.xy[1][0]
 
+    def _coerce_point(self, point: tuple[float, float]) -> tuple[float, float]:
+        """Return a finite numeric point pair or fail before Shapely coercion."""
+        if isinstance(point, Point):
+            x = self._x(point)
+            y = self._y(point)
+            if not math.isfinite(x) or not math.isfinite(y):
+                raise ValueError("Point coordinates must be finite numeric values.")
+            return float(x), float(y)
+        if not isinstance(point, (list, tuple)) or len(point) != 2:
+            raise ValueError("Point must be a tuple of two finite numeric values.")
+        if any(isinstance(value, bool) for value in point):
+            raise TypeError("Point coordinates must be numeric values, not booleans.")
+        try:
+            x = float(point[0])
+            y = float(point[1])
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Point coordinates must be finite numeric values.") from exc
+        if not math.isfinite(x) or not math.isfinite(y):
+            raise ValueError("Point coordinates must be finite numeric values.")
+        return x, y
+
     def _check_inputs(self, point_1: Point, point_2: Point) -> None:
         """ Private method to verify valid point coordinates.
 
@@ -308,7 +329,7 @@ class StandardDrawingComponent(DrawingComponent):
         Args:
             point_1 (Tuple[float, float]): coordinates of first point.
         """
-        p1 = Point(point_1)
+        p1 = Point(self._coerce_point(point_1))
         self._check_inputs(p1, self._p2)
         self._p1 = p1
 
@@ -329,7 +350,7 @@ class StandardDrawingComponent(DrawingComponent):
         Args:
             point_2 (Tuple[float, float]): coordinates of second point.
         """
-        p2 = Point(point_2)
+        p2 = Point(self._coerce_point(point_2))
         self._check_inputs(self._p1, p2)
         self._p2 = p2
 
