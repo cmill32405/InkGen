@@ -3,11 +3,20 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import FrozenInstanceError
 
 import pytest
 
 from InkGen.boundary import Canvas
-from InkGen.extraction_truth import annotate_extraction_truth
+from InkGen.extraction_truth import (
+    ExtractionTruthAnnotation,
+    ExtractionTruthRecord,
+    annotate_extraction_truth,
+    extraction_truth_json,
+    normalize_bbox,
+    records_for_annotated_target,
+    sort_extraction_truth_records,
+)
 from InkGen.pdf_generator import ComponentGroupPDF, DocumentPDF, RectanglePDF
 from InkGen.style import DrawingStyle
 
@@ -28,6 +37,11 @@ def _document_with_group(group: ComponentGroupPDF) -> DocumentPDF:
     document.add_page()
     document.page(1).layer("base").add_component_group(group)
     return document
+
+
+class _TargetWithBBox:
+    def __init__(self, bbox: object) -> None:
+        self.bbox = bbox
 
 
 @pytest.mark.condition("PDF-P2")
@@ -176,3 +190,180 @@ def test_extraction_truth_rejects_empty_required_fields(drawing_style: DrawingSt
 
     with pytest.raises(ValueError, match="field_name must be a non-empty string"):
         annotate_extraction_truth(group, "", "value")
+
+
+@pytest.mark.condition("PDF-P2")
+def test_extraction_truth_rejects_invalid_optional_fields() -> None:
+    """PDF-P2: Semantic annotations fail loudly for invalid optional fields."""
+    empty_subclass = type("EmptySubclass", (str,), {})("")
+
+    with pytest.raises(ValueError, match="field_name must be a non-empty string"):
+        ExtractionTruthAnnotation(empty_subclass, "value")
+    with pytest.raises(ValueError, match="source_channel must be a non-empty string"):
+        ExtractionTruthAnnotation("field", "value", source_channel="")
+    with pytest.raises(TypeError, match="is_truth must be a bool"):
+        ExtractionTruthAnnotation("field", "value", is_truth="yes")
+    with pytest.raises(TypeError, match="instance_id must be a string or None"):
+        ExtractionTruthAnnotation("field", "value", instance_id=object())
+
+
+@pytest.mark.condition("PDF-P2")
+def test_body_annotation_without_bbox_emits_none_bbox() -> None:
+    """PDF-P2: Body extraction truth without usable geometry keeps a null bbox."""
+
+    class TargetWithoutBBox:
+        pass
+
+    target = TargetWithoutBBox()
+    annotate_extraction_truth(target, "unlocated", "value")
+
+    records = records_for_annotated_target(target, page=3, canvas_height=80.0)
+
+    assert len(records) == 1
+    assert records[0].page == 3
+    assert records[0].bbox is None
+
+
+@pytest.mark.condition("PDF-P2")
+def test_body_source_channel_uses_value_equality_not_identity(drawing_style: DrawingStyle) -> None:
+    """PDF-P2: Dynamically built body source strings still emit body records."""
+    group = ComponentGroupPDF("dynamic_body")
+    group.add_component(RectanglePDF((10.0, 5.0), 30.0, 20.0, 0.0, drawing_style))
+    dynamic_body = b"body".decode()
+    body_literal = "body"
+    assert dynamic_body == "body"
+    assert dynamic_body is not body_literal
+
+    annotate_extraction_truth(group, "field", "value", source_channel=dynamic_body)
+    records = records_for_annotated_target(group, page=2, canvas_height=80.0)
+
+    assert records[0].page == 2
+    assert records[0].bbox == [10.0, 55.0, 40.0, 75.0]
+
+
+@pytest.mark.condition("PDF-P2")
+def test_non_body_source_channels_suppress_page_and_bbox_regardless_of_sort_order(drawing_style: DrawingStyle) -> None:
+    """PDF-P2: Non-body channels on geometric targets never emit body geometry."""
+    group_before_body = ComponentGroupPDF("before_body")
+    group_before_body.add_component(RectanglePDF((10.0, 5.0), 30.0, 20.0, 0.0, drawing_style))
+    annotate_extraction_truth(group_before_body, "field", "before", source_channel="aa")
+
+    group_after_body = ComponentGroupPDF("after_body")
+    group_after_body.add_component(RectanglePDF((10.0, 5.0), 30.0, 20.0, 0.0, drawing_style))
+    annotate_extraction_truth(group_after_body, "field", "after", source_channel="metadata")
+
+    for group in (group_before_body, group_after_body):
+        records = records_for_annotated_target(group, page=3, canvas_height=80.0)
+        assert records[0].page == 0
+        assert records[0].bbox is None
+
+
+@pytest.mark.condition("PDF-P2")
+def test_extraction_truth_public_helpers_keep_keyword_only_contracts() -> None:
+    """PDF-P2: Extraction helpers reject positional values for keyword-only options."""
+    target = _TargetWithBBox((1.0, 2.0, 3.0, 4.0))
+    annotation = ExtractionTruthAnnotation("field", "value")
+
+    with pytest.raises(TypeError):
+        annotate_extraction_truth(target, "field", "value", "label")
+    with pytest.raises(TypeError):
+        records_for_annotated_target(target, 1, 80.0)
+    with pytest.raises(TypeError):
+        ExtractionTruthRecord.from_annotation(annotation, 1, None)
+
+
+@pytest.mark.condition("PDF-P2")
+def test_extraction_truth_records_are_immutable() -> None:
+    """PDF-P2: Extraction annotation and emitted record dataclasses are frozen."""
+    annotation = ExtractionTruthAnnotation("field", "value")
+    record = ExtractionTruthRecord.from_annotation(annotation, page=1, bbox=None)
+
+    with pytest.raises(FrozenInstanceError):
+        annotation.role = "label"
+    with pytest.raises(FrozenInstanceError):
+        record.page = 2
+
+
+@pytest.mark.condition("PDF-P2")
+def test_extraction_truth_json_sorts_dictionary_keys() -> None:
+    """PDF-P2: Extraction truth JSON is deterministic for dictionary key order."""
+    assert extraction_truth_json([{"b": 2, "a": 1}]) == '[{"a":1,"b":2}]'
+
+
+@pytest.mark.condition("PDF-P2")
+def test_extraction_truth_sorting_handles_none_and_bbox_values_deterministically() -> None:
+    """PDF-P2: Extraction truth sorting handles optional identifiers and bboxes."""
+    records = [
+        ExtractionTruthRecord("field", "value", "value", 1, None, "body", True, None),
+        ExtractionTruthRecord("field", "value", "value", 1, [1.0, 2.0, 3.0, 4.0], "body", True, "next"),
+    ]
+
+    sorted_records = sort_extraction_truth_records(records)
+
+    assert sorted_records == records
+
+
+@pytest.mark.condition("PDF-P2")
+def test_extraction_truth_bbox_property_cases_emit_pdf_coordinates() -> None:
+    """PDF-P2: Bounded bbox partitions obey the PDF coordinate theorem."""
+    cases = [
+        ((10, 5, 40, 25), 80.0, [10.0, 55.0, 40.0, 75.0]),
+        ((40, 25, 10, 5), 80.0, [10.0, 55.0, 40.0, 75.0]),
+        ([(-5, 2), (15, 10), (8, 20)], 30.0, [-5.0, 10.0, 15.0, 28.0]),
+        ([(1.25, 2.5, "ignored"), (4.75, 8.5, "ignored")], 10.0, [1.25, 1.5, 4.75, 7.5]),
+        ((0, 0, 0, 0), 12.0, [0.0, 12.0, 0.0, 12.0]),
+    ]
+
+    for index, (bbox, canvas_height, expected) in enumerate(cases):
+        target = _TargetWithBBox(bbox)
+        annotate_extraction_truth(target, f"field-{index}", "value")
+
+        records = records_for_annotated_target(target, page=2, canvas_height=canvas_height)
+
+        assert records[0].page == 2
+        assert records[0].bbox == expected
+
+
+@pytest.mark.condition("PDF-P2")
+def test_extraction_truth_bbox_normalization_rejects_malformed_shapes() -> None:
+    """PDF-P2: Bbox normalization ignores malformed shapes without partial coercion."""
+    assert normalize_bbox([]) is None
+    assert normalize_bbox([1, 2, 3]) is None
+    assert normalize_bbox([1, 2, 3, 4, 5]) is None
+    assert normalize_bbox([(1.0, "bad"), (3.0, 4.0)]) == (3.0, 4.0, 3.0, 4.0)
+    assert normalize_bbox([("bad", 2.0), (3.0, 4.0)]) == (3.0, 4.0, 3.0, 4.0)
+    assert normalize_bbox([(1.0,), (3.0, 4.0)]) == (3.0, 4.0, 3.0, 4.0)
+    assert normalize_bbox([object(), (3.0, 4.0)]) == (3.0, 4.0, 3.0, 4.0)
+
+
+@pytest.mark.condition("PDF-P2")
+def test_extraction_truth_annotation_property_cases_round_trip_and_sort_deterministically() -> None:
+    """PDF-P2: Bounded valid annotation partitions round-trip and sort deterministically."""
+    roles = ("label", "value")
+    channels = ("body", "metadata")
+    truth_values = (True, False)
+    records: list[ExtractionTruthRecord] = []
+
+    for index, (role, source_channel, is_truth) in enumerate(
+        (role, source_channel, is_truth) for role in roles for source_channel in channels for is_truth in truth_values
+    ):
+        annotation = ExtractionTruthAnnotation(
+            f"field-{index}",
+            f"value-{index}",
+            role=role,
+            source_channel=source_channel,
+            is_truth=is_truth,
+            instance_id=f"instance-{index}" if index % 2 else None,
+        )
+
+        assert ExtractionTruthAnnotation.from_dict(annotation.to_dict()) == annotation
+
+        page = 7 if source_channel == "body" else 0
+        bbox = [1.0, 2.0, 3.0, 4.0] if source_channel == "body" else None
+        records.append(ExtractionTruthRecord.from_annotation(annotation, page=page, bbox=bbox))
+
+    sorted_once = sort_extraction_truth_records(records)
+    sorted_twice = sort_extraction_truth_records(reversed(records))
+
+    assert sorted_once == sorted_twice
+    assert extraction_truth_json(sorted_once) == extraction_truth_json(sorted_twice)

@@ -32,17 +32,22 @@ class ExtractionTruthAnnotation:
         ):
             if not isinstance(value, str) or value == "":
                 raise ValueError(f"{field} must be a non-empty string.")
+        if not isinstance(self.is_truth, bool):
+            raise TypeError("is_truth must be a bool.")
+        if self.instance_id is not None and not isinstance(self.instance_id, str):
+            raise TypeError("instance_id must be a string or None.")
 
     @classmethod
     def from_dict(cls, data: dict[str, object]) -> ExtractionTruthAnnotation:
         """Recreate an annotation from serialized data."""
         instance_id = data.get("instance_id")
+        is_truth = data.get("is_truth", True)
         return cls(
             field_name=str(data["field_name"]),
             value=str(data["value"]),
             role=str(data.get("role", "value")),
             source_channel=str(data.get("source_channel", BODY_SOURCE_CHANNEL)),
-            is_truth=bool(data.get("is_truth", True)),
+            is_truth=is_truth,
             instance_id=None if instance_id is None else str(instance_id),
         )
 

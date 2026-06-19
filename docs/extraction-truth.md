@@ -36,6 +36,10 @@ bottom-left origin, one unit per PDF point. This matches the PDF parser's native
 frame. Out-of-band channels such as `filename` and `metadata` emit `page: 0` and
 `bbox: None`.
 
+Annotation schema fields are validated at construction time. `field_name`,
+`value`, `role`, and `source_channel` must be non-empty strings. `is_truth` must
+be a boolean, and `instance_id` must be either a string or `None`.
+
 ## Example
 
 ```python
