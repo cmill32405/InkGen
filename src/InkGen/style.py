@@ -774,9 +774,12 @@ class TextStyle(Style):
                  name: str,
                  font: Font) -> None:
 
+        if not isinstance(font, Font):
+            raise TypeError("Font must be set with a Font type")
+
         super().__init__(name)
 
-        self.font = font
+        self._font = font
         self.color = "#000000"
         self.superscript = False
         self.subscript = False
@@ -967,6 +970,9 @@ class TextStyle(Style):
                end - end, right
                center - middle, center
         """
+        if not isinstance(value, str):
+            raise TypeError("Text alignment must be a string.")
+
         value = value.lower()
         if value in ["start", "left"]:
             self._text_align = "start"
@@ -977,6 +983,8 @@ class TextStyle(Style):
         elif value in ["middle", "center"]:
             self._text_align = "center"
             self._text_anchor = "middle"
+        else:
+            raise ValueError("Text alignment must be start, left, end, right, middle, or center.")
 
     @property
     def line_spacing(self) -> float:
@@ -1011,7 +1019,9 @@ class TextStyle(Style):
         ValueError
             If value is not >= 0 or is not float.
         """
-        if isinstance(value, (float, int)) and value >= 0:
-            self._line_spacing = value
-        else:
-            raise TypeError("Line Spacing must be a positive float")
+        try:
+            self._line_spacing = _coerce_nonnegative_float(value, "line_spacing")
+        except TypeError as exc:
+            raise TypeError("Line Spacing must be a non-negative finite float") from exc
+        except ValueError as exc:
+            raise ValueError("Line Spacing must be a non-negative finite float") from exc
