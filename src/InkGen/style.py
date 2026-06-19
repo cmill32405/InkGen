@@ -36,6 +36,27 @@ def _coerce_opacity(value: float | int, name: str) -> float:
     raise ValueError(f"{name} must be between 0.0 and 1.0.")
 
 
+def _coerce_font_size(value: str | float | int) -> str | float:
+    valid_names = ["xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large"]
+    if isinstance(value, str):
+        if value in valid_names:
+            return value
+        raise ValueError(f"Invalid size value. Should be greater than 0.0 through 240.0 or {valid_names}")
+
+    size = _coerce_finite_float(value, "size")
+    if 0.0 < size <= 240.0:
+        return size
+    raise ValueError("size must be greater than 0.0 and less than or equal to 240.0.")
+
+
+def _coerce_font_family(value: str | list[str]) -> str | list[str]:
+    if isinstance(value, str) and value:
+        return value
+    if isinstance(value, list) and value and all(isinstance(item, str) and item for item in value):
+        return value
+    raise TypeError("family must be a non-empty string or list of non-empty strings.")
+
+
 class Style:
     """
         Base class for styles.  Holds id and name.
@@ -400,8 +421,8 @@ class Font:
         variant: str = "normal",
         stretch: str = "normal",
         weight: str | int = "normal",
-        size: str | float = 10.0,
-        custom_font_paths: list[str] | None = None,
+        size: str | float | int = 10.0,
+        custom_font_paths: str | list[str] | None = None,
     ) -> None:
         """ Create a new font object with desired parameters.
 
@@ -439,27 +460,33 @@ class Font:
         self._font_paths = []
 
         if isinstance(custom_font_paths, str):
-            custom_font_paths = [custom_font_paths]
+            normalized_font_paths = [custom_font_paths]
+        elif custom_font_paths is None:
+            normalized_font_paths = None
+        elif isinstance(custom_font_paths, list) and all(isinstance(path, str) for path in custom_font_paths):
+            normalized_font_paths = list(custom_font_paths)
+        else:
+            raise TypeError("custom_font_paths must be a path string, list of path strings, or None.")
 
-        if custom_font_paths:
-            for i, path in enumerate(custom_font_paths):
+        if normalized_font_paths:
+            for i, path in enumerate(normalized_font_paths):
                 if not os.path.exists(path):
                     error_str = f"{path} is not a valid path"
                     raise ValueError(error_str)
                 if path[-1] not in ["\\", "/"]:
-                    custom_font_paths[i] = path.replace("\\", "/") + "/"
-            self._font_paths = custom_font_paths
+                    normalized_font_paths[i] = path.replace("\\", "/") + "/"
+            self._font_paths = normalized_font_paths
         else:
             self._get_paths()
 
         self._font_manager = self._get_font_manager()
-
-        self._font = self._font_manager.FontProperties(family=family,
-                                                       style=style,
-                                                       variant=variant,
-                                                       stretch=stretch,
-                                                       weight=weight,
-                                                       size=size)
+        self._font = self._font_manager.FontProperties()
+        self.family = family
+        self.style = style
+        self.variant = variant
+        self.stretch = stretch
+        self.weight = weight
+        self.size = size
 
     @classmethod
     def create_from_dict(cls, data: dict) -> Font:
@@ -591,14 +618,14 @@ class Font:
         return self._font.get_name()
 
     @family.setter
-    def family(self, family: str) -> None:
+    def family(self, family: str | list[str]) -> None:
         """ Update font family to nearest match of family argument.
 
         Args:
             family (str): Valid font family name from the systm paths
             or provided by the custom_font_path.
         """
-        self._font.set_family(family)
+        self._font.set_family(_coerce_font_family(family))
 
     @property
     def font_file(self) -> str:
@@ -687,7 +714,7 @@ class Font:
 
         if isinstance(stretch, str) and stretch in valid_names:
             self._font.set_stretch(stretch)
-        elif isinstance(stretch, int) and (0 <= stretch <= 1000):
+        elif not isinstance(stretch, bool) and isinstance(stretch, int) and (0 <= stretch <= 1000):
             self._font.set_stretch(stretch)
         else:
             raise ValueError(f"Invalid stretch value. Should either be 0-1000 or {valid_names}")
@@ -721,7 +748,7 @@ class Font:
 
         if isinstance(weight, str) and weight in valid_names:
             self._font.set_weight(weight)
-        elif isinstance(weight, int) and (0 <= weight <= 1000):
+        elif not isinstance(weight, bool) and isinstance(weight, int) and (0 <= weight <= 1000):
             self._font.set_weight(weight)
         else:
             raise ValueError(f"Invalid weight value. Should either be 0-1000 or {valid_names}")
@@ -736,7 +763,7 @@ class Font:
         return self._font.get_size_in_points()
 
     @size.setter
-    def size(self, size: str | float) -> None:
+    def size(self, size: str | float | int) -> None:
         """Update size of current font.
 
         Args:
@@ -747,14 +774,7 @@ class Font:
         Raises:
             ValueError: Invalid value used for size.
         """
-        valid_names = ['xx-small', 'x-small', 'small', 'medium', 'large', 'x-large', 'xx-large']
-
-        if isinstance(size, str) and size in valid_names:
-            self._font.set_size(size)
-        elif isinstance(size, float) and (0 < size <= 240):
-            self._font.set_size(size)
-        else:
-            raise ValueError(f"Invalid size value. Should either be 0-1000 or {valid_names}")
+        self._font.set_size(_coerce_font_size(size))
 
     @property
     def configuration(self) -> str:
