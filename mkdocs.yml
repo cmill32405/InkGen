@@ -44,6 +44,7 @@ nav:
       - Flow Document Contract: proofs/flow-document-contract.md
       - CAD Zoning Contract: proofs/cad-zoning-contract.md
       - Table Contract: proofs/table-contract.md
+      - DXF Renderer Contract: proofs/dxf-renderer-contract.md
   - Architecture Diagrams: architecture-diagrams.md
   - Notes:
       - Mask Alignment Findings: mask_alignment_findings.md
