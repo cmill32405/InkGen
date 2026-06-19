@@ -36,6 +36,7 @@ nav:
       - Rectangle Renderer Contract: proofs/rectangle-renderer-contract.md
       - Polygonal Renderer Contract: proofs/polygonal-renderer-contract.md
       - Text Renderer Contract: proofs/text-renderer-contract.md
+      - Text Outline Contract: proofs/text-outline-contract.md
       - Text Fitter Contract: proofs/text-fitter-contract.md
       - Paragraph Contract: proofs/paragraph-contract.md
       - Drawing Group Contract: proofs/drawing-group-contract.md

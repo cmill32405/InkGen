@@ -34,9 +34,9 @@ def _px_to_units(px: float, units: str = "mm", dpi: float = 96.0) -> float:
         Converted value in the specified units.
     """
     if units.lower() in ("mm", "millimeter", "millimeters"):
-        return px * (25.4 / 96.0)   # 1 CSS px = 1/96 in; 25.4 mm/in.
+        return px * (25.4 / dpi)
     if units.lower() in ("in", "inch", "inches"):
-        return px / 96.0
+        return px / dpi
     return px  # "px"
 
 
