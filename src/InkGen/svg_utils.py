@@ -5,6 +5,7 @@ Currently provides a flattening routine that collects path geometry,
 applies any transforms, normalises coordinates to the origin, and exposes
 basic metadata needed by the generator module.
 """
+
 from __future__ import annotations
 
 from collections.abc import Iterable
@@ -74,7 +75,7 @@ def _collect_bbox(paths: Iterable[Path]) -> tuple[tuple[float, float], tuple[flo
         max_x = max(max_x, xmax)
         min_y = min(min_y, ymin)
         max_y = max(max_y, ymax)
-    if min_x is float("inf"):
+    if min_x == float("inf"):
         return (0.0, 0.0), (0.0, 0.0)
     return (float(min_x), float(min_y)), (float(max_x), float(max_y))
 
