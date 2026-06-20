@@ -15,6 +15,7 @@ import base64
 import math
 import os
 import sys
+from collections.abc import Iterable
 from enum import Flag, auto
 from xml.sax.saxutils import escape
 
@@ -1649,14 +1650,18 @@ class IncludeLayer(Flag):
 class DocumentSVG(Document):
     """ Saves the document as an SVG file.
     """
+    @staticmethod
+    def _iter_layer_groups(layer: Layer) -> Iterable[ComponentGroup]:
+        """Yield every component group in a layer, including repeated labels."""
+        return layer._component_groups.values()
+
     def _collect_fonts(self) -> dict[str, str]:
         fonts: dict[str, str] = {}
         for pg in range(1, self.pages + 1):
             page = self.page(pg)
             for layer_name in page.layers:
                 layer = page.layer(layer_name)
-                for _, group_id in layer.component_groups.items():
-                    group = layer.group(group_id)
+                for group in self._iter_layer_groups(layer):
                     for component in group.components():
                         font_obj = getattr(getattr(component, "style", None), "font", None)
                         font_path = getattr(font_obj, "font_file", None)
@@ -1680,10 +1685,10 @@ class DocumentSVG(Document):
         """
         path, base_filename = self._normalize_output_path(filepath)
 
-        if include == IncludeLayer.LABEL:
+        if IncludeLayer.LABEL in include:
             self._add_label_layer()
 
-        if include == IncludeLayer.MASK:
+        if IncludeLayer.MASK in include:
             self._add_segmentation_layer()
 
         font_rules = self._collect_font_rules()
@@ -1768,8 +1773,7 @@ class DocumentSVG(Document):
         inkscape:label="Layer {layer_.layer_id}"
         inkscape:groupmode="layer"
         id="layer{layer_.layer_id}">\n""")
-            for _, id_ in layer_.component_groups.items():
-                group = layer_.group(id_)
+            for group in self._iter_layer_groups(layer_):
                 for cmp in group.components():
                     payload.append("\t\t")
                     payload.append(cmp.generate_svg())
@@ -1896,8 +1900,7 @@ class DocumentSVG(Document):
                 layer = page.layer(lyr)
                 if not layer.model:
                     continue
-                for _, id_ in layer.component_groups.items():
-                    group = layer.group(id_)
+                for group in self._iter_layer_groups(layer):
                     entry: dict[str, object] = {
                         'color': colors[color_mem % 16],
                         'mask': self._compute_model_mask(group),
@@ -1956,6 +1959,31 @@ class DocumentSVG(Document):
         """
         self._add_modeling_layer('label')
 
+    @staticmethod
+    def _layer_from_svg_dict(data: dict, styles: dict[str, object]) -> Layer:
+        """Recreate a layer containing SVG component groups."""
+        canvas = Canvas.create_from_dict(data['Layer']['canvas'])
+        layer = Layer(data['Layer']['layer_name'], canvas, data['Layer']['model'])
+        for group_payload in data['Layer']['component_groups']:
+            if 'ComponentGroupSVG' in group_payload:
+                group = ComponentGroupSVG.create_from_dict(group_payload, styles)
+            else:
+                group = ComponentGroup.create_from_dict(group_payload, styles)
+            settings = data['Layer']['group_collision_settings'][group.group_label]
+            layer.add_component_group(group, settings['allow_collision'], settings['strict'])
+        return layer
+
+    @staticmethod
+    def _layers_from_svg_dict(data: dict, styles: dict[str, object]) -> Layers:
+        """Recreate the page layer stack with SVG component groups."""
+        layers = Layers(Canvas.create_from_dict(data['Layers']['canvas']))
+        for layer_name in list(layers.layers):
+            layers.remove_layer(layer_name)
+        for _, layer_payload in data['Layers']['layers'].items():
+            layer = DocumentSVG._layer_from_svg_dict(layer_payload, styles)
+            layers.add_layer(layer.layer_name, layer)
+        return layers
+
     @classmethod
     def create_from_dict(cls, data: dict, styles: dict | None = None) -> object:
         """ Class method to recreate the object from its serialization dict.
@@ -1966,9 +1994,11 @@ class DocumentSVG(Document):
         Returns:
             object: instance of the class.
         """
+        if styles is None:
+            styles = {}
         document = cls(Canvas.create_from_dict(data['DocumentSVG']['canvas']))
         for pg in range(len(data['DocumentSVG']['pages'])):
-            page = Layers.create_from_dict(data['DocumentSVG']['pages'][pg], styles)
+            page = cls._layers_from_svg_dict(data['DocumentSVG']['pages'][pg], styles)
             document.add_page(position=-1, page=page)
         return document
 
