@@ -831,6 +831,14 @@ class ComponentGroupPDF(ComponentGroup, LabelGenerator, SegmentGenerator):
 class DocumentPDF(Document):
     """Document renderer that writes one PDF page for each InkGen page."""
 
+    @staticmethod
+    def _iter_layer_groups(layer: Layer, *, sort: bool = False) -> tuple[ComponentGroup, ...]:
+        """Return every stored group in a layer, including repeated labels."""
+        groups = tuple(layer._component_groups.values())
+        if sort:
+            return tuple(sorted(groups, key=lambda group: (group.group_label, group.group_id)))
+        return groups
+
     def create_pdf(self, filepath: str) -> None:
         """Create a deterministic PDF file at the requested path."""
         path = os.path.abspath(filepath)
@@ -890,8 +898,7 @@ class DocumentPDF(Document):
         operators = ["q", f"1 0 0 -1 0 {_number(page._canvas.height)} cm"]
         for layer_name in page.layers:
             layer = page.layer(layer_name)
-            for _, group_id in layer.component_groups.items():
-                group = layer.group(group_id)
+            for group in self._iter_layer_groups(layer):
                 ensure_pdf_group(
                     group,
                     ComponentGroupPDF,
@@ -912,8 +919,7 @@ class DocumentPDF(Document):
             page = self.page(page_number)
             for layer_name in sorted(page.layers):
                 layer = page.layer(layer_name)
-                for group_label in sorted(layer.component_groups):
-                    group = layer.group(layer.component_groups[group_label])
+                for group in self._iter_layer_groups(layer, sort=True):
                     records.extend(
                         extraction_records_for_annotated_target(
                             group,
@@ -946,8 +952,7 @@ class DocumentPDF(Document):
             page = self.page(page_number)
             for layer_name in sorted(page.layers):
                 layer = page.layer(layer_name)
-                for group_label in sorted(layer.component_groups):
-                    group = layer.group(layer.component_groups[group_label])
+                for group in self._iter_layer_groups(layer, sort=True):
                     records.extend(
                         grammar_records_for_annotated_target(
                             group,
