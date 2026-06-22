@@ -1353,9 +1353,9 @@ class Arc(DrawingComponent):
         self._center = self._coerce_point(center)
         self._radius_x = self._validate_radius(radius_x, "radius_x")
         self._radius_y = self._validate_radius(radius_y, "radius_y")
-        self._start_angle = float(start_angle)
-        self._end_angle = float(end_angle)
-        self._rotation = float(rotation)
+        self._start_angle = self._coerce_finite_number(start_angle, "start_angle")
+        self._end_angle = self._coerce_finite_number(end_angle, "end_angle")
+        self._rotation = self._coerce_finite_number(rotation, "rotation")
         self._samples = max(1, DEFAULT_CURVE_SAMPLES)
 
         super().__init__(style)
@@ -1364,14 +1364,30 @@ class Arc(DrawingComponent):
     def _coerce_point(point: tuple[float, float]) -> tuple[float, float]:
         if len(point) != 2:
             raise ValueError("Point must contain two numeric values.")
-        return (float(point[0]), float(point[1]))
+        return (
+            Arc._coerce_finite_number(point[0], "point coordinate"),
+            Arc._coerce_finite_number(point[1], "point coordinate"),
+        )
 
     @staticmethod
     def _validate_radius(value: float, name: str) -> float:
-        radius = float(value)
+        radius = Arc._coerce_finite_number(value, name)
         if radius <= 0:
             raise ValueError(f"{name} must be greater than zero.")
         return radius
+
+    @staticmethod
+    def _coerce_finite_number(value: float, name: str) -> float:
+        """Return a finite numeric value or fail at the arc public boundary."""
+        if isinstance(value, bool):
+            raise TypeError(f"{name} must be numeric.")
+        try:
+            number = float(value)
+        except (TypeError, ValueError) as exc:
+            raise TypeError(f"{name} must be numeric.") from exc
+        if not math.isfinite(number):
+            raise ValueError(f"{name} must be finite.")
+        return number
 
     @classmethod
     def create_from_dict(cls, data: dict, style: DrawingStyle = None) -> object:
@@ -1427,7 +1443,7 @@ class Arc(DrawingComponent):
 
     @start_angle.setter
     def start_angle(self, value: float) -> None:
-        self._start_angle = float(value)
+        self._start_angle = self._coerce_finite_number(value, "start_angle")
 
     @property
     def end_angle(self) -> float:
@@ -1435,7 +1451,7 @@ class Arc(DrawingComponent):
 
     @end_angle.setter
     def end_angle(self, value: float) -> None:
-        self._end_angle = float(value)
+        self._end_angle = self._coerce_finite_number(value, "end_angle")
 
     @property
     def rotation(self) -> float:
@@ -1443,7 +1459,7 @@ class Arc(DrawingComponent):
 
     @rotation.setter
     def rotation(self, value: float) -> None:
-        self._rotation = float(value)
+        self._rotation = self._coerce_finite_number(value, "rotation")
 
     @property
     def points(self) -> list[tuple[float, float]]:

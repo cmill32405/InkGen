@@ -114,7 +114,7 @@ ADR/rule impact:
 | Non-positive radii | Reject at construction and setter boundaries with `ValueError` | PO-ARC-002 | `test_arc_rejects_non_positive_radii` | Must be killed or proven equivalent |
 | PDF arc rendering | Emit an open sampled PDF path from `Arc.points` with stroke-only painting | PO-ARC-003 | `test_arc_pdf_emits_sampled_open_polyline` | Must be killed or proven equivalent |
 | Renderer-neutral arc drawing exported to DXF | Materialize to PDF and emit DXF polyline vertices from the same sampled points | PO-ARC-004 | `test_arc_drawing_materializes_pdf_component`; `test_dxf_arc_drawing_reuses_pdf_sample_points` | Must be killed or proven equivalent |
-| Non-numeric center/angles, non-finite values, hostile mutation of private fields, monkey-patched renderers, non-default sample counts, and native PDF/DXF arc entities | Excluded from proven domain | Explicit exclusions in PO-ARC-001 through PO-ARC-004 | none | Out of scope |
+| Hostile mutation of private fields, monkey-patched renderers, non-default sample counts, and native PDF/DXF arc entities | Excluded from proven domain | Explicit exclusions in PO-ARC-001 through PO-ARC-004 | none | Out of scope |
 
 ## Test Applicability Matrix
 
@@ -235,6 +235,9 @@ collapsed a tiny non-zero arc to one point. The
 `test_arc_tiny_nonzero_angle_span_still_samples_curve` regression now kills
 that mutant.
 
+The companion ARC-FINITE-P2 slice closes the former non-finite public input
+exclusion for center, radius, angle, and rotation values.
+
 ## PO-ARC-001: Rotated Ellipse Sample Formula
 
 ### Claim
@@ -293,7 +296,6 @@ Static/algebraic reasoning over `Arc.points`:
 
 ### Counterexamples And Exclusions
 
-- Non-finite numeric values are outside the proof.
 - Direct mutation of `_samples` to a non-positive or non-default value is outside
   the public construction contract.
 - Rounding can move a value by up to the precision unit; exact unrounded ellipse

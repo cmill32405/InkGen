@@ -29,6 +29,7 @@ nav:
       - Document Model Contract: proofs/document-model-contract.md
       - Quadratic Bezier Renderer Contract: proofs/quadratic-bezier-renderer-contract.md
       - Arc Renderer Contract: proofs/arc-renderer-contract.md
+      - Arc Finite Boundary Contract: proofs/arc-finite-contract.md
       - Cubic Bezier Renderer Contract: proofs/cubic-bezier-renderer-contract.md
       - Line Renderer Contract: proofs/line-renderer-contract.md
       - Regular Polygon Renderer Contract: proofs/regular-polygon-renderer-contract.md
