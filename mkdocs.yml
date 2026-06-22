@@ -36,6 +36,7 @@ nav:
       - Regular Polygon Renderer Contract: proofs/regular-polygon-renderer-contract.md
       - Circle Renderer Contract: proofs/circle-renderer-contract.md
       - Path Renderer Contract: proofs/path-renderer-contract.md
+      - Path Finite Boundary Contract: proofs/path-finite-contract.md
       - Rectangle Renderer Contract: proofs/rectangle-renderer-contract.md
       - Polygonal Renderer Contract: proofs/polygonal-renderer-contract.md
       - Text Renderer Contract: proofs/text-renderer-contract.md

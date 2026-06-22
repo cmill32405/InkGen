@@ -1282,7 +1282,23 @@ class PathCommand:
         """
         if len(point) != 2:
             raise ValueError("Points must contain two numeric values.")
-        return (float(point[0]), float(point[1]))
+        return (
+            self._coerce_finite_number(point[0], "point coordinate"),
+            self._coerce_finite_number(point[1], "point coordinate"),
+        )
+
+    @staticmethod
+    def _coerce_finite_number(value: float, name: str) -> float:
+        """Return a finite numeric value or fail at the path command boundary."""
+        if isinstance(value, bool):
+            raise TypeError(f"{name} must be numeric.")
+        try:
+            number = float(value)
+        except (TypeError, ValueError) as exc:
+            raise TypeError(f"{name} must be numeric.") from exc
+        if not math.isfinite(number):
+            raise ValueError(f"{name} must be finite.")
+        return number
 
     @property
     def type(self) -> str:

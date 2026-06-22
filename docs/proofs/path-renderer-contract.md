@@ -139,7 +139,7 @@ ADR/rule impact:
 | SVG smooth commands | Preserve `S/T` as valid SVG path data | PO-PATH-006 | `test_path_svg_preserves_smooth_commands_that_pdf_rejects` | Must be killed or proven equivalent |
 | Neutral path materialization | Materialize to `PathSVG` or `PathPDF` with matching commands | PO-PATH-007 | `test_path_drawing_materializes_svg_and_pdf_components` | Must be killed or proven equivalent |
 | DXF path output | Emit `LWPOLYLINE` vertices and closure flag through live document path | PO-PATH-008 | `test_dxf_path_drawing_reuses_pdf_points_and_closure_flag` | Must be killed or proven equivalent |
-| Full SVG arc geometry, smooth-control reflection, non-finite coordinates, fill-rule semantics, and Bézier-to-DXF curve fidelity | Excluded from proven domain | Explicit exclusions in PO-PATH-003 through PO-PATH-008 | existing tests only | Out of scope |
+| Full SVG arc geometry, smooth-control reflection, fill-rule semantics, and Bézier-to-DXF curve fidelity | Excluded from proven domain | Explicit exclusions in PO-PATH-003 through PO-PATH-008 | existing tests only | Out of scope |
 
 ## Test Applicability Matrix
 
@@ -266,6 +266,10 @@ During mutation, real test gaps were found and closed:
 - PDF arc fallback used two points, making `points[1]` and `points[-1]`
   equivalent; it now uses three points plus a separate one-endpoint case.
 - SVG arc formatting now covers default, partial, and empty flag dictionaries.
+
+The companion PATH-FINITE-P2 slice closes the former non-finite coordinate
+input exclusion for `PathCommand` and dictionary-sourced `Path.add_command()`
+inputs.
 
 Gate result: passed for the declared domain. The mutation report has no
 surviving non-equivalent proof-critical mutants.
