@@ -135,7 +135,7 @@ translated by `position`.
 | Invalid radius or corner radius | Reject non-positive radius, negative corner radius, and corner radius greater than half radius | PO-REGPOLY-002 | `test_regular_polygon_rejects_invalid_boundaries` | Must be killed or proven equivalent |
 | PDF regular polygon rendering | Emit a closed PDF path from component vertices | PO-REGPOLY-003 | `test_regular_polygon_pdf_emits_closed_path_from_component_points` | Must be killed or proven equivalent |
 | Renderer-neutral regular polygon exported to DXF | Materialize to PDF and emit DXF closed polyline vertices from the same points | PO-REGPOLY-004 | `test_regular_polygon_drawing_materializes_pdf_component`; `test_dxf_regular_polygon_reuses_pdf_points_as_closed_polyline` | Must be killed or proven equivalent |
-| Negative base coordinates, non-finite values, hostile mutation of private fields, monkey-patched renderers, rounded-corner geometry, and native DXF polygon entities | Excluded from proven domain | Explicit exclusions in PO-REGPOLY-001 through PO-REGPOLY-004 | none | Out of scope |
+| Negative base coordinates, hostile mutation of private fields, monkey-patched renderers, rounded-corner geometry, and native DXF polygon entities | Excluded from proven domain | Explicit exclusions in PO-REGPOLY-001 through PO-REGPOLY-004 | none | Out of scope |
 
 ## Test Applicability Matrix
 
@@ -253,6 +253,9 @@ During mutation, real test gaps were found and closed:
 
 Gate result: passed for the declared domain. The mutation report has no
 surviving non-equivalent proof-critical mutants.
+
+The companion RADIAL-SCALAR-P2 slice closes the former boolean and non-finite
+regular-polygon scalar boundary gaps for radius, angle, and corner radius.
 
 ## PO-REGPOLY-001: Regular Polygon Vertex Formula
 

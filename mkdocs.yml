@@ -35,6 +35,7 @@ nav:
       - Line Renderer Contract: proofs/line-renderer-contract.md
       - Regular Polygon Renderer Contract: proofs/regular-polygon-renderer-contract.md
       - Circle Renderer Contract: proofs/circle-renderer-contract.md
+      - Radial Scalar Boundary Contract: proofs/radial-scalar-contract.md
       - Path Renderer Contract: proofs/path-renderer-contract.md
       - Path Finite Boundary Contract: proofs/path-finite-contract.md
       - Rectangle Renderer Contract: proofs/rectangle-renderer-contract.md

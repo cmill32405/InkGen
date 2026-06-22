@@ -124,7 +124,7 @@ control = radius * k
 | PDF circle rendering | Emit one move-to, four cubic operators using kappa control distance, close path, and paint | PO-CIRCLE-002 | `test_circle_pdf_emits_four_cubic_bezier_segments` | Must be killed or proven equivalent |
 | Renderer-neutral circle materialization | Materialize to `CircleSVG` or `CirclePDF` with matching position/radius | PO-CIRCLE-003 | `test_circle_drawing_materializes_svg_and_pdf_components` | Must be killed or proven equivalent |
 | DXF circle output | Emit one native `CIRCLE` entity with layer, center, z=0, and radius | PO-CIRCLE-004 | `test_dxf_circle_drawing_emits_native_circle_entity` | Must be killed or proven equivalent |
-| Non-finite values, mutation of inherited `size`, negative base coordinates, style paint semantics, and SVG circle internals | Excluded from proven domain | Explicit exclusions in PO-CIRCLE-001 through PO-CIRCLE-004 | existing tests only | Out of scope |
+| Mutation of inherited `size`, negative base coordinates, style paint semantics, and SVG circle internals | Excluded from proven domain | Explicit exclusions in PO-CIRCLE-001 through PO-CIRCLE-004 | existing tests only | Out of scope |
 
 ## Test Applicability Matrix
 
@@ -229,6 +229,10 @@ During mutation, real test gaps were found and closed:
 
 Gate result: passed for the declared domain. The mutation report has no
 surviving non-equivalent proof-critical mutants.
+
+The companion RADIAL-SCALAR-P2 slice closes the former boolean and non-finite
+circle radius boundary gap for SVG/PDF circle components and neutral
+materialization.
 
 ## PO-CIRCLE-001: Positive Radius Boundary
 

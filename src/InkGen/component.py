@@ -702,10 +702,25 @@ class PolarCoordinateDrawingComponent(StandardDrawingComponent):
             angle (Union[int, float]): angle in degrees from the initial position.
             style (DrawingStyle): style information for drawing component
         """
+        length = self._coerce_polar_number(length, "length")
+        angle = self._coerce_polar_number(angle, "angle")
         coords = self._rect(length=length, angle=angle)
         point_2 = (coords[0] + position[0], coords[1] + position[1])
 
         super().__init__(point_1 = position, point_2 = point_2, style=style)
+
+    @staticmethod
+    def _coerce_polar_number(value: float | int, name: str) -> float:
+        """Return a finite numeric polar scalar or fail at the public boundary."""
+        if isinstance(value, bool):
+            raise TypeError(f"{name} must be numeric.")
+        try:
+            number = float(value)
+        except (TypeError, ValueError) as exc:
+            raise TypeError(f"{name} must be numeric.") from exc
+        if not math.isfinite(number):
+            raise ValueError(f"{name} must be finite.")
+        return number
 
     @classmethod
     def create_from_dict(cls, data: dict, style: DrawingStyle=None) -> object:
@@ -817,6 +832,7 @@ class PolarCoordinateDrawingComponent(StandardDrawingComponent):
         Args:
             value (Union[float, int]): New length.
         """
+        value = self._coerce_polar_number(value, "length")
         _, angle = self._length_angle()
 
         coords = self._rect(length=value, angle=angle)
@@ -839,6 +855,7 @@ class PolarCoordinateDrawingComponent(StandardDrawingComponent):
         Args:
             value (Union[float, int]): new angle in degrees.
         """
+        value = self._coerce_polar_number(value, "angle")
         length, _ = self._length_angle()
 
         coords = self._rect(length=length, angle=value)
@@ -1068,11 +1085,18 @@ class RegularPolygonDrawingComponent(PolarCoordinateDrawingComponent):
         """
 
         self.sides = sides
-        if radius <= 0:
-            raise ValueError("The radius should be greater than zero.")
+        radius = self._coerce_positive_scalar(radius, "radius")
         super().__init__(position=position, length=radius, angle=angle, style=style)
 
         self.corner_radius = corner_radius
+
+    @staticmethod
+    def _coerce_positive_scalar(value: float | int, name: str) -> float:
+        """Return a finite positive scalar or fail at the polygon boundary."""
+        number = PolarCoordinateDrawingComponent._coerce_polar_number(value, name)
+        if number <= 0:
+            raise ValueError(f"The {name} should be greater than zero.")
+        return number
 
     @classmethod
     def create_from_dict(cls, data: dict, style: DrawingStyle=None) -> object:
@@ -1185,8 +1209,7 @@ class RegularPolygonDrawingComponent(PolarCoordinateDrawingComponent):
         ValueError
             Ensures that radius is greater than zero.
         """
-        if value <= 0:
-            raise ValueError("The radius should be greater than zero.")
+        value = self._coerce_positive_scalar(value, "radius")
         if hasattr(self, "_corner_radius") and self.corner_radius > (value / 2):
             raise ValueError("The corner rounding should not exceed half the radius.")
         self.length = value
@@ -1211,6 +1234,7 @@ class RegularPolygonDrawingComponent(PolarCoordinateDrawingComponent):
         value : float
             Corner Radius
         """
+        value = self._coerce_polar_number(value, "corner_radius")
         if value < 0:
             raise ValueError("The corner rounding should be non-negative.")
         if value <= (self.radius/2):

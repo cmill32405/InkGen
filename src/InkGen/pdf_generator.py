@@ -647,10 +647,19 @@ class CirclePDF(SingleDimensionDrawingComponent, PDFGeneratorInterface):
 
     def __init__(self, position: tuple[float, float], radius: float, style: DrawingStyle) -> None:
         """Create a PDF circle."""
-        if isinstance(radius, (float, int)) and radius > 0:
-            super().__init__(position, radius, style)
-        else:
+        super().__init__(position, self._coerce_radius(radius), style)
+
+    @staticmethod
+    def _coerce_radius(radius: float | int) -> float:
+        """Return a finite positive circle radius or fail at the public boundary."""
+        if isinstance(radius, bool):
+            raise TypeError("Radii must be numeric.")
+        if not isinstance(radius, (float, int)):
             raise ValueError("Radii must be greater than 0")
+        numeric = float(radius)
+        if not math.isfinite(numeric) or numeric <= 0:
+            raise ValueError("Radii must be greater than 0")
+        return numeric
 
     @property
     def radius(self) -> float:

@@ -828,10 +828,19 @@ class CircleSVG(SingleDimensionDrawingComponent, DrawingGeneratorInterface):
         Raises:
             ValueError: Raised if radius is not greater than zero.
         """
-        if isinstance(radius, (float, int)) and radius > 0:
-            super().__init__(position, radius, style)
-        else:
+        super().__init__(position, self._coerce_radius(radius), style)
+
+    @staticmethod
+    def _coerce_radius(radius: float | int) -> float:
+        """Return a finite positive circle radius or fail at the public boundary."""
+        if isinstance(radius, bool):
+            raise TypeError("Radii must be numeric.")
+        if not isinstance(radius, (float, int)):
             raise ValueError("Radii must be greater than 0")
+        numeric = float(radius)
+        if not math.isfinite(numeric) or numeric <= 0:
+            raise ValueError("Radii must be greater than 0")
+        return numeric
 
     @classmethod
     def create_from_dict(cls, data: dict, style: DrawingStyle=None) -> object:
@@ -884,10 +893,7 @@ class CircleSVG(SingleDimensionDrawingComponent, DrawingGeneratorInterface):
         Raises:
             ValueError: Raised if radius not greater than zero.
         """
-        if isinstance(radius, (float, int)) and radius > 0:
-            self.size = radius
-        else:
-            raise ValueError("Radii must be a float greater than 0")
+        self.size = self._coerce_radius(radius)
 
     def _rect(self, length: float | int, angle: float | int) -> tuple[float, float]:
         """ Private method to convert polar coordinates to cartesian.
