@@ -40,6 +40,7 @@ nav:
       - Text Outline Contract: proofs/text-outline-contract.md
       - Text Fitter Contract: proofs/text-fitter-contract.md
       - SVG Utilities Contract: proofs/svg-utils-contract.md
+      - PDF Render Guard Contract: proofs/pdf-render-contract.md
       - SVG Document Contract: proofs/svg-document-contract.md
       - PDF Document Contract: proofs/pdf-document-contract.md
       - Layer Group Contract: proofs/layer-group-contract.md

@@ -18,5 +18,5 @@ def ensure_builtin_pdf_component(
 
 def ensure_pdf_group(group: object, group_type: type[object], *, message: str) -> None:
     """Reject non-PDF component groups before PDF rendering."""
-    if not isinstance(group, group_type):
+    if type(group) not in (group_type,):
         raise TypeError(message)

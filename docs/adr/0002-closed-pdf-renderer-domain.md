@@ -18,7 +18,9 @@ explicitly reviewed component set over arbitrary dynamic extension.
 
 ## Decision
 
-`DocumentPDF` will render only `ComponentGroupPDF` groups.
+`DocumentPDF` will render only exact `ComponentGroupPDF` groups. Custom
+`ComponentGroupPDF` subclasses are outside the supported and proven PDF renderer
+contract because they can override `generate_pdf()`.
 
 `ComponentGroupPDF` will accept and render only the built-in PDF component
 classes:
@@ -38,8 +40,8 @@ classes:
 `ComponentGroupPDF.generate_pdf()` repeats the same check before rendering so
 private `_components` mutation fails before unsupported dynamic code runs.
 
-Custom dynamic `generate_pdf()` components are outside the supported and proven
-PDF renderer contract.
+Custom dynamic `generate_pdf()` components and group subclasses are outside the
+supported and proven PDF renderer contract.
 
 ## Consequences
 

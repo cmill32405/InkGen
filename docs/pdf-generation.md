@@ -17,12 +17,13 @@ the page content-stream level, and text rendering counter-flips glyphs so text
 stays upright. PDF metadata dates and object ordering are fixed so repeated
 renders of the same document produce deterministic bytes.
 
-The PDF render path is intentionally closed. `DocumentPDF` renders
+The PDF render path is intentionally closed. `DocumentPDF` renders exact
 `ComponentGroupPDF` groups, and `ComponentGroupPDF` accepts/renders only the
 built-in PDF primitive component classes listed above. Custom dynamic
-`generate_pdf()` components are outside the supported and proven PDF renderer
-contract. This constraint keeps rendered bytes deterministic and supports the
-grammar-truth noninterference proof in `docs/proofs/grammar-truth.md`.
+`generate_pdf()` components and custom `ComponentGroupPDF` subclasses are
+outside the supported and proven PDF renderer contract. This constraint keeps
+rendered bytes deterministic and supports the grammar-truth noninterference
+proof in `docs/proofs/grammar-truth.md`.
 
 Higher-level synthetic drawing helpers should use `InkGen.drawing_components`
 when they need to target multiple formats. For example, `ZoningDrawing` stores a
