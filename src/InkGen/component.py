@@ -479,7 +479,7 @@ class SingleDimensionDrawingComponent(StandardDrawingComponent):
         Args:
             value (Union[float, int]): New size.
         """
-        point_2 = Point(self._p1.x + value, self._p1.x + value)
+        point_2 = Point(self._p1.x + value, self._p1.y + value)
         self.point_2 = point_2
 
     @property
