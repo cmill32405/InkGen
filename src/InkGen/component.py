@@ -535,9 +535,23 @@ class WidthHeightDrawingComponent(StandardDrawingComponent):
             height (Union[float, int]): height of drawing component.
             style (DrawingStyle): style information for drawing component
         """
+        width = self._coerce_dimension(width, "width")
+        height = self._coerce_dimension(height, "height")
         point_2 = (position[0] + width, position[1] + height)
 
         super().__init__(point_1 = position, point_2 = point_2, style=style)
+
+    @staticmethod
+    def _coerce_dimension(value: float | int, name: str) -> float:
+        """Return a finite nonnegative dimension or fail at the public boundary."""
+        if isinstance(value, bool) or not isinstance(value, (float, int)):
+            raise TypeError(f"{name} must be a numeric value.")
+        numeric = float(value)
+        if not math.isfinite(numeric):
+            raise ValueError(f"{name} must be finite.")
+        if numeric < 0.0:
+            raise ValueError(f"{name} must be greater than or equal to zero.")
+        return numeric
 
     @classmethod
     def create_from_dict(cls, data: dict, style: DrawingStyle=None) -> object:
@@ -610,6 +624,7 @@ class WidthHeightDrawingComponent(StandardDrawingComponent):
         Args:
             value (float): new height.
         """
+        value = self._coerce_dimension(value, "height")
         point_2 = (self._x(self._p2), self._y(self._p1) + value)
         self.point_2 = point_2
 
@@ -629,6 +644,7 @@ class WidthHeightDrawingComponent(StandardDrawingComponent):
         Args:
             value (float): new width.
         """
+        value = self._coerce_dimension(value, "width")
         point_2 = (self._x(self._p1) + value, self._y(self._p2))
         self.point_2 = point_2
 

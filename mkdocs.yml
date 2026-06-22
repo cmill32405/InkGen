@@ -46,6 +46,7 @@ nav:
       - Layer Group Contract: proofs/layer-group-contract.md
       - Component Group Contract: proofs/component-group-contract.md
       - Single Dimension Contract: proofs/single-dimension-contract.md
+      - Width Height Contract: proofs/width-height-contract.md
       - Public API Contract: proofs/public-api-contract.md
       - Error Contract: proofs/error-contract.md
       - Paragraph Contract: proofs/paragraph-contract.md
