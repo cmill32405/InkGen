@@ -1508,7 +1508,23 @@ class QuadraticBezier(DrawingComponent):
     def _coerce_point(point: tuple[float, float]) -> tuple[float, float]:
         if len(point) != 2:
             raise ValueError("Point must contain two numeric values.")
-        return (float(point[0]), float(point[1]))
+        return (
+            QuadraticBezier._coerce_finite_number(point[0], "point coordinate"),
+            QuadraticBezier._coerce_finite_number(point[1], "point coordinate"),
+        )
+
+    @staticmethod
+    def _coerce_finite_number(value: float, name: str) -> float:
+        """Return a finite numeric value or fail at the Bezier public boundary."""
+        if isinstance(value, bool):
+            raise TypeError(f"{name} must be numeric.")
+        try:
+            number = float(value)
+        except (TypeError, ValueError) as exc:
+            raise TypeError(f"{name} must be numeric.") from exc
+        if not math.isfinite(number):
+            raise ValueError(f"{name} must be finite.")
+        return number
 
     @classmethod
     def create_from_dict(cls, data: dict, style: DrawingStyle = None) -> object:
@@ -1592,7 +1608,23 @@ class CubicBezier(DrawingComponent):
     def _coerce_point(point: tuple[float, float]) -> tuple[float, float]:
         if len(point) != 2:
             raise ValueError("Point must contain two numeric values.")
-        return (float(point[0]), float(point[1]))
+        return (
+            CubicBezier._coerce_finite_number(point[0], "point coordinate"),
+            CubicBezier._coerce_finite_number(point[1], "point coordinate"),
+        )
+
+    @staticmethod
+    def _coerce_finite_number(value: float, name: str) -> float:
+        """Return a finite numeric value or fail at the Bezier public boundary."""
+        if isinstance(value, bool):
+            raise TypeError(f"{name} must be numeric.")
+        try:
+            number = float(value)
+        except (TypeError, ValueError) as exc:
+            raise TypeError(f"{name} must be numeric.") from exc
+        if not math.isfinite(number):
+            raise ValueError(f"{name} must be finite.")
+        return number
 
     @classmethod
     def create_from_dict(cls, data: dict, style: DrawingStyle = None) -> object:

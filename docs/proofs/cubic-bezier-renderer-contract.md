@@ -110,7 +110,7 @@ ADR/rule impact:
 | Malformed coordinate tuples | Reject at construction and setter boundaries with `ValueError` | PO-CUBIC-002 | `test_cubic_bezier_rejects_malformed_points` | Must be killed or proven equivalent |
 | PDF cubic rendering | Emit one open native PDF cubic operator and use stroke-only painting | PO-CUBIC-003 | `test_cubic_bezier_pdf_emits_exact_cubic_operator` | Must be killed or proven equivalent |
 | Renderer-neutral cubic drawing exported to DXF | Materialize to PDF and emit DXF polyline vertices from the same sampled points | PO-CUBIC-004 | `test_cubic_drawing_materializes_pdf_component`; `test_dxf_cubic_bezier_reuses_pdf_sample_points` | Must be killed or proven equivalent |
-| Non-numeric points, non-finite values, hostile mutation of private fields, monkey-patched renderers, non-default sample counts, and native DXF cubic entities | Excluded from proven domain | Explicit exclusions in PO-CUBIC-001 through PO-CUBIC-004 | none | Out of scope |
+| Hostile mutation of private fields, monkey-patched renderers, non-default sample counts, and native DXF cubic entities | Excluded from proven domain | Explicit exclusions in PO-CUBIC-001 through PO-CUBIC-004 | none | Out of scope |
 
 ## Test Applicability Matrix
 
@@ -223,6 +223,9 @@ three-coordinate tuples. The `test_cubic_bezier_rejects_malformed_points`
 regression now covers both too few and too many coordinates and kills that
 mutant.
 
+The companion BEZIER-FINITE-P2 slice closes the former non-finite public point
+input exclusion for quadratic and cubic Bezier components.
+
 Gate result: passed for the declared domain. The mutation report has no
 surviving non-equivalent proof-critical mutants.
 
@@ -282,7 +285,6 @@ axis-aligned bounds.
 
 ### Counterexamples And Exclusions
 
-- Non-finite numeric values are outside the proof.
 - Direct mutation of `_samples` to a non-positive or non-default value is outside
   the public construction contract.
 - Rounding can move a value by up to the precision unit; exact unrounded curve

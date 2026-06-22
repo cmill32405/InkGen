@@ -110,7 +110,7 @@ ADR/rule impact:
 | PDF quadratic rendering | Convert quadratic controls to an equivalent cubic PDF curve | PO-QB-002 | `test_pdf_quadratic_to_cubic_conversion_is_curve_equivalent`; `test_quadratic_bezier_pdf_emits_equivalent_cubic_operator` | Must be killed or proven equivalent |
 | Renderer-neutral quadratic drawing exported to DXF | Materialize to PDF and emit DXF polyline vertices from the same sampled points | PO-QB-003 | `test_dxf_quadratic_bezier_reuses_pdf_sample_points` | Must be killed or proven equivalent |
 | Parameter round trip | Preserve quadratic geometry parameters | Compatibility invariant | `test_quadratic_bezier_points`; `test_pdf_primitives_round_trip_parameters` | Must be killed or proven equivalent |
-| Non-numeric points, hostile mutation of private fields, monkey-patched renderers, non-default sample counts, and native DXF curve entities | Excluded from proven domain | Explicit exclusions in PO-QB-001 through PO-QB-003 | none | Out of scope |
+| Hostile mutation of private fields, monkey-patched renderers, non-default sample counts, and native DXF curve entities | Excluded from proven domain | Explicit exclusions in PO-QB-001 through PO-QB-003 | none | Out of scope |
 
 ## Test Applicability Matrix
 
@@ -211,6 +211,9 @@ second cubic control point had `x == y`, so coordinate-index mutations survived.
 The test now uses an asymmetric second cubic control point and the refined gate
 kills those mutants.
 
+The companion BEZIER-FINITE-P2 slice closes the former non-finite public point
+input exclusion for quadratic and cubic Bezier components.
+
 ## PO-QB-001: Quadratic Sample Formula
 
 ### Claim
@@ -261,7 +264,6 @@ each unrounded sample is a convex combination of `S`, `C`, and `E`.
 
 ### Counterexamples And Exclusions
 
-- Non-finite numeric values are outside the proof.
 - Direct mutation of `_samples` to a non-positive value is outside the public
   construction contract.
 - Rounding can move a value by up to the precision unit; exact unrounded curve

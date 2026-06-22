@@ -28,6 +28,7 @@ nav:
       - Text Style Contract: proofs/text-style-contract.md
       - Document Model Contract: proofs/document-model-contract.md
       - Quadratic Bezier Renderer Contract: proofs/quadratic-bezier-renderer-contract.md
+      - Bezier Finite Boundary Contract: proofs/bezier-finite-contract.md
       - Arc Renderer Contract: proofs/arc-renderer-contract.md
       - Arc Finite Boundary Contract: proofs/arc-finite-contract.md
       - Cubic Bezier Renderer Contract: proofs/cubic-bezier-renderer-contract.md
