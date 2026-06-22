@@ -11,6 +11,20 @@ Canvas, DocumentPDF, RectanglePDF, Table` when a shorter import path is useful.
 - `Boundary`: Base class representing convex hull boundaries.
 - `Canvas`: Specialised boundary used as the drawing surface.
 
+## Errors (`InkGen.errors`)
+
+Project-specific exceptions are plain `ValueError` subclasses and are also
+available from the package root for caller-facing failure handling:
+
+- `IllegalArgumentError`: Unsupported public argument value.
+- `InvalidConvexHull`: Boundary points cannot define a valid convex hull.
+- `InvalidPolygonError`: Polygon coordinates violate the component contract.
+- `InvalidComponentID`: Component lookup failed inside a component group.
+- `InvalidComponentGroupID`: Component-group lookup failed inside a layer.
+- `ComponentGroupCollision`: New group collides with an existing group.
+- `ComponentGroupOffCanvas`: New group extends beyond the canvas boundary.
+- `IncompatibleCanvas`: Document, page, or layer canvases do not match.
+
 ## Components (`InkGen.component`)
 
 - `Component`: Base class with identifiers and serialization.

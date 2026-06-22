@@ -21,6 +21,16 @@ from .drawing_components import (
     ZoningDrawing,
 )
 from .dxf_generator import DXFDocument, DXFRenderContext
+from .errors import (
+    ComponentGroupCollision,
+    ComponentGroupOffCanvas,
+    IllegalArgumentError,
+    IncompatibleCanvas,
+    InvalidComponentGroupID,
+    InvalidComponentID,
+    InvalidConvexHull,
+    InvalidPolygonError,
+)
 from .extraction_truth import (
     ExtractionTruthAnnotation,
     ExtractionTruthRecord,
@@ -94,6 +104,8 @@ __all__ = [
     "CirclePDF",
     "Column",
     "Component",
+    "ComponentGroupCollision",
+    "ComponentGroupOffCanvas",
     "ComponentGroup",
     "ComponentGroupPDF",
     "ComponentGroupSVG",
@@ -119,6 +131,12 @@ __all__ = [
     "GrammarTruthAnnotation",
     "GrammarTruthRecord",
     "IncludeLayer",
+    "IllegalArgumentError",
+    "IncompatibleCanvas",
+    "InvalidComponentGroupID",
+    "InvalidComponentID",
+    "InvalidConvexHull",
+    "InvalidPolygonError",
     "Layer",
     "Layers",
     "LineSVG",

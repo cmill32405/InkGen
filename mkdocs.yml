@@ -45,6 +45,7 @@ nav:
       - PDF Document Contract: proofs/pdf-document-contract.md
       - Layer Group Contract: proofs/layer-group-contract.md
       - Public API Contract: proofs/public-api-contract.md
+      - Error Contract: proofs/error-contract.md
       - Paragraph Contract: proofs/paragraph-contract.md
       - Drawing Group Contract: proofs/drawing-group-contract.md
       - Flow Document Contract: proofs/flow-document-contract.md
