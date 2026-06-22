@@ -107,3 +107,71 @@ def test_svg_component_uses_flattened_svg_live_path(tmp_path) -> None:
     assert component.parameters["SVGComponent"]["width"] == 100.0
     assert component.parameters["SVGComponent"]["height"] == 40.0
     assert "fill:#123456" in component.generate_svg()
+
+
+@pytest.mark.condition("SVG-COMPONENT-FINITE-P2")
+def test_svg_component_rejects_invalid_position_and_scale_boundaries() -> None:
+    """SVG-COMPONENT-FINITE-P2: Embedded SVG transforms accept only finite numeric scalars."""
+    paths = [{"d": "M 0 0 L 10 0", "style": None}]
+    bbox = ((0.0, 0.0), (10.0, 5.0))
+
+    for position in [
+        (float("nan"), 0.0),
+        (0.0, float("inf")),
+        (True, 0.0),
+        ("bad", 0.0),
+        (0.0,),
+    ]:
+        with pytest.raises((TypeError, ValueError)):
+            SVGComponent(paths=paths, bbox=bbox, position=position)  # type: ignore[arg-type]
+
+    for scale in [float("nan"), float("inf"), -float("inf"), True, 0.0, -1.0, "bad"]:
+        with pytest.raises((TypeError, ValueError)):
+            SVGComponent(paths=paths, bbox=bbox, scale=scale)  # type: ignore[arg-type]
+
+    component = SVGComponent(paths=paths, bbox=bbox, position=(1.0, 2.0), scale=2.0)
+    before = component.parameters
+
+    with pytest.raises(ValueError):
+        component.position = (float("-inf"), 2.0)
+    assert component.parameters == before
+
+    with pytest.raises(TypeError):
+        component.scale = False  # type: ignore[assignment]
+    assert component.parameters == before
+
+
+@pytest.mark.condition("SVG-COMPONENT-FINITE-P2")
+def test_svg_component_rejects_invalid_bbox_boundaries_and_deserialized_values() -> None:
+    """SVG-COMPONENT-FINITE-P2: Bbox and serialized transforms cannot inject non-finite geometry."""
+    paths = [{"d": "M 0 0 L 10 0", "style": None}]
+
+    for bbox in [
+        ((0.0, 0.0), (float("nan"), 5.0)),
+        ((0.0, True), (10.0, 5.0)),
+        ((0.0, 0.0),),
+        "bad",
+    ]:
+        with pytest.raises((TypeError, ValueError)):
+            SVGComponent(paths=paths, bbox=bbox)  # type: ignore[arg-type]
+
+    payload = {
+        "SVGComponent": {
+            "paths": paths,
+            "bbox": ((0.0, 0.0), (10.0, 5.0)),
+            "position": [3.0, 4.0],
+            "scale": 1.5,
+            "width": None,
+            "height": None,
+            "source": None,
+        }
+    }
+
+    component = SVGComponent.create_from_dict(payload)
+
+    assert component.points == [(3.0, 4.0), (18.0, 4.0), (18.0, 11.5), (3.0, 11.5)]
+    assert '<g transform="translate(3.0,4.0) scale(1.5)">' in component.generate_svg()
+
+    payload["SVGComponent"]["scale"] = float("nan")
+    with pytest.raises(ValueError):
+        SVGComponent.create_from_dict(payload)

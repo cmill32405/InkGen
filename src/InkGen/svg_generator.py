@@ -1121,10 +1121,7 @@ class SVGComponent(Component, DrawingGeneratorInterface):
             self._source = filepath
         elif paths is not None and bbox is not None:
             self._paths = paths
-            self._bbox = (
-                (float(bbox[0][0]), float(bbox[0][1])),
-                (float(bbox[1][0]), float(bbox[1][1])),
-            )
+            self._bbox = self._coerce_bbox(bbox)
             self._width = width
             self._height = height
             self._source = source
@@ -1141,7 +1138,10 @@ class SVGComponent(Component, DrawingGeneratorInterface):
     @position.setter
     def position(self, value: tuple[float, float]) -> None:
         x, y = value
-        self._position = (float(x), float(y))
+        self._position = (
+            self._coerce_finite_number(x, "position coordinate"),
+            self._coerce_finite_number(y, "position coordinate"),
+        )
 
     @property
     def scale(self) -> float:
@@ -1149,10 +1149,44 @@ class SVGComponent(Component, DrawingGeneratorInterface):
 
     @scale.setter
     def scale(self, value: float) -> None:
-        value = float(value)
+        value = self._coerce_finite_number(value, "scale")
         if value <= 0:
             raise ValueError("scale must be greater than zero.")
         self._scale = value
+
+    @staticmethod
+    def _coerce_finite_number(value: float, name: str) -> float:
+        """Return a finite float while rejecting booleans and malformed values."""
+        if isinstance(value, bool):
+            raise TypeError(f"{name} must be numeric, not boolean.")
+        try:
+            number = float(value)
+        except (TypeError, ValueError) as error:
+            raise ValueError(f"{name} must be numeric.") from error
+        if not math.isfinite(number):
+            raise ValueError(f"{name} must be finite.")
+        return number
+
+    @classmethod
+    def _coerce_bbox(
+        cls,
+        bbox: tuple[tuple[float, float], tuple[float, float]],
+    ) -> tuple[tuple[float, float], tuple[float, float]]:
+        """Return a finite two-corner bbox."""
+        try:
+            (min_x, min_y), (max_x, max_y) = bbox
+        except (TypeError, ValueError) as error:
+            raise ValueError("bbox must contain exactly two coordinate pairs.") from error
+        return (
+            (
+                cls._coerce_finite_number(min_x, "bbox coordinate"),
+                cls._coerce_finite_number(min_y, "bbox coordinate"),
+            ),
+            (
+                cls._coerce_finite_number(max_x, "bbox coordinate"),
+                cls._coerce_finite_number(max_y, "bbox coordinate"),
+            ),
+        )
 
     @property
     def width(self) -> float:
