@@ -16,7 +16,9 @@ This section provides a high-level index of the primary modules and classes expo
 
 ## Document (`InkGen.document`)
 
-- `Layer`: Container for component groups.
+- `Layer`: Container for component groups. Use `component_groups` for the
+  backwards-compatible label-to-id lookup and `groups()` for complete traversal
+  when repeated labels must be preserved.
 - `Layers`: Layer stack with convenience helpers.
 - `Document`: Multi-page document abstraction.
 

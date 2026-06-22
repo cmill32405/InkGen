@@ -834,7 +834,7 @@ class DocumentPDF(Document):
     @staticmethod
     def _iter_layer_groups(layer: Layer, *, sort: bool = False) -> tuple[ComponentGroup, ...]:
         """Return every stored group in a layer, including repeated labels."""
-        groups = tuple(layer._component_groups.values())
+        groups = layer.groups()
         if sort:
             return tuple(sorted(groups, key=lambda group: (group.group_label, group.group_id)))
         return groups

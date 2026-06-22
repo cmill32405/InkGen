@@ -115,6 +115,7 @@ These contracts are more important than individual implementation details.
 | Deterministic artifact bytes/records | Regression tests and fixture generation | Tests become flaky or fixtures churn |
 | Closed PDF renderer component set | PDF noninterference proofs and deterministic rendering | Custom dynamic `generate_pdf()` paths can break proof obligations |
 | `pdf_render_contract.py` guard semantics | PO-GT-004 mutation gate and PDF render-path failures | Unsupported groups/components render instead of failing at the boundary |
+| `Layer.groups()` complete traversal | SVG/PDF renderers, truth emitters, and duplicate-label model layers | Reverting to `component_groups` collapses repeated labels |
 | Dependency-free PDF/DXF/DOCX emitters | Project dependency policy | New package dependency appears without approval |
 | Flow document block order | DOCX/HTML/RTF/text exports | Document content is reordered or omitted |
 | Public exports in `__init__.py` | External callers and examples | Imports from `InkGen` break |

@@ -1653,7 +1653,7 @@ class DocumentSVG(Document):
     @staticmethod
     def _iter_layer_groups(layer: Layer) -> Iterable[ComponentGroup]:
         """Yield every component group in a layer, including repeated labels."""
-        return layer._component_groups.values()
+        return layer.groups()
 
     def _collect_fonts(self) -> dict[str, str]:
         fonts: dict[str, str] = {}

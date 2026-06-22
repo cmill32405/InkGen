@@ -1,6 +1,7 @@
-""" Module for creating full representations of documents and
+"""Module for creating full representations of documents and
 the layers they contain.
 """
+
 from __future__ import annotations
 
 import itertools
@@ -14,8 +15,7 @@ from InkGen.errors import ComponentGroupCollision, ComponentGroupOffCanvas, Inco
 
 
 class Layer:
-    """ Class for storing a collection of component groups.
-    """
+    """Class for storing a collection of component groups."""
 
     id_iter = itertools.count()
 
@@ -59,12 +59,12 @@ class Layer:
         Returns:
             Layer: Rehydrated layer instance.
         """
-        canvas = Canvas.create_from_dict(data['Layer']['canvas'])
-        layer = cls(data['Layer']['layer_name'], canvas, data['Layer']['model'])
-        for gr in data['Layer']['component_groups']:
+        canvas = Canvas.create_from_dict(data["Layer"]["canvas"])
+        layer = cls(data["Layer"]["layer_name"], canvas, data["Layer"]["model"])
+        for gr in data["Layer"]["component_groups"]:
             group = ComponentGroup.create_from_dict(gr, styles)
-            allow_collision = data['Layer']['group_collision_settings'][group.group_label]['allow_collision']
-            strict = data['Layer']['group_collision_settings'][group.group_label]['strict']
+            allow_collision = data["Layer"]["group_collision_settings"][group.group_label]["allow_collision"]
+            strict = data["Layer"]["group_collision_settings"][group.group_label]["strict"]
             layer.add_component_group(group, allow_collision, strict)
         return layer
 
@@ -76,13 +76,15 @@ class Layer:
             dict: Mapping with layer metadata and component group definitions.
         """
         groups = [gr.parameters for gr in self._component_groups.values()]
-        parameter_dict = {"Layer": {
-            'layer_name': self.layer_name,
-            'canvas': self.canvas.parameters,
-            'model': self.model,
-            'component_groups': groups,
-            'group_collision_settings': self._group_collision_settings,
-        }}
+        parameter_dict = {
+            "Layer": {
+                "layer_name": self.layer_name,
+                "canvas": self.canvas.parameters,
+                "model": self.model,
+                "component_groups": groups,
+                "group_collision_settings": self._group_collision_settings,
+            }
+        }
         return parameter_dict
 
     @property
@@ -96,7 +98,7 @@ class Layer:
 
     @property
     def layer_name(self) -> str:
-        """ Read-only attribute for layer name identifier.
+        """Read-only attribute for layer name identifier.
 
         Returns:
             str: name of layer.
@@ -105,7 +107,7 @@ class Layer:
 
     @property
     def canvas(self) -> Canvas:
-        """ Object for storing information about
+        """Object for storing information about
         the layers boundaries and dimensions.
 
         Returns:
@@ -114,7 +116,7 @@ class Layer:
         return self._canvas
 
     def _create_boundary(self, group: ComponentGroup) -> None:
-        """ creates a new boundary object for every component group added.
+        """creates a new boundary object for every component group added.
 
         Args:
             group (ComponentGroup): new component group
@@ -122,7 +124,7 @@ class Layer:
         self._group_boundaries[group.group_id] = Boundary(group.convex_hull, False)
 
     def _check_bounds(self, group: ComponentGroup, strict: bool) -> bool:
-        """ Verifies group argument doesn't interfere with others that
+        """Verifies group argument doesn't interfere with others that
         don't allow for collisions
 
         Args:
@@ -162,8 +164,10 @@ class Layer:
 
         if isinstance(group, ComponentGroup):
             if not self.canvas.boundary_check(group.points):
-                raise ComponentGroupOffCanvas("Some points of the component \
-                                              group are off the canvas")
+                raise ComponentGroupOffCanvas(
+                    "Some points of the component \
+                                              group are off the canvas"
+                )
 
             if not self._check_bounds(group, strict):
                 raise ComponentGroupCollision("New Component Group Collides with Existing")
@@ -172,13 +176,12 @@ class Layer:
                 self._create_boundary(group)
             self._component_groups[group.group_id] = group
             self._group_names[group.group_label] = group.group_id
-            self._group_collision_settings[group.group_label] = {"allow_collision": allow_collision,
-                                                                 'strict': strict}
+            self._group_collision_settings[group.group_label] = {"allow_collision": allow_collision, "strict": strict}
         else:
             raise TypeError("The group argument must be a ComponentGroup class")
 
     def remove_component_group(self, group_id: int | str) -> None:
-        """ Drops a component group from the layer.
+        """Drops a component group from the layer.
 
         Args:
             group_id (int): ComponentGroup.group_id attribute of the desired group or
@@ -189,16 +192,14 @@ class Layer:
             not exist in the layer's collection of ComponentGroups
         """
         if isinstance(group_id, str):
-            group_id = self._group_names.get(group_id, "FAIL")
-
-        if group_id == "FAIL":
-            raise InvalidComponentGroupID("That group_id does not exist")
+            if group_id not in self._group_names:
+                raise InvalidComponentGroupID("That group_id does not exist")
+            group_id = self._group_names[group_id]
 
         if isinstance(group_id, int) and group_id in self._component_groups:
             group_name = self._component_groups[group_id].group_label
             del self._component_groups[group_id]
-            del self._group_names[group_name]
-            del self._group_collision_settings[group_name]
+            self._restore_group_name_lookup(group_name)
             if group_id in self._group_boundaries:
                 del self._group_boundaries[group_id]
         else:
@@ -213,9 +214,13 @@ class Layer:
         """
         return self._group_names
 
+    def groups(self) -> tuple[ComponentGroup, ...]:
+        """Return all component groups in insertion order, including repeated labels."""
+        return tuple(self._component_groups.values())
+
     @property
     def model(self) -> bool:
-        """ Read only property to indicate if the model data should be shown.
+        """Read only property to indicate if the model data should be shown.
 
         Returns:
             bool: True means bounding boxes and segmentation mask should be included
@@ -224,7 +229,7 @@ class Layer:
         return self._model
 
     def group(self, group_id: int) -> ComponentGroup:
-        """ Get a particular component group from the layer.
+        """Get a particular component group from the layer.
 
         Args:
             group_id (int): id of the component group returned.
@@ -240,17 +245,24 @@ class Layer:
 
         raise ValueError("Invalid component group id.")
 
+    def _restore_group_name_lookup(self, group_name: str) -> None:
+        """Restore label lookup after removing one of possibly repeated labels."""
+        for remaining_group_id, remaining_group in reversed(tuple(self._component_groups.items())):
+            if remaining_group.group_label == group_name:
+                self._group_names[group_name] = remaining_group_id
+                return
+        del self._group_names[group_name]
+        del self._group_collision_settings[group_name]
+
 
 class Layers:
-    """ Collection of Layer Objects for holding multiple levels of information
+    """Collection of Layer Objects for holding multiple levels of information
     such as the content to be created ("base"), bounding boxes for object detection,
     and segmentation mask with each on a different layer.
     """
-    def __init__(self,
-                 canvas: Canvas,
-                 name: str | None=None,
-                 layer: Layer | None=None) -> None:
-        """ Create new layers container. If Layer object is passed as argument,
+
+    def __init__(self, canvas: Canvas, name: str | None = None, layer: Layer | None = None) -> None:
+        """Create new layers container. If Layer object is passed as argument,
         it is added as the first layer and the name argument is ignored, but if
         only a name is provided a new layer with that name is added to the stack.
         If neither is provided, a new layer named "base" is created and added
@@ -278,7 +290,7 @@ class Layers:
 
     @classmethod
     def create_from_dict(cls, data: dict, styles: dict | None = None) -> object:
-        """ Class method to recreate the object from its serialization dict.
+        """Class method to recreate the object from its serialization dict.
 
         Args:
             data (dict): Dictionary created via obj.parameters property.
@@ -286,17 +298,17 @@ class Layers:
         Returns:
             object: instance of the class.
         """
-        layers = cls(Canvas.create_from_dict(data['Layers']['canvas']))
+        layers = cls(Canvas.create_from_dict(data["Layers"]["canvas"]))
         for layer_name in list(layers.layers):
             layers.remove_layer(layer_name)
-        for _, layer_payload in data['Layers']['layers'].items():
+        for _, layer_payload in data["Layers"]["layers"].items():
             layer = Layer.create_from_dict(layer_payload, styles)
             layers.add_layer(layer.layer_name, layer)
         return layers
 
     @property
     def parameters(self) -> dict:
-        """ Parameters for the object as a dictionary for serialization.
+        """Parameters for the object as a dictionary for serialization.
 
         Returns:
             dict: dictionary with class name as top level key, that
@@ -307,13 +319,11 @@ class Layers:
         sorted_layers = sorted(self.layers)
         for layer in sorted_layers:
             layers[layer] = self.layer(layer).parameters
-        parameter_dict = {"Layers":
-                       {'canvas': self._canvas.parameters,
-                        'layers': layers}}
+        parameter_dict = {"Layers": {"canvas": self._canvas.parameters, "layers": layers}}
         return parameter_dict
 
     def _canvas_compatibility(self, layer: Layer) -> None:
-        """ Private method for verifying that any layer added to the class have equivalent
+        """Private method for verifying that any layer added to the class have equivalent
         Canvas attributes as the instance.
 
         Args:
@@ -323,14 +333,16 @@ class Layers:
             IncompatibleCanvas: raised if either height, width, or units do not match the
             instances Canvas object.
         """
-        if (layer.canvas.height == self._canvas.height and
-            layer.canvas.width == self._canvas.width and
-            layer.canvas.units == self._canvas.units):
+        if (
+            layer.canvas.height == self._canvas.height
+            and layer.canvas.width == self._canvas.width
+            and layer.canvas.units == self._canvas.units
+        ):
             return
         raise IncompatibleCanvas("Layer does have match the same canvas attributes.")
 
     def _layer_identification_lookup(self, identifier: int | str) -> tuple[str, int]:
-        """ Private method to lookup the name and id of a Layer object if either the
+        """Private method to lookup the name and id of a Layer object if either the
         name or id is provided.
 
         Args:
@@ -356,10 +368,8 @@ class Layers:
             raise ValueError("Invalid identifier, must be either the name or the layer_id.")
         return layer_name, layer_id
 
-    def add_layer(self,
-                  name: str | None = None,
-                  layer: Layer | None = None):
-        """ Add a new layer to the stack by either adding an existing Layer object
+    def add_layer(self, name: str | None = None, layer: Layer | None = None):
+        """Add a new layer to the stack by either adding an existing Layer object
         or by creating a new layer object with the name provided.  If Layer object
         is passed as an argument the name argument is ignored as the Layer object
         already has a name which cannot be edited.
@@ -394,13 +404,12 @@ class Layers:
                     layer = Layer("base", self._canvas)
                 else:
                     last_id = max(list(self._layers.keys()))
-                    layer = Layer("unamed_"+str(last_id + 1), self._canvas)
+                    layer = Layer("unamed_" + str(last_id + 1), self._canvas)
             self._layers[layer.layer_id] = layer
             self._layer_name_to_id_map[layer.layer_name] = layer.layer_id
 
-    def remove_layer(self,
-                     identifier: int | str) -> None:
-        """ Removes layer from the stack.
+    def remove_layer(self, identifier: int | str) -> None:
+        """Removes layer from the stack.
 
         Args:
             identifier (Union[int, str]): layer_name or layer_id
@@ -415,7 +424,7 @@ class Layers:
         del self._layers[layer_id]
 
     def layer(self, identifier: str | int) -> Layer:
-        """ Lookup Layer in stack based on either layer name or id and return
+        """Lookup Layer in stack based on either layer name or id and return
         instance.
 
         Args:
@@ -429,7 +438,7 @@ class Layers:
 
     @property
     def layers(self) -> list[str]:
-        """ Return a list of all layer names in the collection
+        """Return a list of all layer names in the collection
 
         Returns:
             List[str]: List of layer names.
@@ -439,11 +448,12 @@ class Layers:
 
 class Document:
     """Class for containing numerous Layers objects as pages in a document.  Has the ability
-        to add and remove pages, select the Layers object as a page number.  Also, provides
-        a means of loading and saving document recipes as a YAML file.
+    to add and remove pages, select the Layers object as a page number.  Also, provides
+    a means of loading and saving document recipes as a YAML file.
     """
+
     def __init__(self, canvas: Canvas) -> None:
-        """ Instanciate a new document with no pages
+        """Instanciate a new document with no pages
 
         Args:
             canvas (Canvas): Canvas object for default pages added to the document.
@@ -461,7 +471,7 @@ class Document:
 
     @classmethod
     def create_from_dict(cls, data: dict, styles: dict | None = None) -> object:
-        """ Class method to recreate the object from its serialization dict.
+        """Class method to recreate the object from its serialization dict.
 
         Args:
             data (dict): Dictionary created via obj.parameters property.
@@ -469,15 +479,15 @@ class Document:
         Returns:
             object: instance of the class.
         """
-        document = cls(Canvas.create_from_dict(data['Document']['canvas']))
-        for pg in range(len(data['Document']['pages'])):
-            page = Layers.create_from_dict(data['Document']['pages'][pg], styles)
+        document = cls(Canvas.create_from_dict(data["Document"]["canvas"]))
+        for pg in range(len(data["Document"]["pages"])):
+            page = Layers.create_from_dict(data["Document"]["pages"][pg], styles)
             document.add_page(position=-1, page=page)
         return document
 
     @property
     def parameters(self) -> dict:
-        """ Parameters for the object as a dictionary for serialization.
+        """Parameters for the object as a dictionary for serialization.
 
         Returns:
             dict: dictionary with class name as top level key, that
@@ -487,18 +497,16 @@ class Document:
         pages = []
         for page in list(self._pages.keys()):
             pages.append(self.page(page).parameters)
-        parameter_dict = {"Document":
-                       {'canvas': self._canvas.parameters,
-                        'pages': pages}}
+        parameter_dict = {"Document": {"canvas": self._canvas.parameters, "pages": pages}}
         return parameter_dict
 
     def save(self, filepath: str) -> None:
-        """ Saves all parameters of the Document object as YAML file.
+        """Saves all parameters of the Document object as YAML file.
 
         Args:
             filepath (str): File to save with Document information.
         """
-        with open(filepath, 'w+', encoding='UTF-8') as file:
+        with open(filepath, "w+", encoding="UTF-8") as file:
             yaml.safe_dump(self.parameters, file, allow_unicode=True, default_flow_style=False)
 
     @classmethod
@@ -521,14 +529,14 @@ class Document:
 
             if k == "style":
                 style_type = list(v.keys())[0]
-                name = v[style_type]['name']
+                name = v[style_type]["name"]
                 new_style[name] = v
                 return new_style
             return None
 
     @classmethod
     def load(cls, filepath: str, styles: dict | None = None):
-        """ Creates a Document object from a saved YAML file.
+        """Creates a Document object from a saved YAML file.
 
         Args:
             filepath (str): filepath of YAML file that describes a Document object.
@@ -538,7 +546,7 @@ class Document:
             Dict[str, Style]: Dictionary of all the styles in the Document.
         """
         document_data = {}
-        with open(filepath, encoding='UTF-8') as file:
+        with open(filepath, encoding="UTF-8") as file:
             document_data = yaml.safe_load(file)
 
         if not styles:
@@ -556,7 +564,7 @@ class Document:
         return document, styles
 
     def add_page(self, position: int = -1, page: Layers | None = None) -> None:
-        """ Add a page to the document at an optional position using the optional page
+        """Add a page to the document at an optional position using the optional page
         argument to incorporate an existing Layers object.
 
         Args:
@@ -570,11 +578,11 @@ class Document:
         """
         page_number = self._validate_insert_position(position)
         if page_number == -1:
-            page_number = self.pages+1
+            page_number = self.pages + 1
         else:
             p = self.pages
             while p >= page_number:
-                self._pages[p+1] = self._pages[p]
+                self._pages[p + 1] = self._pages[p]
                 p -= 1
 
         if page is not None:
@@ -600,11 +608,11 @@ class Document:
         position = self._validate_existing_position(position)
         pages = self.pages
         for p in range(position, pages):
-            self._pages[p] = self._pages[p+1]
+            self._pages[p] = self._pages[p + 1]
         del self._pages[pages]
 
     def page(self, position: int) -> Layers:
-        """ Returns the layer object at the current position.
+        """Returns the layer object at the current position.
 
         Args:
             position (int): Position in the document.

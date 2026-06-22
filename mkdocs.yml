@@ -42,6 +42,7 @@ nav:
       - SVG Utilities Contract: proofs/svg-utils-contract.md
       - SVG Document Contract: proofs/svg-document-contract.md
       - PDF Document Contract: proofs/pdf-document-contract.md
+      - Layer Group Contract: proofs/layer-group-contract.md
       - Paragraph Contract: proofs/paragraph-contract.md
       - Drawing Group Contract: proofs/drawing-group-contract.md
       - Flow Document Contract: proofs/flow-document-contract.md

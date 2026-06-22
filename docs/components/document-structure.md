@@ -28,6 +28,10 @@ layers.add_layer(layer=base_layer)
 
 `Layers` automatically creates a `base` layer and tracks subsequent layers by ID.
 
+`Layer.component_groups` is a label-to-id lookup. When a drawing intentionally
+uses the same semantic label for multiple groups, call `Layer.groups()` to
+traverse every stored group in insertion order.
+
 ## Document
 
 `Document` is a collection of pages (each a `Layers` instance) and stores high-level metadata.
