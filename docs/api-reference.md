@@ -31,6 +31,8 @@ available from the package root for caller-facing failure handling:
 - `DrawingComponent` and subclasses (`StandardDrawingComponent`, `SingleDimensionDrawingComponent`, `PolygonalDrawingComponent`, etc.).
 - Geometry-specific classes such as `Arc`, `QuadraticBezier`, `CubicBezier`, `Path`.
 - `ComponentGroup`: Collection of components with shared metadata.
+  `add_component()` accepts only `Component` instances and raises `TypeError`
+  for invalid objects instead of silently omitting them.
 
 ## Document (`InkGen.document`)
 

@@ -2021,7 +2021,7 @@ class ComponentGroup:
         else:
             raise TypeError("group_label argument must be a string")
 
-        self._components = {}
+        self._components: dict[int, Component] = {}
 
     @classmethod
     def create_from_dict(cls, data: dict, styles: dict=None) -> object:
@@ -2081,8 +2081,9 @@ class ComponentGroup:
             class or a derivative.
         """
 
-        if isinstance(component, Component):
-            self._components[component.id] = component
+        if not isinstance(component, Component):
+            raise TypeError("component argument must be an InkGen Component object.")
+        self._components[component.id] = component
 
     def remove_component(self, component_id: int) -> None:
         """ Removes a component from the Component Group.
