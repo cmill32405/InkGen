@@ -2,6 +2,10 @@
 
 This section provides a high-level index of the primary modules and classes exposed by InkGen. For detailed signatures consult the source files under `src/InkGen/` or generated API docs when available.
 
+The package root re-exports the primary authoring and rendering APIs listed
+below, so callers can import stable public classes with `from InkGen import
+Canvas, DocumentPDF, RectanglePDF, Table` when a shorter import path is useful.
+
 ## Boundary (`InkGen.boundary`)
 
 - `Boundary`: Base class representing convex hull boundaries.
@@ -27,6 +31,13 @@ This section provides a high-level index of the primary modules and classes expo
 - `RectangleSVG`, `LineSVG`, `PolygonalSVG`, `RegularPolygonSVG`, `CircleSVG`, `PathSVG`, `TextSVG`.
 - `ComponentGroupSVG`, `TableSVG`, `DocumentSVG`.
 - `IncludeLayer`: Enum controlling which layers are exported.
+
+## PDF Generator (`InkGen.pdf_generator`)
+
+- `PDFGeneratorInterface`, `PDFRenderContext`.
+- `RectanglePDF`, `LinePDF`, `ArcPDF`, `QuadraticBezierPDF`, `CubicBezierPDF`.
+- `PathPDF`, `RegularPolygonPDF`, `PolygonalPDF`, `CirclePDF`, `TextPDF`.
+- `ComponentGroupPDF`, `DocumentPDF`.
 
 ## Tables (`InkGen.table`)
 
