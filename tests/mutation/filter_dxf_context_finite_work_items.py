@@ -1,4 +1,4 @@
-"""Filter Cosmic Ray work items to the DXF-P1 renderer proof-critical rows."""
+"""Filter Cosmic Ray work items to DXF context finite-boundary rows."""
 
 from __future__ import annotations
 
@@ -13,19 +13,6 @@ AND (
   OR (definition_name = 'point' AND start_pos_row IN (48, 50))
   OR (definition_name = '_coerce_finite_float' AND start_pos_row IN (55, 58, 60))
   OR (definition_name = '__init__' AND start_pos_row IN (70))
-  OR (definition_name = 'add_group' AND start_pos_row IN (75, 77, 78))
-  OR (definition_name = 'to_dxf_string' AND start_pos_row IN (99, 102))
-  OR (definition_name = 'create_dxf' AND start_pos_row IN (108))
-  OR (definition_name = '_component_to_entities' AND start_pos_row IN (115, 117, 119, 122, 124, 127, 130, 132, 134))
-  OR (definition_name = '_rectangle_points' AND start_pos_row IN (144, 145, 147, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166))
-  OR (definition_name = 'append' AND start_pos_row IN (153, 154))
-  OR (definition_name = '_append_corner_arc' AND start_pos_row IN (172, 175, 176, 177, 179, 180, 182))
-  OR (definition_name = '_line_entity' AND start_pos_row IN (187, 188, 193, 194, 196, 197))
-  OR (definition_name = '_lwpolyline_entity' AND start_pos_row IN (205, 206, 208, 210, 212, 213))
-  OR (definition_name = '_text_entity' AND start_pos_row IN (218, 219, 224, 225, 227, 228))
-  OR (definition_name = '_circle_entity' AND start_pos_row IN (234, 239, 240, 242))
-  OR (definition_name = '_pairs' AND start_pos_row IN (249))
-  OR (definition_name = '_format_value' AND start_pos_row IN (256, 257))
 )
 AND operator_name NOT LIKE 'core/ReplaceBinaryOperator_BitOr_%'
 AND (
@@ -33,14 +20,6 @@ AND (
   OR operator_name = 'core/AddNot'
   OR operator_name LIKE 'core/ReplaceComparisonOperator_%'
   OR operator_name LIKE 'core/ReplaceUnaryOperator_%'
-  OR operator_name IN (
-    'core/ReplaceBinaryOperator_Add_Sub',
-    'core/ReplaceBinaryOperator_Sub_Add',
-    'core/ReplaceBinaryOperator_Mul_Div',
-    'core/ReplaceBinaryOperator_Mul_Sub',
-    'core/ReplaceBinaryOperator_Div_Mul',
-    'core/ReplaceBinaryOperator_Div_Sub'
-  )
   OR operator_name = 'core/ReplaceAndWithOr'
   OR operator_name = 'core/ReplaceOrWithAnd'
 )
@@ -48,7 +27,7 @@ AND (
 
 
 def filter_work_items(db_path: Path, *, clear_results: bool) -> tuple[int, int]:
-    """Restrict a Cosmic Ray database to DXF-P1 renderer proof-critical work items."""
+    """Restrict a Cosmic Ray database to DXF context finite-boundary work items."""
     with sqlite3.connect(db_path) as conn:
         cursor = conn.cursor()
         before = cursor.execute("SELECT COUNT(*) FROM work_items").fetchone()[0]

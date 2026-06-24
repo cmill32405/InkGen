@@ -62,6 +62,31 @@ def test_dxf_context_and_numeric_format_are_deterministic() -> None:
 
 
 @pytest.mark.condition("DXF-P1")
+def test_dxf_context_rejects_malformed_coordinate_boundaries() -> None:
+    """DXF-P1: Context coordinates and canvas heights must be finite non-boolean numbers."""
+    context = DXFRenderContext(canvas_height=100.0)
+
+    for value in [True, False, float("nan"), float("inf"), -float("inf"), "1", object()]:
+        with pytest.raises((TypeError, ValueError)):
+            DXFRenderContext(canvas_height=value)  # type: ignore[arg-type]
+        with pytest.raises((TypeError, ValueError)):
+            DXFDocument(canvas_height=value)  # type: ignore[arg-type]
+        with pytest.raises((TypeError, ValueError)):
+            context.point(value, 2.0)  # type: ignore[arg-type]
+        with pytest.raises((TypeError, ValueError)):
+            context.point(1.0, value)  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError):
+        DXFRenderContext(canvas_height=-0.1)
+    with pytest.raises(ValueError):
+        DXFDocument(canvas_height=-0.1)
+
+    assert context.point(1.0, 2.0) == (1.0, 98.0)
+    assert DXFRenderContext(canvas_height=0.0).point(1.0, 2.0) == (1.0, -2.0)
+    assert DXFDocument(canvas_height=0.0).to_dxf_string().endswith("0\nEOF\n")
+
+
+@pytest.mark.condition("DXF-P1")
 def test_dxf_document_layers_and_ascii_text_contract() -> None:
     """DXF-P1: DXFDocument emits layer codes, flipped coordinates, and ASCII text."""
     style = _drawing_style()

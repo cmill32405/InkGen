@@ -32,11 +32,34 @@ class DXFRenderContext:
     canvas_height: float | None = None
     layer: str = "0"
 
+    def __post_init__(self) -> None:
+        """Validate the optional canvas height used for y-axis conversion."""
+        if self.canvas_height is not None:
+            object.__setattr__(
+                self,
+                "canvas_height",
+                _coerce_finite_float(self.canvas_height, name="canvas_height", minimum=0.0),
+            )
+
     def point(self, x: float, y: float) -> tuple[float, float]:
         """Convert an InkGen point to DXF coordinates."""
+        dxf_x = _coerce_finite_float(x, name="x")
+        source_y = _coerce_finite_float(y, name="y")
         if self.canvas_height is None:
-            return float(x), float(y)
-        return float(x), float(self.canvas_height - y)
+            return dxf_x, source_y
+        return dxf_x, float(self.canvas_height - source_y)
+
+
+def _coerce_finite_float(value: object, *, name: str, minimum: float | None = None) -> float:
+    """Return a finite float and reject booleans or malformed numeric values."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError(f"{name} must be a finite number.")
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError(f"{name} must be finite.")
+    if minimum is not None and number < minimum:
+        raise ValueError(f"{name} must be greater than or equal to {minimum}.")
+    return number
 
 
 class DXFDocument:
@@ -44,7 +67,7 @@ class DXFDocument:
 
     def __init__(self, *, canvas_height: float | None = None) -> None:
         """Create an empty DXF document."""
-        self._canvas_height = canvas_height
+        self._canvas_height = None if canvas_height is None else _coerce_finite_float(canvas_height, name="canvas_height", minimum=0.0)
         self._entities: list[str] = []
 
     def add_group(self, group: DrawingComponentGroup, *, layer: str | None = None) -> None:
@@ -146,13 +169,8 @@ def _rectangle_points(component: RectangleDrawing) -> list[tuple[float, float]]:
 
 
 def _append_corner_arc(
-        points: list[tuple[float, float]],
-        *,
-        center: tuple[float, float],
-        rx: float,
-        ry: float,
-        start_degrees: float,
-        end_degrees: float) -> None:
+    points: list[tuple[float, float]], *, center: tuple[float, float], rx: float, ry: float, start_degrees: float, end_degrees: float
+) -> None:
     """Append sampled elliptical arc points for a rounded rectangle corner."""
     step = (end_degrees - start_degrees) / ROUNDED_RECTANGLE_CORNER_SEGMENTS
     for index in range(1, ROUNDED_RECTANGLE_CORNER_SEGMENTS + 1):

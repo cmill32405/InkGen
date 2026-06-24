@@ -10,26 +10,36 @@ flags, text/circle entities, file output guards, and PDF-sampled geometry reuse.
 The slice covers:
 
 - `DXFRenderContext.point()`
+- `DXFRenderContext.__post_init__()`
 - `DXFDocument.add_group()`
 - `DXFDocument.to_dxf_string()`
 - `DXFDocument.create_dxf()`
+- `_coerce_finite_float()`
 - `_component_to_entities()`
 - `_rectangle_points()` and `_append_corner_arc()`
 - `_line_entity()`, `_lwpolyline_entity()`, `_text_entity()`, and
   `_circle_entity()`
 - `_format_value()`
 
-The slice does not change DXF implementation code. It adds condition-marked
-tests, a scoped mutation gate, and this proof note.
+The original DXF-P1 slice added condition-marked tests, a scoped mutation gate,
+and this proof note. The finite-boundary hardening update changes the public
+DXF context and document canvas-height boundaries so malformed numeric values
+fail before DXF artifact text is emitted.
 
 ## Architecture Impact
 
 Affected surface:
 
 - `tests/test_dxf_contract.py`: DXF-P1 condition tests.
+- `src/InkGen/dxf_generator.py`: finite numeric validation for public DXF
+  coordinate and canvas-height boundaries.
 - `tests/mutation/dxf_renderer_cosmic_ray.toml`: scoped Cosmic Ray gate.
 - `tests/mutation/filter_dxf_renderer_work_items.py`: proof-critical mutation
   filter.
+- `tests/mutation/dxf_context_finite_cosmic_ray.toml`: finite-boundary
+  hardening mutation gate.
+- `tests/mutation/filter_dxf_context_finite_work_items.py`: finite-boundary
+  hardening mutation filter.
 - `docs/proofs/dxf-renderer-contract.md`: proof note.
 
 Incoming dependencies:
@@ -52,6 +62,8 @@ Before/after edge changes:
 - No source dependency changed.
 - The proof makes the existing `dxf_generator.py -> PDF sampled geometry`
   cross-layer edge explicit and tested.
+- The hardening update adds a local DXF numeric validator; it does not import a
+  helper from another InkGen layer and does not add a dependency.
 
 Cycle/layer/coupling/redundancy result:
 
@@ -71,6 +83,9 @@ ADR/rule impact:
 ## Domain Definitions
 
 - A DXF point is an InkGen `(x, y)` point converted by `DXFRenderContext`.
+- DXF context coordinates are finite non-boolean numeric values.
+- `canvas_height` is either `None` or a finite non-boolean numeric value greater
+  than or equal to zero.
 - If `canvas_height is None`, point coordinates are unchanged except for float
   coercion.
 - If `canvas_height == H`, DXF y is `H - y`.
@@ -88,6 +103,7 @@ ADR/rule impact:
 | Domain class | Handling | Proof obligation | Test evidence | Mutation status |
 |---|---|---|---|---|
 | Coordinate conversion | Preserve x and optionally flip y | PO-DXF-001 | `test_dxf_context_and_numeric_format_are_deterministic` | killed |
+| Coordinate and canvas-height validation | Reject booleans, non-numeric values, non-finite values, and negative heights | PO-DXF-008 | `test_dxf_context_rejects_malformed_coordinate_boundaries` | killed |
 | Layer selection | Explicit layer, group label fallback, `"0"` fallback | PO-DXF-002 | `test_dxf_document_layers_and_ascii_text_contract`, `test_dxf_document_layer_fallback_and_write_guard` | killed |
 | File output | Existing directories write ASCII; missing directories fail | PO-DXF-003 | write-guard test and existing DXF generator tests | killed |
 | Rounded and sharp rectangles | Emit deterministic closed LWPOLYLINE vertices | PO-DXF-004 | rectangle/closure tests | equivalent survivors documented |
@@ -103,7 +119,7 @@ ADR/rule impact:
 |---|---|---|---|
 | Unit | yes | Entity helpers and numeric formatting are deterministic. | `tests/test_dxf_contract.py` |
 | Behavioral/condition | yes | The slice defines DXF-P1 renderer behavior. | Tests are marked `@pytest.mark.condition("DXF-P1")`. |
-| Failure-mode | yes | Bad group types, unsupported components, and missing directories must fail. | DXF generator and contract tests |
+| Failure-mode | yes | Bad coordinates, bad canvas heights, bad group types, unsupported components, and missing directories must fail. | DXF generator and contract tests |
 | Integration/live-path | yes | `DXFDocument.add_group()` and `to_dxf_string()` are exercised with neutral drawing groups. | document layer/text tests and existing DXF generator tests |
 | Contract/API compatibility | yes | Public `DXFDocument`/`DXFRenderContext` behavior and private proof-critical entity contracts are pinned. | focused DXF gate |
 | Property/fuzz | limited yes | Bounded deterministic partitions cover coordinate, layer, closure, and sampled-geometry domains. | DXF-P1 tests |
@@ -116,15 +132,24 @@ ADR/rule impact:
 
 ## Mutation Testing Gate
 
-Current result:
+Current result after the finite-boundary hardening update:
 
 - Tool: Cosmic Ray 8.4.6.
 - Environment: WSL Python 3.12 virtualenv.
-- Raw work items: 629.
-- Proof-critical work items after filter: 201.
-- Killed mutants: 182.
-- Equivalent survivors: 19.
-- Gate result: pass with documented equivalent survivors.
+- Config: `tests/mutation/dxf_context_finite_cosmic_ray.toml`.
+- Filter: `tests/mutation/filter_dxf_context_finite_work_items.py`.
+- Test selection: DXF context deterministic conversion and malformed-boundary
+  tests.
+- Raw work items: 674.
+- Proof-critical work items after filter: 25.
+- Killed mutants: 25.
+- Surviving mutants: 0.
+- Gate result: pass.
+
+Execution note:
+
+- The WSL mutation environment needs the mutation virtualenv on `PATH` so the
+  Cosmic Ray worker command `python -m pytest ...` resolves `python`.
 
 Equivalent survivor classes:
 
@@ -155,13 +180,59 @@ provided.
 
 ### Proof Method
 
-`DXFRenderContext.point(x, y)` returns `(float(x), float(y))` when no canvas
-height is configured and `(float(x), float(H - y))` otherwise. Tests cover both
-branches and mutation kills arithmetic/branch changes.
+`DXFRenderContext.point(x, y)` returns `(x, y)` as finite floats when no canvas
+height is configured and `(x, H - y)` as finite floats otherwise. Tests cover
+both branches and mutation kills arithmetic/branch changes.
 
 ### Conclusion
 
-Proven for numeric coordinates.
+Proven for finite non-boolean numeric coordinates.
+
+## PO-DXF-008: DXF Numeric Boundaries Fail Closed
+
+### Claim
+
+DXF context coordinates and canvas heights reject malformed numeric values
+before DXF entity text is emitted.
+
+### Domain
+
+Public `DXFRenderContext(canvas_height=...)`, `DXFDocument(canvas_height=...)`,
+and `DXFRenderContext.point(x, y)` calls.
+
+### Assumptions
+
+Renderer-neutral drawing components validate their own geometry before
+`DXFDocument.add_group()` consumes them. This obligation covers direct public
+DXF context/document use and the final coordinate conversion boundary.
+
+### Theorem
+
+For all accepted public DXF context/document canvas heights, the stored height
+is either `None` or a finite float greater than or equal to zero. For all
+accepted public DXF context points, emitted coordinates are finite floats. All
+tested booleans, non-numeric values, non-finite values, and negative
+canvas-height values raise `TypeError` or `ValueError`.
+
+### Proof Method
+
+`DXFRenderContext.__post_init__()`, `DXFDocument.__init__()`, and
+`DXFRenderContext.point()` route public numeric values through one local helper,
+`_coerce_finite_float()`. The helper rejects booleans before numeric coercion,
+rejects non-numeric values, rejects non-finite floats, and enforces a
+nonnegative minimum for `canvas_height`. The condition test covers direct
+context, document, x-coordinate, and y-coordinate invalid partitions and
+confirms a valid context still converts coordinates deterministically.
+
+### Counterexamples And Exclusions
+
+Negative point coordinates are allowed because InkGen geometry can be
+off-canvas. Private mutation of frozen dataclass internals and hostile monkey
+patching are excluded.
+
+### Conclusion
+
+Proven for the stated public DXF numeric boundaries.
 
 ## PO-DXF-002: Layer Selection
 
