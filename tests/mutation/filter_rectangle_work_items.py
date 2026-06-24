@@ -31,7 +31,7 @@ OR (
 OR (
   module_path = 'src/InkGen/drawing_components.py'
   AND definition_name = 'to_component'
-  AND start_pos_row BETWEEN 55 AND 62
+  AND start_pos_row BETWEEN 73 AND 82
 )
 OR (
   module_path = 'src/InkGen/dxf_generator.py'

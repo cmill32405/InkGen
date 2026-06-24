@@ -63,6 +63,7 @@ nav:
       - Error Contract: proofs/error-contract.md
       - Paragraph Contract: proofs/paragraph-contract.md
       - Drawing Group Contract: proofs/drawing-group-contract.md
+      - Neutral Primitive Style Contract: proofs/neutral-primitive-style-contract.md
       - Flow Document Contract: proofs/flow-document-contract.md
       - Flow Document Title Contract: proofs/flow-document-title-contract.md
       - CAD Zoning Contract: proofs/cad-zoning-contract.md

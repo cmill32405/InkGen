@@ -11,17 +11,17 @@ FILTER_SQL = """
 (
   module_path = 'src/InkGen/drawing_components.py'
   AND definition_name = '_apply_parameters'
-  AND start_pos_row BETWEEN 439 AND 449
+  AND start_pos_row BETWEEN 488 AND 498
 )
 OR (
   module_path = 'src/InkGen/drawing_components.py'
   AND definition_name = '_coerce_finite_non_negative_float'
-  AND start_pos_row BETWEEN 658 AND 670
+  AND start_pos_row BETWEEN 707 AND 719
 )
 OR (
   module_path = 'src/InkGen/drawing_components.py'
   AND definition_name = 'create_from_dict'
-  AND start_pos_row BETWEEN 415 AND 437
+  AND start_pos_row BETWEEN 463 AND 486
 )
 )
 AND operator_name NOT LIKE 'core/ReplaceBinaryOperator_BitOr_%'

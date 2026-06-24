@@ -20,7 +20,7 @@ OR (
 OR (
   module_path = 'src/InkGen/drawing_components.py'
   AND definition_name = 'to_component'
-  AND start_pos_row BETWEEN 243 AND 250
+  AND start_pos_row BETWEEN 305 AND 314
 )
 OR (
   module_path = 'src/InkGen/dxf_generator.py'

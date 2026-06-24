@@ -11,7 +11,7 @@ module_path = 'src/InkGen/drawing_components.py'
 AND (
   (
     definition_name = 'create_from_dict'
-    AND start_pos_row BETWEEN 415 AND 437
+    AND start_pos_row BETWEEN 463 AND 486
   )
   OR (
     definition_name IN (
@@ -20,7 +20,7 @@ AND (
       '_zoning_required_mapping',
       '_zoning_style_name'
     )
-    AND start_pos_row BETWEEN 618 AND 655
+    AND start_pos_row BETWEEN 667 AND 704
   )
 )
 AND operator_name NOT LIKE 'core/ReplaceBinaryOperator_BitOr_%'

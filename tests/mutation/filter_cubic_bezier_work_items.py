@@ -20,7 +20,7 @@ OR (
 OR (
   module_path = 'src/InkGen/drawing_components.py'
   AND definition_name = 'to_component'
-  AND start_pos_row BETWEEN 162 AND 169
+  AND start_pos_row BETWEEN 200 AND 209
 )
 OR (
   module_path = 'src/InkGen/pdf_generator.py'

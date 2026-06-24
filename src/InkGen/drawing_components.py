@@ -44,6 +44,18 @@ def normalize_output_format(output_format: OutputFormat | str) -> OutputFormat:
         raise ValueError(f"Unsupported output format: {output_format!r}") from exc
 
 
+def _require_drawing_style(style: object, owner: str) -> None:
+    """Fail when a renderer-neutral drawing primitive receives the wrong style kind."""
+    if not isinstance(style, DrawingStyle):
+        raise TypeError(f"{owner} style must be a DrawingStyle")
+
+
+def _require_text_style(style: object, owner: str) -> None:
+    """Fail when a renderer-neutral text primitive receives the wrong style kind."""
+    if not isinstance(style, TextStyle):
+        raise TypeError(f"{owner} style must be a TextStyle")
+
+
 @dataclass(frozen=True)
 class RectangleDrawing:
     """Renderer-neutral rectangle primitive."""
@@ -53,6 +65,10 @@ class RectangleDrawing:
     height: float
     corner_radii: float | tuple[float, float]
     style: DrawingStyle
+
+    def __post_init__(self) -> None:
+        """Validate the neutral rectangle style boundary."""
+        _require_drawing_style(self.style, "RectangleDrawing")
 
     def to_component(self, output_format: OutputFormat | str) -> Component:
         """Create a rectangle component for the requested backend."""
@@ -74,6 +90,10 @@ class LineDrawing:
     point_2: tuple[float, float]
     style: DrawingStyle
 
+    def __post_init__(self) -> None:
+        """Validate the neutral line style boundary."""
+        _require_drawing_style(self.style, "LineDrawing")
+
     def to_component(self, output_format: OutputFormat | str) -> Component:
         """Create a line component for the requested backend."""
         target = normalize_output_format(output_format)
@@ -93,6 +113,10 @@ class TextDrawing:
     text: str
     position: tuple[float, float]
     style: TextStyle
+
+    def __post_init__(self) -> None:
+        """Validate the neutral text style boundary."""
+        _require_text_style(self.style, "TextDrawing")
 
     def to_component(self, output_format: OutputFormat | str) -> Component:
         """Create a text component for the requested backend."""
@@ -118,6 +142,10 @@ class ArcDrawing:
     style: DrawingStyle
     rotation: float = 0.0
 
+    def __post_init__(self) -> None:
+        """Validate the neutral arc style boundary."""
+        _require_drawing_style(self.style, "ArcDrawing")
+
     def to_component(self, output_format: OutputFormat | str) -> Component:
         """Create an arc component for the requested backend."""
         target = normalize_output_format(output_format)
@@ -138,6 +166,10 @@ class QuadraticBezierDrawing:
     control_point: tuple[float, float]
     end_point: tuple[float, float]
     style: DrawingStyle
+
+    def __post_init__(self) -> None:
+        """Validate the neutral quadratic Bezier style boundary."""
+        _require_drawing_style(self.style, "QuadraticBezierDrawing")
 
     def to_component(self, output_format: OutputFormat | str) -> Component:
         """Create a quadratic Bezier component for the requested backend."""
@@ -161,6 +193,10 @@ class CubicBezierDrawing:
     end_point: tuple[float, float]
     style: DrawingStyle
 
+    def __post_init__(self) -> None:
+        """Validate the neutral cubic Bezier style boundary."""
+        _require_drawing_style(self.style, "CubicBezierDrawing")
+
     def to_component(self, output_format: OutputFormat | str) -> Component:
         """Create a cubic Bezier component for the requested backend."""
         target = normalize_output_format(output_format)
@@ -182,6 +218,7 @@ class PathDrawing:
 
     def __post_init__(self) -> None:
         """Validate the public path command collection boundary."""
+        _require_drawing_style(self.style, "PathDrawing")
         if self.commands is None:
             return
         if isinstance(self.commands, (str, bytes)) or not isinstance(self.commands, Sequence):
@@ -214,6 +251,10 @@ class RegularPolygonDrawing:
     angle: float = 0.0
     corner_radius: float = 0.0
 
+    def __post_init__(self) -> None:
+        """Validate the neutral regular polygon style boundary."""
+        _require_drawing_style(self.style, "RegularPolygonDrawing")
+
     def to_component(self, output_format: OutputFormat | str) -> Component:
         """Create a regular polygon component for the requested backend."""
         target = normalize_output_format(output_format)
@@ -232,6 +273,10 @@ class PolygonalDrawing:
 
     points: list[tuple[float, float]]
     style: DrawingStyle
+
+    def __post_init__(self) -> None:
+        """Validate the neutral polygonal style boundary."""
+        _require_drawing_style(self.style, "PolygonalDrawing")
 
     def to_component(self, output_format: OutputFormat | str) -> Component:
         """Create an irregular polygon component for the requested backend."""
@@ -252,6 +297,10 @@ class CircleDrawing:
     position: tuple[float, float]
     radius: float
     style: DrawingStyle
+
+    def __post_init__(self) -> None:
+        """Validate the neutral circle style boundary."""
+        _require_drawing_style(self.style, "CircleDrawing")
 
     def to_component(self, output_format: OutputFormat | str) -> Component:
         """Create a circle component for the requested backend."""

@@ -11,11 +11,11 @@ module_path = 'src/InkGen/drawing_components.py'
 AND (
     (
         definition_name = '__post_init__'
-        AND start_pos_row BETWEEN 183 AND 191
+        AND start_pos_row BETWEEN 222 AND 229
     )
     OR (
         definition_name = 'to_component'
-        AND start_pos_row BETWEEN 196 AND 204
+        AND start_pos_row BETWEEN 231 AND 240
     )
 )
 """

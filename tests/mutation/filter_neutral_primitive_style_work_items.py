@@ -1,4 +1,4 @@
-"""Filter Cosmic Ray work items to DRAWING-GROUP-COMPONENTS-P2 rows."""
+"""Filter Cosmic Ray work items to NEUTRAL-PRIMITIVE-STYLE-P2 rows."""
 
 from __future__ import annotations
 
@@ -9,25 +9,32 @@ from pathlib import Path
 FILTER_SQL = """
 module_path = 'src/InkGen/drawing_components.py'
 AND (
-    (
-        definition_name = '__post_init__'
-        AND start_pos_row BETWEEN 324 AND 333
+  (
+    definition_name IN ('_require_drawing_style', '_require_text_style')
+    AND start_pos_row BETWEEN 47 AND 56
+  )
+  OR (
+    definition_name = '__post_init__'
+    AND (
+      start_pos_row BETWEEN 69 AND 71
+      OR start_pos_row BETWEEN 93 AND 95
+      OR start_pos_row BETWEEN 117 AND 119
+      OR start_pos_row BETWEEN 145 AND 147
+      OR start_pos_row BETWEEN 170 AND 172
+      OR start_pos_row BETWEEN 196 AND 198
+      OR start_pos_row BETWEEN 219 AND 221
+      OR start_pos_row BETWEEN 254 AND 256
+      OR start_pos_row BETWEEN 277 AND 279
+      OR start_pos_row BETWEEN 301 AND 303
     )
-    OR (
-        definition_name = 'add_component'
-        AND start_pos_row BETWEEN 335 AND 338
-    )
-    OR (
-        definition_name = '_validate_component'
-        AND start_pos_row BETWEEN 340 AND 344
-    )
+  )
 )
 AND operator_name NOT LIKE 'core/ReplaceBinaryOperator_BitOr_%'
 """
 
 
 def filter_work_items(db_path: Path, *, clear_results: bool) -> tuple[int, int]:
-    """Restrict a Cosmic Ray database to group component-boundary items."""
+    """Restrict a Cosmic Ray database to neutral primitive style items."""
     with sqlite3.connect(db_path) as conn:
         cursor = conn.cursor()
         before = cursor.execute("SELECT COUNT(*) FROM work_items").fetchone()[0]

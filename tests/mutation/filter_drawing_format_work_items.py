@@ -9,8 +9,8 @@ from pathlib import Path
 FILTER_SQL = """
 module_path = 'src/InkGen/drawing_components.py'
 AND (
-  (definition_name = 'normalize_output_format' AND start_pos_row BETWEEN 34 AND 43)
-  OR (definition_name = 'to_group' AND start_pos_row = 278)
+  (definition_name = 'normalize_output_format' AND start_pos_row BETWEEN 35 AND 44)
+  OR (definition_name = 'to_group' AND start_pos_row = 350)
 )
 AND (
   operator_name = 'core/AddNot'

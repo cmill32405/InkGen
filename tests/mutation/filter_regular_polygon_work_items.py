@@ -35,7 +35,7 @@ OR (
 OR (
   module_path = 'src/InkGen/drawing_components.py'
   AND definition_name = 'to_component'
-  AND start_pos_row BETWEEN 204 AND 211
+  AND start_pos_row BETWEEN 258 AND 267
 )
 OR (
   module_path = 'src/InkGen/pdf_generator.py'
