@@ -388,6 +388,134 @@ def test_flow_document_hydration_rejects_malformed_drawing_component_envelopes(
 
 
 @pytest.mark.condition("FLOW-DOCUMENT-P1")
+@pytest.mark.parametrize(
+    ("style_payload", "exception_type", "message"),
+    [
+        (None, ValueError, "flow document drawing component payload must include style"),
+        (object(), TypeError, "flow document drawing style payload must be a mapping"),
+        ({}, ValueError, "flow document drawing style payload must include DrawingStyle"),
+        ({"TextStyle": {"name": "wrong-kind"}}, ValueError, "flow document drawing style payload must include DrawingStyle"),
+        ({"DrawingStyle": object()}, TypeError, "flow document drawing style entry must be a mapping"),
+        ({"DrawingStyle": {"name": object()}}, TypeError, "flow document drawing style name must be a string"),
+    ],
+)
+def test_flow_document_hydration_rejects_malformed_drawing_style_payloads(
+    style_payload: object,
+    exception_type: type[Exception],
+    message: str,
+) -> None:
+    """FLOW-DOCUMENT-P1: Drawing style envelopes fail before style construction."""
+    document = FlowDocument(title="Malformed Style")
+    document.add_drawing_group(_drawing_group())
+    payload = document.parameters
+    flow_payload = payload["FlowDocument"]
+    assert isinstance(flow_payload, dict)
+    blocks = flow_payload["blocks"]
+    assert isinstance(blocks, list)
+    block_payload = blocks[0]["payload"]
+    assert isinstance(block_payload, dict)
+    components = block_payload["components"]
+    assert isinstance(components, list)
+    component_payload = components[0]["payload"]
+    assert isinstance(component_payload, dict)
+    if style_payload is None:
+        component_payload.pop("style")
+    else:
+        component_payload["style"] = style_payload
+
+    with pytest.raises(exception_type, match=message):
+        FlowDocument.create_from_dict(payload)
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-P1")
+def test_flow_document_hydration_rejects_mismatched_drawing_style_overrides() -> None:
+    """FLOW-DOCUMENT-P1: Drawing style overrides must match the component kind."""
+    drawing_document = FlowDocument(title="Bad Drawing Style Override")
+    drawing = _drawing_group()
+    drawing_document.add_drawing_group(drawing)
+    drawing_style_name = drawing.components[0].style.name
+
+    text_document = FlowDocument(title="Bad Text Style Override")
+    text_group = DrawingComponentGroup("text-flow-drawing")
+    text_group.add_component(TextDrawing("NOTE", (2.0, 3.0), _text_style()))
+    text_document.add_drawing_group(text_group)
+    text_style_name = text_group.components[0].style.name
+
+    with pytest.raises(TypeError, match="must be a DrawingStyle"):
+        FlowDocument.create_from_dict(drawing_document.parameters, {drawing_style_name: _text_style()})
+    with pytest.raises(TypeError, match="must be a TextStyle"):
+        FlowDocument.create_from_dict(text_document.parameters, {text_style_name: _drawing_style()})
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-P1")
+def test_flow_document_hydration_constructs_missing_drawing_style_overrides_by_kind() -> None:
+    """FLOW-DOCUMENT-P1: Drawing style fallback construction matches component kind."""
+    drawing_style_name = f"raw_draw_{uuid4().hex}"
+    text_style_name = f"raw_text_{uuid4().hex}"
+    payload = {
+        "FlowDocument": {
+            "title": "Raw Styles",
+            "blocks": [
+                {
+                    "type": "drawing",
+                    "payload": {
+                        "group_label": "raw-style-drawing",
+                        "components": [
+                            {
+                                "type": "RectangleDrawing",
+                                "payload": {
+                                    "position": (1.0, 2.0),
+                                    "width": 10.0,
+                                    "height": 5.0,
+                                    "corner_radii": 0.0,
+                                    "style": {
+                                        "DrawingStyle": {
+                                            "name": drawing_style_name,
+                                            "stroke": "#222222",
+                                            "stroke_width": 0.2,
+                                            "fill": "none",
+                                            "stroke_opacity": 1.0,
+                                            "fill_opacity": 1.0,
+                                        }
+                                    },
+                                },
+                            },
+                            {
+                                "type": "TextDrawing",
+                                "payload": {
+                                    "text": "NOTE",
+                                    "position": (2.0, 3.0),
+                                    "style": {
+                                        "TextStyle": {
+                                            "name": text_style_name,
+                                            "color": "#000000",
+                                            "superscript": False,
+                                            "subscript": False,
+                                            "text_align": "left",
+                                            "line_spacing": 1.0,
+                                            "font": Font(size=11.0).parameters,
+                                        }
+                                    },
+                                },
+                            },
+                        ],
+                    },
+                }
+            ],
+        }
+    }
+
+    clone = FlowDocument.create_from_dict(payload)
+    drawing = clone.blocks[0]
+
+    assert isinstance(drawing, DrawingComponentGroup)
+    assert isinstance(drawing.components[0].style, DrawingStyle)
+    assert drawing.components[0].style.name == drawing_style_name
+    assert isinstance(drawing.components[1].style, TextStyle)
+    assert drawing.components[1].style.name == text_style_name
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-P1")
 def test_flow_document_hydration_dispatches_dynamic_drawing_component_type_strings() -> None:
     """FLOW-DOCUMENT-P1: Drawing component dispatch uses string equality."""
     document = FlowDocument(title="Dynamic Component")

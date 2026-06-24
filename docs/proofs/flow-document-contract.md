@@ -73,6 +73,10 @@ Before/after edge changes:
 - Before the drawing-payload hardening update, malformed serialized drawing
   payloads could fail through incidental `KeyError` or character-by-character
   component iteration.
+- Before the drawing-style hardening update, malformed serialized drawing style
+  envelopes and mismatched style override map entries could fail through
+  incidental `KeyError` or reach primitive construction with the wrong style
+  type.
 - After this slice, DOCX ZIP parts use a fixed timestamp and drawing
   materialization must return an InkGen `Component`.
 - After the drawing-label hardening update, drawing block hydration passes
@@ -89,6 +93,9 @@ Before/after edge changes:
 - After the drawing-payload hardening update, drawing block hydration validates
   that the drawing payload contains `group_label` and a non-string component
   sequence before constructing the neutral drawing group.
+- After the drawing-style hardening update, component hydration requires a style
+  payload, validates the nested style envelope and style name, and verifies
+  override-map values match the component's drawing/text style kind.
 - No new dependency edge or third-party dependency was introduced.
 
 Cycle/layer/coupling/redundancy result:
@@ -147,6 +154,8 @@ ADR/rule impact:
   and supported discriminators before style extraction.
 - `_drawing_from_parameters()` validates drawing payload keys and component
   sequence shape before iterating components.
+- `_style_from_payload()` validates drawing style envelope shape and override
+  type before constructing or reusing a style object.
 
 ## Comprehensiveness Matrix
 
@@ -159,6 +168,7 @@ ADR/rule impact:
 | Serialized block envelope and dispatch | Reject malformed envelopes and dispatch valid dynamic type strings by value | PO-FDOC-007 | `test_flow_document_hydration_rejects_malformed_block_envelopes`, `test_flow_document_hydration_dispatches_dynamic_block_type_strings` | killed |
 | Serialized drawing payload | Reject missing drawing payload keys and non-sequence component collections before component iteration | PO-FDOC-010 | `test_flow_document_hydration_rejects_malformed_drawing_payloads` | killed |
 | Serialized drawing component envelope and dispatch | Reject malformed component envelopes, reject unsupported types before style extraction, and dispatch valid dynamic type strings by value | PO-FDOC-009 | `test_flow_document_hydration_rejects_malformed_drawing_component_envelopes`, `test_flow_document_hydration_dispatches_dynamic_drawing_component_type_strings` | killed |
+| Serialized drawing style envelope | Reject missing/malformed style envelopes, mismatched style keys, non-string style names, and wrong-type style overrides | PO-FDOC-011 | `test_flow_document_hydration_rejects_malformed_drawing_style_payloads`, `test_flow_document_hydration_rejects_mismatched_drawing_style_overrides`, `test_flow_document_hydration_constructs_missing_drawing_style_overrides_by_kind` | killed |
 | Malformed serialized drawing label | Reject through the neutral group label contract | PO-FDOC-006 | `test_flow_document_drawing_group_hydration_rejects_malformed_label` | behavioral evidence |
 | Invalid drawing materialization | Reject before silent omission | PO-FDOC-004 | `test_flow_document_rejects_invalid_drawing_materialization` | killed |
 | DOCX VML linework | Emit group-relative points | PO-FDOC-005 | `test_flow_document_docx_drawing_polyline_uses_group_relative_points` | killed |
@@ -171,7 +181,7 @@ ADR/rule impact:
 |---|---|---|---|
 | Unit | yes | Helpers are deterministic. | FLOW-DOCUMENT-P1 tests |
 | Behavioral/condition | yes | The slice defines document-output behavior. | Tests are marked `@pytest.mark.condition("FLOW-DOCUMENT-P1")`. |
-| Failure-mode | yes | Invalid content, malformed root payloads, malformed serialized block envelopes, malformed drawing payloads, malformed drawing component envelopes, malformed serialized drawing labels, and invalid output paths must fail loudly. | Invalid hydration, invalid materialization, and existing writer tests |
+| Failure-mode | yes | Invalid content, malformed root payloads, malformed serialized block envelopes, malformed drawing payloads, malformed drawing component envelopes, malformed drawing style envelopes, malformed serialized drawing labels, and invalid output paths must fail loudly. | Invalid hydration, invalid materialization, and existing writer tests |
 | Integration/live-path | yes | DOCX ZIP, HTML, RTF, text, table, and drawing paths cross module boundaries. | Focused and existing document-output tests |
 | Contract/API compatibility | yes | Parameters and public add methods must preserve existing behavior. | Round-trip and existing rejection tests |
 | Property/fuzz | no | This slice proves finite output and dispatch contracts. | Not applicable |
@@ -201,6 +211,8 @@ Proof-critical mutation targets:
   fail malformed-component and dynamic-component-dispatch tests.
 - Weakening serialized drawing payload key or component-sequence validation
   should fail malformed-drawing-payload tests.
+- Weakening serialized drawing style envelope or override type validation should
+  fail malformed-style, mismatched-override, or fallback-construction tests.
 
 Current result:
 
@@ -217,6 +229,8 @@ Current result:
   killed, and 0 survived.
 - Cosmic Ray 8.4.6, scoped to drawing payload validation rows after the
   drawing-payload hardening update: 7 work items, 7 killed, and 0 survived.
+- Cosmic Ray 8.4.6, scoped to drawing style envelope validation rows after the
+  drawing-style hardening update: 15 work items, 15 killed, and 0 survived.
 
 ## PO-FDOC-001: DOCX Bytes Are Deterministic
 
@@ -472,6 +486,38 @@ non-sequence object.
 Malformed labels are delegated to the `DrawingComponentGroup` label contract.
 Malformed component entries inside a valid component sequence are delegated to
 the drawing component envelope contract.
+
+### Conclusion
+
+Proven for the stated domain after focused tests, mutation, and the full DoD
+gate pass.
+
+## PO-FDOC-011: Drawing Style Envelopes Are Validated
+
+### Claim
+
+Flow-document drawing component hydration rejects malformed serialized style
+envelopes and mismatched style override entries before primitive construction.
+
+### Domain
+
+Serialized drawing component payloads passed through
+`FlowDocument.create_from_dict()`, including the optional `styles` override map.
+
+### Proof Method
+
+`_drawing_component_from_parameters()` requires every component payload to
+include `style`. `_style_from_payload()` then requires the style payload to be a
+mapping with the expected `DrawingStyle` or `TextStyle` key, a mapping style
+entry, and a string style name. If an override exists in `styles`, the override
+must be a `DrawingStyle` for drawing primitives or a `TextStyle` for text
+primitives. Without an override, focused tests prove fallback construction uses
+the correct style class for both drawing and text components.
+
+### Counterexamples And Exclusions
+
+Style field-level validation, such as color, opacity, font, and line-spacing
+rules, remains delegated to `DrawingStyle`, `TextStyle`, and `Font`.
 
 ### Conclusion
 

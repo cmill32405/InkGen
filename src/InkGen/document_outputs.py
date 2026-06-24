@@ -566,6 +566,8 @@ def _drawing_component_from_parameters(data: object, styles: dict[str, object] |
     if not isinstance(data["payload"], Mapping):
         raise TypeError("flow document drawing component payload must be a mapping")
     payload = dict(data["payload"])
+    if "style" not in payload:
+        raise ValueError("flow document drawing component payload must include style")
     style = _style_from_payload(payload.pop("style"), styles, text=component_type in TEXT_DRAWING_COMPONENT_TYPES)
     if component_type == "PathDrawing":
         commands = [PathCommand(command["type"], command.get("points", [])) for command in payload.get("commands", [])]
@@ -573,12 +575,25 @@ def _drawing_component_from_parameters(data: object, styles: dict[str, object] |
     return DRAWING_COMPONENT_CONSTRUCTORS[component_type](style=style, **payload)
 
 
-def _style_from_payload(payload: dict[str, object], styles: dict[str, object] | None, *, text: bool) -> DrawingStyle | TextStyle:
+def _style_from_payload(payload: object, styles: dict[str, object] | None, *, text: bool) -> DrawingStyle | TextStyle:
+    if not isinstance(payload, Mapping):
+        raise TypeError("flow document drawing style payload must be a mapping")
     styles = styles or {}
     style_key = "TextStyle" if text else "DrawingStyle"
-    style_name = payload[style_key]["name"]
+    expected_style_type = TextStyle if text else DrawingStyle
+    if style_key not in payload:
+        raise ValueError(f"flow document drawing style payload must include {style_key}")
+    style_data = payload[style_key]
+    if not isinstance(style_data, Mapping):
+        raise TypeError("flow document drawing style entry must be a mapping")
+    style_name = style_data.get("name")
+    if not isinstance(style_name, str):
+        raise TypeError("flow document drawing style name must be a string")
     if style_name in styles:
-        return styles[style_name]
+        style = styles[style_name]
+        if not isinstance(style, expected_style_type):
+            raise TypeError(f"style override for {style_name!r} must be a {expected_style_type.__name__}")
+        return style
     return TextStyle.create_from_dict(payload) if text else DrawingStyle.create_from_dict(payload)
 
 
