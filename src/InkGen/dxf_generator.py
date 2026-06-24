@@ -101,14 +101,28 @@ class DXFDocument:
         lines.extend(["0", "ENDSEC", "0", "EOF"])
         return "\n".join(lines) + "\n"
 
-    def create_dxf(self, filepath: str) -> None:
+    def create_dxf(self, filepath: str | os.PathLike[str]) -> None:
         """Write this document to a DXF file."""
-        path = os.path.abspath(filepath)
-        directory = os.path.dirname(path)
-        if directory and not os.path.exists(directory):
-            raise ValueError("The file path does not exist.")
+        path = _normalize_output_filepath(filepath)
         with open(path, "w", encoding="ascii") as handle:
             handle.write(self.to_dxf_string())
+
+
+def _normalize_output_filepath(filepath: object) -> str:
+    """Return an absolute output path or fail at the DXF writer boundary."""
+    try:
+        path_value = os.fspath(filepath)
+    except TypeError as exc:
+        raise TypeError("file path must be a string or path-like object") from exc
+    if not isinstance(path_value, str):
+        raise TypeError("file path must be a string or path-like object")
+    if not path_value:
+        raise ValueError("file path must not be empty")
+    path = os.path.abspath(path_value)
+    directory = os.path.dirname(path)
+    if directory and not os.path.exists(directory):
+        raise ValueError("The file path does not exist.")
+    return path
 
 
 def _component_to_entities(component: object, context: DXFRenderContext) -> list[str]:

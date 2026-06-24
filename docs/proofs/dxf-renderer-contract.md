@@ -24,7 +24,8 @@ The slice covers:
 The original DXF-P1 slice added condition-marked tests, a scoped mutation gate,
 and this proof note. The finite-boundary hardening update changes the public
 DXF context and document canvas-height boundaries so malformed numeric values
-fail before DXF artifact text is emitted.
+fail before DXF artifact text is emitted. The filepath hardening update changes
+the public DXF writer boundary so malformed output paths fail before `open()`.
 
 ## Architecture Impact
 
@@ -32,7 +33,7 @@ Affected surface:
 
 - `tests/test_dxf_contract.py`: DXF-P1 condition tests.
 - `src/InkGen/dxf_generator.py`: finite numeric validation for public DXF
-  coordinate and canvas-height boundaries.
+  coordinate and canvas-height boundaries, plus file-writer path validation.
 - `tests/mutation/dxf_renderer_cosmic_ray.toml`: scoped Cosmic Ray gate.
 - `tests/mutation/filter_dxf_renderer_work_items.py`: proof-critical mutation
   filter.
@@ -64,6 +65,8 @@ Before/after edge changes:
   cross-layer edge explicit and tested.
 - The hardening update adds a local DXF numeric validator; it does not import a
   helper from another InkGen layer and does not add a dependency.
+- The filepath hardening update adds a local DXF output path validator; it does
+  not add a dependency or change DXF entity generation.
 
 Cycle/layer/coupling/redundancy result:
 
@@ -97,6 +100,8 @@ ADR/rule impact:
 - Text entity height is `font_size * 25.4 / 72.0`; newlines are replaced with
   spaces.
 - DXF output is ASCII text and ends with `0\nEOF\n`.
+- DXF file output accepts string and path-like paths that resolve to existing
+  directories and rejects non-path, bytes, and empty path values.
 
 ## Comprehensiveness Matrix
 
@@ -105,7 +110,7 @@ ADR/rule impact:
 | Coordinate conversion | Preserve x and optionally flip y | PO-DXF-001 | `test_dxf_context_and_numeric_format_are_deterministic` | killed |
 | Coordinate and canvas-height validation | Reject booleans, non-numeric values, non-finite values, and negative heights | PO-DXF-008 | `test_dxf_context_rejects_malformed_coordinate_boundaries` | killed |
 | Layer selection | Explicit layer, group label fallback, `"0"` fallback | PO-DXF-002 | `test_dxf_document_layers_and_ascii_text_contract`, `test_dxf_document_layer_fallback_and_write_guard` | killed |
-| File output | Existing directories write ASCII; missing directories fail | PO-DXF-003 | write-guard test and existing DXF generator tests | killed |
+| File output | String/path-like existing-directory paths write ASCII; malformed paths and missing directories fail before writing | PO-DXF-003 | write-guard test, malformed-path test, and existing DXF generator tests | killed |
 | Rounded and sharp rectangles | Emit deterministic closed LWPOLYLINE vertices | PO-DXF-004 | rectangle/closure tests | equivalent survivors documented |
 | Path closure | `Z` closes; non-`Z` valid commands remain open | PO-DXF-005 | open/closed path tests | equivalent survivor documented |
 | PDF-sampled geometry | Arc, cubic Bezier, regular polygon, and path reuse PDF points | PO-DXF-006 | sampled-geometry test | killed |
@@ -119,7 +124,7 @@ ADR/rule impact:
 |---|---|---|---|
 | Unit | yes | Entity helpers and numeric formatting are deterministic. | `tests/test_dxf_contract.py` |
 | Behavioral/condition | yes | The slice defines DXF-P1 renderer behavior. | Tests are marked `@pytest.mark.condition("DXF-P1")`. |
-| Failure-mode | yes | Bad coordinates, bad canvas heights, bad group types, unsupported components, and missing directories must fail. | DXF generator and contract tests |
+| Failure-mode | yes | Bad coordinates, bad canvas heights, bad group types, unsupported components, malformed output paths, and missing directories must fail. | DXF generator and contract tests |
 | Integration/live-path | yes | `DXFDocument.add_group()` and `to_dxf_string()` are exercised with neutral drawing groups. | document layer/text tests and existing DXF generator tests |
 | Contract/API compatibility | yes | Public `DXFDocument`/`DXFRenderContext` behavior and private proof-critical entity contracts are pinned. | focused DXF gate |
 | Property/fuzz | limited yes | Bounded deterministic partitions cover coordinate, layer, closure, and sampled-geometry domains. | DXF-P1 tests |
@@ -143,6 +148,19 @@ Current result after the finite-boundary hardening update:
 - Raw work items: 674.
 - Proof-critical work items after filter: 25.
 - Killed mutants: 25.
+- Surviving mutants: 0.
+- Gate result: pass.
+
+Current result after the filepath hardening update:
+
+- Tool: Cosmic Ray 8.4.6.
+- Environment: WSL Python 3.12 virtualenv.
+- Config: `tests/mutation/dxf_renderer_cosmic_ray.toml`.
+- Filter: `tests/mutation/filter_dxf_filepath_work_items.py`.
+- Test selection: focused DXF-P1 contract tests.
+- Raw work items: 690.
+- Proof-critical work items after filter: 7.
+- Killed mutants: 7.
 - Surviving mutants: 0.
 - Gate result: pass.
 
@@ -254,13 +272,17 @@ Proven for `DrawingComponentGroup` inputs.
 
 ### Claim
 
-DXF files write only when the destination directory exists.
+DXF files write only when the destination path is a string or path-like value
+whose destination directory exists.
 
 ### Proof Method
 
-`create_dxf()` resolves the target path, checks the parent directory, raises for
-missing directories, and writes ASCII output otherwise. Tests cover both
-branches.
+`create_dxf()` delegates to `_normalize_output_filepath()` before writing. The
+helper accepts string and path-like values through `os.fspath()`, rejects
+non-path objects, bytes, and empty paths, checks the parent directory, and then
+returns the absolute path for ASCII output. Tests cover valid string and
+path-like writes, malformed object/integer/bytes/empty paths, and missing
+directories.
 
 ### Conclusion
 

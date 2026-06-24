@@ -131,6 +131,32 @@ def test_dxf_document_layer_fallback_and_write_guard(tmp_path) -> None:
     document.create_dxf(str(target))
     assert target.read_text(encoding="ascii") == document.to_dxf_string()
 
+    pathlike_target = tmp_path / "pathlike.dxf"
+    document.create_dxf(pathlike_target)
+    assert pathlike_target.read_text(encoding="ascii") == document.to_dxf_string()
+
+
+@pytest.mark.condition("DXF-P1")
+@pytest.mark.parametrize(
+    ("filepath", "exception_type", "message"),
+    [
+        (object(), TypeError, "file path must be a string or path-like object"),
+        (123, TypeError, "file path must be a string or path-like object"),
+        (b"drawing.dxf", TypeError, "file path must be a string or path-like object"),
+        ("", ValueError, "file path must not be empty"),
+    ],
+)
+def test_dxf_document_rejects_malformed_output_paths(
+    filepath: object,
+    exception_type: type[Exception],
+    message: str,
+) -> None:
+    """DXF-P1: DXFDocument rejects malformed output paths at the writer boundary."""
+    document = DXFDocument()
+
+    with pytest.raises(exception_type, match=message):
+        document.create_dxf(filepath)  # type: ignore[arg-type]
+
 
 @pytest.mark.condition("DXF-P1")
 def test_dxf_rectangle_and_path_closure_contracts() -> None:
