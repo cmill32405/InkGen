@@ -63,6 +63,9 @@ Before/after edge changes:
   group contract.
 - Before the block-envelope hardening update, malformed serialized block
   envelopes could fail through incidental `KeyError` or downstream type errors.
+- Before the root-payload hardening update, malformed `FlowDocument` root
+  payloads and string `blocks`/`paragraphs` collections could fail through
+  incidental attribute errors or character-by-character iteration.
 - After this slice, DOCX ZIP parts use a fixed timestamp and drawing
   materialization must return an InkGen `Component`.
 - After the drawing-label hardening update, drawing block hydration passes
@@ -70,6 +73,8 @@ Before/after edge changes:
   labels fail at the renderer-neutral boundary.
 - After the block-envelope hardening update, block hydration first validates
   that each block is a mapping with a string `type` and mapping `payload`.
+- After the root-payload hardening update, `create_from_dict()` first validates
+  the wrapped or direct flow-document payload and collection fields.
 - No new dependency edge or third-party dependency was introduced.
 
 Cycle/layer/coupling/redundancy result:
@@ -122,6 +127,8 @@ ADR/rule impact:
   `DrawingComponentGroup` without stringifying malformed values.
 - `_block_from_parameters()` now validates serialized block envelopes before
   dispatching to paragraph, table, or drawing hydration.
+- `_flow_document_payload()` and `_payload_sequence()` validate root payloads
+  and serialized collection fields before block or paragraph iteration.
 
 ## Comprehensiveness Matrix
 
@@ -130,6 +137,7 @@ ADR/rule impact:
 | Repeated DOCX generation | Preserve exact bytes and fixed part order/timestamps | PO-FDOC-001 | `test_flow_document_docx_bytes_are_deterministic` | killed |
 | Text with XML/HTML/RTF controls | Escape per target format | PO-FDOC-002 | `test_flow_document_escapes_text_across_output_formats` | behavioral evidence |
 | Paragraph/table/drawing block order | Preserve through parameters and output | PO-FDOC-003 | `test_flow_document_preserves_mixed_block_order_after_round_trip` | behavioral evidence |
+| Root payload shape | Accept wrapped/direct mappings and reject malformed payload roots or collection fields | PO-FDOC-008 | `test_flow_document_hydrates_direct_payload_mapping`, `test_flow_document_hydration_rejects_malformed_root_payloads` | killed |
 | Serialized block envelope and dispatch | Reject malformed envelopes and dispatch valid dynamic type strings by value | PO-FDOC-007 | `test_flow_document_hydration_rejects_malformed_block_envelopes`, `test_flow_document_hydration_dispatches_dynamic_block_type_strings` | killed |
 | Malformed serialized drawing label | Reject through the neutral group label contract | PO-FDOC-006 | `test_flow_document_drawing_group_hydration_rejects_malformed_label` | behavioral evidence |
 | Invalid drawing materialization | Reject before silent omission | PO-FDOC-004 | `test_flow_document_rejects_invalid_drawing_materialization` | killed |
@@ -143,7 +151,7 @@ ADR/rule impact:
 |---|---|---|---|
 | Unit | yes | Helpers are deterministic. | FLOW-DOCUMENT-P1 tests |
 | Behavioral/condition | yes | The slice defines document-output behavior. | Tests are marked `@pytest.mark.condition("FLOW-DOCUMENT-P1")`. |
-| Failure-mode | yes | Invalid content, malformed serialized block envelopes, malformed serialized drawing labels, and invalid output paths must fail loudly. | Invalid hydration, invalid materialization, and existing writer tests |
+| Failure-mode | yes | Invalid content, malformed root payloads, malformed serialized block envelopes, malformed serialized drawing labels, and invalid output paths must fail loudly. | Invalid hydration, invalid materialization, and existing writer tests |
 | Integration/live-path | yes | DOCX ZIP, HTML, RTF, text, table, and drawing paths cross module boundaries. | Focused and existing document-output tests |
 | Contract/API compatibility | yes | Parameters and public add methods must preserve existing behavior. | Round-trip and existing rejection tests |
 | Property/fuzz | no | This slice proves finite output and dispatch contracts. | Not applicable |
@@ -167,6 +175,8 @@ Proof-critical mutation targets:
   label hydration test.
 - Weakening serialized block envelope validation or dispatch should fail the
   malformed-envelope test.
+- Weakening root payload or collection validation should fail malformed-root
+  tests.
 
 Current result:
 
@@ -176,6 +186,8 @@ Current result:
 - Cosmic Ray 8.4.6, scoped to serialized block-envelope validation and
   dispatch rows after the block-envelope hardening update: 32 work items, 32
   killed, and 0 survived.
+- Cosmic Ray 8.4.6, scoped to root-payload validation rows after the
+  root-payload hardening update: 8 work items, 8 killed, and 0 survived.
 
 ## PO-FDOC-001: DOCX Bytes Are Deterministic
 
@@ -333,6 +345,38 @@ strings for all three supported block kinds.
 
 Malformed payloads inside valid paragraph, table, or drawing envelopes are
 delegated to the owning paragraph, table, or drawing contract.
+
+### Conclusion
+
+Proven for the stated domain after tests and mutation pass.
+
+## PO-FDOC-008: Root Payload Shape Is Validated
+
+### Claim
+
+`FlowDocument.create_from_dict()` accepts wrapped and direct mapping payloads
+and rejects malformed root payloads before iterating blocks or legacy
+paragraphs.
+
+### Domain
+
+Public `FlowDocument.create_from_dict(data, styles=None)` calls using either
+`{"FlowDocument": payload}` or direct payload mappings.
+
+### Proof Method
+
+`_flow_document_payload()` requires `data` to be a mapping, unwraps
+`FlowDocument` when present, and requires the unwrapped payload to be a mapping.
+`_payload_sequence()` accepts absent collection fields as empty lists, rejects
+strings and bytes, and requires collection fields to be sequences before
+iteration. Focused tests cover a valid direct payload, non-mapping root data,
+non-mapping wrapped payloads, and malformed `blocks`/`paragraphs` collections.
+
+### Counterexamples And Exclusions
+
+Individual malformed block envelopes are delegated to PO-FDOC-007. Malformed
+legacy paragraph payloads inside a valid `paragraphs` sequence are delegated to
+the paragraph contract.
 
 ### Conclusion
 

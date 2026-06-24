@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import zipfile
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from enum import Enum
 from html import escape as html_escape
 from io import BytesIO
@@ -88,13 +88,13 @@ class FlowDocument:
         }
 
     @classmethod
-    def create_from_dict(cls, data: dict[str, object], styles: dict[str, object] | None = None) -> FlowDocument:
+    def create_from_dict(cls, data: object, styles: dict[str, object] | None = None) -> FlowDocument:
         """Recreate a flow document from serialized parameters."""
-        payload = data["FlowDocument"] if "FlowDocument" in data else data
+        payload = _flow_document_payload(data)
         document = cls(title=_normalize_title(payload.get("title")))
-        for block_payload in payload.get("blocks", []):
+        for block_payload in _payload_sequence(payload, "blocks"):
             document._blocks.append(_block_from_parameters(block_payload, styles))
-        for paragraph_payload in payload.get("paragraphs", []):
+        for paragraph_payload in _payload_sequence(payload, "paragraphs"):
             document.add_paragraph(Paragraph.create_from_dict(paragraph_payload, styles))
         return document
 
@@ -355,6 +355,22 @@ def _normalize_title(value: object) -> str:
         raise TypeError("title must be a string or None")
     if not value:
         return "InkGen Document"
+    return value
+
+
+def _flow_document_payload(data: object) -> Mapping[str, object]:
+    if not isinstance(data, Mapping):
+        raise TypeError("flow document data must be a mapping")
+    payload = data["FlowDocument"] if "FlowDocument" in data else data
+    if not isinstance(payload, Mapping):
+        raise TypeError("FlowDocument payload must be a mapping")
+    return payload
+
+
+def _payload_sequence(payload: Mapping[str, object], name: str) -> Sequence[object]:
+    value = payload.get(name, [])
+    if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
+        raise TypeError(f"FlowDocument {name} must be a sequence")
     return value
 
 

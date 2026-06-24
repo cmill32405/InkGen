@@ -140,6 +140,42 @@ def test_flow_document_valid_title_round_trips_and_escapes() -> None:
 
 
 @pytest.mark.condition("FLOW-DOCUMENT-P1")
+def test_flow_document_hydrates_direct_payload_mapping() -> None:
+    """FLOW-DOCUMENT-P1: Direct FlowDocument payloads remain supported."""
+    document = FlowDocument(title="Direct")
+    paragraph = _paragraph("Direct payload")
+    document.add_paragraph(paragraph)
+    payload = document.parameters["FlowDocument"]
+
+    clone = FlowDocument.create_from_dict(payload, {paragraph.style.name: paragraph.style})
+
+    assert clone.parameters == document.parameters
+    assert clone.to_plain_text() == "Direct payload"
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-P1")
+@pytest.mark.parametrize(
+    ("payload", "exception_type", "message"),
+    [
+        (object(), TypeError, "flow document data must be a mapping"),
+        ({"FlowDocument": object()}, TypeError, "FlowDocument payload must be a mapping"),
+        ({"FlowDocument": {"title": "Bad", "blocks": "paragraph"}}, TypeError, "FlowDocument blocks must be a sequence"),
+        ({"FlowDocument": {"title": "Bad", "blocks": object()}}, TypeError, "FlowDocument blocks must be a sequence"),
+        ({"FlowDocument": {"title": "Bad", "paragraphs": "legacy"}}, TypeError, "FlowDocument paragraphs must be a sequence"),
+        ({"FlowDocument": {"title": "Bad", "paragraphs": object()}}, TypeError, "FlowDocument paragraphs must be a sequence"),
+    ],
+)
+def test_flow_document_hydration_rejects_malformed_root_payloads(
+    payload: object,
+    exception_type: type[Exception],
+    message: str,
+) -> None:
+    """FLOW-DOCUMENT-P1: Root serialized payloads fail at the document boundary."""
+    with pytest.raises(exception_type, match=message):
+        FlowDocument.create_from_dict(payload)
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-P1")
 def test_flow_document_preserves_mixed_block_order_after_round_trip() -> None:
     """FLOW-DOCUMENT-P1: Parameters preserve paragraph, table, and drawing block order."""
     document = FlowDocument(title="Mixed")
