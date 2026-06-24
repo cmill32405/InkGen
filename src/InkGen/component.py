@@ -744,7 +744,7 @@ class PolarCoordinateDrawingComponent(StandardDrawingComponent):
         return number
 
     @classmethod
-    def create_from_dict(cls, data: dict, style: DrawingStyle=None) -> object:
+    def create_from_dict(cls, data: object, style: DrawingStyle=None) -> object:
         """ Class method to recreate the object from its serialization dict.
 
         Args:
@@ -753,11 +753,12 @@ class PolarCoordinateDrawingComponent(StandardDrawingComponent):
         Returns:
             object: instance of the class.
         """
+        payload = _component_payload(data, "PolarCoordinateDrawingComponent")
         if not style:
-            style = DrawingStyle.create_from_dict(data['PolarCoordinateDrawingComponent']['style'])
-        component = cls(data['PolarCoordinateDrawingComponent']['position'],
-                        data['PolarCoordinateDrawingComponent']['length'],
-                        data['PolarCoordinateDrawingComponent']['angle'],
+            style = DrawingStyle.create_from_dict(_component_required_field(payload, "style", "PolarCoordinateDrawingComponent"))
+        component = cls(_component_required_field(payload, "position", "PolarCoordinateDrawingComponent"),
+                        _component_required_field(payload, "length", "PolarCoordinateDrawingComponent"),
+                        _component_required_field(payload, "angle", "PolarCoordinateDrawingComponent"),
                         style)
         return component
 
@@ -940,7 +941,7 @@ class PolygonalDrawingComponent(DrawingComponent):
         super().__init__(style)
 
     @classmethod
-    def create_from_dict(cls, data: dict, style: DrawingStyle=None) -> object:
+    def create_from_dict(cls, data: object, style: DrawingStyle=None) -> object:
         """ Class method to recreate the object from its serialization dict.
 
         Args:
@@ -949,9 +950,10 @@ class PolygonalDrawingComponent(DrawingComponent):
         Returns:
             object: instance of the class.
         """
+        payload = _component_payload(data, "PolygonalDrawingComponent")
         if not style:
-            style = DrawingStyle.create_from_dict(data['PolygonalDrawingComponent']['style'])
-        component = cls(data['PolygonalDrawingComponent']['points'],
+            style = DrawingStyle.create_from_dict(_component_required_field(payload, "style", "PolygonalDrawingComponent"))
+        component = cls(_component_required_field(payload, "points", "PolygonalDrawingComponent"),
                         style)
         return component
 
@@ -1120,7 +1122,7 @@ class RegularPolygonDrawingComponent(PolarCoordinateDrawingComponent):
         return number
 
     @classmethod
-    def create_from_dict(cls, data: dict, style: DrawingStyle=None) -> object:
+    def create_from_dict(cls, data: object, style: DrawingStyle=None) -> object:
         """ Class method to recreate the object from its serialization dict.
 
         Args:
@@ -1129,14 +1131,15 @@ class RegularPolygonDrawingComponent(PolarCoordinateDrawingComponent):
         Returns:
             object: instance of the class.
         """
+        payload = _component_payload(data, "RegularPolygonDrawingComponent")
         if not style:
-            style = DrawingStyle.create_from_dict(data['RegularPolygonDrawingComponent']['style'])
-        component = cls(data['RegularPolygonDrawingComponent']['position'],
-                        data['RegularPolygonDrawingComponent']['sides'],
-                        data['RegularPolygonDrawingComponent']['radius'],
+            style = DrawingStyle.create_from_dict(_component_required_field(payload, "style", "RegularPolygonDrawingComponent"))
+        component = cls(_component_required_field(payload, "position", "RegularPolygonDrawingComponent"),
+                        _component_required_field(payload, "sides", "RegularPolygonDrawingComponent"),
+                        _component_required_field(payload, "radius", "RegularPolygonDrawingComponent"),
                         style,
-                        data['RegularPolygonDrawingComponent']['angle'],
-                        data['RegularPolygonDrawingComponent']['corner_radius'],)
+                        _component_required_field(payload, "angle", "RegularPolygonDrawingComponent"),
+                        _component_required_field(payload, "corner_radius", "RegularPolygonDrawingComponent"),)
         return component
 
     @property
@@ -1451,16 +1454,17 @@ class Arc(DrawingComponent):
         return number
 
     @classmethod
-    def create_from_dict(cls, data: dict, style: DrawingStyle = None) -> object:
+    def create_from_dict(cls, data: object, style: DrawingStyle = None) -> object:
+        payload = _component_payload(data, "Arc")
         if not style:
-            style = DrawingStyle.create_from_dict(data['Arc']['style'])
-        return cls(center=tuple(data['Arc']['center']),
-                   radius_x=data['Arc']['radius_x'],
-                   radius_y=data['Arc']['radius_y'],
-                   start_angle=data['Arc']['start_angle'],
-                   end_angle=data['Arc']['end_angle'],
+            style = DrawingStyle.create_from_dict(_component_required_field(payload, "style", "Arc"))
+        return cls(center=tuple(_component_required_field(payload, "center", "Arc")),
+                   radius_x=_component_required_field(payload, "radius_x", "Arc"),
+                   radius_y=_component_required_field(payload, "radius_y", "Arc"),
+                   start_angle=_component_required_field(payload, "start_angle", "Arc"),
+                   end_angle=_component_required_field(payload, "end_angle", "Arc"),
                    style=style,
-                   rotation=data['Arc'].get('rotation', 0.0))
+                   rotation=payload.get('rotation', 0.0))
 
     @property
     def parameters(self) -> dict:
@@ -1588,12 +1592,13 @@ class QuadraticBezier(DrawingComponent):
         return number
 
     @classmethod
-    def create_from_dict(cls, data: dict, style: DrawingStyle = None) -> object:
+    def create_from_dict(cls, data: object, style: DrawingStyle = None) -> object:
+        payload = _component_payload(data, "QuadraticBezier")
         if not style:
-            style = DrawingStyle.create_from_dict(data['QuadraticBezier']['style'])
-        return cls(start_point=tuple(data['QuadraticBezier']['start_point']),
-                   control_point=tuple(data['QuadraticBezier']['control_point']),
-                   end_point=tuple(data['QuadraticBezier']['end_point']),
+            style = DrawingStyle.create_from_dict(_component_required_field(payload, "style", "QuadraticBezier"))
+        return cls(start_point=tuple(_component_required_field(payload, "start_point", "QuadraticBezier")),
+                   control_point=tuple(_component_required_field(payload, "control_point", "QuadraticBezier")),
+                   end_point=tuple(_component_required_field(payload, "end_point", "QuadraticBezier")),
                    style=style)
 
     @property
@@ -1688,13 +1693,14 @@ class CubicBezier(DrawingComponent):
         return number
 
     @classmethod
-    def create_from_dict(cls, data: dict, style: DrawingStyle = None) -> object:
+    def create_from_dict(cls, data: object, style: DrawingStyle = None) -> object:
+        payload = _component_payload(data, "CubicBezier")
         if not style:
-            style = DrawingStyle.create_from_dict(data['CubicBezier']['style'])
-        return cls(start_point=tuple(data['CubicBezier']['start_point']),
-                   control_point1=tuple(data['CubicBezier']['control_point1']),
-                   control_point2=tuple(data['CubicBezier']['control_point2']),
-                   end_point=tuple(data['CubicBezier']['end_point']),
+            style = DrawingStyle.create_from_dict(_component_required_field(payload, "style", "CubicBezier"))
+        return cls(start_point=tuple(_component_required_field(payload, "start_point", "CubicBezier")),
+                   control_point1=tuple(_component_required_field(payload, "control_point1", "CubicBezier")),
+                   control_point2=tuple(_component_required_field(payload, "control_point2", "CubicBezier")),
+                   end_point=tuple(_component_required_field(payload, "end_point", "CubicBezier")),
                    style=style)
 
     @property
@@ -1775,11 +1781,12 @@ class Path(DrawingComponent):
         super().__init__(style)
 
     @classmethod
-    def create_from_dict(cls, data: dict, style: DrawingStyle = None) -> object:
+    def create_from_dict(cls, data: object, style: DrawingStyle = None) -> object:
+        payload = _component_payload(data, "Path")
         if not style:
-            style = DrawingStyle.create_from_dict(data['Path']['style'])
+            style = DrawingStyle.create_from_dict(_component_required_field(payload, "style", "Path"))
         commands = []
-        for command in data['Path'].get('commands', []):
+        for command in payload.get('commands', []):
             commands.append(PathCommand(command['type'], command.get('points', [])))
         return cls(style=style, commands=commands)
 

@@ -51,6 +51,7 @@ nav:
       - Layer Group Contract: proofs/layer-group-contract.md
       - Component Group Contract: proofs/component-group-contract.md
       - Component Factory Payload Contract: proofs/component-factory-payload-contract.md
+      - Specialized Component Factory Payload Contract: proofs/specialized-component-factory-payload-contract.md
       - Single Dimension Contract: proofs/single-dimension-contract.md
       - Width Height Contract: proofs/width-height-contract.md
       - Public API Contract: proofs/public-api-contract.md
