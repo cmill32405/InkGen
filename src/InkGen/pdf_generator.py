@@ -848,12 +848,9 @@ class DocumentPDF(Document):
             return tuple(sorted(groups, key=lambda group: (group.group_label, group.group_id)))
         return groups
 
-    def create_pdf(self, filepath: str) -> None:
+    def create_pdf(self, filepath: str | os.PathLike[str]) -> None:
         """Create a deterministic PDF file at the requested path."""
-        path = os.path.abspath(filepath)
-        directory = os.path.dirname(path)
-        if directory and not os.path.exists(directory):
-            raise ValueError("The file path does not exist.")
+        path = _normalize_output_filepath(filepath)
         with open(path, "wb") as handle:
             handle.write(self.to_pdf_bytes())
 
@@ -1011,6 +1008,23 @@ class DocumentPDF(Document):
         if grammar_annotations:
             document_payload["grammar_truth"] = grammar_annotations
         return {"DocumentPDF": document_payload}
+
+
+def _normalize_output_filepath(filepath: object) -> str:
+    """Return an absolute output path or fail at the PDF writer boundary."""
+    try:
+        path_value = os.fspath(filepath)
+    except TypeError as exc:
+        raise TypeError("file path must be a string or path-like object") from exc
+    if not isinstance(path_value, str):
+        raise TypeError("file path must be a string or path-like object")
+    if not path_value:
+        raise ValueError("file path must not be empty")
+    path = os.path.abspath(path_value)
+    directory = os.path.dirname(path)
+    if directory and not os.path.exists(directory):
+        raise ValueError("The file path does not exist.")
+    return path
 
 
 def _layer_pdf_from_dict(data: dict, styles: dict[str, object]) -> Layer:

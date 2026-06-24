@@ -361,8 +361,33 @@ def test_document_pdf_create_pdf_writes_bytes_and_rejects_missing_directory(
     document.create_pdf(str(target))
 
     assert target.read_bytes() == document.to_pdf_bytes()
+    pathlike_target = tmp_path / "pathlike.pdf"
+    document.create_pdf(pathlike_target)
+    assert pathlike_target.read_bytes() == document.to_pdf_bytes()
     with pytest.raises(ValueError, match="file path does not exist"):
         document.create_pdf(str(tmp_path / "missing" / "seed.pdf"))
+
+
+@pytest.mark.condition("PDF-P1")
+@pytest.mark.parametrize(
+    ("filepath", "exception_type", "message"),
+    [
+        (object(), TypeError, "file path must be a string or path-like object"),
+        (123, TypeError, "file path must be a string or path-like object"),
+        (b"seed.pdf", TypeError, "file path must be a string or path-like object"),
+        ("", ValueError, "file path must not be empty"),
+    ],
+)
+def test_document_pdf_create_pdf_rejects_malformed_paths(
+    filepath: object,
+    exception_type: type[Exception],
+    message: str,
+) -> None:
+    """PDF-P1: create_pdf rejects malformed paths at the writer boundary."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+
+    with pytest.raises(exception_type, match=message):
+        document.create_pdf(filepath)  # type: ignore[arg-type]
 
 
 @pytest.mark.condition("PDF-P1")
