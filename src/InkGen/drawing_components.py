@@ -7,6 +7,7 @@ embedding renderer-specific classes in higher-level synthetic drawing builders.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import Enum
 from math import isfinite
@@ -177,7 +178,18 @@ class PathDrawing:
     """Renderer-neutral SVG-style path primitive."""
 
     style: DrawingStyle
-    commands: list[PathCommand] | None = None
+    commands: Sequence[PathCommand] | None = None
+
+    def __post_init__(self) -> None:
+        """Validate the public path command collection boundary."""
+        if self.commands is None:
+            return
+        if isinstance(self.commands, (str, bytes)) or not isinstance(self.commands, Sequence):
+            raise TypeError("PathDrawing commands must be a sequence of PathCommand objects")
+        commands = list(self.commands)
+        if not all(isinstance(command, PathCommand) for command in commands):
+            raise TypeError("PathDrawing commands must contain only PathCommand objects")
+        object.__setattr__(self, "commands", commands)
 
     def to_component(self, output_format: OutputFormat | str) -> Component:
         """Create a path component for the requested backend."""

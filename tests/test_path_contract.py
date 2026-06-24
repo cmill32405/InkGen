@@ -215,6 +215,39 @@ def test_path_drawing_materializes_svg_and_pdf_components() -> None:
     assert pdf_component.commands == commands
 
 
+@pytest.mark.condition("PATH-DRAWING-COMMANDS-P2")
+def test_path_drawing_accepts_command_sequences_before_materialization() -> None:
+    """PATH-DRAWING-COMMANDS-P2: PathDrawing normalizes valid command sequences."""
+    commands = (PathCommand("M", [(0.0, 0.0)]), PathCommand("L", [(2.0, 3.0)]))
+    drawing = PathDrawing(_style(), commands)
+
+    svg_component = drawing.to_component(OutputFormat.SVG)
+    pdf_component = drawing.to_component(OutputFormat.PDF)
+
+    assert drawing.commands == list(commands)
+    assert isinstance(svg_component, PathSVG)
+    assert isinstance(pdf_component, PathPDF)
+    assert svg_component.commands == list(commands)
+    assert pdf_component.commands == list(commands)
+
+
+@pytest.mark.condition("PATH-DRAWING-COMMANDS-P2")
+@pytest.mark.parametrize(
+    "commands",
+    [
+        "M",
+        b"M",
+        object(),
+        [object()],
+        [{"type": "M", "points": []}],
+    ],
+)
+def test_path_drawing_rejects_malformed_command_collections(commands: object) -> None:
+    """PATH-DRAWING-COMMANDS-P2: PathDrawing rejects malformed command collections."""
+    with pytest.raises(TypeError, match="PathDrawing commands must"):
+        PathDrawing(_style(), commands)  # type: ignore[arg-type]
+
+
 @pytest.mark.condition("PATH-P1")
 def test_dxf_path_drawing_reuses_pdf_points_and_closure_flag() -> None:
     """PATH-P1: DXF path output uses neutral path points and Z closure state."""
