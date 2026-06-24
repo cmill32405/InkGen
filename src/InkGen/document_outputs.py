@@ -468,10 +468,7 @@ def _drawing_html(group: DrawingComponentGroup) -> str:
     height = max(max_y - min_y, 1.0)
     payload = []
     for component in group.components:
-        svg_component = _materialize_drawing_component(component, OutputFormat.SVG)
-        generate_svg = getattr(svg_component, "generate_svg", None)
-        if generate_svg is not None:
-            payload.append(generate_svg())
+        payload.append(_svg_fragment(component))
     return (
         f'<svg width="{_vml_number(width)}mm" height="{_vml_number(height)}mm" '
         f'viewBox="{_vml_number(min_x)} {_vml_number(min_y)} {_vml_number(width)} {_vml_number(height)}">' + "".join(payload) + "</svg>"
@@ -513,7 +510,9 @@ def _component_vml(component: object, min_x: float, min_y: float) -> str:
             "</w:txbxContent></v:textbox></v:shape>"
         )
     concrete = _materialize_drawing_component(component, OutputFormat.PDF)
-    points = getattr(concrete, "points", [])
+    points = getattr(concrete, "points", None)
+    if points is None:
+        raise TypeError("PDF materialization must expose points for DOCX drawing output")
     if not points:
         return ""
     point_text = " ".join(f"{_vml_number(point[0] - min_x)},{_vml_number(point[1] - min_y)}" for point in points)
@@ -620,6 +619,18 @@ def _vml_number(value: float) -> str:
     if abs(numeric - round(numeric)) < 1e-9:
         return str(int(round(numeric)))
     return f"{numeric:.3f}".rstrip("0").rstrip(".")
+
+
+def _svg_fragment(component: object) -> str:
+    """Materialize a neutral drawing primitive into an SVG fragment."""
+    svg_component = _materialize_drawing_component(component, OutputFormat.SVG)
+    generate_svg = getattr(svg_component, "generate_svg", None)
+    if not callable(generate_svg):
+        raise TypeError("SVG materialization must provide generate_svg()")
+    fragment = generate_svg()
+    if not isinstance(fragment, str):
+        raise TypeError("generate_svg() must return a string")
+    return fragment
 
 
 def _materialize_drawing_component(component: object, output_format: OutputFormat) -> Component:

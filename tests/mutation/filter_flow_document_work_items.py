@@ -11,27 +11,27 @@ FILTER_SQL = """
 (
   module_path = 'src/InkGen/document_outputs.py'
   AND definition_name = 'to_docx_bytes'
-  AND start_pos_row BETWEEN 137 AND 142
+  AND start_pos_row BETWEEN 141 AND 156
 )
 OR (
   module_path = 'src/InkGen/document_outputs.py'
   AND definition_name = '_drawing_html'
-  AND start_pos_row BETWEEN 421 AND 424
+  AND start_pos_row BETWEEN 465 AND 475
 )
 OR (
   module_path = 'src/InkGen/document_outputs.py'
   AND definition_name = '_drawing_bounds'
-  AND start_pos_row BETWEEN 439 AND 440
+  AND start_pos_row BETWEEN 478 AND 492
 )
 OR (
   module_path = 'src/InkGen/document_outputs.py'
   AND definition_name = '_component_vml'
-  AND start_pos_row BETWEEN 465 AND 470
+  AND start_pos_row BETWEEN 495 AND 519
 )
 OR (
   module_path = 'src/InkGen/document_outputs.py'
   AND definition_name IN ('_materialize_drawing_component', '_write_docx_part')
-  AND start_pos_row BETWEEN 543 AND 556
+  AND start_pos_row BETWEEN 636 AND 649
 )
 )
 AND operator_name NOT LIKE 'core/ReplaceBinaryOperator_BitOr_%'

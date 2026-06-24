@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import pytest
 
-from InkGen.component import PathCommand
+from InkGen.component import Component, PathCommand
 from InkGen.document_outputs import DOCX_FIXED_TIMESTAMP, FlowDocument
 from InkGen.drawing_components import (
     ArcDrawing,
@@ -37,6 +37,24 @@ class _InvalidDrawingPrimitive:
 
 class _AttributeOnlyDrawingPrimitive:
     to_component = None
+
+
+class _BareComponentDrawingPrimitive:
+    def to_component(self, output_format: OutputFormat | str) -> Component:
+        """Return a base component that cannot render as SVG or DOCX VML."""
+        return Component()
+
+
+class _NonStringSvgComponent(Component):
+    def generate_svg(self) -> object:
+        """Return a malformed SVG fragment for failure-path tests."""
+        return object()
+
+
+class _NonStringSvgDrawingPrimitive:
+    def to_component(self, output_format: OutputFormat | str) -> Component:
+        """Return a component whose SVG renderer violates the fragment contract."""
+        return _NonStringSvgComponent()
 
 
 def _text_style() -> TextStyle:
@@ -609,6 +627,25 @@ def test_flow_document_rejects_invalid_drawing_materialization() -> None:
     group.components.clear()
     group.components.append(_AttributeOnlyDrawingPrimitive())  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="must implement to_component"):
+        document.to_html()
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-SVG-MATERIALIZATION-P2")
+def test_flow_document_rejects_materializations_without_render_fragments() -> None:
+    """FLOW-DOCUMENT-SVG-MATERIALIZATION-P2: Drawing outputs fail instead of silently omitting malformed fragments."""
+    document = FlowDocument()
+    group = DrawingComponentGroup("invalid-render-fragment")
+    document.add_drawing_group(group)
+
+    group.components.append(_BareComponentDrawingPrimitive())  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match=r"SVG materialization must provide generate_svg\(\)"):
+        document.to_html()
+    with pytest.raises(TypeError, match="PDF materialization must expose points"):
+        document.to_docx_bytes()
+
+    group.components.clear()
+    group.components.append(_NonStringSvgDrawingPrimitive())  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match=r"generate_svg\(\) must return a string"):
         document.to_html()
 
 

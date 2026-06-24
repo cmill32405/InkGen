@@ -146,7 +146,8 @@ ADR/rule impact:
 - Repeated DOCX generation for the same document state must produce identical
   bytes.
 - Drawing output must fail loudly if a neutral drawing primitive cannot
-  materialize to an InkGen `Component`.
+  materialize to an InkGen `Component` with the renderer-specific fragment
+  surface needed by the target document format.
 
 ## Fix Log
 
@@ -156,6 +157,9 @@ ADR/rule impact:
   `_materialize_drawing_component()`.
 - `_materialize_drawing_component()` rejects missing/non-callable materializers
   and non-`Component` materialization results.
+- `_svg_fragment()` rejects SVG materializations that cannot provide a string
+  `generate_svg()` fragment, and DOCX VML conversion rejects PDF
+  materializations without a `points` surface.
 - `_drawing_from_parameters()` now delegates serialized drawing labels to
   `DrawingComponentGroup` without stringifying malformed values.
 - `_block_from_parameters()` now validates serialized block envelopes before
@@ -189,6 +193,7 @@ ADR/rule impact:
 | File writer path boundary | Accept string/path-like output paths and reject malformed output path values before writing | PO-FDOC-013 | `test_flow_document_file_writers_accept_pathlike_outputs`, `test_flow_document_file_writers_reject_malformed_paths`, `test_flow_document_file_writers_fail_on_missing_directory` | killed |
 | Malformed serialized drawing label | Reject through the neutral group label contract | PO-FDOC-006 | `test_flow_document_drawing_group_hydration_rejects_malformed_label` | behavioral evidence |
 | Invalid drawing materialization | Reject before silent omission | PO-FDOC-004 | `test_flow_document_rejects_invalid_drawing_materialization` | killed |
+| Invalid drawing render fragments | Reject SVG materializations without string `generate_svg()` fragments and DOCX/PDF materializations without points | PO-FDOC-014 | `test_flow_document_rejects_materializations_without_render_fragments` | killed |
 | DOCX VML linework | Emit group-relative points | PO-FDOC-005 | `test_flow_document_docx_drawing_polyline_uses_group_relative_points` | killed |
 | Unsupported block private mutation | Excluded from public contract | Explicit exclusion | Not applicable | Out of scope |
 | Full WordprocessingML feature parity | Excluded from minimal dependency-free backend | Explicit exclusion | Not applicable | Out of scope |
@@ -198,8 +203,8 @@ ADR/rule impact:
 | Test class | Applicable? | Reason | Evidence |
 |---|---|---|---|
 | Unit | yes | Helpers are deterministic. | FLOW-DOCUMENT-P1 tests |
-| Behavioral/condition | yes | The slice defines document-output behavior. | Tests are marked `@pytest.mark.condition("FLOW-DOCUMENT-P1")`. |
-| Failure-mode | yes | Invalid content, malformed root payloads, malformed serialized block envelopes, malformed drawing payloads, malformed drawing component envelopes, malformed drawing style envelopes, malformed path command envelopes, malformed serialized drawing labels, malformed output paths, and invalid output paths must fail loudly. | Invalid hydration, invalid materialization, and writer tests |
+| Behavioral/condition | yes | The slice defines document-output behavior. | Tests are marked `@pytest.mark.condition("FLOW-DOCUMENT-P1")` and `@pytest.mark.condition("FLOW-DOCUMENT-SVG-MATERIALIZATION-P2")`. |
+| Failure-mode | yes | Invalid content, malformed root payloads, malformed serialized block envelopes, malformed drawing payloads, malformed drawing component envelopes, malformed drawing style envelopes, malformed path command envelopes, malformed serialized drawing labels, malformed materialization fragments, malformed output paths, and invalid output paths must fail loudly. | Invalid hydration, invalid materialization, render-fragment, and writer tests |
 | Integration/live-path | yes | DOCX ZIP, HTML, RTF, text, table, and drawing paths cross module boundaries. | Focused and existing document-output tests |
 | Contract/API compatibility | yes | Parameters and public add methods must preserve existing behavior. | Round-trip and existing rejection tests |
 | Property/fuzz | no | This slice proves finite output and dispatch contracts. | Not applicable |
@@ -218,6 +223,8 @@ Proof-critical mutation targets:
   should fail deterministic package tests.
 - Weakening drawing materializer callability or return-type checks should fail
   invalid-materialization tests.
+- Weakening SVG fragment callability/string checks or DOCX VML points-surface
+  checks should fail render-fragment tests.
 - Changing DOCX VML group-relative points should fail exact polyline tests.
 - Reintroducing drawing-label stringification should fail the serialized drawing
   label hydration test.
@@ -257,6 +264,8 @@ Current result:
   path-command hardening update: 19 work items, 19 killed, and 0 survived.
 - Cosmic Ray 8.4.6, scoped to file-writer path normalization rows after the
   filepath hardening update: 7 work items, 7 killed, and 0 survived.
+- Cosmic Ray 8.4.6, scoped to render-fragment guards after the SVG
+  materialization hardening update: 7 work items, 7 killed, and 0 survived.
 
 ## PO-FDOC-001: DOCX Bytes Are Deterministic
 
@@ -612,6 +621,39 @@ reserved path names remain delegated to the operating system.
 
 Proven for the stated domain after focused tests, mutation, and the full DoD
 gate pass.
+
+## PO-FDOC-014: Drawing Materializations Expose Render Fragments
+
+### Claim
+
+Flow-document drawing outputs fail before silently omitting a drawing primitive
+whose concrete materialization lacks the renderer-specific fragment contract.
+
+### Domain
+
+Drawing groups exported through `FlowDocument.to_html()` and
+`FlowDocument.to_docx_bytes()`.
+
+### Proof Method
+
+HTML drawing output routes each neutral primitive through `_svg_fragment()`,
+which first uses `_materialize_drawing_component()` to prove the object is an
+InkGen `Component`, then requires a callable `generate_svg()` method returning
+a string. DOCX VML output materializes non-special-case primitives through the
+PDF path and requires a `points` surface before deciding whether an empty point
+list should produce no polyline. Focused tests cover a base `Component`
+materialization that previously produced empty HTML/DOCX drawing output and a
+malformed SVG materialization whose `generate_svg()` does not return a string.
+
+### Counterexamples And Exclusions
+
+Valid components with an empty `points` collection remain allowed to produce no
+VML polyline. Full SVG semantic validation remains delegated to the concrete
+SVG renderer tests.
+
+### Conclusion
+
+Proven after focused tests, mutation, and the full DoD gate pass.
 
 ## Current Slice Decision
 
