@@ -12,12 +12,16 @@ from svgpathtools import parse_path
 ADD_ONE_PIXEL_MARGIN_DEFAULT = False
 
 
+def _require_bool(value: object, *, name: str) -> bool:
+    if not isinstance(value, bool):
+        raise TypeError(f"{name} must be a boolean.")
+    return value
+
+
 def set_add_one_pixel_margin_default(enabled: bool) -> None:
     """Set global default for adding a one-pixel margin around text outlines."""
     global ADD_ONE_PIXEL_MARGIN_DEFAULT
-    if not isinstance(enabled, bool):
-        raise TypeError("enabled must be a boolean.")
-    ADD_ONE_PIXEL_MARGIN_DEFAULT = enabled
+    ADD_ONE_PIXEL_MARGIN_DEFAULT = _require_bool(enabled, name="enabled")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -208,12 +212,14 @@ def outline_for_text(
         "convex_hull": [(x,y), ...]                 # document units (e.g., mm)
       }
     """
+    if add_one_pixel_margin is None:
+        add_one_pixel_margin = ADD_ONE_PIXEL_MARGIN_DEFAULT
+    else:
+        add_one_pixel_margin = _require_bool(add_one_pixel_margin, name="add_one_pixel_margin")
+
     tt = TTFont(font_path)
     with open(font_path, "rb") as f:
         font_bytes = f.read()
-
-    if add_one_pixel_margin is None:
-        add_one_pixel_margin = ADD_ONE_PIXEL_MARGIN_DEFAULT
 
     # 1) Shape with HarfBuzz (positions returned in font units)
     gids, pos_fu, upem = _shape_with_harfbuzz(font_bytes, text, features)

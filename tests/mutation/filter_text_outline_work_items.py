@@ -11,6 +11,7 @@ module_path = 'src/InkGen/text_outline.py'
 AND (
   (
     definition_name IN (
+      '_require_bool',
       'set_add_one_pixel_margin_default',
       '_px_to_units',
       'sample_path_points'
@@ -20,9 +21,9 @@ AND (
   OR (
     definition_name = 'outline_for_text'
     AND (
-      start_pos_row BETWEEN 215 AND 216
+      start_pos_row BETWEEN 215 AND 218
       OR start_pos_row BETWEEN 254 AND 278
-      OR start_pos_row BETWEEN 282 AND 288
+      OR start_pos_row BETWEEN 288 AND 290
     )
   )
 )
@@ -37,12 +38,17 @@ AND (
 )
 AND NOT (
   definition_name = 'sample_path_points'
-  AND start_pos_row IN (46, 62)
+  AND start_pos_row IN (50, 46, 62)
   AND operator_name = 'core/NumberReplacer'
 )
 AND NOT (
   definition_name = 'outline_for_text'
-  AND start_pos_row IN (254, 255, 260, 266, 269, 275, 278, 284, 288)
+  AND start_pos_row IN (254, 255, 260, 261, 266, 269, 272, 275, 278)
+)
+AND NOT (
+  definition_name = 'outline_for_text'
+  AND start_pos_row = 290
+  AND operator_name = 'core/NumberReplacer'
 )
 """
 

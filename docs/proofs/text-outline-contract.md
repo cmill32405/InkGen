@@ -55,6 +55,9 @@ Before/after edge changes:
 - The strict-global-default hardening update makes
   `set_add_one_pixel_margin_default()` reject non-boolean values instead of
   applying Python truthiness.
+- The strict-explicit-margin hardening update makes
+  `outline_for_text(add_one_pixel_margin=...)` reject truthy/falsy stand-ins
+  while preserving `None` as the global-default sentinel.
 
 Cycle/layer/coupling/redundancy result:
 
@@ -82,6 +85,7 @@ ADR/rule impact:
 - A one-pixel margin expands the hull by one converted pixel in the requested
   units.
 - When `add_one_pixel_margin` is `None`, the global margin default is used.
+- When `add_one_pixel_margin` is explicit, only `True` and `False` are accepted.
 - The global margin default setter accepts only explicit `True` or `False` and
   rejects truthy/falsy stand-ins without changing the prior flag value.
 - Whitespace or zero-outline text uses font metrics to produce a finite bbox and
@@ -95,6 +99,10 @@ ADR/rule impact:
 - Added strict boolean validation to `set_add_one_pixel_margin_default()`.
 - Added a failure-mode test proving malformed global-default values raise and
   preserve existing global state.
+- Added strict boolean validation to explicit `outline_for_text()` margin
+  arguments.
+- Added a failure-mode test proving malformed explicit margin arguments raise
+  before text geometry is generated and preserve global state.
 - Added scoped mutation configuration and filter.
 
 ## Comprehensiveness Matrix
@@ -107,6 +115,7 @@ ADR/rule impact:
 | Margin expansion | Expand bbox by one converted pixel in requested units | PO-TOUTLINE-004 | `test_text_outline_margin_expands_bounds_by_requested_unit_size` | killed |
 | Global margin default | `None` uses global default and explicit values override it | PO-TOUTLINE-005 | `test_text_outline_global_margin_default_matches_explicit_margin` | killed |
 | Global margin setter validation | Reject non-boolean values and preserve prior global state | PO-TOUTLINE-007 | `test_text_outline_global_margin_default_rejects_non_boolean_values` | killed |
+| Explicit margin argument validation | Reject non-boolean explicit arguments while preserving `None` as the only default sentinel | PO-TOUTLINE-008 | `test_text_outline_explicit_margin_argument_rejects_non_boolean_values` | killed |
 | Whitespace fallback | Use font metrics and requested DPI for whitespace bbox/hull | PO-TOUTLINE-006 | `test_text_outline_whitespace_uses_font_metric_fallback_and_dpi` | killed |
 
 ## Test Applicability Matrix
@@ -115,14 +124,14 @@ ADR/rule impact:
 |---|---|---|---|
 | Unit | yes | Unit conversion and path sampling are deterministic. | TEXT-OUTLINE-P1 tests |
 | Behavioral/condition | yes | The slice defines public outline behavior. | Tests are marked `@pytest.mark.condition("TEXT-OUTLINE-P1")`. |
-| Failure-mode | yes | Zero-length path segments and whitespace text must return safe geometry rather than fail; malformed global-default values must fail without mutating state. | Sampling, whitespace, and global-default validation tests |
+| Failure-mode | yes | Zero-length path segments and whitespace text must return safe geometry rather than fail; malformed global-default values and explicit margin arguments must fail without mutating state. | Sampling, whitespace, global-default validation, and explicit margin validation tests |
 | Integration/live-path | yes | Text fitter, text components, and SVG tests consume outline behavior. | Focused gate includes existing text fitter/text/SVG tests |
 | Contract/API compatibility | yes | Existing outline tests and downstream text tests must continue passing. | Focused gate evidence |
 | Property/fuzz | no | The proof partitions deterministic unit, sampling, visible-text, and whitespace cases directly. | Not applicable |
 | Mutation | yes | Unit conversion, path sampling, margin, and fallback rows are proof-critical. | Mutation result recorded below |
 | Security/adversarial | no | The slice does not add file writes, network, templates, auth, SQL, or active content. Existing font-path loading remains unchanged. | Not applicable |
 | Performance/resource | no | The change is constant-time arithmetic in an existing helper. | Code inspection |
-| Concurrency/race | yes | Global margin default is mutable shared state. | Global default test resets state and verifies final default |
+| Concurrency/race | yes | Global margin default is mutable shared state. | Global default and explicit argument validation tests reset state and verify final default |
 | Golden artifact/visual | no | This slice verifies geometry outputs rather than rendered pixels. | Not applicable |
 | Regression | yes | This closes the documented `dpi` parameter being ignored. | DPI conversion tests |
 
@@ -136,13 +145,15 @@ Proof-critical mutation targets:
 - Weakening margin-default selection or margin size must fail margin tests.
 - Weakening global-default setter type validation must fail strict-boolean
   tests.
+- Weakening explicit margin argument type validation must fail strict-boolean
+  tests.
 - Weakening whitespace font-metric width/height calculations must fail fallback
   tests.
 
 Current result:
 
 - Cosmic Ray 8.4.6, scoped to executable TEXT-OUTLINE-P1 rows after the
-  strict-global-default hardening update: 19 work items, 19 killed, and 0
+  strict-explicit-margin hardening update: 15 work items, 15 killed, and 0
   survived.
 
 ## PO-TOUTLINE-001: Pixel Conversion Is DPI-Aware
@@ -287,6 +298,37 @@ preserved after each failure.
 
 Hostile direct mutation of `text_outline.ADD_ONE_PIXEL_MARGIN_DEFAULT` is
 outside the setter contract.
+
+### Conclusion
+
+Proven for the stated domain after tests and mutation pass.
+
+## PO-TOUTLINE-008: Explicit Margin Argument Is Strict Boolean
+
+### Claim
+
+`outline_for_text(add_one_pixel_margin=...)` accepts only `True`, `False`, or
+`None`, where `None` is the sole sentinel for using the global default.
+
+### Domain
+
+Public calls to `outline_for_text()` with explicit `add_one_pixel_margin`
+arguments.
+
+### Proof Method
+
+The public function resolves `None` to `ADD_ONE_PIXEL_MARGIN_DEFAULT` and sends
+all explicit values through the shared strict-boolean helper before loading the
+font or generating geometry. The focused test covers string, integer, and
+arbitrary-object inputs while the global default is both `False` and `True`, and
+asserts the previous global state is preserved after each failure.
+
+### Counterexamples And Exclusions
+
+Hostile direct mutation of `text_outline.ADD_ONE_PIXEL_MARGIN_DEFAULT` is
+outside the public argument contract. Direct private calls to `_require_bool()`
+are covered only as an implementation detail of the public setter and
+`outline_for_text()`.
 
 ### Conclusion
 

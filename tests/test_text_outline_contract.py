@@ -179,6 +179,36 @@ def test_text_outline_global_margin_default_rejects_non_boolean_values() -> None
 
 
 @pytest.mark.condition("TEXT-OUTLINE-P1")
+def test_text_outline_explicit_margin_argument_rejects_non_boolean_values() -> None:
+    """TEXT-OUTLINE-P1: Explicit margin argument accepts only booleans or None."""
+    set_add_one_pixel_margin_default(False)
+
+    for value in ["false", "true", 1, 0, object()]:
+        with pytest.raises(TypeError, match="add_one_pixel_margin must be a boolean"):
+            outline_for_text(
+                text="Margin",
+                font_path=FONT_PATH,
+                size_px=18.0,
+                add_one_pixel_margin=value,  # type: ignore[arg-type]
+            )
+        assert text_outline.ADD_ONE_PIXEL_MARGIN_DEFAULT is False
+
+    set_add_one_pixel_margin_default(True)
+    try:
+        for value in ["false", 0, object()]:
+            with pytest.raises(TypeError, match="add_one_pixel_margin must be a boolean"):
+                outline_for_text(
+                    text="Margin",
+                    font_path=FONT_PATH,
+                    size_px=18.0,
+                    add_one_pixel_margin=value,  # type: ignore[arg-type]
+                )
+            assert text_outline.ADD_ONE_PIXEL_MARGIN_DEFAULT is True
+    finally:
+        set_add_one_pixel_margin_default(False)
+
+
+@pytest.mark.condition("TEXT-OUTLINE-P1")
 def test_text_outline_whitespace_uses_font_metric_fallback_and_dpi() -> None:
     """TEXT-OUTLINE-P1: Whitespace outlines use font metrics and DPI-aware units."""
     low_dpi = outline_for_text(
