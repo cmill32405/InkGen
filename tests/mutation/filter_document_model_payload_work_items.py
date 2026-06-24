@@ -12,14 +12,14 @@ AND (
   (
     definition_name = 'create_from_dict'
     AND (
-      start_pos_row BETWEEN 63 AND 76
-      OR start_pos_row BETWEEN 309 AND 315
-      OR start_pos_row BETWEEN 491 AND 495
+      start_pos_row BETWEEN 64 AND 77
+      OR start_pos_row BETWEEN 311 AND 317
+      OR start_pos_row BETWEEN 494 AND 497
     )
   )
   OR (
     definition_name IN ('_payload_mapping', '_required_field', '_required_mapping', '_required_sequence')
-    AND start_pos_row BETWEEN 671 AND 699
+    AND start_pos_row BETWEEN 673 AND 701
   )
 )
 """

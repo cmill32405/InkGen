@@ -1,4 +1,4 @@
-"""Filter Cosmic Ray work items to the DOCUMENT-MODEL-P1 proof-critical rows."""
+"""Filter Cosmic Ray work items to DOCUMENT-MODEL-STYLES-MAPPING-P2 rows."""
 
 from __future__ import annotations
 
@@ -11,37 +11,49 @@ module_path = 'src/InkGen/document.py'
 AND (
   (
     definition_name = 'create_from_dict'
-    AND start_pos_row BETWEEN 300 AND 317
+    AND start_pos_row IN (63, 310, 493)
   )
   OR (
-    definition_name = 'add_page'
-    AND start_pos_row BETWEEN 578 AND 607
+    definition_name = 'load'
+    AND start_pos_row = 565
   )
   OR (
-    definition_name = 'remove_page'
-    AND start_pos_row BETWEEN 609 AND 624
+    definition_name = '_style_cache'
+    AND start_pos_row BETWEEN 704 AND 710
   )
-  OR (
-    definition_name = 'page'
-    AND start_pos_row BETWEEN 626 AND 636
-  )
-  OR (
-    definition_name IN ('_validate_insert_position', '_validate_existing_position', '_page_canvas_compatibility')
-    AND start_pos_row BETWEEN 647 AND 670
-  )
+)
+AND operator_name NOT LIKE 'core/ReplaceBinaryOperator_BitOr_%'
+AND (
+  operator_name = 'core/AddNot'
+  OR operator_name LIKE 'core/ReplaceComparisonOperator_%'
+  OR operator_name LIKE 'core/ReplaceUnaryOperator_%'
+  OR operator_name = 'core/ReplaceAndWithOr'
+  OR operator_name = 'core/ReplaceOrWithAnd'
 )
 """
 
 
 def filter_work_items(db_path: Path, *, clear_results: bool) -> tuple[int, int]:
-    """Restrict a Cosmic Ray database to DOCUMENT-MODEL-P1 proof-critical work items."""
+    """Restrict a Cosmic Ray database to document-model style-cache checks."""
     with sqlite3.connect(db_path) as conn:
         cursor = conn.cursor()
         before = cursor.execute("SELECT COUNT(*) FROM work_items").fetchone()[0]
         if clear_results:
             cursor.execute("DELETE FROM work_results")
-        cursor.execute(f"DELETE FROM work_items WHERE job_id NOT IN (SELECT job_id FROM mutation_specs WHERE {FILTER_SQL})")
-        cursor.execute("DELETE FROM mutation_specs WHERE job_id NOT IN (SELECT job_id FROM work_items)")
+        cursor.execute(
+            f"""
+            DELETE FROM work_items
+            WHERE job_id NOT IN (
+                SELECT job_id FROM mutation_specs WHERE {FILTER_SQL}
+            )
+            """,
+        )
+        cursor.execute(
+            """
+            DELETE FROM mutation_specs
+            WHERE job_id NOT IN (SELECT job_id FROM work_items)
+            """,
+        )
         after = cursor.execute("SELECT COUNT(*) FROM work_items").fetchone()[0]
     return before, after
 

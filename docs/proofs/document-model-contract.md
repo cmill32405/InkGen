@@ -3,8 +3,8 @@
 This note applies the InkGen Definition of Done to the DOCUMENT-MODEL-P1 and
 DOCUMENT-MODEL-PAYLOAD-P2 document model slices. It focuses on one-based page
 indexing, page insertion and removal boundaries, page canvas compatibility,
-serialized page hydration, serialized payload envelope validation, and live use
-through PDF rendering.
+serialized page hydration, serialized payload envelope validation, style-cache
+validation, and live use through PDF rendering.
 
 ## Scope
 
@@ -67,12 +67,19 @@ Before/after edge changes:
 - Before DOCUMENT-MODEL-PAYLOAD-P2, `Layer.create_from_dict()` could begin
   component-group hydration before proving every serialized group had matching
   collision settings.
+- Before DOCUMENT-MODEL-STYLES-MAPPING-P2, malformed document-model `styles`
+  caches could fail through incidental `.keys()` lookups inside component-group
+  hydration.
 - After this slice, page positions are explicitly one-based, `-1` remains the
   append sentinel, inserted pages must share the document canvas contract, and
   hydrated layers match serialized layers without a constructor-created ghost
   layer.
 - After DOCUMENT-MODEL-PAYLOAD-P2, document-model hydration validates payload
   envelopes and collection types before nested object construction.
+- After DOCUMENT-MODEL-STYLES-MAPPING-P2, `Layer.create_from_dict()`,
+  `Layers.create_from_dict()`, `Document.create_from_dict()`, and
+  `Document.load()` require the style cache to be a mutable mapping or `None`
+  before component-group hydration can mutate it.
 
 Cycle/layer/coupling/redundancy result:
 
@@ -122,6 +129,8 @@ ADR/rule impact:
 - For DOCUMENT-MODEL-PAYLOAD-P2, added shared serialized payload helpers,
   explicit root/collection validation for `Layer`, `Layers`, and `Document`,
   and a layer collision-setting completeness check.
+- For DOCUMENT-MODEL-STYLES-MAPPING-P2, added `_style_cache()` to validate
+  mutable style caches at every document-model hydration entry point.
 
 ## Comprehensiveness Matrix
 
@@ -134,14 +143,15 @@ ADR/rule impact:
 | Serialized page/layer hydration | Preserve payload layers without ghost base layers | PO-DOCM-005 | `test_document_serialization_preserves_one_based_page_order` | killed |
 | PDF live path | Render through one-based document page contract | PO-DOCM-006 | `test_document_page_contract_remains_live_through_pdf_render_path` | behavioral evidence |
 | Serialized document/layer payload envelopes | Reject malformed roots and collection fields before downstream hydration | PO-DOCM-007 | `test_document_model_hydration_rejects_malformed_payload_envelopes`, `test_layer_hydration_requires_collision_settings_for_each_group` | killed |
+| Style cache boundary | Reject non-mutable `styles` caches before component-group hydration | PO-DOCM-008 | `test_document_model_hydration_rejects_malformed_style_caches`, `test_document_load_rejects_malformed_style_cache` | killed |
 
 ## Test Applicability Matrix
 
 | Test class | Applicable? | Reason | Evidence |
 |---|---|---|---|
 | Unit | yes | Page validation and canvas compatibility are deterministic. | DOCUMENT-MODEL-P1 tests |
-| Behavioral/condition | yes | DOCUMENT-MODEL-P1 defines public document model behavior. | Tests are marked `@pytest.mark.condition("DOCUMENT-MODEL-P1")`. |
-| Failure-mode | yes | Bad page numbers and incompatible pages must fail before mutation/rendering. | Invalid position and incompatible canvas tests |
+| Behavioral/condition | yes | DOCUMENT-MODEL-P1 defines public document model behavior. | Tests are marked `@pytest.mark.condition("DOCUMENT-MODEL-P1")`, `@pytest.mark.condition("DOCUMENT-MODEL-PAYLOAD-P2")`, and `@pytest.mark.condition("DOCUMENT-MODEL-STYLES-MAPPING-P2")`. |
+| Failure-mode | yes | Bad page numbers, incompatible pages, malformed payloads, and malformed style caches must fail before mutation/rendering/hydration. | Invalid position, incompatible canvas, payload, and style-cache tests |
 | Integration/live-path | yes | `DocumentPDF` consumes the base document page contract. | PDF live-path test |
 | Contract/API compatibility | yes | Existing document, SVG, and PDF tests must continue passing. | Focused gate includes existing tests |
 | Property/fuzz | no | This slice covers finite page-index partitions directly. | Not applicable |
@@ -152,6 +162,7 @@ ADR/rule impact:
 | Golden artifact/visual | yes | PDF rendering must still emit a valid page from the one-based path. | PDF byte prefix and page-object assertion |
 | Regression | yes | This closes page-zero corruption and serialized ghost-layer behavior. | DOCUMENT-MODEL-P1 tests |
 | Serialized payload adversarial input | yes | Malformed public hydration payloads must fail before incidental downstream errors. | DOCUMENT-MODEL-PAYLOAD-P2 tests |
+| Style-cache adversarial input | yes | Non-mutable style caches must fail before incidental downstream `.keys()` or item-assignment errors. | DOCUMENT-MODEL-STYLES-MAPPING-P2 tests |
 
 ## Mutation Testing Gate
 
@@ -191,6 +202,13 @@ DOCUMENT-MODEL-PAYLOAD-P2 current result:
   returned `609 passed` with `93%` coverage.
 - Ruff lint and format passed for touched Python files.
 - MkDocs strict build passed.
+
+DOCUMENT-MODEL-STYLES-MAPPING-P2 current result:
+
+- Focused tests: `102 passed`.
+- Mutation: `4` proof-critical work items, `4 killed`, `0 survivors`.
+- Full coverage gate: `822 passed`, total coverage `94%`.
+- Ruff lint and format passed for touched Python files.
 
 ## PO-DOCM-001: Valid Page Insertions Preserve One-Based Order
 
@@ -342,3 +360,37 @@ settings for a serialized component group.
 
 Supported by focused dependent-path tests, mutation testing, full coverage
 tests, and MkDocs strict build for the stated domain.
+
+## PO-DOCM-008: Style Caches Are Mutable Mappings
+
+### Claim
+
+Document-model hydration rejects malformed `styles` caches before
+component-group hydration can use `.keys()` or item assignment.
+
+### Domain
+
+Public `Layer.create_from_dict(data, styles=...)`,
+`Layers.create_from_dict(data, styles=...)`, `Document.create_from_dict(data,
+styles=...)`, and `Document.load(filepath, styles=...)` calls where `styles` is
+`None`, a mutable mapping, or a malformed non-mutable value.
+
+### Proof Method
+
+Each public document-model hydration entry point calls `_style_cache()` before
+delegating into nested layer or component-group hydration. `_style_cache()`
+creates a fresh dictionary for `None`, accepts mutable mappings, and rejects
+arbitrary objects, strings, bytes, sets, and sequences before any downstream
+style lookup or cache mutation. Focused condition tests cover direct
+`Layer`/`Layers`/`Document` hydration and YAML `Document.load()`.
+
+### Counterexamples And Exclusions
+
+Validation of individual style payload shapes remains owned by component-group
+and style factory contracts. Private mutation of the style cache after
+validation is outside the public hydration boundary.
+
+### Conclusion
+
+Supported by focused document-model and renderer-path tests, scoped mutation
+testing, and the full coverage gate for the stated style-cache boundary.

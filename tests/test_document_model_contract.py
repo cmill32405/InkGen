@@ -32,6 +32,16 @@ def _group() -> ComponentGroup:
     return group
 
 
+def _document_with_styled_group() -> tuple[Layer, Layers, Document]:
+    """Return document-model objects containing a styled component group."""
+    layer = Layer("base", _canvas())
+    layer.add_component_group(_group())
+    layers = Layers(_canvas(), layer=layer)
+    document = Document(_canvas())
+    document.add_page(page=layers)
+    return layer, layers, document
+
+
 def _pdf_group() -> ComponentGroupPDF:
     """Return a PDF-native group that fits on the standard canvas."""
     style = DrawingStyle(name=f"document_contract_pdf_{uuid4().hex}", stroke="#000000", fill="none")
@@ -193,6 +203,32 @@ def test_layer_hydration_requires_collision_settings_for_each_group() -> None:
 
     with pytest.raises(ValueError, match="group_collision_settings must include every component group label"):
         Layer.create_from_dict(payload, {style.name: style})
+
+
+@pytest.mark.condition("DOCUMENT-MODEL-STYLES-MAPPING-P2")
+@pytest.mark.parametrize("styles", [object(), ["style-name"], "style-name", b"style-name", {"style-name"}])
+def test_document_model_hydration_rejects_malformed_style_caches(styles: object) -> None:
+    """DOCUMENT-MODEL-STYLES-MAPPING-P2: Style caches must be mutable mappings before hydration."""
+    layer, layers, document = _document_with_styled_group()
+
+    for factory, payload in (
+        (Layer.create_from_dict, layer.parameters),
+        (Layers.create_from_dict, layers.parameters),
+        (Document.create_from_dict, document.parameters),
+    ):
+        with pytest.raises(TypeError, match="styles must be a mutable mapping or None"):
+            factory(payload, styles)  # type: ignore[operator]
+
+
+@pytest.mark.condition("DOCUMENT-MODEL-STYLES-MAPPING-P2")
+def test_document_load_rejects_malformed_style_cache(tmp_path) -> None:
+    """DOCUMENT-MODEL-STYLES-MAPPING-P2: Document.load validates caller-provided style caches."""
+    _, _, document = _document_with_styled_group()
+    recipe_path = tmp_path / "document.yaml"
+    document.save(str(recipe_path))
+
+    with pytest.raises(TypeError, match="styles must be a mutable mapping or None"):
+        Document.load(str(recipe_path), styles=["style-name"])  # type: ignore[arg-type]
 
 
 @pytest.mark.condition("DOCUMENT-MODEL-P1")

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import itertools
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping, MutableMapping, Sequence
 
 import yaml
 
@@ -60,6 +60,7 @@ class Layer:
         Returns:
             Layer: Rehydrated layer instance.
         """
+        styles = _style_cache(styles)
         payload = _payload_mapping(data, "Layer")
         canvas = Canvas.create_from_dict(_required_field(payload, "canvas", "Layer"))
         layer = cls(_required_field(payload, "layer_name", "Layer"), canvas, _required_field(payload, "model", "Layer"))
@@ -306,6 +307,7 @@ class Layers:
         Returns:
             object: instance of the class.
         """
+        styles = _style_cache(styles)
         payload = _payload_mapping(data, "Layers")
         layers = cls(Canvas.create_from_dict(_required_field(payload, "canvas", "Layers")))
         for layer_name in list(layers.layers):
@@ -488,6 +490,7 @@ class Document:
         Returns:
             object: instance of the class.
         """
+        styles = _style_cache(styles)
         payload = _payload_mapping(data, "Document")
         document = cls(Canvas.create_from_dict(_required_field(payload, "canvas", "Document")))
         for page_payload in _required_sequence(payload, "pages", "Document"):
@@ -559,8 +562,7 @@ class Document:
         with open(filepath, encoding="UTF-8") as file:
             document_data = yaml.safe_load(file)
 
-        if not styles:
-            styles = {}
+        styles = _style_cache(styles)
         dict_styles = Document._iterdict(document_data)
         if dict_styles:
             for k, v in dict_styles.items():
@@ -697,3 +699,12 @@ def _required_sequence(payload: Mapping[str, object], name: str, owner: str) -> 
     if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
         raise TypeError(f"{owner} {name} must be a sequence")
     return value
+
+
+def _style_cache(styles: object) -> MutableMapping[str, object]:
+    """Return a mutable style cache for document-model hydration."""
+    if styles is None:
+        return {}
+    if not isinstance(styles, MutableMapping):
+        raise TypeError("styles must be a mutable mapping or None")
+    return styles
