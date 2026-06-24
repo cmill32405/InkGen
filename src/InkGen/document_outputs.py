@@ -30,6 +30,19 @@ from InkGen.style import DrawingStyle, TextStyle
 from InkGen.table import Table
 
 DOCX_FIXED_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
+DRAWING_COMPONENT_CONSTRUCTORS = {
+    "ArcDrawing": ArcDrawing,
+    "CircleDrawing": CircleDrawing,
+    "CubicBezierDrawing": CubicBezierDrawing,
+    "LineDrawing": LineDrawing,
+    "PolygonalDrawing": PolygonalDrawing,
+    "QuadraticBezierDrawing": QuadraticBezierDrawing,
+    "RectangleDrawing": RectangleDrawing,
+    "RegularPolygonDrawing": RegularPolygonDrawing,
+    "TextDrawing": TextDrawing,
+}
+DRAWING_COMPONENT_TYPES = frozenset((*DRAWING_COMPONENT_CONSTRUCTORS, "PathDrawing"))
+TEXT_DRAWING_COMPONENT_TYPES = frozenset({"TextDrawing"})
 
 
 class DocumentOutputFormat(str, Enum):
@@ -533,32 +546,24 @@ def _drawing_component_parameters(component: object) -> dict[str, object]:
     return {"type": component.__class__.__name__, "payload": payload}
 
 
-def _drawing_component_from_parameters(data: dict[str, object], styles: dict[str, object] | None) -> object:
+def _drawing_component_from_parameters(data: object, styles: dict[str, object] | None) -> object:
+    if not isinstance(data, Mapping):
+        raise TypeError("flow document drawing component must be a mapping")
+    if "type" not in data or "payload" not in data:
+        raise ValueError("flow document drawing component must include type and payload")
     component_type = data["type"]
+    if not isinstance(component_type, str):
+        raise TypeError("flow document drawing component type must be a string")
+    if component_type not in DRAWING_COMPONENT_TYPES:
+        raise ValueError(f"Unsupported drawing component type: {component_type}")
+    if not isinstance(data["payload"], Mapping):
+        raise TypeError("flow document drawing component payload must be a mapping")
     payload = dict(data["payload"])
-    style = _style_from_payload(payload.pop("style"), styles, text=component_type == "TextDrawing")
-    if component_type == "RectangleDrawing":
-        return RectangleDrawing(style=style, **payload)
-    if component_type == "LineDrawing":
-        return LineDrawing(style=style, **payload)
-    if component_type == "TextDrawing":
-        return TextDrawing(style=style, **payload)
-    if component_type == "ArcDrawing":
-        return ArcDrawing(style=style, **payload)
-    if component_type == "QuadraticBezierDrawing":
-        return QuadraticBezierDrawing(style=style, **payload)
-    if component_type == "CubicBezierDrawing":
-        return CubicBezierDrawing(style=style, **payload)
+    style = _style_from_payload(payload.pop("style"), styles, text=component_type in TEXT_DRAWING_COMPONENT_TYPES)
     if component_type == "PathDrawing":
         commands = [PathCommand(command["type"], command.get("points", [])) for command in payload.get("commands", [])]
         return PathDrawing(style=style, commands=commands)
-    if component_type == "RegularPolygonDrawing":
-        return RegularPolygonDrawing(style=style, **payload)
-    if component_type == "PolygonalDrawing":
-        return PolygonalDrawing(style=style, **payload)
-    if component_type == "CircleDrawing":
-        return CircleDrawing(style=style, **payload)
-    raise ValueError(f"Unsupported drawing component type: {component_type}")
+    return DRAWING_COMPONENT_CONSTRUCTORS[component_type](style=style, **payload)
 
 
 def _style_from_payload(payload: dict[str, object], styles: dict[str, object] | None, *, text: bool) -> DrawingStyle | TextStyle:

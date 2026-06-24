@@ -8,8 +8,22 @@ from uuid import uuid4
 
 import pytest
 
+from InkGen.component import PathCommand
 from InkGen.document_outputs import DOCX_FIXED_TIMESTAMP, FlowDocument
-from InkGen.drawing_components import DrawingComponentGroup, LineDrawing, OutputFormat, RectangleDrawing
+from InkGen.drawing_components import (
+    ArcDrawing,
+    CircleDrawing,
+    CubicBezierDrawing,
+    DrawingComponentGroup,
+    LineDrawing,
+    OutputFormat,
+    PathDrawing,
+    PolygonalDrawing,
+    QuadraticBezierDrawing,
+    RectangleDrawing,
+    RegularPolygonDrawing,
+    TextDrawing,
+)
 from InkGen.paragraph import LineSpacingRule, Paragraph
 from InkGen.style import DrawingStyle, Font, TextStyle
 from InkGen.table import Table
@@ -60,6 +74,23 @@ def _table() -> Table:
 def _drawing_group() -> DrawingComponentGroup:
     group = DrawingComponentGroup("flow-drawing")
     group.add_component(RectangleDrawing((1.0, 2.0), 10.0, 5.0, 0.0, _drawing_style()))
+    return group
+
+
+def _all_supported_drawing_group() -> DrawingComponentGroup:
+    drawing_style = _drawing_style()
+    text_style = _text_style()
+    group = DrawingComponentGroup("all-flow-drawings")
+    group.add_component(RectangleDrawing((1.0, 2.0), 10.0, 5.0, 0.0, drawing_style))
+    group.add_component(LineDrawing((1.0, 1.0), (6.0, 4.0), drawing_style))
+    group.add_component(TextDrawing("NOTE", (2.0, 3.0), text_style))
+    group.add_component(ArcDrawing(center=(5.0, 5.0), radius_x=4.0, radius_y=3.0, start_angle=0.0, end_angle=90.0, style=drawing_style))
+    group.add_component(QuadraticBezierDrawing((0.0, 0.0), (3.0, 4.0), (6.0, 0.0), drawing_style))
+    group.add_component(CubicBezierDrawing((0.0, 0.0), (2.0, 5.0), (4.0, 5.0), (6.0, 0.0), drawing_style))
+    group.add_component(PathDrawing(drawing_style, [PathCommand("M", [(0.0, 0.0)]), PathCommand("L", [(3.0, 0.0)])]))
+    group.add_component(RegularPolygonDrawing(position=(5.0, 5.0), sides=6, radius=3.0, style=drawing_style))
+    group.add_component(PolygonalDrawing([(0.0, 0.0), (3.0, 0.0), (3.0, 2.0)], drawing_style))
+    group.add_component(CircleDrawing((4.0, 4.0), 2.0, drawing_style))
     return group
 
 
@@ -284,6 +315,75 @@ def test_flow_document_drawing_group_hydration_rejects_malformed_label() -> None
 
     with pytest.raises(TypeError, match="group_label must be a string"):
         FlowDocument.create_from_dict(payload)
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-P1")
+@pytest.mark.parametrize(
+    ("component_payload", "exception_type", "message"),
+    [
+        (object(), TypeError, "flow document drawing component must be a mapping"),
+        ({"payload": {}}, ValueError, "flow document drawing component must include type and payload"),
+        ({"type": "RectangleDrawing"}, ValueError, "flow document drawing component must include type and payload"),
+        ({"type": 123, "payload": {}}, TypeError, "flow document drawing component type must be a string"),
+        ({"type": "RectangleDrawing", "payload": object()}, TypeError, "flow document drawing component payload must be a mapping"),
+        ({"type": "UnsupportedDrawing", "payload": {}}, ValueError, "Unsupported drawing component type"),
+    ],
+)
+def test_flow_document_hydration_rejects_malformed_drawing_component_envelopes(
+    component_payload: object,
+    exception_type: type[Exception],
+    message: str,
+) -> None:
+    """FLOW-DOCUMENT-P1: Drawing component envelopes fail at the document boundary."""
+    payload = {
+        "FlowDocument": {
+            "title": "Malformed Component",
+            "blocks": [
+                {
+                    "type": "drawing",
+                    "payload": {
+                        "group_label": "components",
+                        "components": [component_payload],
+                    },
+                }
+            ],
+        }
+    }
+
+    with pytest.raises(exception_type, match=message):
+        FlowDocument.create_from_dict(payload)
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-P1")
+def test_flow_document_hydration_dispatches_dynamic_drawing_component_type_strings() -> None:
+    """FLOW-DOCUMENT-P1: Drawing component dispatch uses string equality."""
+    document = FlowDocument(title="Dynamic Component")
+    drawing = _all_supported_drawing_group()
+    document.add_drawing_group(drawing)
+    payload = document.parameters
+    flow_payload = payload["FlowDocument"]
+    assert isinstance(flow_payload, dict)
+    blocks = flow_payload["blocks"]
+    assert isinstance(blocks, list)
+    block_payload = blocks[0]["payload"]
+    assert isinstance(block_payload, dict)
+    components = block_payload["components"]
+    assert isinstance(components, list)
+    for component_payload in components:
+        assert isinstance(component_payload, dict)
+        component_type = component_payload["type"]
+        assert isinstance(component_type, str)
+        component_payload["type"] = "".join([component_type[:-1], component_type[-1:]])
+
+    styles = {component.style.name: component.style for component in drawing.components if hasattr(component, "style")}
+    clone = FlowDocument.create_from_dict(payload, styles)
+
+    assert clone.parameters == document.parameters
+    assert clone.to_plain_text() == (
+        "[Drawing: all-flow-drawings; RectangleDrawing, LineDrawing, TextDrawing, "
+        "ArcDrawing, QuadraticBezierDrawing, CubicBezierDrawing, PathDrawing, "
+        "RegularPolygonDrawing, PolygonalDrawing, CircleDrawing]"
+    )
 
 
 @pytest.mark.condition("FLOW-DOCUMENT-P1")
