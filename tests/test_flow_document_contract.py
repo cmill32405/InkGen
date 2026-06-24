@@ -101,6 +101,44 @@ def test_flow_document_escapes_text_across_output_formats() -> None:
     assert r"A&B <tag> \{x\}\\y" in rtf
 
 
+@pytest.mark.condition("FLOW-DOCUMENT-TITLE-P2")
+@pytest.mark.parametrize("title", [123, object(), ["Doc"]])
+def test_flow_document_rejects_non_string_titles(title: object) -> None:
+    """FLOW-DOCUMENT-TITLE-P2: Flow-document titles must be strings or None."""
+    with pytest.raises(TypeError, match="title must be a string or None"):
+        FlowDocument(title=title)  # type: ignore[arg-type]
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-TITLE-P2")
+@pytest.mark.parametrize("title", [None, ""])
+def test_flow_document_default_title_is_preserved(title: str | None) -> None:
+    """FLOW-DOCUMENT-TITLE-P2: None and empty titles keep the existing default."""
+    document = FlowDocument(title=title)
+
+    assert document.title == "InkGen Document"
+    assert "<h1>InkGen Document</h1>" in document.to_html()
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-TITLE-P2")
+def test_flow_document_title_hydration_rejects_malformed_title() -> None:
+    """FLOW-DOCUMENT-TITLE-P2: Serialized titles cannot be silently stringified."""
+    payload = {"FlowDocument": {"title": object(), "blocks": []}}
+
+    with pytest.raises(TypeError, match="title must be a string or None"):
+        FlowDocument.create_from_dict(payload)
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-TITLE-P2")
+def test_flow_document_valid_title_round_trips_and_escapes() -> None:
+    """FLOW-DOCUMENT-TITLE-P2: Valid titles round-trip and remain escaped in outputs."""
+    document = FlowDocument(title="A&B <Doc> {1}")
+    clone = FlowDocument.create_from_dict(document.parameters)
+
+    assert clone.parameters == document.parameters
+    assert "<h1>A&amp;B &lt;Doc&gt; {1}</h1>" in clone.to_html()
+    assert r"\b A&B <Doc> \{1\}\b0\par" in clone.to_rtf()
+
+
 @pytest.mark.condition("FLOW-DOCUMENT-P1")
 def test_flow_document_preserves_mixed_block_order_after_round_trip() -> None:
     """FLOW-DOCUMENT-P1: Parameters preserve paragraph, table, and drawing block order."""

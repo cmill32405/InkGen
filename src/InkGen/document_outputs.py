@@ -45,7 +45,7 @@ class FlowDocument:
 
     def __init__(self, *, title: str | None = None) -> None:
         """Create an empty flow document."""
-        self.title = title or "InkGen Document"
+        self.title = _normalize_title(title)
         self._blocks: list[Paragraph | Table | DrawingComponentGroup] = []
 
     @property
@@ -90,7 +90,7 @@ class FlowDocument:
     def create_from_dict(cls, data: dict[str, object], styles: dict[str, object] | None = None) -> FlowDocument:
         """Recreate a flow document from serialized parameters."""
         payload = data["FlowDocument"] if "FlowDocument" in data else data
-        document = cls(title=str(payload.get("title", "InkGen Document")))
+        document = cls(title=_normalize_title(payload.get("title")))
         for block_payload in payload.get("blocks", []):
             document._blocks.append(_block_from_parameters(block_payload, styles))
         for paragraph_payload in payload.get("paragraphs", []):
@@ -344,6 +344,17 @@ class FlowDocument:
             '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>\n'
             "</w:styles>\n"
         )
+
+
+def _normalize_title(value: object) -> str:
+    """Normalize a flow-document title without stringifying malformed data."""
+    if value is None:
+        return "InkGen Document"
+    if not isinstance(value, str):
+        raise TypeError("title must be a string or None")
+    if not value:
+        return "InkGen Document"
+    return value
 
 
 def _docx_line_spacing(paragraph: Paragraph) -> tuple[int, str]:

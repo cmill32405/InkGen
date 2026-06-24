@@ -57,6 +57,7 @@ nav:
       - Paragraph Contract: proofs/paragraph-contract.md
       - Drawing Group Contract: proofs/drawing-group-contract.md
       - Flow Document Contract: proofs/flow-document-contract.md
+      - Flow Document Title Contract: proofs/flow-document-title-contract.md
       - CAD Zoning Contract: proofs/cad-zoning-contract.md
       - Zoning Drawing Finite Boundary Contract: proofs/zoning-drawing-finite-contract.md
       - Table Contract: proofs/table-contract.md
