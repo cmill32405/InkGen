@@ -26,7 +26,7 @@ class Table(Component):
     ) -> None:
         super().__init__()
         self._position = _normalize_position(position)
-        self._auto_fit = bool(autofit)
+        self._auto_fit = _normalize_bool(autofit, name="autofit")
         self._autofit_queue: list[tuple[tuple[int, int], AutoFitRule, AutoFitRule]] = []
         self._autofit_suppressed = False
 
@@ -266,7 +266,7 @@ class Table(Component):
         Args:
             state: True to enable autofit, False to disable.
         """
-        self._auto_fit = bool(state)
+        self._auto_fit = _normalize_bool(state, name="autofit")
 
     @property
     def autofit_queue(self) -> list[tuple[tuple[int, int], AutoFitRule, AutoFitRule]]:
@@ -436,6 +436,13 @@ def _normalize_position(value: tuple[float, float]) -> tuple[float, float]:
         _coerce_finite_float(x, name="Table position"),
         _coerce_finite_float(y, name="Table position"),
     )
+
+
+def _normalize_bool(value: object, *, name: str) -> bool:
+    """Normalize a public table boolean option without truthiness coercion."""
+    if not isinstance(value, bool):
+        raise TypeError(f"{name} must be a bool")
+    return value
 
 
 def _coerce_finite_float(value: float, *, name: str, allow_negative: bool = True) -> float:

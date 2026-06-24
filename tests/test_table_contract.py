@@ -161,3 +161,54 @@ def test_table_svg_and_flow_document_use_valid_table_contract() -> None:
     document.add_table(table)
     assert "A1" in document.to_html()
     assert "A1" in document.to_plain_text()
+
+
+@pytest.mark.condition("TABLE-AUTOFIT-P2")
+@pytest.mark.parametrize("value", [1, 0, "false", "", object()])
+def test_table_autofit_rejects_non_bool_values(value: object) -> None:
+    """TABLE-AUTOFIT-P2: Autofit accepts only real bool values."""
+    with pytest.raises(TypeError, match="autofit must be a bool"):
+        Table(autofit=value)  # type: ignore[arg-type]
+
+    table = Table(autofit=True)
+    before = table.autofit
+    with pytest.raises(TypeError, match="autofit must be a bool"):
+        table.autofit = value  # type: ignore[assignment]
+    assert table.autofit is before
+
+
+@pytest.mark.condition("TABLE-AUTOFIT-P2")
+def test_table_autofit_hydration_rejects_non_bool_values() -> None:
+    """TABLE-AUTOFIT-P2: Serialized auto_fit cannot bypass bool validation."""
+    table = _table()
+    payload = table.parameters
+    payload["Table"]["auto_fit"] = "false"
+
+    with pytest.raises(TypeError, match="autofit must be a bool"):
+        Table.create_from_dict(payload)
+
+
+@pytest.mark.condition("TABLE-AUTOFIT-P2")
+def test_table_autofit_true_still_registers_queue_entries() -> None:
+    """TABLE-AUTOFIT-P2: Valid true autofit still drives queue registration."""
+    table = Table(autofit=True)
+    table.add_column(width=5.0)
+    table.add_row(height=4.0)
+
+    table.cell(0, 0).add_paragraph("queued")
+
+    assert table.autofit is True
+    assert table.autofit_queue == [((0, 0), table.rows[0].height_rule, table.columns[0].width_rule)]
+
+
+@pytest.mark.condition("TABLE-AUTOFIT-P2")
+def test_table_autofit_false_suppresses_queue_entries() -> None:
+    """TABLE-AUTOFIT-P2: Valid false autofit suppresses queue registration."""
+    table = Table(autofit=False)
+    table.add_column(width=5.0)
+    table.add_row(height=4.0)
+
+    table.cell(0, 0).add_paragraph("not queued")
+
+    assert table.autofit is False
+    assert table.autofit_queue == []
