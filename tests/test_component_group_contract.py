@@ -109,3 +109,120 @@ def test_component_group_round_trip_preserves_label_order_and_styles() -> None:
         "WidthHeightDrawingComponent",
     ]
     assert clone.parameters == group.parameters
+
+
+@pytest.mark.condition("COMPONENT-GROUP-PAYLOAD-P2")
+def test_component_group_round_trip_preserves_base_components() -> None:
+    """COMPONENT-GROUP-PAYLOAD-P2: Base Component payloads hydrate without a style argument."""
+    group = ComponentGroup("base")
+    group.add_component(Component())
+
+    clone = ComponentGroup.create_from_dict(group.parameters)
+
+    assert clone.group_label == "base"
+    assert [component.component_type for component in clone.components()] == ["Component"]
+    assert clone.parameters == group.parameters
+
+
+@pytest.mark.condition("COMPONENT-GROUP-PAYLOAD-P2")
+@pytest.mark.parametrize(
+    ("payload", "exception_type", "message"),
+    [
+        (object(), TypeError, "ComponentGroup data must be a mapping"),
+        ({}, ValueError, "ComponentGroup data must include ComponentGroup"),
+        ({"ComponentGroup": object()}, TypeError, "ComponentGroup payload must be a mapping"),
+        ({"ComponentGroup": {"components": []}}, ValueError, "ComponentGroup payload must include group_label"),
+        ({"ComponentGroup": {"group_label": "parts"}}, ValueError, "ComponentGroup payload must include components"),
+        (
+            {"ComponentGroup": {"group_label": "parts", "components": "bad"}},
+            TypeError,
+            "ComponentGroup components must be a sequence",
+        ),
+        (
+            {"ComponentGroup": {"group_label": "parts", "components": [object()]}},
+            TypeError,
+            "component group component entry must be a mapping",
+        ),
+        (
+            {"ComponentGroup": {"group_label": "parts", "components": [{}]}},
+            ValueError,
+            "component group component entry must contain one component type",
+        ),
+        (
+            {"ComponentGroup": {"group_label": "parts", "components": [{"Component": {}, "DrawingComponent": {}}]}},
+            ValueError,
+            "component group component entry must contain one component type",
+        ),
+        (
+            {"ComponentGroup": {"group_label": "parts", "components": [{123: {}}]}},
+            TypeError,
+            "component group component type must be a string",
+        ),
+        (
+            {"ComponentGroup": {"group_label": "parts", "components": [{"Component": object()}]}},
+            TypeError,
+            "component group component payload must be a mapping",
+        ),
+        (
+            {"ComponentGroup": {"group_label": "parts", "components": [{"NotAComponent": {}}]}},
+            ValueError,
+            "Unsupported component group payload type",
+        ),
+        (
+            {"ComponentGroup": {"group_label": "parts", "components": [{"PRECISION": {}}]}},
+            ValueError,
+            "Unsupported component group payload type",
+        ),
+        (
+            {"ComponentGroup": {"group_label": "parts", "components": [{"Style": {}}]}},
+            ValueError,
+            "Unsupported component group payload type",
+        ),
+    ],
+)
+def test_component_group_hydration_rejects_malformed_payload_envelopes(
+    payload: object,
+    exception_type: type[Exception],
+    message: str,
+) -> None:
+    """COMPONENT-GROUP-PAYLOAD-P2: Serialized group envelopes fail before dynamic dispatch."""
+    with pytest.raises(exception_type, match=message):
+        ComponentGroup.create_from_dict(payload, {})
+
+
+@pytest.mark.condition("COMPONENT-GROUP-PAYLOAD-P2")
+@pytest.mark.parametrize(
+    ("style_payload", "exception_type", "message"),
+    [
+        (object(), TypeError, "component group style payload must be a mapping"),
+        ({}, ValueError, "component group style payload must contain one style type"),
+        ({"DrawingStyle": {}, "TextStyle": {}}, ValueError, "component group style payload must contain one style type"),
+        ({123: {}}, TypeError, "component group style type must be a string"),
+        ({"DrawingStyle": object()}, TypeError, "component group style entry must be a mapping"),
+        ({"DrawingStyle": {"name": object()}}, TypeError, "component group style name must be a string"),
+        ({"NotAStyle": {"name": "style"}}, ValueError, "Unsupported component group payload type"),
+    ],
+)
+def test_component_group_hydration_rejects_malformed_style_envelopes(
+    style_payload: object,
+    exception_type: type[Exception],
+    message: str,
+) -> None:
+    """COMPONENT-GROUP-PAYLOAD-P2: Serialized style envelopes fail before style construction."""
+    payload = {
+        "ComponentGroup": {
+            "group_label": "parts",
+            "components": [
+                {
+                    "StandardDrawingComponent": {
+                        "point_1": (1.0, 2.0),
+                        "point_2": (3.0, 4.0),
+                        "style": style_payload,
+                    }
+                }
+            ],
+        }
+    }
+
+    with pytest.raises(exception_type, match=message):
+        ComponentGroup.create_from_dict(payload, {})

@@ -5,7 +5,7 @@
 import itertools
 import math
 import sys
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping, Sequence
 from copy import deepcopy
 
 import numpy as np
@@ -2108,6 +2108,57 @@ class TextComponent(Component):
         return hull_coords
 
 
+def _component_group_payload(data: object) -> Mapping[str, object]:
+    if not isinstance(data, Mapping):
+        raise TypeError("ComponentGroup data must be a mapping")
+    if "ComponentGroup" not in data:
+        raise ValueError("ComponentGroup data must include ComponentGroup")
+    payload = data["ComponentGroup"]
+    if not isinstance(payload, Mapping):
+        raise TypeError("ComponentGroup payload must be a mapping")
+    return payload
+
+
+def _component_group_required_field(payload: Mapping[str, object], name: str) -> object:
+    if name not in payload:
+        raise ValueError(f"ComponentGroup payload must include {name}")
+    return payload[name]
+
+
+def _component_group_sequence(payload: Mapping[str, object], name: str) -> Sequence[object]:
+    value = _component_group_required_field(payload, name)
+    if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
+        raise TypeError(f"ComponentGroup {name} must be a sequence")
+    return value
+
+
+def _component_group_style_payload(payload: object) -> tuple[str, Mapping[str, object]]:
+    if not isinstance(payload, Mapping):
+        raise TypeError("component group style payload must be a mapping")
+    if len(payload) != 1:
+        raise ValueError("component group style payload must contain one style type")
+    style_class_name = next(iter(payload))
+    if not isinstance(style_class_name, str):
+        raise TypeError("component group style type must be a string")
+    style_data = payload[style_class_name]
+    if not isinstance(style_data, Mapping):
+        raise TypeError("component group style entry must be a mapping")
+    style_name = style_data.get("name")
+    if not isinstance(style_name, str):
+        raise TypeError("component group style name must be a string")
+    return style_class_name, style_data
+
+
+def _component_group_class(class_name: str) -> type:
+    try:
+        candidate = getattr(sys.modules[__name__], class_name)
+    except AttributeError as exc:
+        raise ValueError(f"Unsupported component group payload type: {class_name}") from exc
+    if not isinstance(candidate, type):
+        raise ValueError(f"Unsupported component group payload type: {class_name}")
+    return candidate
+
+
 class ComponentGroup:
     """
         A collection of components that makes up a labelled object in a document.
@@ -2128,7 +2179,7 @@ class ComponentGroup:
         self._components: dict[int, Component] = {}
 
     @classmethod
-    def create_from_dict(cls, data: dict, styles: dict=None) -> object:
+    def create_from_dict(cls, data: object, styles: dict=None) -> object:
         """ Class method to recreate the object from its serialization dict.
 
         Args:
@@ -2137,24 +2188,39 @@ class ComponentGroup:
         Returns:
             object: instance of the class.
         """
-        group = cls(data['ComponentGroup']['group_label'])
+        payload = _component_group_payload(data)
+        group = cls(_component_group_required_field(payload, "group_label"))
         if styles is None:
             styles = {}
 
-        for c in data['ComponentGroup']['components']:
+        for c in _component_group_sequence(payload, "components"):
+            if not isinstance(c, Mapping):
+                raise TypeError("component group component entry must be a mapping")
+            if len(c) != 1:
+                raise ValueError("component group component entry must contain one component type")
             style = None
-            component_class_name = list(c.keys())[0]
-            if 'style' in list(c[component_class_name].keys()):
-                style_name = list(c[component_class_name]['style'].keys())[0]
-                if c[component_class_name]['style'][style_name]['name'] not in list(styles.keys()):
-                    style_class_name = list(c[component_class_name]['style'].keys())[0]
-                    style_class = getattr(sys.modules[__name__], style_class_name)
-                    style = style_class.create_from_dict(c[component_class_name]['style'])
-                    styles[c[component_class_name]['style'][style_name]['name']] = style
+            component_class_name = next(iter(c))
+            if not isinstance(component_class_name, str):
+                raise TypeError("component group component type must be a string")
+            component_payload = c[component_class_name]
+            if not isinstance(component_payload, Mapping):
+                raise TypeError("component group component payload must be a mapping")
+            if 'style' in component_payload:
+                style_payload = component_payload['style']
+                style_class_name, style_data = _component_group_style_payload(style_payload)
+                if style_data["name"] not in list(styles.keys()):
+                    style_class = _component_group_class(style_class_name)
+                    style = style_class.create_from_dict(style_payload)
+                    styles[style_data["name"]] = style
                 else:
-                    style = styles[c[component_class_name]['style'][style_name]['name']]
-            component_class = getattr(sys.modules[__name__], component_class_name)
-            component = component_class.create_from_dict(c, style)
+                    style = styles[style_data["name"]]
+            component_class = _component_group_class(component_class_name)
+            if not issubclass(component_class, Component):
+                raise ValueError(f"Unsupported component group payload type: {component_class_name}")
+            if component_class is Component:
+                component = component_class.create_from_dict(c)
+            else:
+                component = component_class.create_from_dict(c, style)
             group.add_component(component)
 
         return group
@@ -2309,5 +2375,3 @@ class ComponentGroup:
         for coord in get_coordinates(multi.convex_hull):
             coordinates.append((coord[0], coord[1]))
         return coordinates[:-1]
-
-

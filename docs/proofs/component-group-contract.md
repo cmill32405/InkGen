@@ -1,9 +1,9 @@
 # Component Group Contract Proof Obligations
 
-This note applies the InkGen Definition of Done to the COMPONENT-GROUP-P1 base
-component group slice. It covers the shared `ComponentGroup` boundary used by
-document layers, SVG/PDF renderers, CAD helpers, truth records, and serialized
-recipes.
+This note applies the InkGen Definition of Done to the COMPONENT-GROUP-P1 and
+COMPONENT-GROUP-PAYLOAD-P2 base component group slices. It covers the shared
+`ComponentGroup` boundary used by document layers, SVG/PDF renderers, CAD
+helpers, truth records, and serialized recipes.
 
 ## Scope
 
@@ -31,6 +31,8 @@ Affected surface:
 - `tests/mutation/component_group_cosmic_ray.toml`: scoped mutation gate.
 - `tests/mutation/filter_component_group_work_items.py`: proof-critical
   mutation filter.
+- `tests/mutation/filter_component_group_payload_work_items.py`:
+  COMPONENT-GROUP-PAYLOAD-P2 mutation filter.
 - `docs/api-reference.md`: base group contract note.
 - `docs/proofs/component-group-contract.md`: proof note.
 
@@ -58,8 +60,15 @@ Before/after edge changes:
 
 - Before this slice, `ComponentGroup.add_component()` silently ignored
   non-`Component` objects.
+- Before COMPONENT-GROUP-PAYLOAD-P2, malformed serialized group roots,
+  component envelopes, style envelopes, and unsupported dynamic type names
+  could fail through incidental subscription, `AttributeError`, or dynamic
+  dispatch errors.
 - After this slice, invalid add attempts raise `TypeError` and leave existing
   group contents unchanged.
+- After COMPONENT-GROUP-PAYLOAD-P2, group hydration validates the serialized
+  root, component collection, component envelopes, style envelopes, and dynamic
+  class names before constructing components.
 - Valid components, insertion order, lookup/removal exceptions, geometry
   aggregation, and serialization round trips are preserved.
 
@@ -84,6 +93,16 @@ ADR/rule impact:
 - Missing component ids raise `InvalidComponentID`.
 - Geometry aggregation includes only child components that expose `points`.
 - Serialization order follows the stored component insertion order.
+- Serialized component-group roots must be mappings with a `ComponentGroup`
+  mapping payload.
+- Serialized group payloads must include `group_label` and a non-string
+  `components` sequence.
+- Each serialized component entry must be a single-key mapping whose key is a
+  string component type and whose value is a mapping payload.
+- Serialized style envelopes, when present, must be single-key mappings with a
+  string style type and a mapping entry containing a string `name`.
+- Dynamic component type names must resolve to classes in the `Component`
+  hierarchy.
 - Empty-group geometry behavior is outside this slice; this slice preserves
   the current Shapely-derived behavior for empty groups.
 
@@ -93,6 +112,10 @@ ADR/rule impact:
   `ComponentGroup._components`.
 - Changed `ComponentGroup.add_component()` from silent ignore to `TypeError`
   for non-`Component` values.
+- Added explicit serialized payload-envelope validation for
+  `ComponentGroup.create_from_dict()`.
+- Preserved valid base `Component` hydration by calling its one-argument
+  factory without a style argument.
 
 ## Comprehensiveness Matrix
 
@@ -103,6 +126,8 @@ ADR/rule impact:
 | Missing ids | Raise `InvalidComponentID` on lookup/removal | PO-CGROUP-003 | `test_component_group_lookup_and_removal_fail_loudly_for_missing_ids` | existing behavior |
 | Geometry aggregation | Aggregate drawable child points, bbox, and hull | PO-CGROUP-004 | `test_component_group_geometry_aggregates_only_component_points` | existing behavior |
 | Serialization | Preserve label, component order, and style cache reuse on round trip | PO-CGROUP-005 | `test_component_group_round_trip_preserves_label_order_and_styles` | existing behavior |
+| Serialized group payload envelopes | Reject malformed roots, collections, component entries, style envelopes, and unsupported type names before dynamic dispatch | PO-CGROUP-006 | `test_component_group_hydration_rejects_malformed_payload_envelopes`, `test_component_group_hydration_rejects_malformed_style_envelopes` | killed/equivalent |
+| Base component payloads | Hydrate valid style-free base `Component` entries | PO-CGROUP-007 | `test_component_group_round_trip_preserves_base_components` | killed/equivalent |
 
 ## Test Applicability Matrix
 
@@ -112,7 +137,7 @@ ADR/rule impact:
 | Behavioral/condition | yes | The slice defines a public component-group contract. | Tests are marked `@pytest.mark.condition("COMPONENT-GROUP-P1")`. |
 | Failure-mode | yes | Invalid add inputs and missing ids must fail loudly. | Invalid add and missing-id tests |
 | Integration/live-path | yes | Layer, drawing group, and PDF render guard tests exercise dependent paths. | Focused gate includes dependent tests |
-| Contract/API compatibility | yes | Existing component and layer tests must continue passing. | Focused gate |
+| Contract/API compatibility | yes | Existing component and layer tests plus serialized payload tests must continue passing. | Focused gate |
 | Property/fuzz | no | The changed add boundary is finite type validation. | Not applicable |
 | Mutation | yes | The changed fail-fast boundary is proof-critical. | Result recorded below |
 | Security/adversarial | no | No file path, network, subprocess, archive, SQL, template, or active-content surface changed. | Not applicable |
@@ -120,6 +145,7 @@ ADR/rule impact:
 | Concurrency/race | no | No shared mutable global state, locks, workers, or temp files changed. | Not applicable |
 | Golden artifact/visual | no | No renderer output syntax changed. | Not applicable |
 | Regression | yes | Prevents invalid components from disappearing silently. | Invalid add test |
+| Serialized payload adversarial input | yes | Malformed group hydration payloads must fail before incidental dynamic dispatch errors. | COMPONENT-GROUP-PAYLOAD-P2 tests |
 
 ## Mutation Testing Gate
 
@@ -135,6 +161,17 @@ Current result:
 - Cosmic Ray 8.4.6, scoped to the changed
   `ComponentGroup.add_component()` fail-fast boundary: 2805 raw work items, 2
   proof-critical work items after filter, 2 killed, 0 survived.
+- Cosmic Ray 8.4.6, scoped to COMPONENT-GROUP-PAYLOAD-P2 payload validation
+  and dispatch rows: 57 work items, 56 killed, and 1 documented equivalent
+  survivor.
+- Equivalent survivor:
+  - `create_from_dict`: `component_class is Component` changed to
+    `component_class == Component`.
+- Equivalence proof: inside the declared domain, `component_class` is a normal
+  Python class object resolved from `InkGen.component`. Python class equality
+  for these classes is identity equality, so `component_class == Component` and
+  `component_class is Component` select the same branch for every supported
+  serialized component type.
 
 ## PO-CGROUP-001: Valid Components Are Stored Deterministically
 
@@ -238,3 +275,54 @@ label, component type order, and exact parameter equality.
 ### Conclusion
 
 Proven for the stated domain after focused tests pass.
+
+## PO-CGROUP-006: Serialized Group Envelopes Fail Explicitly
+
+### Claim
+
+`ComponentGroup.create_from_dict()` rejects malformed serialized roots,
+component collections, component entries, style envelopes, and unsupported type
+names before dynamic component construction.
+
+### Domain
+
+Public group hydration calls using `ComponentGroup.create_from_dict(data,
+styles=None)`.
+
+### Proof Method
+
+Local helpers validate the `ComponentGroup` root, required fields, collection
+shape, component-entry envelope, style envelope, and dynamic class resolution
+before component factories are called. Focused condition tests cover malformed
+roots, missing fields, string collections, non-mapping entries, empty or
+multi-key entries, non-string type keys, non-mapping component payloads,
+unsupported component names, non-class module attributes, non-component classes,
+and malformed style envelopes.
+
+### Conclusion
+
+Proven for the stated domain after focused tests and mutation pass with one
+documented equivalent survivor.
+
+## PO-CGROUP-007: Base Components Hydrate Without Style Arguments
+
+### Claim
+
+Serialized base `Component` entries in a component group hydrate without passing
+an unsupported style argument.
+
+### Domain
+
+Component groups containing valid style-free base `Component` payloads.
+
+### Proof Method
+
+`ComponentGroup.create_from_dict()` dispatches the base `Component` factory with
+only the serialized entry and dispatches subclasses through the existing
+style-aware path. The focused test round trips a group containing a base
+`Component` and asserts exact serialized parameters.
+
+### Conclusion
+
+Proven for the stated domain after focused tests and mutation pass with one
+documented equivalent survivor.
