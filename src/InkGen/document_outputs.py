@@ -570,9 +570,27 @@ def _drawing_component_from_parameters(data: object, styles: dict[str, object] |
         raise ValueError("flow document drawing component payload must include style")
     style = _style_from_payload(payload.pop("style"), styles, text=component_type in TEXT_DRAWING_COMPONENT_TYPES)
     if component_type == "PathDrawing":
-        commands = [PathCommand(command["type"], command.get("points", [])) for command in payload.get("commands", [])]
-        return PathDrawing(style=style, commands=commands)
+        return PathDrawing(style=style, commands=_path_commands_from_payload(payload))
     return DRAWING_COMPONENT_CONSTRUCTORS[component_type](style=style, **payload)
+
+
+def _path_commands_from_payload(payload: Mapping[str, object]) -> list[PathCommand]:
+    if "commands" not in payload:
+        raise ValueError("flow document path payload must include commands")
+    commands = payload["commands"]
+    if isinstance(commands, (str, bytes)) or not isinstance(commands, Sequence):
+        raise TypeError("flow document path commands must be a sequence")
+    path_commands = []
+    for command in commands:
+        if not isinstance(command, Mapping):
+            raise TypeError("flow document path command must be a mapping")
+        if "type" not in command or "points" not in command:
+            raise ValueError("flow document path command must include type and points")
+        points = command["points"]
+        if isinstance(points, (str, bytes)) or not isinstance(points, Sequence):
+            raise TypeError("flow document path command points must be a sequence")
+        path_commands.append(PathCommand(command["type"], points))
+    return path_commands
 
 
 def _style_from_payload(payload: object, styles: dict[str, object] | None, *, text: bool) -> DrawingStyle | TextStyle:

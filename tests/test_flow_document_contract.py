@@ -516,6 +516,52 @@ def test_flow_document_hydration_constructs_missing_drawing_style_overrides_by_k
 
 
 @pytest.mark.condition("FLOW-DOCUMENT-P1")
+@pytest.mark.parametrize(
+    ("commands_payload", "exception_type", "message"),
+    [
+        ("__missing__", ValueError, "flow document path payload must include commands"),
+        ("not-commands", TypeError, "flow document path commands must be a sequence"),
+        (b"not-commands", TypeError, "flow document path commands must be a sequence"),
+        (object(), TypeError, "flow document path commands must be a sequence"),
+        ([object()], TypeError, "flow document path command must be a mapping"),
+        ([{"points": []}], ValueError, "flow document path command must include type and points"),
+        ([{"type": "M"}], ValueError, "flow document path command must include type and points"),
+        ([{"type": "M", "points": "not-points"}], TypeError, "flow document path command points must be a sequence"),
+        ([{"type": "M", "points": object()}], TypeError, "flow document path command points must be a sequence"),
+    ],
+)
+def test_flow_document_hydration_rejects_malformed_path_command_payloads(
+    commands_payload: object,
+    exception_type: type[Exception],
+    message: str,
+) -> None:
+    """FLOW-DOCUMENT-P1: Path command envelopes fail before path construction."""
+    style = _drawing_style()
+    group = DrawingComponentGroup("path-flow-drawing")
+    group.add_component(PathDrawing(style, [PathCommand("M", [(0.0, 0.0)])]))
+    document = FlowDocument(title="Malformed Path")
+    document.add_drawing_group(group)
+    payload = document.parameters
+    flow_payload = payload["FlowDocument"]
+    assert isinstance(flow_payload, dict)
+    blocks = flow_payload["blocks"]
+    assert isinstance(blocks, list)
+    block_payload = blocks[0]["payload"]
+    assert isinstance(block_payload, dict)
+    components = block_payload["components"]
+    assert isinstance(components, list)
+    path_payload = components[0]["payload"]
+    assert isinstance(path_payload, dict)
+    if commands_payload == "__missing__":
+        path_payload.pop("commands")
+    else:
+        path_payload["commands"] = commands_payload
+
+    with pytest.raises(exception_type, match=message):
+        FlowDocument.create_from_dict(payload, {style.name: style})
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-P1")
 def test_flow_document_hydration_dispatches_dynamic_drawing_component_type_strings() -> None:
     """FLOW-DOCUMENT-P1: Drawing component dispatch uses string equality."""
     document = FlowDocument(title="Dynamic Component")

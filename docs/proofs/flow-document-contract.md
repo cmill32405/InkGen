@@ -77,6 +77,9 @@ Before/after edge changes:
   envelopes and mismatched style override map entries could fail through
   incidental `KeyError` or reach primitive construction with the wrong style
   type.
+- Before the path-command hardening update, malformed serialized `PathDrawing`
+  command envelopes could fail through incidental indexing errors before
+  reaching `PathCommand`.
 - After this slice, DOCX ZIP parts use a fixed timestamp and drawing
   materialization must return an InkGen `Component`.
 - After the drawing-label hardening update, drawing block hydration passes
@@ -96,6 +99,9 @@ Before/after edge changes:
 - After the drawing-style hardening update, component hydration requires a style
   payload, validates the nested style envelope and style name, and verifies
   override-map values match the component's drawing/text style kind.
+- After the path-command hardening update, `PathDrawing` hydration validates
+  that commands are a non-string sequence of command envelopes with `type` and
+  `points` before constructing `PathCommand` objects.
 - No new dependency edge or third-party dependency was introduced.
 
 Cycle/layer/coupling/redundancy result:
@@ -156,6 +162,8 @@ ADR/rule impact:
   sequence shape before iterating components.
 - `_style_from_payload()` validates drawing style envelope shape and override
   type before constructing or reusing a style object.
+- `_path_commands_from_payload()` validates serialized path command envelope
+  shape before delegating command semantics to `PathCommand`.
 
 ## Comprehensiveness Matrix
 
@@ -169,6 +177,7 @@ ADR/rule impact:
 | Serialized drawing payload | Reject missing drawing payload keys and non-sequence component collections before component iteration | PO-FDOC-010 | `test_flow_document_hydration_rejects_malformed_drawing_payloads` | killed |
 | Serialized drawing component envelope and dispatch | Reject malformed component envelopes, reject unsupported types before style extraction, and dispatch valid dynamic type strings by value | PO-FDOC-009 | `test_flow_document_hydration_rejects_malformed_drawing_component_envelopes`, `test_flow_document_hydration_dispatches_dynamic_drawing_component_type_strings` | killed |
 | Serialized drawing style envelope | Reject missing/malformed style envelopes, mismatched style keys, non-string style names, and wrong-type style overrides | PO-FDOC-011 | `test_flow_document_hydration_rejects_malformed_drawing_style_payloads`, `test_flow_document_hydration_rejects_mismatched_drawing_style_overrides`, `test_flow_document_hydration_constructs_missing_drawing_style_overrides_by_kind` | killed |
+| Serialized path command envelope | Reject malformed `PathDrawing` command collections before `PathCommand` construction | PO-FDOC-012 | `test_flow_document_hydration_rejects_malformed_path_command_payloads` | killed |
 | Malformed serialized drawing label | Reject through the neutral group label contract | PO-FDOC-006 | `test_flow_document_drawing_group_hydration_rejects_malformed_label` | behavioral evidence |
 | Invalid drawing materialization | Reject before silent omission | PO-FDOC-004 | `test_flow_document_rejects_invalid_drawing_materialization` | killed |
 | DOCX VML linework | Emit group-relative points | PO-FDOC-005 | `test_flow_document_docx_drawing_polyline_uses_group_relative_points` | killed |
@@ -181,7 +190,7 @@ ADR/rule impact:
 |---|---|---|---|
 | Unit | yes | Helpers are deterministic. | FLOW-DOCUMENT-P1 tests |
 | Behavioral/condition | yes | The slice defines document-output behavior. | Tests are marked `@pytest.mark.condition("FLOW-DOCUMENT-P1")`. |
-| Failure-mode | yes | Invalid content, malformed root payloads, malformed serialized block envelopes, malformed drawing payloads, malformed drawing component envelopes, malformed drawing style envelopes, malformed serialized drawing labels, and invalid output paths must fail loudly. | Invalid hydration, invalid materialization, and existing writer tests |
+| Failure-mode | yes | Invalid content, malformed root payloads, malformed serialized block envelopes, malformed drawing payloads, malformed drawing component envelopes, malformed drawing style envelopes, malformed path command envelopes, malformed serialized drawing labels, and invalid output paths must fail loudly. | Invalid hydration, invalid materialization, and existing writer tests |
 | Integration/live-path | yes | DOCX ZIP, HTML, RTF, text, table, and drawing paths cross module boundaries. | Focused and existing document-output tests |
 | Contract/API compatibility | yes | Parameters and public add methods must preserve existing behavior. | Round-trip and existing rejection tests |
 | Property/fuzz | no | This slice proves finite output and dispatch contracts. | Not applicable |
@@ -213,6 +222,8 @@ Proof-critical mutation targets:
   should fail malformed-drawing-payload tests.
 - Weakening serialized drawing style envelope or override type validation should
   fail malformed-style, mismatched-override, or fallback-construction tests.
+- Weakening serialized path command envelope validation should fail malformed
+  path-command tests.
 
 Current result:
 
@@ -231,6 +242,8 @@ Current result:
   drawing-payload hardening update: 7 work items, 7 killed, and 0 survived.
 - Cosmic Ray 8.4.6, scoped to drawing style envelope validation rows after the
   drawing-style hardening update: 15 work items, 15 killed, and 0 survived.
+- Cosmic Ray 8.4.6, scoped to path command envelope validation rows after the
+  path-command hardening update: 19 work items, 19 killed, and 0 survived.
 
 ## PO-FDOC-001: DOCX Bytes Are Deterministic
 
@@ -518,6 +531,37 @@ the correct style class for both drawing and text components.
 
 Style field-level validation, such as color, opacity, font, and line-spacing
 rules, remains delegated to `DrawingStyle`, `TextStyle`, and `Font`.
+
+### Conclusion
+
+Proven for the stated domain after focused tests, mutation, and the full DoD
+gate pass.
+
+## PO-FDOC-012: Path Command Envelopes Are Validated
+
+### Claim
+
+Flow-document `PathDrawing` hydration rejects malformed serialized path command
+envelopes before constructing `PathCommand` objects.
+
+### Domain
+
+Serialized `PathDrawing` component payloads passed through
+`FlowDocument.create_from_dict()`.
+
+### Proof Method
+
+`_path_commands_from_payload()` requires `commands` to be present and to be a
+non-string sequence. Each command entry must be a mapping with both `type` and
+`points`, and `points` must be a non-string sequence. Focused tests cover a
+missing command collection, string/bytes/non-sequence collections, non-mapping
+command entries, missing command fields, and malformed point collections.
+
+### Counterexamples And Exclusions
+
+Path command semantic validation, including supported command letters, point
+arity, numeric coercion, and finite coordinate checks, remains delegated to
+`PathCommand`.
 
 ### Conclusion
 
