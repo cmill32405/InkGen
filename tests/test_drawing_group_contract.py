@@ -30,6 +30,14 @@ def drawing_style() -> DrawingStyle:
 
 
 @pytest.mark.condition("DRAWING-GROUP-P1")
+@pytest.mark.parametrize("label", [123, None, object()])
+def test_drawing_group_rejects_non_string_labels(label: object) -> None:
+    """DRAWING-GROUP-P1: Neutral group labels must be strings."""
+    with pytest.raises(TypeError, match="group_label must be a string"):
+        DrawingComponentGroup(label)  # type: ignore[arg-type]
+
+
+@pytest.mark.condition("DRAWING-GROUP-P1")
 def test_drawing_group_materializes_svg_and_pdf_groups(drawing_style: DrawingStyle) -> None:
     """DRAWING-GROUP-P1: Neutral groups materialize supported concrete group types."""
     group = DrawingComponentGroup("portable")

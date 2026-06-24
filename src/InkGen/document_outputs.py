@@ -489,7 +489,7 @@ def _drawing_parameters(group: DrawingComponentGroup) -> dict[str, object]:
 
 
 def _drawing_from_parameters(data: dict[str, object], styles: dict[str, object] | None) -> DrawingComponentGroup:
-    group = DrawingComponentGroup(str(data["group_label"]))
+    group = DrawingComponentGroup(data["group_label"])
     for component_data in data.get("components", []):
         group.add_component(_drawing_component_from_parameters(component_data, styles))
     return group

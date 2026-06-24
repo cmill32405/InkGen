@@ -15,13 +15,13 @@ FILTER_SQL = """
 )
 OR (
   module_path = 'src/InkGen/drawing_components.py'
-  AND definition_name IN ('add_component', 'to_group')
-  AND start_pos_row BETWEEN 260 AND 285
+  AND definition_name IN ('__post_init__', 'add_component', 'to_group')
+  AND start_pos_row BETWEEN 261 AND 292
 )
 OR (
   module_path = 'src/InkGen/drawing_components.py'
   AND definition_name IN ('to_group', 'create_from_dict')
-  AND start_pos_row BETWEEN 379 AND 405
+  AND start_pos_row BETWEEN 385 AND 406
 )
 )
 AND operator_name NOT LIKE 'core/ReplaceBinaryOperator_BitOr_%'

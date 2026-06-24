@@ -58,8 +58,14 @@ Before/after edge changes:
 - Before this slice, flow-document drawing HTML/DOCX helpers could bypass the
   neutral group materialization guard and silently omit invalid materialized
   components.
+- Before the drawing-label hardening update, drawing block hydration stringified
+  malformed serialized group labels instead of preserving the neutral drawing
+  group contract.
 - After this slice, DOCX ZIP parts use a fixed timestamp and drawing
   materialization must return an InkGen `Component`.
+- After the drawing-label hardening update, drawing block hydration passes
+  serialized labels unchanged into `DrawingComponentGroup`, where non-string
+  labels fail at the renderer-neutral boundary.
 - No new dependency edge or third-party dependency was introduced.
 
 Cycle/layer/coupling/redundancy result:
@@ -108,6 +114,8 @@ ADR/rule impact:
   `_materialize_drawing_component()`.
 - `_materialize_drawing_component()` rejects missing/non-callable materializers
   and non-`Component` materialization results.
+- `_drawing_from_parameters()` now delegates serialized drawing labels to
+  `DrawingComponentGroup` without stringifying malformed values.
 
 ## Comprehensiveness Matrix
 
@@ -116,6 +124,7 @@ ADR/rule impact:
 | Repeated DOCX generation | Preserve exact bytes and fixed part order/timestamps | PO-FDOC-001 | `test_flow_document_docx_bytes_are_deterministic` | killed |
 | Text with XML/HTML/RTF controls | Escape per target format | PO-FDOC-002 | `test_flow_document_escapes_text_across_output_formats` | behavioral evidence |
 | Paragraph/table/drawing block order | Preserve through parameters and output | PO-FDOC-003 | `test_flow_document_preserves_mixed_block_order_after_round_trip` | behavioral evidence |
+| Malformed serialized drawing label | Reject through the neutral group label contract | PO-FDOC-006 | `test_flow_document_drawing_group_hydration_rejects_malformed_label` | behavioral evidence |
 | Invalid drawing materialization | Reject before silent omission | PO-FDOC-004 | `test_flow_document_rejects_invalid_drawing_materialization` | killed |
 | DOCX VML linework | Emit group-relative points | PO-FDOC-005 | `test_flow_document_docx_drawing_polyline_uses_group_relative_points` | killed |
 | Unsupported block private mutation | Excluded from public contract | Explicit exclusion | Not applicable | Out of scope |
@@ -127,7 +136,7 @@ ADR/rule impact:
 |---|---|---|---|
 | Unit | yes | Helpers are deterministic. | FLOW-DOCUMENT-P1 tests |
 | Behavioral/condition | yes | The slice defines document-output behavior. | Tests are marked `@pytest.mark.condition("FLOW-DOCUMENT-P1")`. |
-| Failure-mode | yes | Invalid content and invalid output paths must fail loudly. | Invalid materialization and existing writer tests |
+| Failure-mode | yes | Invalid content, malformed serialized drawing labels, and invalid output paths must fail loudly. | Invalid hydration, invalid materialization, and existing writer tests |
 | Integration/live-path | yes | DOCX ZIP, HTML, RTF, text, table, and drawing paths cross module boundaries. | Focused and existing document-output tests |
 | Contract/API compatibility | yes | Parameters and public add methods must preserve existing behavior. | Round-trip and existing rejection tests |
 | Property/fuzz | no | This slice proves finite output and dispatch contracts. | Not applicable |
@@ -147,6 +156,8 @@ Proof-critical mutation targets:
 - Weakening drawing materializer callability or return-type checks should fail
   invalid-materialization tests.
 - Changing DOCX VML group-relative points should fail exact polyline tests.
+- Reintroducing drawing-label stringification should fail the serialized drawing
+  label hydration test.
 
 Current result:
 
@@ -261,6 +272,28 @@ coordinates for nonzero source points.
 ### Conclusion
 
 Proven for the stated domain after tests and mutation pass.
+
+## PO-FDOC-006: Drawing Labels Hydrate Through Neutral Contract
+
+### Claim
+
+Flow-document drawing hydration preserves the `DrawingComponentGroup` label
+contract and rejects malformed serialized labels instead of stringifying them.
+
+### Domain
+
+`FlowDocument.create_from_dict()` payloads containing drawing blocks.
+
+### Proof Method
+
+`_drawing_from_parameters()` passes `data["group_label"]` directly to
+`DrawingComponentGroup`. The neutral group constructor validates the label
+before any component hydration or output rendering occurs. The focused test
+supplies a malformed serialized label and asserts the neutral group label error.
+
+### Conclusion
+
+Proven for the stated domain after tests.
 
 ## Current Slice Decision
 

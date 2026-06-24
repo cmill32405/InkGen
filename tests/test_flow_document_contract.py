@@ -164,6 +164,28 @@ def test_flow_document_preserves_mixed_block_order_after_round_trip() -> None:
     assert clone.to_plain_text() == "Intro\n\nPN\tQty\n\n[Drawing: flow-drawing; RectangleDrawing]"
 
 
+@pytest.mark.condition("DRAWING-GROUP-P1")
+def test_flow_document_drawing_group_hydration_rejects_malformed_label() -> None:
+    """DRAWING-GROUP-P1: Flow-document hydration cannot stringify drawing labels."""
+    payload = {
+        "FlowDocument": {
+            "title": "Malformed Drawing",
+            "blocks": [
+                {
+                    "type": "drawing",
+                    "payload": {
+                        "group_label": 123,
+                        "components": [],
+                    },
+                }
+            ],
+        }
+    }
+
+    with pytest.raises(TypeError, match="group_label must be a string"):
+        FlowDocument.create_from_dict(payload)
+
+
 @pytest.mark.condition("FLOW-DOCUMENT-P1")
 def test_flow_document_rejects_invalid_drawing_materialization() -> None:
     """FLOW-DOCUMENT-P1: Invalid drawing recipes fail before silent output omission."""

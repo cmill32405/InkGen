@@ -12,6 +12,7 @@ The slice covers `DrawingComponentGroup`, output-format normalization, and the
 The public behavior under review is:
 
 - `normalize_output_format()`
+- `DrawingComponentGroup.__post_init__()`
 - `DrawingComponentGroup.add_component()`
 - `DrawingComponentGroup.to_group()`
 - `ZoningDrawing.to_group()`
@@ -52,9 +53,15 @@ Before/after edge changes:
 - Before this slice, `to_group()` trusted concrete materialization and could
   pass a non-`Component` object to a concrete group, where it could be silently
   omitted by the base group implementation.
+- Before the label-contract hardening update, `DrawingComponentGroup` could be
+  constructed with non-string labels, and flow-document drawing hydration
+  stringified malformed serialized labels.
 - After this slice, neutral components must expose a callable
   `to_component(output_format)` and concrete materialization must return an
   InkGen `Component`.
+- After the label-contract hardening update, neutral drawing groups reject
+  non-string labels at construction, and flow-document hydration delegates to
+  that same boundary instead of repairing malformed labels.
 - No dependency direction changed and no third-party dependency was introduced.
 
 Cycle/layer/coupling/redundancy result:
@@ -89,6 +96,8 @@ ADR/rule impact:
 
 - A neutral drawing group has a string label and an ordered list of drawing
   primitives.
+- `group_label` must be a real string. Empty strings remain valid for callers
+  that intentionally want renderer defaults.
 - A valid primitive provides a callable `to_component(output_format)` method.
 - A valid concrete materialization returns an InkGen `Component`.
 - Supported group output formats are `svg` and `pdf`, represented by strings or
@@ -101,6 +110,9 @@ ADR/rule impact:
   where `to_component` is not callable.
 - `DrawingComponentGroup.to_group()` now rejects materializations that do not
   return a concrete InkGen `Component`.
+- `DrawingComponentGroup.__post_init__()` now rejects non-string labels.
+- Flow-document drawing hydration no longer stringifies serialized group
+  labels, so invalid labels fail at the neutral group boundary.
 
 ## Comprehensiveness Matrix
 
@@ -108,6 +120,8 @@ ADR/rule impact:
 |---|---|---|---|---|
 | Valid neutral group to SVG | Preserve label, order, component type, annotations | PO-DGROUP-001 | `test_drawing_group_materializes_svg_and_pdf_groups` | killed/equivalent |
 | Valid neutral group to PDF | Preserve label, order, component type, annotations | PO-DGROUP-001 | same | killed/equivalent |
+| Invalid group label | Reject non-string labels before rendering or serialization | PO-DGROUP-005 | `test_drawing_group_rejects_non_string_labels` | killed |
+| Invalid serialized flow-document drawing label | Reject instead of stringifying during hydration | PO-DGROUP-005 | `test_flow_document_drawing_group_hydration_rejects_malformed_label` | behavioral evidence |
 | Attribute-only invalid primitive | Reject at add boundary | PO-DGROUP-002 | `test_drawing_group_rejects_invalid_recipe_boundaries` | killed |
 | Primitive returning non-component | Reject at materialization boundary | PO-DGROUP-002 | same | killed |
 | Unsupported output format | Reject before materialization | PO-DGROUP-003 | `test_drawing_group_rejects_unsupported_formats_before_materializing` | killed/equivalent |
@@ -120,8 +134,8 @@ ADR/rule impact:
 |---|---|---|---|
 | Unit | yes | Group boundary validation is deterministic. | DRAWING-GROUP-P1 tests |
 | Behavioral/condition | yes | The slice defines a renderer-neutral group contract. | Tests are marked `@pytest.mark.condition("DRAWING-GROUP-P1")`. |
-| Failure-mode | yes | Invalid primitives and unsupported formats must fail loudly. | Invalid-boundary tests |
-| Integration/live-path | yes | Group materialization crosses into SVG/PDF group classes and grammar truth. | Materialization and existing zoning tests |
+| Failure-mode | yes | Invalid labels, invalid primitives, and unsupported formats must fail loudly. | Invalid-boundary and hydration tests |
+| Integration/live-path | yes | Group materialization crosses into SVG/PDF group classes, grammar truth, and flow-document hydration. | Materialization, flow-document, and existing zoning tests |
 | Contract/API compatibility | yes | Existing zoning and primitive materialization behavior must remain compatible. | Existing `PDF-P3` tests |
 | Property/fuzz | no | The slice is finite dispatch and type-boundary behavior. | Not applicable |
 | Mutation | yes | The changed code is proof-critical boundary and dispatch logic. | Mutation result recorded below |
@@ -136,6 +150,8 @@ ADR/rule impact:
 Proof-critical mutation targets:
 
 - Weakening output-format normalization should fail unsupported-format tests.
+- Weakening group-label validation should fail invalid-label and flow-document
+  hydration tests.
 - Weakening callable validation should fail invalid-add tests.
 - Weakening concrete `Component` validation should fail invalid-materialization
   tests.
@@ -145,7 +161,8 @@ Proof-critical mutation targets:
 Current result:
 
 - Cosmic Ray 8.4.6, scoped to group normalization/materialization and zoning
-  pass-through: 19 work items, 17 killed, and 2 survived.
+  pass-through after label-contract hardening: 20 work items, 18 killed, and 2
+  survived.
 - Equivalent survivors:
   - `target is OutputFormat.SVG` changed to `target == OutputFormat.SVG`.
     `normalize_output_format()` returns an `OutputFormat` member, so identity
@@ -154,6 +171,8 @@ Current result:
     `OutputFormat.SVG` is the first supported string enum value in this
     normalized two-format branch; SVG and PDF materialization assertions cover
     the reachable outcomes.
+  - The label-validation guard mutants in `DrawingComponentGroup.__post_init__()`
+    were killed.
 
 ## PO-DGROUP-001: Valid Groups Materialize To Concrete Groups
 
@@ -235,6 +254,38 @@ Valid zoning recipes over supported SVG and PDF outputs.
 `ZoningDrawing.to_group()` returns `self._group.to_group(output_format)`.
 Existing dependent tests compare neutral SVG geometry to legacy zoning geometry,
 prove PDF rendering through `DocumentPDF`, and prove serialization round trip.
+
+### Conclusion
+
+Proven for the stated domain after tests and mutation pass.
+
+## PO-DGROUP-005: Neutral Group Labels Are Strings
+
+### Claim
+
+Every public `DrawingComponentGroup` instance has a string `group_label`, and
+flow-document drawing hydration cannot convert malformed serialized labels into
+apparently valid strings.
+
+### Domain
+
+Public `DrawingComponentGroup(group_label=...)` construction and
+`FlowDocument.create_from_dict()` payloads that contain drawing blocks.
+
+### Proof Method
+
+`DrawingComponentGroup.__post_init__()` rejects non-string labels before any
+components are added or renderers are selected. `_drawing_from_parameters()`
+passes the serialized `group_label` through unchanged, so malformed serialized
+labels are checked by the same neutral group constructor. Focused tests cover
+direct non-string labels and a flow-document drawing block with a malformed
+serialized label.
+
+### Counterexamples And Exclusions
+
+Private mutation of dataclass attributes after construction is outside the
+public constructor and hydration contract. Empty string labels remain valid
+because DXF and renderer defaults use them intentionally.
 
 ### Conclusion
 

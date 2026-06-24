@@ -258,6 +258,11 @@ class DrawingComponentGroup:
     group_label: str
     components: list[DrawingPrimitive] = field(default_factory=list)
 
+    def __post_init__(self) -> None:
+        """Validate the public group label boundary."""
+        if not isinstance(self.group_label, str):
+            raise TypeError("group_label must be a string")
+
     def add_component(self, component: DrawingPrimitive) -> None:
         """Append a renderer-neutral primitive to the group."""
         if not callable(getattr(component, "to_component", None)):
