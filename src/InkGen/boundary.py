@@ -2,12 +2,32 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from math import isfinite
 
 from shapely import MultiPoint, Polygon, get_coordinates
 from shapely.errors import GEOSException
 
 from InkGen.errors import IllegalArgumentError, InvalidConvexHull
+
+
+def _boundary_payload(data: object, key: str) -> Mapping[str, object]:
+    """Return the serialized boundary payload for a class key or fail explicitly."""
+    if not isinstance(data, Mapping):
+        raise TypeError(f"{key} data must be a mapping.")
+    if key not in data:
+        raise ValueError(f"{key} data must include {key}.")
+    payload = data[key]
+    if not isinstance(payload, Mapping):
+        raise TypeError(f"{key} payload must be a mapping.")
+    return payload
+
+
+def _boundary_required_field(payload: Mapping[str, object], field: str, owner: str) -> object:
+    """Return a required serialized boundary field or fail explicitly."""
+    if field not in payload:
+        raise ValueError(f"{owner} payload must include {field}.")
+    return payload[field]
 
 
 def _coerce_finite_number(value: float | int, name: str) -> float:
@@ -88,7 +108,7 @@ class Boundary:
             raise InvalidConvexHull("The hull argument is not a valid convex hull")
 
     @classmethod
-    def create_from_dict(cls, data: dict) -> Boundary:
+    def create_from_dict(cls, data: object) -> Boundary:
         """Class method to recreate the object from its serialization dict.
 
         Args:
@@ -97,7 +117,10 @@ class Boundary:
         Returns:
             Boundary: instance of the class.
         """
-        boundary = cls(data["Boundary"]["hull"], data["Boundary"]["outer_boundary"])
+        payload = _boundary_payload(data, "Boundary")
+        boundary = cls(
+            _boundary_required_field(payload, "hull", "Boundary"), _boundary_required_field(payload, "outer_boundary", "Boundary")
+        )
         return boundary
 
     @property
@@ -235,7 +258,7 @@ class Canvas(Boundary):
         super().__init__([(0.0, 0.0), (width, 0.0), (width, height), (0.0, height)])
 
     @classmethod
-    def create_from_dict(cls, data: dict) -> Canvas:
+    def create_from_dict(cls, data: object) -> Canvas:
         """Class method to recreate the object from its serialization dict.
 
         Args:
@@ -244,7 +267,12 @@ class Canvas(Boundary):
         Returns:
             Canvas: instance of the class.
         """
-        canvas = cls(canvas_width=data["Canvas"]["width"], canvas_height=data["Canvas"]["height"], units=data["Canvas"]["units"])
+        payload = _boundary_payload(data, "Canvas")
+        canvas = cls(
+            canvas_width=_boundary_required_field(payload, "width", "Canvas"),
+            canvas_height=_boundary_required_field(payload, "height", "Canvas"),
+            units=_boundary_required_field(payload, "units", "Canvas"),
+        )
         return canvas
 
     @property
