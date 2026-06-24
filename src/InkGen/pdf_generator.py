@@ -266,6 +266,14 @@ def _pdf_required_sequence(payload: Mapping[str, object], name: str, owner: str)
     return value
 
 
+def _pdf_required_mapping(payload: Mapping[str, object], name: str, owner: str) -> Mapping[str, object]:
+    """Return a required serialized PDF mapping field or fail explicitly."""
+    value = _pdf_required_field(payload, name, owner)
+    if not isinstance(value, Mapping):
+        raise TypeError(f"{owner} {name} must be a mapping")
+    return value
+
+
 def _pdf_single_mapping_entry(payload: object, owner: str) -> tuple[str, Mapping[str, object]]:
     """Return the single typed payload entry for a PDF group child or style."""
     if not isinstance(payload, Mapping):
@@ -1069,11 +1077,11 @@ class DocumentPDF(Document):
         """Recreate a DocumentPDF from serialized parameters."""
         if styles is None:
             styles = {}
-        payload = data["DocumentPDF"]
-        document = cls(Canvas.create_from_dict(payload["canvas"]))
+        payload = _pdf_payload(data, "DocumentPDF")
+        document = cls(Canvas.create_from_dict(_pdf_required_field(payload, "canvas", "DocumentPDF")))
         restore_extraction_truth_annotations(document, payload.get("extraction_truth", []))
         restore_grammar_truth_annotations(document, payload.get("grammar_truth", []))
-        for page_payload in payload["pages"]:
+        for page_payload in _pdf_required_sequence(payload, "pages", "DocumentPDF"):
             page = _layers_pdf_from_dict(page_payload, styles)
             document.add_page(position=-1, page=page)
         return document
@@ -1113,22 +1121,31 @@ def _normalize_output_filepath(filepath: object) -> str:
 
 def _layer_pdf_from_dict(data: dict, styles: dict[str, object]) -> Layer:
     """Recreate a Layer containing ComponentGroupPDF instances."""
-    payload = data["Layer"]
-    layer = Layer(payload["layer_name"], Canvas.create_from_dict(payload["canvas"]), payload["model"])
-    for group_payload in payload["component_groups"]:
+    payload = _pdf_payload(data, "Layer")
+    layer = Layer(
+        _pdf_required_field(payload, "layer_name", "Layer"),
+        Canvas.create_from_dict(_pdf_required_field(payload, "canvas", "Layer")),
+        _pdf_required_field(payload, "model", "Layer"),
+    )
+    collision_settings = _pdf_required_mapping(payload, "group_collision_settings", "Layer")
+    for group_payload in _pdf_required_sequence(payload, "component_groups", "Layer"):
         group = ComponentGroupPDF.create_from_dict(group_payload, styles)
-        settings = payload["group_collision_settings"].get(group.group_label, {})
-        layer.add_component_group(group, settings.get("allow_collision", True), settings.get("strict", False))
+        settings = collision_settings.get(group.group_label, {})
+        if not isinstance(settings, Mapping):
+            raise TypeError("Layer group collision setting entries must be mappings")
+        allow_collision = _pdf_required_field(settings, "allow_collision", "Layer group collision settings")
+        strict = _pdf_required_field(settings, "strict", "Layer group collision settings")
+        layer.add_component_group(group, allow_collision, strict)
     return layer
 
 
 def _layers_pdf_from_dict(data: dict, styles: dict[str, object]) -> Layers:
     """Recreate a Layers page containing PDF component groups."""
-    payload = data["Layers"]
-    layers = Layers(Canvas.create_from_dict(payload["canvas"]))
-    if "base" in layers.layers:
-        layers.remove_layer("base")
-    for _, layer_payload in payload["layers"].items():
+    payload = _pdf_payload(data, "Layers")
+    layers = Layers(Canvas.create_from_dict(_pdf_required_field(payload, "canvas", "Layers")))
+    for layer_name in list(layers.layers):
+        layers.remove_layer(layer_name)
+    for layer_payload in _pdf_required_mapping(payload, "layers", "Layers").values():
         layer = _layer_pdf_from_dict(layer_payload, styles)
         layers.add_layer(layer=layer)
     return layers

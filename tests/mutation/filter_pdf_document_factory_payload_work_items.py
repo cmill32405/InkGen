@@ -1,4 +1,4 @@
-"""Filter Cosmic Ray work items to PDF-GROUP-FACTORY-PAYLOAD-P2 rows."""
+"""Filter Cosmic Ray work items to PDF-DOCUMENT-FACTORY-PAYLOAD-P2 rows."""
 
 from __future__ import annotations
 
@@ -10,20 +10,20 @@ FILTER_SQL = """
 module_path = 'src/InkGen/pdf_generator.py'
 AND (
   (
-    definition_name IN (
-      '_pdf_required_sequence',
-      '_pdf_single_mapping_entry',
-      '_pdf_style_entry',
-      '_pdf_component_class'
-    )
-    AND (
-      start_pos_row BETWEEN 261 AND 301
-      OR start_pos_row BETWEEN 839 AND 844
-    )
+    definition_name = '_pdf_required_mapping'
+    AND start_pos_row BETWEEN 269 AND 274
   )
   OR (
     definition_name = 'create_from_dict'
-    AND start_pos_row BETWEEN 860 AND 886
+    AND start_pos_row BETWEEN 1080 AND 1087
+  )
+  OR (
+    definition_name = '_layer_pdf_from_dict'
+    AND start_pos_row BETWEEN 1124 AND 1139
+  )
+  OR (
+    definition_name = '_layers_pdf_from_dict'
+    AND start_pos_row BETWEEN 1144 AND 1151
   )
 )
 AND operator_name NOT LIKE 'core/ReplaceBinaryOperator_BitOr_%'
@@ -31,7 +31,7 @@ AND operator_name NOT LIKE 'core/ReplaceBinaryOperator_BitOr_%'
 
 
 def filter_work_items(db_path: Path, *, clear_results: bool) -> tuple[int, int]:
-    """Restrict a Cosmic Ray database to PDF group factory payload items."""
+    """Restrict a Cosmic Ray database to PDF document factory payload items."""
     with sqlite3.connect(db_path) as conn:
         cursor = conn.cursor()
         before = cursor.execute("SELECT COUNT(*) FROM work_items").fetchone()[0]

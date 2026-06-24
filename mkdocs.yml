@@ -52,6 +52,7 @@ nav:
       - PDF Document Contract: proofs/pdf-document-contract.md
       - PDF Component Factory Payload Contract: proofs/pdf-component-factory-payload-contract.md
       - PDF Group Factory Payload Contract: proofs/pdf-group-factory-payload-contract.md
+      - PDF Document Factory Payload Contract: proofs/pdf-document-factory-payload-contract.md
       - Layer Group Contract: proofs/layer-group-contract.md
       - Component Group Contract: proofs/component-group-contract.md
       - Component Factory Payload Contract: proofs/component-factory-payload-contract.md

@@ -13,22 +13,22 @@ AND (
     definition_name IN ('_pdf_payload', '_pdf_required_field', '_pdf_optional_sequence', '_path_command_from_dict')
     AND (
       start_pos_row BETWEEN 235 AND 259
-      OR start_pos_row BETWEEN 300 AND 308
+      OR start_pos_row BETWEEN 304 AND 312
     )
   )
   OR (
     definition_name = 'create_from_dict'
     AND (
-      start_pos_row BETWEEN 329 AND 338
-      OR start_pos_row BETWEEN 381 AND 388
-      OR start_pos_row BETWEEN 431 AND 442
-      OR start_pos_row BETWEEN 481 AND 489
-      OR start_pos_row BETWEEN 529 AND 538
-      OR start_pos_row BETWEEN 577 AND 581
-      OR start_pos_row BETWEEN 671 AND 681
-      OR start_pos_row BETWEEN 713 AND 716
-      OR start_pos_row BETWEEN 755 AND 758
-      OR start_pos_row BETWEEN 791 AND 794
+      start_pos_row BETWEEN 331 AND 340
+      OR start_pos_row BETWEEN 383 AND 390
+      OR start_pos_row BETWEEN 433 AND 444
+      OR start_pos_row BETWEEN 483 AND 491
+      OR start_pos_row BETWEEN 531 AND 540
+      OR start_pos_row BETWEEN 579 AND 584
+      OR start_pos_row BETWEEN 673 AND 683
+      OR start_pos_row BETWEEN 715 AND 720
+      OR start_pos_row BETWEEN 757 AND 762
+      OR start_pos_row BETWEEN 793 AND 798
     )
   )
 )
