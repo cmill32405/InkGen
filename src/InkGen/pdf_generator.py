@@ -11,6 +11,7 @@ import abc
 import math
 import os
 import sys
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from InkGen.boundary import Canvas
@@ -224,16 +225,45 @@ def _drawing_pdf(style: DrawingStyle, path_operators: list[str], *, fill: bool =
     return "\n".join(operators)
 
 
-def _primitive_parameters(name: str, *, values: dict[str, object], style: DrawingStyle**TextStyle) -> dict[str, dict[str, object]]:
+def _primitive_parameters(name: str, *, values: dict[str, object], style: DrawingStyle | TextStyle) -> dict[str, dict[str, object]]:
     """Return a serialization dictionary for a PDF primitive component."""
     payload = dict(values)
     payload["style"] = style.parameters
     return {name: payload}
 
 
-def _path_command_from_dict(data: dict[str, object]) -> PathCommand:
+def _pdf_payload(data: object, key: str) -> Mapping[str, object]:
+    """Return the serialized PDF component payload for a class key or fail explicitly."""
+    if not isinstance(data, Mapping):
+        raise TypeError(f"{key} data must be a mapping")
+    if key not in data:
+        raise ValueError(f"{key} data must include {key}")
+    payload = data[key]
+    if not isinstance(payload, Mapping):
+        raise TypeError(f"{key} payload must be a mapping")
+    return payload
+
+
+def _pdf_required_field(payload: Mapping[str, object], name: str, owner: str) -> object:
+    """Return a required serialized PDF component field or fail explicitly."""
+    if name not in payload:
+        raise ValueError(f"{owner} payload must include {name}")
+    return payload[name]
+
+
+def _pdf_optional_sequence(payload: Mapping[str, object], name: str, owner: str) -> Sequence[object]:
+    """Return an optional serialized PDF sequence field or fail explicitly."""
+    value = payload.get(name, [])
+    if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
+        raise TypeError(f"{owner} {name} must be a sequence")
+    return value
+
+
+def _path_command_from_dict(data: object) -> PathCommand:
     """Recreate a PathCommand from serialized command parameters."""
-    command = PathCommand(str(data["type"]), data.get("points", []))
+    if not isinstance(data, Mapping):
+        raise TypeError("PathPDF command payload must be a mapping")
+    command = PathCommand(str(_pdf_required_field(data, "type", "PathPDF command")), data.get("points", []))
     flags = data.get("flags")
     if flags:
         command.flags = flags
@@ -258,10 +288,16 @@ class RectanglePDF(WidthHeightDrawingComponent, PDFGeneratorInterface):
     @classmethod
     def create_from_dict(cls, data: dict, style: DrawingStyle | None = None) -> RectanglePDF:
         """Recreate a RectanglePDF from serialized parameters."""
-        payload = data["RectanglePDF"]
+        payload = _pdf_payload(data, "RectanglePDF")
         if style is None:
-            style = DrawingStyle.create_from_dict(payload["style"])
-        return cls(payload["position"], payload["width"], payload["height"], payload["corner_radii"], style)
+            style = DrawingStyle.create_from_dict(_pdf_required_field(payload, "style", "RectanglePDF"))
+        return cls(
+            _pdf_required_field(payload, "position", "RectanglePDF"),
+            _pdf_required_field(payload, "width", "RectanglePDF"),
+            _pdf_required_field(payload, "height", "RectanglePDF"),
+            _pdf_required_field(payload, "corner_radii", "RectanglePDF"),
+            style,
+        )
 
     @property
     def parameters(self) -> dict[str, dict[str, object]]:
@@ -304,10 +340,14 @@ class LinePDF(StandardDrawingComponent, PDFGeneratorInterface):
     @classmethod
     def create_from_dict(cls, data: dict, style: DrawingStyle | None = None) -> LinePDF:
         """Recreate a LinePDF from serialized parameters."""
-        payload = data["LinePDF"]
+        payload = _pdf_payload(data, "LinePDF")
         if style is None:
-            style = DrawingStyle.create_from_dict(payload["style"])
-        return cls(tuple(payload["point_1"]), tuple(payload["point_2"]), style)
+            style = DrawingStyle.create_from_dict(_pdf_required_field(payload, "style", "LinePDF"))
+        return cls(
+            tuple(_pdf_required_field(payload, "point_1", "LinePDF")),
+            tuple(_pdf_required_field(payload, "point_2", "LinePDF")),
+            style,
+        )
 
     @property
     def parameters(self) -> dict[str, dict[str, object]]:
@@ -350,15 +390,15 @@ class ArcPDF(ArcComponent, PDFGeneratorInterface):
     @classmethod
     def create_from_dict(cls, data: dict, style: DrawingStyle | None = None) -> ArcPDF:
         """Recreate an ArcPDF from serialized parameters."""
-        payload = data["ArcPDF"]
+        payload = _pdf_payload(data, "ArcPDF")
         if style is None:
-            style = DrawingStyle.create_from_dict(payload["style"])
+            style = DrawingStyle.create_from_dict(_pdf_required_field(payload, "style", "ArcPDF"))
         return cls(
-            center=tuple(payload["center"]),
-            radius_x=payload["radius_x"],
-            radius_y=payload["radius_y"],
-            start_angle=payload["start_angle"],
-            end_angle=payload["end_angle"],
+            center=tuple(_pdf_required_field(payload, "center", "ArcPDF")),
+            radius_x=_pdf_required_field(payload, "radius_x", "ArcPDF"),
+            radius_y=_pdf_required_field(payload, "radius_y", "ArcPDF"),
+            start_angle=_pdf_required_field(payload, "start_angle", "ArcPDF"),
+            end_angle=_pdf_required_field(payload, "end_angle", "ArcPDF"),
             style=style,
             rotation=payload.get("rotation", 0.0),
         )
@@ -400,10 +440,15 @@ class QuadraticBezierPDF(QuadraticBezierComponent, PDFGeneratorInterface):
     @classmethod
     def create_from_dict(cls, data: dict, style: DrawingStyle | None = None) -> QuadraticBezierPDF:
         """Recreate a QuadraticBezierPDF from serialized parameters."""
-        payload = data["QuadraticBezierPDF"]
+        payload = _pdf_payload(data, "QuadraticBezierPDF")
         if style is None:
-            style = DrawingStyle.create_from_dict(payload["style"])
-        return cls(tuple(payload["start_point"]), tuple(payload["control_point"]), tuple(payload["end_point"]), style)
+            style = DrawingStyle.create_from_dict(_pdf_required_field(payload, "style", "QuadraticBezierPDF"))
+        return cls(
+            tuple(_pdf_required_field(payload, "start_point", "QuadraticBezierPDF")),
+            tuple(_pdf_required_field(payload, "control_point", "QuadraticBezierPDF")),
+            tuple(_pdf_required_field(payload, "end_point", "QuadraticBezierPDF")),
+            style,
+        )
 
     @property
     def parameters(self) -> dict[str, dict[str, object]]:
@@ -443,14 +488,14 @@ class CubicBezierPDF(CubicBezierComponent, PDFGeneratorInterface):
     @classmethod
     def create_from_dict(cls, data: dict, style: DrawingStyle | None = None) -> CubicBezierPDF:
         """Recreate a CubicBezierPDF from serialized parameters."""
-        payload = data["CubicBezierPDF"]
+        payload = _pdf_payload(data, "CubicBezierPDF")
         if style is None:
-            style = DrawingStyle.create_from_dict(payload["style"])
+            style = DrawingStyle.create_from_dict(_pdf_required_field(payload, "style", "CubicBezierPDF"))
         return cls(
-            tuple(payload["start_point"]),
-            tuple(payload["control_point1"]),
-            tuple(payload["control_point2"]),
-            tuple(payload["end_point"]),
+            tuple(_pdf_required_field(payload, "start_point", "CubicBezierPDF")),
+            tuple(_pdf_required_field(payload, "control_point1", "CubicBezierPDF")),
+            tuple(_pdf_required_field(payload, "control_point2", "CubicBezierPDF")),
+            tuple(_pdf_required_field(payload, "end_point", "CubicBezierPDF")),
             style,
         )
 
@@ -491,10 +536,10 @@ class PathPDF(PathComponent, PDFGeneratorInterface):
     @classmethod
     def create_from_dict(cls, data: dict, style: DrawingStyle | None = None) -> PathPDF:
         """Recreate a PathPDF from serialized parameters."""
-        payload = data["PathPDF"]
+        payload = _pdf_payload(data, "PathPDF")
         if style is None:
-            style = DrawingStyle.create_from_dict(payload["style"])
-        commands = [_path_command_from_dict(command) for command in payload.get("commands", [])]
+            style = DrawingStyle.create_from_dict(_pdf_required_field(payload, "style", "PathPDF"))
+        commands = [_path_command_from_dict(command) for command in _pdf_optional_sequence(payload, "commands", "PathPDF")]
         return cls(style=style, commands=commands)
 
     @property
@@ -585,13 +630,13 @@ class RegularPolygonPDF(RegularPolygonDrawingComponent, PDFGeneratorInterface):
     @classmethod
     def create_from_dict(cls, data: dict, style: DrawingStyle | None = None) -> RegularPolygonPDF:
         """Recreate a RegularPolygonPDF from serialized parameters."""
-        payload = data["RegularPolygonPDF"]
+        payload = _pdf_payload(data, "RegularPolygonPDF")
         if style is None:
-            style = DrawingStyle.create_from_dict(payload["style"])
+            style = DrawingStyle.create_from_dict(_pdf_required_field(payload, "style", "RegularPolygonPDF"))
         return cls(
-            tuple(payload["position"]),
-            payload["sides"],
-            payload["radius"],
+            tuple(_pdf_required_field(payload, "position", "RegularPolygonPDF")),
+            _pdf_required_field(payload, "sides", "RegularPolygonPDF"),
+            _pdf_required_field(payload, "radius", "RegularPolygonPDF"),
             style,
             payload.get("angle", 0.0),
             payload.get("corner_radius", 0.0),
@@ -627,10 +672,10 @@ class PolygonalPDF(PolygonalDrawingComponent, PDFGeneratorInterface):
     @classmethod
     def create_from_dict(cls, data: dict, style: DrawingStyle | None = None) -> PolygonalPDF:
         """Recreate a PolygonalPDF from serialized parameters."""
-        payload = data["PolygonalPDF"]
+        payload = _pdf_payload(data, "PolygonalPDF")
         if style is None:
-            style = DrawingStyle.create_from_dict(payload["style"])
-        return cls([tuple(point) for point in payload["points"]], style)
+            style = DrawingStyle.create_from_dict(_pdf_required_field(payload, "style", "PolygonalPDF"))
+        return cls([tuple(point) for point in _pdf_required_field(payload, "points", "PolygonalPDF")], style)
 
     @property
     def parameters(self) -> dict[str, dict[str, object]]:
@@ -669,10 +714,10 @@ class CirclePDF(SingleDimensionDrawingComponent, PDFGeneratorInterface):
     @classmethod
     def create_from_dict(cls, data: dict, style: DrawingStyle | None = None) -> CirclePDF:
         """Recreate a CirclePDF from serialized parameters."""
-        payload = data["CirclePDF"]
+        payload = _pdf_payload(data, "CirclePDF")
         if style is None:
-            style = DrawingStyle.create_from_dict(payload["style"])
-        return cls(tuple(payload["position"]), payload["radius"], style)
+            style = DrawingStyle.create_from_dict(_pdf_required_field(payload, "style", "CirclePDF"))
+        return cls(tuple(_pdf_required_field(payload, "position", "CirclePDF")), _pdf_required_field(payload, "radius", "CirclePDF"), style)
 
     @property
     def parameters(self) -> dict[str, dict[str, object]]:
@@ -705,10 +750,10 @@ class TextPDF(TextComponent, PDFGeneratorInterface):
     @classmethod
     def create_from_dict(cls, data: dict, style: TextStyle | None = None) -> TextPDF:
         """Recreate a TextPDF from serialized parameters."""
-        payload = data["TextPDF"]
+        payload = _pdf_payload(data, "TextPDF")
         if style is None:
-            style = TextStyle.create_from_dict(payload["style"])
-        return cls(payload["text"], tuple(payload["position"]), style)
+            style = TextStyle.create_from_dict(_pdf_required_field(payload, "style", "TextPDF"))
+        return cls(_pdf_required_field(payload, "text", "TextPDF"), tuple(_pdf_required_field(payload, "position", "TextPDF")), style)
 
     @property
     def parameters(self) -> dict[str, dict[str, object]]:

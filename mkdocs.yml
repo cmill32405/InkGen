@@ -50,6 +50,7 @@ nav:
       - PDF Render Guard Contract: proofs/pdf-render-contract.md
       - SVG Document Contract: proofs/svg-document-contract.md
       - PDF Document Contract: proofs/pdf-document-contract.md
+      - PDF Component Factory Payload Contract: proofs/pdf-component-factory-payload-contract.md
       - Layer Group Contract: proofs/layer-group-contract.md
       - Component Group Contract: proofs/component-group-contract.md
       - Component Factory Payload Contract: proofs/component-factory-payload-contract.md
