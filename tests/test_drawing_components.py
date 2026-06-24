@@ -146,6 +146,72 @@ def test_zoning_recipe_round_trips_without_renderer_specific_components() -> Non
     assert "PDF" not in repr(zoning.parameters)
 
 
+@pytest.mark.condition("ZONING-DRAWING-FINITE-P2")
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"margins": True},
+        {"margins": object()},
+        {"margins": -0.01},
+        {"margins": float("nan")},
+        {"margins": float("inf")},
+        {"zone_width": float("-inf")},
+        {"inner_radius": True},
+        {"outer_radius": -1.0},
+    ],
+)
+def test_zoning_drawing_rejects_invalid_dimension_parameters(kwargs: dict[str, object]) -> None:
+    """ZONING-DRAWING-FINITE-P2: Zoning dimensions must be finite non-negative numbers."""
+    canvas = Canvas(210.0, 297.0, "mm")
+    line_style, text_style = _styles()
+
+    with pytest.raises((TypeError, ValueError), match="finite non-negative number"):
+        ZoningDrawing(canvas, line_style, text_style, **kwargs)
+
+
+@pytest.mark.condition("ZONING-DRAWING-FINITE-P2")
+def test_zoning_drawing_preserves_zero_dimension_overrides() -> None:
+    """ZONING-DRAWING-FINITE-P2: Zero is a valid explicit zoning dimension."""
+    canvas = Canvas(210.0, 297.0, "mm")
+    line_style, text_style = _styles()
+
+    zoning = ZoningDrawing(
+        canvas,
+        line_style,
+        text_style,
+        margins=5.0,
+        left_margin=0.0,
+        zone_width=3.0,
+        left_zone_width=0.0,
+        horizontal_zones=10,
+        vertical_zones=8,
+    )
+
+    params = zoning.parameters["ZoningDrawing"]["parameters"]
+    assert params["left_margin"] == 0.0
+    assert params["left_zone_width"] == 0.0
+    assert params["right_margin"] == 5.0
+    assert params["right_zone_width"] == 3.0
+
+
+@pytest.mark.condition("ZONING-DRAWING-FINITE-P2")
+def test_zoning_drawing_hydration_rejects_invalid_dimensions() -> None:
+    """ZONING-DRAWING-FINITE-P2: Serialized zoning dimensions cannot bypass validation."""
+    canvas = Canvas(210.0, 297.0, "mm")
+    line_style, text_style = _styles()
+    payload = {
+        "ZoningDrawing": {
+            "canvas": canvas.parameters,
+            "line_style": line_style.parameters,
+            "text_style": text_style.parameters,
+            "parameters": {"zone_width": float("nan")},
+        }
+    }
+
+    with pytest.raises(ValueError, match="finite non-negative number"):
+        ZoningDrawing.create_from_dict(payload, {line_style.name: line_style, text_style.name: text_style})
+
+
 @pytest.mark.condition("PDF-P3")
 def test_neutral_zoning_svg_output_matches_legacy_zoning_geometry() -> None:
     """PDF-P3: ZoningDrawing keeps the existing SVG zoning geometry while removing backend coupling."""

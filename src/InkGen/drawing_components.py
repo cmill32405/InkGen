@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+from math import isfinite
 from typing import Protocol
 
 from InkGen.boundary import Canvas
@@ -403,8 +404,8 @@ class ZoningDrawing:
         for key, value in kwargs.items():
             if key not in self._PARAMETERS:
                 raise KeyError(f"{key} is not a valid parameter.")
-            if key in self._POSITIVE_REALS and value is not None and (not isinstance(value, (float, int)) or value < 0):
-                raise ValueError(f"{key} should be a positive floating point number or integer")
+            if key in self._POSITIVE_REALS and value is not None:
+                value = _coerce_finite_non_negative_float(value, name=key)
             if key in self._EVEN_INTS and value is not None and (not isinstance(value, int) or value % 2 != 0 or value <= 0):
                 raise ValueError(f"{key} should be an even integer")
             if key in self._ZONE_CHARS and value is not None and (not isinstance(value, int) or value not in self._VALID_ZONE_CHARS):
@@ -576,3 +577,18 @@ class ZoningDrawing:
             x_pos = first_number_horizontal - offset * multiplier
             self._group.add_component(TextDrawing(character, (x_pos, top_number_vertical), self._text_style))
             self._group.add_component(TextDrawing(character, (x_pos, bottom_number_vertical), self._text_style))
+
+
+def _coerce_finite_non_negative_float(value: object, *, name: str) -> float:
+    """Coerce a public zoning dimension into a finite non-negative float."""
+    if isinstance(value, bool):
+        raise TypeError(f"{name} should be a finite non-negative number")
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise TypeError(f"{name} should be a finite non-negative number") from exc
+    if not isfinite(number):
+        raise ValueError(f"{name} should be a finite non-negative number")
+    if number < 0:
+        raise ValueError(f"{name} should be a finite non-negative number")
+    return number

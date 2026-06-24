@@ -58,6 +58,7 @@ nav:
       - Drawing Group Contract: proofs/drawing-group-contract.md
       - Flow Document Contract: proofs/flow-document-contract.md
       - CAD Zoning Contract: proofs/cad-zoning-contract.md
+      - Zoning Drawing Finite Boundary Contract: proofs/zoning-drawing-finite-contract.md
       - Table Contract: proofs/table-contract.md
       - DXF Renderer Contract: proofs/dxf-renderer-contract.md
   - Architecture Diagrams: architecture-diagrams.md
