@@ -15,7 +15,7 @@ AND (
   )
   OR (
     definition_name = '_drawing_component_from_parameters'
-    AND start_pos_row BETWEEN 549 AND 566
+    AND start_pos_row BETWEEN 565 AND 583
   )
 )
 AND operator_name NOT LIKE 'core/ReplaceBinaryOperator_BitOr_%'

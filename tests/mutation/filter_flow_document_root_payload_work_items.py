@@ -11,11 +11,11 @@ module_path = 'src/InkGen/document_outputs.py'
 AND (
   (
     definition_name = 'create_from_dict'
-    AND start_pos_row BETWEEN 93 AND 98
+    AND start_pos_row BETWEEN 104 AND 112
   )
   OR (
     definition_name IN ('_flow_document_payload', '_payload_sequence')
-    AND start_pos_row BETWEEN 361 AND 374
+    AND start_pos_row BETWEEN 375 AND 388
   )
 )
 AND operator_name NOT LIKE 'core/ReplaceBinaryOperator_BitOr_%'

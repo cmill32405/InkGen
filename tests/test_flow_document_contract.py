@@ -465,6 +465,19 @@ def test_flow_document_hydration_rejects_mismatched_drawing_style_overrides() ->
         FlowDocument.create_from_dict(text_document.parameters, {text_style_name: _drawing_style()})
 
 
+@pytest.mark.condition("FLOW-DOCUMENT-STYLES-MAPPING-P2")
+@pytest.mark.parametrize("styles", [object(), ["style-name"], "style-name", b"style-name"])
+def test_flow_document_hydration_rejects_malformed_style_override_maps(styles: object) -> None:
+    """FLOW-DOCUMENT-STYLES-MAPPING-P2: Style overrides must be a mapping before block hydration."""
+    document = FlowDocument(title="Bad Style Map")
+    drawing = DrawingComponentGroup("drawing-style-map")
+    drawing.add_component(RectangleDrawing((1.0, 2.0), 3.0, 4.0, 0.0, _drawing_style()))
+    document.add_drawing_group(drawing)
+
+    with pytest.raises(TypeError, match="styles must be a mapping or None"):
+        FlowDocument.create_from_dict(document.parameters, styles)  # type: ignore[arg-type]
+
+
 @pytest.mark.condition("FLOW-DOCUMENT-P1")
 def test_flow_document_hydration_constructs_missing_drawing_style_overrides_by_kind() -> None:
     """FLOW-DOCUMENT-P1: Drawing style fallback construction matches component kind."""

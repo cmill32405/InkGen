@@ -77,6 +77,9 @@ Before/after edge changes:
   envelopes and mismatched style override map entries could fail through
   incidental `KeyError` or reach primitive construction with the wrong style
   type.
+- Before the style-mapping hardening update, non-mapping `styles` override
+  containers could fail through incidental iterable or index errors during
+  block hydration.
 - Before the path-command hardening update, malformed serialized `PathDrawing`
   command envelopes could fail through incidental indexing errors before
   reaching `PathCommand`.
@@ -102,6 +105,8 @@ Before/after edge changes:
 - After the drawing-style hardening update, component hydration requires a style
   payload, validates the nested style envelope and style name, and verifies
   override-map values match the component's drawing/text style kind.
+- After the style-mapping hardening update, `FlowDocument.create_from_dict()`
+  validates that `styles` is a mapping or `None` before block hydration.
 - After the path-command hardening update, `PathDrawing` hydration validates
   that commands are a non-string sequence of command envelopes with `type` and
   `points` before constructing `PathCommand` objects.
@@ -172,6 +177,8 @@ ADR/rule impact:
   sequence shape before iterating components.
 - `_style_from_payload()` validates drawing style envelope shape and override
   type before constructing or reusing a style object.
+- `_normalize_style_overrides()` validates optional style override maps before
+  paragraph or drawing hydration can use membership or index lookups.
 - `_path_commands_from_payload()` validates serialized path command envelope
   shape before delegating command semantics to `PathCommand`.
 - `_normalize_output_filepath()` validates all flow-document file-writer output
@@ -189,6 +196,7 @@ ADR/rule impact:
 | Serialized drawing payload | Reject missing drawing payload keys and non-sequence component collections before component iteration | PO-FDOC-010 | `test_flow_document_hydration_rejects_malformed_drawing_payloads` | killed |
 | Serialized drawing component envelope and dispatch | Reject malformed component envelopes, reject unsupported types before style extraction, and dispatch valid dynamic type strings by value | PO-FDOC-009 | `test_flow_document_hydration_rejects_malformed_drawing_component_envelopes`, `test_flow_document_hydration_dispatches_dynamic_drawing_component_type_strings` | killed |
 | Serialized drawing style envelope | Reject missing/malformed style envelopes, mismatched style keys, non-string style names, and wrong-type style overrides | PO-FDOC-011 | `test_flow_document_hydration_rejects_malformed_drawing_style_payloads`, `test_flow_document_hydration_rejects_mismatched_drawing_style_overrides`, `test_flow_document_hydration_constructs_missing_drawing_style_overrides_by_kind` | killed |
+| Style override map boundary | Reject non-mapping `styles` values before block hydration | PO-FDOC-015 | `test_flow_document_hydration_rejects_malformed_style_override_maps` | killed |
 | Serialized path command envelope | Reject malformed `PathDrawing` command collections before `PathCommand` construction | PO-FDOC-012 | `test_flow_document_hydration_rejects_malformed_path_command_payloads` | killed |
 | File writer path boundary | Accept string/path-like output paths and reject malformed output path values before writing | PO-FDOC-013 | `test_flow_document_file_writers_accept_pathlike_outputs`, `test_flow_document_file_writers_reject_malformed_paths`, `test_flow_document_file_writers_fail_on_missing_directory` | killed |
 | Malformed serialized drawing label | Reject through the neutral group label contract | PO-FDOC-006 | `test_flow_document_drawing_group_hydration_rejects_malformed_label` | behavioral evidence |
@@ -203,8 +211,8 @@ ADR/rule impact:
 | Test class | Applicable? | Reason | Evidence |
 |---|---|---|---|
 | Unit | yes | Helpers are deterministic. | FLOW-DOCUMENT-P1 tests |
-| Behavioral/condition | yes | The slice defines document-output behavior. | Tests are marked `@pytest.mark.condition("FLOW-DOCUMENT-P1")` and `@pytest.mark.condition("FLOW-DOCUMENT-SVG-MATERIALIZATION-P2")`. |
-| Failure-mode | yes | Invalid content, malformed root payloads, malformed serialized block envelopes, malformed drawing payloads, malformed drawing component envelopes, malformed drawing style envelopes, malformed path command envelopes, malformed serialized drawing labels, malformed materialization fragments, malformed output paths, and invalid output paths must fail loudly. | Invalid hydration, invalid materialization, render-fragment, and writer tests |
+| Behavioral/condition | yes | The slice defines document-output behavior. | Tests are marked `@pytest.mark.condition("FLOW-DOCUMENT-P1")`, `@pytest.mark.condition("FLOW-DOCUMENT-SVG-MATERIALIZATION-P2")`, and `@pytest.mark.condition("FLOW-DOCUMENT-STYLES-MAPPING-P2")`. |
+| Failure-mode | yes | Invalid content, malformed root payloads, malformed serialized block envelopes, malformed drawing payloads, malformed drawing component envelopes, malformed drawing style envelopes, malformed style override maps, malformed path command envelopes, malformed serialized drawing labels, malformed materialization fragments, malformed output paths, and invalid output paths must fail loudly. | Invalid hydration, invalid materialization, render-fragment, style-map, and writer tests |
 | Integration/live-path | yes | DOCX ZIP, HTML, RTF, text, table, and drawing paths cross module boundaries. | Focused and existing document-output tests |
 | Contract/API compatibility | yes | Parameters and public add methods must preserve existing behavior. | Round-trip and existing rejection tests |
 | Property/fuzz | no | This slice proves finite output and dispatch contracts. | Not applicable |
@@ -238,6 +246,7 @@ Proof-critical mutation targets:
   should fail malformed-drawing-payload tests.
 - Weakening serialized drawing style envelope or override type validation should
   fail malformed-style, mismatched-override, or fallback-construction tests.
+- Weakening style override map validation should fail malformed-style-map tests.
 - Weakening serialized path command envelope validation should fail malformed
   path-command tests.
 - Weakening file-writer path normalization should fail malformed-path or
@@ -266,6 +275,8 @@ Current result:
   filepath hardening update: 7 work items, 7 killed, and 0 survived.
 - Cosmic Ray 8.4.6, scoped to render-fragment guards after the SVG
   materialization hardening update: 7 work items, 7 killed, and 0 survived.
+- Cosmic Ray 8.4.6, scoped to style override map validation after the
+  style-mapping hardening update: 4 work items, 4 killed, and 0 survived.
 
 ## PO-FDOC-001: DOCX Bytes Are Deterministic
 
@@ -650,6 +661,39 @@ malformed SVG materialization whose `generate_svg()` does not return a string.
 Valid components with an empty `points` collection remain allowed to produce no
 VML polyline. Full SVG semantic validation remains delegated to the concrete
 SVG renderer tests.
+
+### Conclusion
+
+Proven after focused tests, mutation, and the full DoD gate pass.
+
+## PO-FDOC-015: Style Override Maps Are Validated
+
+### Claim
+
+`FlowDocument.create_from_dict()` rejects malformed `styles` override
+containers before paragraph or drawing block hydration can use membership or
+index lookups.
+
+### Domain
+
+Public `FlowDocument.create_from_dict(data, styles=...)` calls with `styles`
+set to `None`, a mapping, or a malformed non-mapping container.
+
+### Proof Method
+
+`FlowDocument.create_from_dict()` normalizes `styles` through
+`_normalize_style_overrides()` before reading serialized blocks. The same helper
+is used inside `_style_from_payload()` so internal callers cannot reintroduce
+sequence or arbitrary-object lookup behavior. Focused tests cover arbitrary
+objects, lists, strings, and bytes as malformed override containers while
+existing round-trip and fallback tests preserve valid `None` and mapping
+behavior.
+
+### Counterexamples And Exclusions
+
+Validation of individual style override values remains covered by
+`PO-FDOC-011`. Private mutation of the normalized mapping after validation is
+outside the public `create_from_dict()` contract.
 
 ### Conclusion
 

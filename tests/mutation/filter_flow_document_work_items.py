@@ -16,22 +16,22 @@ FILTER_SQL = """
 OR (
   module_path = 'src/InkGen/document_outputs.py'
   AND definition_name = '_drawing_html'
-  AND start_pos_row BETWEEN 465 AND 475
+  AND start_pos_row BETWEEN 475 AND 485
 )
 OR (
   module_path = 'src/InkGen/document_outputs.py'
   AND definition_name = '_drawing_bounds'
-  AND start_pos_row BETWEEN 478 AND 492
+  AND start_pos_row BETWEEN 488 AND 502
 )
 OR (
   module_path = 'src/InkGen/document_outputs.py'
   AND definition_name = '_component_vml'
-  AND start_pos_row BETWEEN 495 AND 519
+  AND start_pos_row BETWEEN 505 AND 529
 )
 OR (
   module_path = 'src/InkGen/document_outputs.py'
   AND definition_name IN ('_materialize_drawing_component', '_write_docx_part')
-  AND start_pos_row BETWEEN 636 AND 649
+  AND start_pos_row BETWEEN 646 AND 659
 )
 )
 AND operator_name NOT LIKE 'core/ReplaceBinaryOperator_BitOr_%'

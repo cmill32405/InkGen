@@ -11,11 +11,11 @@ module_path = 'src/InkGen/document_outputs.py'
 AND (
   (
     definition_name = '_drawing_component_from_parameters'
-    AND start_pos_row BETWEEN 569 AND 571
+    AND start_pos_row BETWEEN 578 AND 580
   )
   OR (
     definition_name = '_style_from_payload'
-    AND start_pos_row BETWEEN 578 AND 597
+    AND start_pos_row BETWEEN 605 AND 624
   )
 )
 AND operator_name NOT LIKE 'core/ReplaceBinaryOperator_BitOr_%'

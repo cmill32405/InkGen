@@ -1,4 +1,4 @@
-"""Filter Cosmic Ray work items to FLOW-DOCUMENT-SVG-MATERIALIZATION-P2 rows."""
+"""Filter Cosmic Ray work items to FLOW-DOCUMENT-STYLES-MAPPING-P2 rows."""
 
 from __future__ import annotations
 
@@ -10,12 +10,16 @@ FILTER_SQL = """
 module_path = 'src/InkGen/document_outputs.py'
 AND (
   (
-    definition_name = '_component_vml'
-    AND start_pos_row BETWEEN 523 AND 525
+    definition_name = 'create_from_dict'
+    AND start_pos_row BETWEEN 104 AND 112
   )
   OR (
-    definition_name = '_svg_fragment'
-    AND start_pos_row BETWEEN 636 AND 643
+    definition_name = '_normalize_style_overrides'
+    AND start_pos_row BETWEEN 391 AND 397
+  )
+  OR (
+    definition_name = '_style_from_payload'
+    AND start_pos_row = 608
   )
 )
 AND operator_name NOT LIKE 'core/ReplaceBinaryOperator_BitOr_%'
@@ -23,12 +27,14 @@ AND (
   operator_name = 'core/AddNot'
   OR operator_name LIKE 'core/ReplaceComparisonOperator_%'
   OR operator_name LIKE 'core/ReplaceUnaryOperator_%'
+  OR operator_name = 'core/ReplaceAndWithOr'
+  OR operator_name = 'core/ReplaceOrWithAnd'
 )
 """
 
 
 def filter_work_items(db_path: Path, *, clear_results: bool) -> tuple[int, int]:
-    """Restrict a Cosmic Ray database to flow-document render-fragment checks."""
+    """Restrict a Cosmic Ray database to flow-document style-map checks."""
     with sqlite3.connect(db_path) as conn:
         cursor = conn.cursor()
         before = cursor.execute("SELECT COUNT(*) FROM work_items").fetchone()[0]

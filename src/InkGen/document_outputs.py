@@ -103,6 +103,7 @@ class FlowDocument:
     @classmethod
     def create_from_dict(cls, data: object, styles: dict[str, object] | None = None) -> FlowDocument:
         """Recreate a flow document from serialized parameters."""
+        styles = _normalize_style_overrides(styles)
         payload = _flow_document_payload(data)
         document = cls(title=_normalize_title(payload.get("title")))
         for block_payload in _payload_sequence(payload, "blocks"):
@@ -387,6 +388,15 @@ def _payload_sequence(payload: Mapping[str, object], name: str) -> Sequence[obje
     return value
 
 
+def _normalize_style_overrides(styles: object) -> Mapping[str, object]:
+    """Normalize serialized style overrides without accepting sequence lookups."""
+    if styles is None:
+        return {}
+    if not isinstance(styles, Mapping):
+        raise TypeError("styles must be a mapping or None")
+    return styles
+
+
 def _docx_line_spacing(paragraph: Paragraph) -> tuple[int, str]:
     if paragraph.line_spacing_rule is LineSpacingRule.SINGLE:
         return 240, "auto"
@@ -595,7 +605,7 @@ def _path_commands_from_payload(payload: Mapping[str, object]) -> list[PathComma
 def _style_from_payload(payload: object, styles: dict[str, object] | None, *, text: bool) -> DrawingStyle | TextStyle:
     if not isinstance(payload, Mapping):
         raise TypeError("flow document drawing style payload must be a mapping")
-    styles = styles or {}
+    styles = _normalize_style_overrides(styles)
     style_key = "TextStyle" if text else "DrawingStyle"
     expected_style_type = TextStyle if text else DrawingStyle
     if style_key not in payload:

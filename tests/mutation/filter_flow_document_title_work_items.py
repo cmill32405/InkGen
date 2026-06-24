@@ -11,17 +11,17 @@ FILTER_SQL = """
 (
   module_path = 'src/InkGen/document_outputs.py'
   AND definition_name = '__init__'
-  AND start_pos_row BETWEEN 48 AND 49
+  AND start_pos_row BETWEEN 60 AND 63
 )
 OR (
   module_path = 'src/InkGen/document_outputs.py'
   AND definition_name = 'create_from_dict'
-  AND start_pos_row BETWEEN 89 AND 94
+  AND start_pos_row BETWEEN 104 AND 108
 )
 OR (
   module_path = 'src/InkGen/document_outputs.py'
   AND definition_name = '_normalize_title'
-  AND start_pos_row BETWEEN 351 AND 357
+  AND start_pos_row BETWEEN 364 AND 372
 )
 )
 AND operator_name NOT LIKE 'core/ReplaceBinaryOperator_BitOr_%'

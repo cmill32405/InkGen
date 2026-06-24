@@ -9,7 +9,7 @@ from pathlib import Path
 FILTER_SQL = """
 module_path = 'src/InkGen/document_outputs.py'
 AND definition_name = '_block_from_parameters'
-AND start_pos_row BETWEEN 383 AND 401
+AND start_pos_row BETWEEN 422 AND 440
 AND operator_name NOT LIKE 'core/ReplaceBinaryOperator_BitOr_%'
 AND (
   operator_name = 'core/AddNot'
