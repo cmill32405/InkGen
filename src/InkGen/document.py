@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import itertools
 import sys
+from collections.abc import Mapping, Sequence
 
 import yaml
 
@@ -49,7 +50,7 @@ class Layer:
         self._group_collision_settings = {}
 
     @classmethod
-    def create_from_dict(cls, data: dict, styles: dict | None = None) -> Layer:
+    def create_from_dict(cls, data: object, styles: dict | None = None) -> Layer:
         """Recreate a layer from its serialised representation.
 
         Args:
@@ -59,12 +60,19 @@ class Layer:
         Returns:
             Layer: Rehydrated layer instance.
         """
-        canvas = Canvas.create_from_dict(data["Layer"]["canvas"])
-        layer = cls(data["Layer"]["layer_name"], canvas, data["Layer"]["model"])
-        for gr in data["Layer"]["component_groups"]:
+        payload = _payload_mapping(data, "Layer")
+        canvas = Canvas.create_from_dict(_required_field(payload, "canvas", "Layer"))
+        layer = cls(_required_field(payload, "layer_name", "Layer"), canvas, _required_field(payload, "model", "Layer"))
+        collision_settings = _required_mapping(payload, "group_collision_settings", "Layer")
+        for gr in _required_sequence(payload, "component_groups", "Layer"):
             group = ComponentGroup.create_from_dict(gr, styles)
-            allow_collision = data["Layer"]["group_collision_settings"][group.group_label]["allow_collision"]
-            strict = data["Layer"]["group_collision_settings"][group.group_label]["strict"]
+            if group.group_label not in collision_settings:
+                raise ValueError("Layer group_collision_settings must include every component group label")
+            settings = collision_settings[group.group_label]
+            if not isinstance(settings, Mapping):
+                raise TypeError("Layer group collision setting entries must be mappings")
+            allow_collision = _required_field(settings, "allow_collision", "Layer group collision settings")
+            strict = _required_field(settings, "strict", "Layer group collision settings")
             layer.add_component_group(group, allow_collision, strict)
         return layer
 
@@ -289,7 +297,7 @@ class Layers:
         self.add_layer(name, layer)
 
     @classmethod
-    def create_from_dict(cls, data: dict, styles: dict | None = None) -> object:
+    def create_from_dict(cls, data: object, styles: dict | None = None) -> object:
         """Class method to recreate the object from its serialization dict.
 
         Args:
@@ -298,10 +306,11 @@ class Layers:
         Returns:
             object: instance of the class.
         """
-        layers = cls(Canvas.create_from_dict(data["Layers"]["canvas"]))
+        payload = _payload_mapping(data, "Layers")
+        layers = cls(Canvas.create_from_dict(_required_field(payload, "canvas", "Layers")))
         for layer_name in list(layers.layers):
             layers.remove_layer(layer_name)
-        for _, layer_payload in data["Layers"]["layers"].items():
+        for layer_payload in _required_mapping(payload, "layers", "Layers").values():
             layer = Layer.create_from_dict(layer_payload, styles)
             layers.add_layer(layer.layer_name, layer)
         return layers
@@ -470,7 +479,7 @@ class Document:
         self._pages = {}
 
     @classmethod
-    def create_from_dict(cls, data: dict, styles: dict | None = None) -> object:
+    def create_from_dict(cls, data: object, styles: dict | None = None) -> object:
         """Class method to recreate the object from its serialization dict.
 
         Args:
@@ -479,9 +488,10 @@ class Document:
         Returns:
             object: instance of the class.
         """
-        document = cls(Canvas.create_from_dict(data["Document"]["canvas"]))
-        for pg in range(len(data["Document"]["pages"])):
-            page = Layers.create_from_dict(data["Document"]["pages"][pg], styles)
+        payload = _payload_mapping(data, "Document")
+        document = cls(Canvas.create_from_dict(_required_field(payload, "canvas", "Document")))
+        for page_payload in _required_sequence(payload, "pages", "Document"):
+            page = Layers.create_from_dict(page_payload, styles)
             document.add_page(position=-1, page=page)
         return document
 
@@ -656,3 +666,34 @@ class Document:
         if (canvas.height, canvas.width, canvas.units) == (self._canvas.height, self._canvas.width, self._canvas.units):
             return
         raise IncompatibleCanvas("Page must have the same canvas attributes as the document.")
+
+
+def _payload_mapping(data: object, key: str) -> Mapping[str, object]:
+    if not isinstance(data, Mapping):
+        raise TypeError(f"{key} data must be a mapping")
+    if key not in data:
+        raise ValueError(f"{key} data must include {key}")
+    payload = data[key]
+    if not isinstance(payload, Mapping):
+        raise TypeError(f"{key} payload must be a mapping")
+    return payload
+
+
+def _required_field(payload: Mapping[str, object], name: str, owner: str) -> object:
+    if name not in payload:
+        raise ValueError(f"{owner} payload must include {name}")
+    return payload[name]
+
+
+def _required_mapping(payload: Mapping[str, object], name: str, owner: str) -> Mapping[str, object]:
+    value = _required_field(payload, name, owner)
+    if not isinstance(value, Mapping):
+        raise TypeError(f"{owner} {name} must be a mapping")
+    return value
+
+
+def _required_sequence(payload: Mapping[str, object], name: str, owner: str) -> Sequence[object]:
+    value = _required_field(payload, name, owner)
+    if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
+        raise TypeError(f"{owner} {name} must be a sequence")
+    return value

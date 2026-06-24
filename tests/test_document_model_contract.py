@@ -8,7 +8,7 @@ import pytest
 
 from InkGen.boundary import Canvas
 from InkGen.component import ComponentGroup, WidthHeightDrawingComponent
-from InkGen.document import Document, Layers
+from InkGen.document import Document, Layer, Layers
 from InkGen.errors import IncompatibleCanvas
 from InkGen.pdf_generator import ComponentGroupPDF, DocumentPDF, RectanglePDF
 from InkGen.style import DrawingStyle
@@ -127,6 +127,72 @@ def test_document_serialization_preserves_one_based_page_order() -> None:
     assert clone.page(2).layers == ["first"]
     assert clone.page(3).layers == ["second"]
     assert clone.parameters == document.parameters
+
+
+@pytest.mark.condition("DOCUMENT-MODEL-PAYLOAD-P2")
+@pytest.mark.parametrize(
+    ("factory", "payload", "error_type", "message"),
+    [
+        (Document.create_from_dict, object(), TypeError, "Document data must be a mapping"),
+        (Document.create_from_dict, {}, ValueError, "Document data must include Document"),
+        (Document.create_from_dict, {"Document": object()}, TypeError, "Document payload must be a mapping"),
+        (
+            Document.create_from_dict,
+            {"Document": {"canvas": _canvas().parameters, "pages": "bad"}},
+            TypeError,
+            "Document pages must be a sequence",
+        ),
+        (Layers.create_from_dict, object(), TypeError, "Layers data must be a mapping"),
+        (Layers.create_from_dict, {}, ValueError, "Layers data must include Layers"),
+        (Layers.create_from_dict, {"Layers": object()}, TypeError, "Layers payload must be a mapping"),
+        (
+            Layers.create_from_dict,
+            {"Layers": {"canvas": _canvas().parameters, "layers": "bad"}},
+            TypeError,
+            "Layers layers must be a mapping",
+        ),
+        (Layer.create_from_dict, object(), TypeError, "Layer data must be a mapping"),
+        (Layer.create_from_dict, {}, ValueError, "Layer data must include Layer"),
+        (Layer.create_from_dict, {"Layer": object()}, TypeError, "Layer payload must be a mapping"),
+        (
+            Layer.create_from_dict,
+            {
+                "Layer": {
+                    "canvas": _canvas().parameters,
+                    "layer_name": "base",
+                    "model": True,
+                    "component_groups": "bad",
+                    "group_collision_settings": {},
+                }
+            },
+            TypeError,
+            "Layer component_groups must be a sequence",
+        ),
+    ],
+)
+def test_document_model_hydration_rejects_malformed_payload_envelopes(
+    factory: object,
+    payload: object,
+    error_type: type[Exception],
+    message: str,
+) -> None:
+    """DOCUMENT-MODEL-PAYLOAD-P2: Serialized document envelopes fail before incidental lookup errors."""
+    with pytest.raises(error_type, match=message):
+        factory(payload)  # type: ignore[operator]
+
+
+@pytest.mark.condition("DOCUMENT-MODEL-PAYLOAD-P2")
+def test_layer_hydration_requires_collision_settings_for_each_group() -> None:
+    """DOCUMENT-MODEL-PAYLOAD-P2: Layer hydration validates group collision settings."""
+    layer = Layer("base", _canvas())
+    group = _group()
+    layer.add_component_group(group, allow_collision=False, strict=True)
+    style = next(group.components()).style
+    payload = layer.parameters
+    payload["Layer"]["group_collision_settings"] = {}
+
+    with pytest.raises(ValueError, match="group_collision_settings must include every component group label"):
+        Layer.create_from_dict(payload, {style.name: style})
 
 
 @pytest.mark.condition("DOCUMENT-MODEL-P1")

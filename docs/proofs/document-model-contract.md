@@ -1,15 +1,18 @@
 # Document Model Contract Proof Obligations
 
-This note applies the InkGen Definition of Done to the DOCUMENT-MODEL-P1
-document model slice. It focuses on one-based page indexing, page insertion and
-removal boundaries, page canvas compatibility, serialized page hydration, and
-live use through PDF rendering.
+This note applies the InkGen Definition of Done to the DOCUMENT-MODEL-P1 and
+DOCUMENT-MODEL-PAYLOAD-P2 document model slices. It focuses on one-based page
+indexing, page insertion and removal boundaries, page canvas compatibility,
+serialized page hydration, serialized payload envelope validation, and live use
+through PDF rendering.
 
 ## Scope
 
 The slice covers:
 
 - `Layers.create_from_dict()`
+- `Layer.create_from_dict()`
+- `Document.create_from_dict()`
 - `Document.add_page()`
 - `Document.remove_page()`
 - `Document.page()`
@@ -22,7 +25,7 @@ The slice covers:
 Affected surface:
 
 - `src/InkGen/document.py`: page validation, page insertion/removal, and
-  serialized layer hydration.
+  serialized document/layer hydration.
 - `docs/api-reference.md`, `docs/components/document-structure.md`, and
   `docs/examples.md`: one-based page examples.
 - `tests/test_document_model_contract.py`: DOCUMENT-MODEL-P1 behavioral and
@@ -30,6 +33,8 @@ Affected surface:
 - `tests/mutation/document_model_cosmic_ray.toml`: scoped mutation gate.
 - `tests/mutation/filter_document_model_work_items.py`: proof-critical mutation
   filter.
+- `tests/mutation/filter_document_model_payload_work_items.py`:
+  DOCUMENT-MODEL-PAYLOAD-P2 mutation filter.
 
 Incoming dependencies:
 
@@ -56,10 +61,18 @@ Before/after edge changes:
   incompatible canvases.
 - Before this slice, `Layers.create_from_dict()` built a default base layer and
   then added serialized layers, leaving a hidden extra layer in hydrated pages.
+- Before DOCUMENT-MODEL-PAYLOAD-P2, malformed `Layer`, `Layers`, and `Document`
+  serialized roots and collection fields could fail through incidental lookup,
+  subscription, or downstream iteration errors.
+- Before DOCUMENT-MODEL-PAYLOAD-P2, `Layer.create_from_dict()` could begin
+  component-group hydration before proving every serialized group had matching
+  collision settings.
 - After this slice, page positions are explicitly one-based, `-1` remains the
   append sentinel, inserted pages must share the document canvas contract, and
   hydrated layers match serialized layers without a constructor-created ghost
   layer.
+- After DOCUMENT-MODEL-PAYLOAD-P2, document-model hydration validates payload
+  envelopes and collection types before nested object construction.
 
 Cycle/layer/coupling/redundancy result:
 
@@ -87,6 +100,14 @@ ADR/rule impact:
 - Inserted `Layers` pages must have the same canvas height, width, and units as
   the document.
 - Serialized layers hydrate exactly the layers in the payload.
+- Serialized `Layer`, `Layers`, and `Document` roots must be mappings with
+  `Layer`, `Layers`, and `Document` mapping payloads.
+- `Document.pages` and `Layer.component_groups` must be non-string sequences.
+- `Layers.layers` and `Layer.group_collision_settings` must be mappings.
+- `Layer.group_collision_settings` must include every serialized component
+  group label.
+- Each layer collision-setting entry must be a mapping with `allow_collision`
+  and `strict` fields.
 
 ## Fix Log
 
@@ -98,6 +119,9 @@ ADR/rule impact:
 - Removed the auto-created base layer during `Layers.create_from_dict()` before
   hydrating serialized layers.
 - Updated docs examples from zero-based page access to one-based page access.
+- For DOCUMENT-MODEL-PAYLOAD-P2, added shared serialized payload helpers,
+  explicit root/collection validation for `Layer`, `Layers`, and `Document`,
+  and a layer collision-setting completeness check.
 
 ## Comprehensiveness Matrix
 
@@ -109,6 +133,7 @@ ADR/rule impact:
 | Incompatible page canvas | Reject mismatched width, height, or units | PO-DOCM-004 | `test_document_rejects_pages_with_incompatible_canvas` | killed |
 | Serialized page/layer hydration | Preserve payload layers without ghost base layers | PO-DOCM-005 | `test_document_serialization_preserves_one_based_page_order` | killed |
 | PDF live path | Render through one-based document page contract | PO-DOCM-006 | `test_document_page_contract_remains_live_through_pdf_render_path` | behavioral evidence |
+| Serialized document/layer payload envelopes | Reject malformed roots and collection fields before downstream hydration | PO-DOCM-007 | `test_document_model_hydration_rejects_malformed_payload_envelopes`, `test_layer_hydration_requires_collision_settings_for_each_group` | killed |
 
 ## Test Applicability Matrix
 
@@ -126,6 +151,7 @@ ADR/rule impact:
 | Concurrency/race | no | No shared state, background workers, locks, or temp files are added. | Not applicable |
 | Golden artifact/visual | yes | PDF rendering must still emit a valid page from the one-based path. | PDF byte prefix and page-object assertion |
 | Regression | yes | This closes page-zero corruption and serialized ghost-layer behavior. | DOCUMENT-MODEL-P1 tests |
+| Serialized payload adversarial input | yes | Malformed public hydration payloads must fail before incidental downstream errors. | DOCUMENT-MODEL-PAYLOAD-P2 tests |
 
 ## Mutation Testing Gate
 
@@ -152,6 +178,19 @@ Current result:
   before `add_page()` branches. Therefore `== -1`, `is -1` on CPython's small
   integer sentinel, and `<= -1` are behaviorally identical inside the declared
   add-page branch domain.
+
+DOCUMENT-MODEL-PAYLOAD-P2 current result:
+
+- Cosmic Ray 8.4.6, scoped to executable DOCUMENT-MODEL-PAYLOAD-P2 rows: 24
+  work items, 24 killed, 0 survivors.
+- Focused dependent-path tests:
+  `python -m pytest -q tests\test_document_model_contract.py tests\test_document.py tests\test_pdf_generator.py tests\test_svg_generator.py`
+  returned `96 passed`.
+- Full coverage gate:
+  `python -m pytest --cov=src/InkGen --cov-branch --cov-report=term -q`
+  returned `609 passed` with `93%` coverage.
+- Ruff lint and format passed for touched Python files.
+- MkDocs strict build passed.
 
 ## PO-DOCM-001: Valid Page Insertions Preserve One-Based Order
 
@@ -277,3 +316,29 @@ checks generated PDF bytes.
 ### Conclusion
 
 Supported by behavioral evidence for the stated domain.
+
+## PO-DOCM-007: Serialized Payload Envelopes Fail Explicitly
+
+### Claim
+
+`Layer.create_from_dict()`, `Layers.create_from_dict()`, and
+`Document.create_from_dict()` reject malformed serialized roots and collection
+fields before downstream hydration can produce incidental errors.
+
+### Domain
+
+Public hydration calls with non-mapping roots, missing root keys, non-mapping
+payloads, string or non-sequence page/group collections, non-mapping layer maps,
+and incomplete layer collision settings.
+
+### Proof Method
+
+Shared helpers validate payload root shape, required fields, mapping fields, and
+non-string sequence fields before nested object construction. Focused condition
+tests cover malformed roots, malformed collection fields, and missing collision
+settings for a serialized component group.
+
+### Conclusion
+
+Supported by focused dependent-path tests, mutation testing, full coverage
+tests, and MkDocs strict build for the stated domain.
