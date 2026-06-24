@@ -1,9 +1,9 @@
 # SVG Document Renderer Contract Proof Obligations
 
-This note applies the InkGen Definition of Done to the SVG-DOC-P1 document
-renderer slice. It covers SVG file writing, include-layer flag combinations,
-modeling-layer rebuild behavior, duplicate semantic labels, and document
-parameter round trips.
+This note applies the InkGen Definition of Done to the SVG document renderer
+slices. It covers SVG file writing, path boundary validation, include-layer flag
+combinations, modeling-layer rebuild behavior, duplicate semantic labels, and
+document parameter round trips.
 
 ## Scope
 
@@ -25,11 +25,15 @@ The slice covers:
 Affected surface:
 
 - `src/InkGen/svg_generator.py`: fixed combined include flags, SVG-specific
-  document deserialization, and duplicate-label layer traversal.
-- `tests/test_svg_document_contract.py`: SVG-DOC-P1 condition tests.
+  document deserialization, duplicate-label layer traversal, and SVG writer path
+  input validation.
+- `tests/test_svg_document_contract.py`: SVG-DOC-P1 and SVG-FILEPATH-P2
+  condition tests.
 - `tests/mutation/svg_document_cosmic_ray.toml`: scoped mutation gate.
 - `tests/mutation/filter_svg_document_work_items.py`: proof-critical mutation
   filter.
+- `tests/mutation/filter_svg_filepath_work_items.py`: filepath proof-critical
+  mutation filter.
 - `docs/proofs/svg-document-contract.md`: proof note.
 
 Incoming dependencies:
@@ -55,9 +59,13 @@ Before/after edge changes:
   payloads.
 - Before this slice, SVG document traversal used the label lookup map and
   collapsed repeated semantic labels.
+- Before the filepath slice, `DocumentSVG.create_svg()` called `os.path`
+  directly on unvalidated public input, so malformed path values failed through
+  incidental stdlib errors.
 - After this slice, include flags use membership checks, SVG documents rehydrate
   SVG groups through SVG-specific helpers while retaining generic-group
-  compatibility, and renderer traversal includes every stored group.
+  compatibility, renderer traversal includes every stored group, and SVG file
+  writers normalize only string/path-like paths before writing.
 
 Cycle/layer/coupling/redundancy result:
 
@@ -77,6 +85,9 @@ ADR/rule impact:
 
 - A single-page SVG document writes `<base>.svg`.
 - A multipage SVG document writes `<base>_page_<n>.svg` for each page.
+- String and path-like output paths are accepted at the public file-writer
+  boundary.
+- Non-path objects, bytes paths, and empty paths fail before writing files.
 - A missing output directory fails before writing files.
 - Include-layer flags are composable: `LABEL | MASK` requests both overlays.
 - Label overlays render bbox rectangles.
@@ -93,6 +104,8 @@ ADR/rule impact:
 |---|---|---|---|---|
 | Single-page output | Write `<base>.svg` | PO-SVGDOC-001 | file-write test | killed |
 | Multipage output | Write numbered page files | PO-SVGDOC-001 | file-write test | killed |
+| Path-like output path | Normalize and write | PO-SVGDOC-007 | path-like test | killed |
+| Malformed output path | Raise `TypeError` or `ValueError` before writing | PO-SVGDOC-007 | malformed-path tests | killed |
 | Missing directory | Raise `ValueError` | Failure-mode test | missing-directory test | killed |
 | Combined include flags | Add label and mask overlays | PO-SVGDOC-002 | combined-flag test | killed |
 | Label overlay | Render bbox rectangles with dimensions | PO-SVGDOC-003 | label-rectangle test | killed |
@@ -108,13 +121,13 @@ ADR/rule impact:
 | Test class | Applicable? | Reason | Evidence |
 |---|---|---|---|
 | Unit | yes | Private deterministic helpers have direct behavioral effects. | `tests/test_svg_document_contract.py` |
-| Behavioral/condition | yes | The slice defines SVG-DOC-P1 document-render behavior. | Tests are marked `@pytest.mark.condition("SVG-DOC-P1")`. |
-| Failure-mode | yes | Missing output directories must fail loudly. | missing-directory test |
+| Behavioral/condition | yes | The slices define SVG-DOC-P1 document-render behavior and SVG-FILEPATH-P2 path-boundary behavior. | Tests are marked `@pytest.mark.condition("SVG-DOC-P1")` and `@pytest.mark.condition("SVG-FILEPATH-P2")`. |
+| Failure-mode | yes | Missing output directories and malformed file paths must fail loudly before writing. | missing-directory and malformed-path tests |
 | Integration/live-path | yes | `create_svg()` writes files and mutates document overlays. | file, flag, stale-layer, duplicate-label tests |
 | Contract/API compatibility | yes | `create_from_dict()` must preserve existing generic-group behavior. | existing SVG generator test plus SVG round-trip test |
 | Property/fuzz | limited yes | Deterministic partitions cover single/multi page, missing directory, label/mask/both, duplicate labels, and SVG/generic group payloads. | SVG-DOC-P1 tests |
 | Mutation | yes | Proof-critical renderer decisions are mutation tested. | Cosmic Ray result below |
-| Security/adversarial | limited yes | The slice writes only explicit local paths and adds no subprocess, network, SQL, or template execution. | missing-directory failure test |
+| Security/adversarial | limited yes | The slice writes only explicit local paths and adds no subprocess, network, SQL, or template execution. Malformed path-like boundaries are rejected before write attempts. | missing-directory and malformed-path tests |
 | Performance/resource | no | Rendering is linear over pages, layers, groups, and components. | Not applicable |
 | Concurrency/race | no | No shared concurrency primitive is added. | Not applicable |
 | Golden artifact/visual | yes | SVG XML output is a text artifact. | file and markup assertions |
@@ -140,6 +153,16 @@ Current result:
     `_add_segmentation_layer()`, which pass the literal strings `'label'` and
     `'mask'`.
 - Gate result: pass with documented equivalent survivors.
+
+Additional SVG-FILEPATH-P2 result:
+
+- Tool: Cosmic Ray 8.4.6.
+- Environment: WSL Python 3.12 virtualenv.
+- Raw work items: 2337.
+- Proof-critical work items after filter: 9.
+- Killed mutants: 9.
+- Survivors: 0.
+- Gate result: pass.
 
 ## PO-SVGDOC-001: SVG Files Are Written Deterministically
 
@@ -240,3 +263,28 @@ round-trip compatibility.
 ### Conclusion
 
 Proven for SVG and generic group payloads in the current serialization domain.
+
+## PO-SVGDOC-007: SVG File Paths Fail At The Boundary
+
+### Claim
+
+For every public `DocumentSVG.create_svg()` path input in the declared domain,
+string and `os.PathLike[str]` values are normalized before writing, while
+non-path objects, byte paths, and empty strings are rejected before any file
+write is attempted.
+
+### Proof Method
+
+The implementation applies `os.fspath()` once at the SVG writer boundary,
+accepts only resulting `str` values, rejects empty strings, then passes the
+normalized value into the existing deterministic filename and missing-directory
+logic. Tests cover a `pathlib.Path` live write, object/integer/bytes rejection,
+empty-string rejection, and the existing missing-directory failure. The
+SVG-FILEPATH-P2 Cosmic Ray gate mutates proof-critical validation rows and all
+9 mutants are killed.
+
+### Conclusion
+
+Proven for the declared string/path-like SVG writer domain. Private mutation of
+post-normalization internal variables and race conditions between directory
+validation and file opening are outside this proof obligation.

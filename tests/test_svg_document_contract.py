@@ -72,6 +72,37 @@ def test_document_svg_rejects_missing_output_directory(tmp_path) -> None:
         document.create_svg(str(tmp_path / "missing" / "drawing.svg"))
 
 
+@pytest.mark.condition("SVG-FILEPATH-P2")
+def test_document_svg_accepts_pathlike_output_paths(tmp_path) -> None:
+    """SVG-FILEPATH-P2: DocumentSVG accepts path-like output paths."""
+    document = _document_with_panel()
+    target = tmp_path / "pathlike.svg"
+
+    document.create_svg(target)
+
+    assert target.exists()
+    assert '<svg\n\twidth="120.0mm"' in target.read_text(encoding="utf-8")
+
+
+@pytest.mark.condition("SVG-FILEPATH-P2")
+@pytest.mark.parametrize(
+    ("filepath", "expected_error", "message"),
+    [
+        (object(), TypeError, "file path must be a string or path-like object"),
+        (123, TypeError, "file path must be a string or path-like object"),
+        (b"drawing.svg", TypeError, "file path must be a string or path-like object"),
+        ("", ValueError, "file path must not be empty"),
+    ],
+    ids=["object", "integer", "bytes", "empty"],
+)
+def test_document_svg_rejects_malformed_output_paths(filepath, expected_error, message) -> None:
+    """SVG-FILEPATH-P2: DocumentSVG rejects malformed output paths before writing."""
+    document = _document_with_panel()
+
+    with pytest.raises(expected_error, match=message):
+        document.create_svg(filepath)
+
+
 @pytest.mark.condition("SVG-DOC-P1")
 def test_document_svg_include_layer_flags_can_be_combined(tmp_path) -> None:
     """SVG-DOC-P1: IncludeLayer flag combinations add requested modeling layers."""

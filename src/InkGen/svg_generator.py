@@ -1710,12 +1710,12 @@ class DocumentSVG(Document):
                             fonts[family] = font_path
         return fonts
 
-    def create_svg(self, filepath: str, include: Flag = IncludeLayer.BASE) -> None:
+    def create_svg(self, filepath: str | os.PathLike[str], include: Flag = IncludeLayer.BASE) -> None:
         """
             Creates a SVG file at the filepath location.
 
             Args:
-                filepath (str): file to create or save to.
+                filepath (str | os.PathLike[str]): file to create or save to.
                 include (Flag): one of three options:
                     IncludeLayer.BASE: Just the drawing components
                     IncludeLayer.LABEL: Drawing components with bounding boxes
@@ -1739,8 +1739,16 @@ class DocumentSVG(Document):
             target = self._target_filename(path, base_filename, pg)
             self._write_svg(target, svg_payload)
 
-    def _normalize_output_path(self, filepath: str) -> tuple[str, str]:
-        path, file = os.path.split(os.path.abspath(filepath))
+    def _normalize_output_path(self, filepath: object) -> tuple[str, str]:
+        try:
+            path_value = os.fspath(filepath)
+        except TypeError as exc:
+            raise TypeError("file path must be a string or path-like object") from exc
+        if not isinstance(path_value, str):
+            raise TypeError("file path must be a string or path-like object")
+        if not path_value:
+            raise ValueError("file path must not be empty")
+        path, file = os.path.split(os.path.abspath(path_value))
         if "." in file:
             file = file.split(".")[0]
         if not os.path.exists(path):
