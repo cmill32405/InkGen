@@ -80,6 +80,9 @@ Before/after edge changes:
 - Before the path-command hardening update, malformed serialized `PathDrawing`
   command envelopes could fail through incidental indexing errors before
   reaching `PathCommand`.
+- Before the filepath hardening update, malformed file-writer paths could fail
+  through incidental `os.path` or `open()` errors, and path-like objects were
+  not part of the documented writer contract.
 - After this slice, DOCX ZIP parts use a fixed timestamp and drawing
   materialization must return an InkGen `Component`.
 - After the drawing-label hardening update, drawing block hydration passes
@@ -102,6 +105,9 @@ Before/after edge changes:
 - After the path-command hardening update, `PathDrawing` hydration validates
   that commands are a non-string sequence of command envelopes with `type` and
   `points` before constructing `PathCommand` objects.
+- After the filepath hardening update, file writers normalize string and
+  path-like output paths through one boundary helper and reject non-string,
+  bytes, and empty paths before writing.
 - No new dependency edge or third-party dependency was introduced.
 
 Cycle/layer/coupling/redundancy result:
@@ -164,6 +170,8 @@ ADR/rule impact:
   type before constructing or reusing a style object.
 - `_path_commands_from_payload()` validates serialized path command envelope
   shape before delegating command semantics to `PathCommand`.
+- `_normalize_output_filepath()` validates all flow-document file-writer output
+  paths before text or byte writes.
 
 ## Comprehensiveness Matrix
 
@@ -178,6 +186,7 @@ ADR/rule impact:
 | Serialized drawing component envelope and dispatch | Reject malformed component envelopes, reject unsupported types before style extraction, and dispatch valid dynamic type strings by value | PO-FDOC-009 | `test_flow_document_hydration_rejects_malformed_drawing_component_envelopes`, `test_flow_document_hydration_dispatches_dynamic_drawing_component_type_strings` | killed |
 | Serialized drawing style envelope | Reject missing/malformed style envelopes, mismatched style keys, non-string style names, and wrong-type style overrides | PO-FDOC-011 | `test_flow_document_hydration_rejects_malformed_drawing_style_payloads`, `test_flow_document_hydration_rejects_mismatched_drawing_style_overrides`, `test_flow_document_hydration_constructs_missing_drawing_style_overrides_by_kind` | killed |
 | Serialized path command envelope | Reject malformed `PathDrawing` command collections before `PathCommand` construction | PO-FDOC-012 | `test_flow_document_hydration_rejects_malformed_path_command_payloads` | killed |
+| File writer path boundary | Accept string/path-like output paths and reject malformed output path values before writing | PO-FDOC-013 | `test_flow_document_file_writers_accept_pathlike_outputs`, `test_flow_document_file_writers_reject_malformed_paths`, `test_flow_document_file_writers_fail_on_missing_directory` | killed |
 | Malformed serialized drawing label | Reject through the neutral group label contract | PO-FDOC-006 | `test_flow_document_drawing_group_hydration_rejects_malformed_label` | behavioral evidence |
 | Invalid drawing materialization | Reject before silent omission | PO-FDOC-004 | `test_flow_document_rejects_invalid_drawing_materialization` | killed |
 | DOCX VML linework | Emit group-relative points | PO-FDOC-005 | `test_flow_document_docx_drawing_polyline_uses_group_relative_points` | killed |
@@ -190,7 +199,7 @@ ADR/rule impact:
 |---|---|---|---|
 | Unit | yes | Helpers are deterministic. | FLOW-DOCUMENT-P1 tests |
 | Behavioral/condition | yes | The slice defines document-output behavior. | Tests are marked `@pytest.mark.condition("FLOW-DOCUMENT-P1")`. |
-| Failure-mode | yes | Invalid content, malformed root payloads, malformed serialized block envelopes, malformed drawing payloads, malformed drawing component envelopes, malformed drawing style envelopes, malformed path command envelopes, malformed serialized drawing labels, and invalid output paths must fail loudly. | Invalid hydration, invalid materialization, and existing writer tests |
+| Failure-mode | yes | Invalid content, malformed root payloads, malformed serialized block envelopes, malformed drawing payloads, malformed drawing component envelopes, malformed drawing style envelopes, malformed path command envelopes, malformed serialized drawing labels, malformed output paths, and invalid output paths must fail loudly. | Invalid hydration, invalid materialization, and writer tests |
 | Integration/live-path | yes | DOCX ZIP, HTML, RTF, text, table, and drawing paths cross module boundaries. | Focused and existing document-output tests |
 | Contract/API compatibility | yes | Parameters and public add methods must preserve existing behavior. | Round-trip and existing rejection tests |
 | Property/fuzz | no | This slice proves finite output and dispatch contracts. | Not applicable |
@@ -224,6 +233,8 @@ Proof-critical mutation targets:
   fail malformed-style, mismatched-override, or fallback-construction tests.
 - Weakening serialized path command envelope validation should fail malformed
   path-command tests.
+- Weakening file-writer path normalization should fail malformed-path or
+  path-like output tests.
 
 Current result:
 
@@ -244,6 +255,8 @@ Current result:
   drawing-style hardening update: 15 work items, 15 killed, and 0 survived.
 - Cosmic Ray 8.4.6, scoped to path command envelope validation rows after the
   path-command hardening update: 19 work items, 19 killed, and 0 survived.
+- Cosmic Ray 8.4.6, scoped to file-writer path normalization rows after the
+  filepath hardening update: 7 work items, 7 killed, and 0 survived.
 
 ## PO-FDOC-001: DOCX Bytes Are Deterministic
 
@@ -562,6 +575,38 @@ command entries, missing command fields, and malformed point collections.
 Path command semantic validation, including supported command letters, point
 arity, numeric coercion, and finite coordinate checks, remains delegated to
 `PathCommand`.
+
+### Conclusion
+
+Proven for the stated domain after focused tests, mutation, and the full DoD
+gate pass.
+
+## PO-FDOC-013: File Writer Paths Are Validated
+
+### Claim
+
+Flow-document file writers accept string and path-like output paths, reject
+malformed path values at the InkGen boundary, and preserve generated payloads.
+
+### Domain
+
+`FlowDocument.create_docx()`, `create_html()`, `create_rtf()`, and
+`create_text()` calls.
+
+### Proof Method
+
+All four writer methods delegate to `_normalize_output_filepath()` through
+`_write_text()` or `_write_bytes()`. The helper uses `os.fspath()` to accept
+string and path-like values, rejects bytes and non-path objects, rejects empty
+paths, and preserves the existing missing-directory `ValueError`. Focused tests
+cover successful `pathlib.Path` writes for every writer, malformed object,
+integer, bytes, and empty-string paths, plus the existing missing-directory
+failure and payload equality checks.
+
+### Counterexamples And Exclusions
+
+Filesystem permission errors, concurrent file replacement, and platform-specific
+reserved path names remain delegated to the operating system.
 
 ### Conclusion
 

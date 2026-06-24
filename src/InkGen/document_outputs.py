@@ -155,19 +155,19 @@ class FlowDocument:
             _write_docx_part(package, "word/_rels/document.xml.rels", document_relationships)
         return buffer.getvalue()
 
-    def create_docx(self, filepath: str) -> None:
+    def create_docx(self, filepath: str | os.PathLike[str]) -> None:
         """Write a DOCX file."""
         _write_bytes(filepath, self.to_docx_bytes())
 
-    def create_html(self, filepath: str) -> None:
+    def create_html(self, filepath: str | os.PathLike[str]) -> None:
         """Write an HTML file."""
         _write_text(filepath, self.to_html())
 
-    def create_rtf(self, filepath: str) -> None:
+    def create_rtf(self, filepath: str | os.PathLike[str]) -> None:
         """Write an RTF file."""
         _write_text(filepath, self.to_rtf())
 
-    def create_text(self, filepath: str) -> None:
+    def create_text(self, filepath: str | os.PathLike[str]) -> None:
         """Write a plain-text file."""
         _write_text(filepath, self.to_plain_text())
 
@@ -646,19 +646,29 @@ def _rtf_escape(value: str) -> str:
     return value.replace("\\", r"\\").replace("{", r"\{").replace("}", r"\}")
 
 
-def _write_text(filepath: str, payload: str) -> None:
-    path = os.path.abspath(filepath)
+def _normalize_output_filepath(filepath: object) -> str:
+    try:
+        path_value = os.fspath(filepath)
+    except TypeError as exc:
+        raise TypeError("file path must be a string or path-like object") from exc
+    if not isinstance(path_value, str):
+        raise TypeError("file path must be a string or path-like object")
+    if not path_value:
+        raise ValueError("file path must not be empty")
+    path = os.path.abspath(path_value)
     directory = os.path.dirname(path)
     if directory and not os.path.exists(directory):
         raise ValueError("The file path does not exist.")
+    return path
+
+
+def _write_text(filepath: str | os.PathLike[str], payload: str) -> None:
+    path = _normalize_output_filepath(filepath)
     with open(path, "w", encoding="utf-8") as handle:
         handle.write(payload)
 
 
-def _write_bytes(filepath: str, payload: bytes) -> None:
-    path = os.path.abspath(filepath)
-    directory = os.path.dirname(path)
-    if directory and not os.path.exists(directory):
-        raise ValueError("The file path does not exist.")
+def _write_bytes(filepath: str | os.PathLike[str], payload: bytes) -> None:
+    path = _normalize_output_filepath(filepath)
     with open(path, "wb") as handle:
         handle.write(payload)

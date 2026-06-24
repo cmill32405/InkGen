@@ -643,3 +643,54 @@ def test_flow_document_text_writers_create_requested_files(tmp_path) -> None:
     assert html_path.read_text(encoding="utf-8") == document.to_html()
     assert rtf_path.read_text(encoding="utf-8") == document.to_rtf()
     assert text_path.read_text(encoding="utf-8") == "Persisted"
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-P1")
+def test_flow_document_file_writers_accept_pathlike_outputs(tmp_path) -> None:
+    """FLOW-DOCUMENT-P1: File writers accept path-like output locations."""
+    document = FlowDocument(title="Pathlike")
+    document.add_paragraph(_paragraph("Persisted"))
+    docx_path = tmp_path / "document.docx"
+    html_path = tmp_path / "document.html"
+    rtf_path = tmp_path / "document.rtf"
+    text_path = tmp_path / "document.txt"
+
+    document.create_docx(docx_path)
+    document.create_html(html_path)
+    document.create_rtf(rtf_path)
+    document.create_text(text_path)
+
+    assert docx_path.read_bytes() == document.to_docx_bytes()
+    assert html_path.read_text(encoding="utf-8") == document.to_html()
+    assert rtf_path.read_text(encoding="utf-8") == document.to_rtf()
+    assert text_path.read_text(encoding="utf-8") == "Persisted"
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-P1")
+@pytest.mark.parametrize(
+    ("filepath", "exception_type", "message"),
+    [
+        (object(), TypeError, "file path must be a string or path-like object"),
+        (123, TypeError, "file path must be a string or path-like object"),
+        (b"document.html", TypeError, "file path must be a string or path-like object"),
+        ("", ValueError, "file path must not be empty"),
+    ],
+)
+def test_flow_document_file_writers_reject_malformed_paths(
+    filepath: object,
+    exception_type: type[Exception],
+    message: str,
+) -> None:
+    """FLOW-DOCUMENT-P1: File writers reject malformed paths at the boundary."""
+    document = FlowDocument(title="Bad Paths")
+    document.add_paragraph(_paragraph("Persisted"))
+    writers = (
+        document.create_docx,
+        document.create_html,
+        document.create_rtf,
+        document.create_text,
+    )
+
+    for writer in writers:
+        with pytest.raises(exception_type, match=message):
+            writer(filepath)  # type: ignore[arg-type]
