@@ -1,4 +1,4 @@
-"""Filter Cosmic Ray work items to PDF-COMPONENT-FACTORY-PAYLOAD-P2 rows."""
+"""Filter Cosmic Ray work items to PDF-GROUP-FACTORY-PAYLOAD-P2 rows."""
 
 from __future__ import annotations
 
@@ -10,26 +10,20 @@ FILTER_SQL = """
 module_path = 'src/InkGen/pdf_generator.py'
 AND (
   (
-    definition_name IN ('_pdf_payload', '_pdf_required_field', '_pdf_optional_sequence', '_path_command_from_dict')
+    definition_name IN (
+      '_pdf_required_sequence',
+      '_pdf_single_mapping_entry',
+      '_pdf_style_entry',
+      '_pdf_component_class'
+    )
     AND (
-      start_pos_row BETWEEN 235 AND 259
-      OR start_pos_row BETWEEN 300 AND 308
+      start_pos_row BETWEEN 261 AND 293
+      OR start_pos_row BETWEEN 831 AND 836
     )
   )
   OR (
     definition_name = 'create_from_dict'
-    AND (
-      start_pos_row BETWEEN 329 AND 338
-      OR start_pos_row BETWEEN 381 AND 388
-      OR start_pos_row BETWEEN 431 AND 442
-      OR start_pos_row BETWEEN 481 AND 489
-      OR start_pos_row BETWEEN 529 AND 538
-      OR start_pos_row BETWEEN 577 AND 581
-      OR start_pos_row BETWEEN 671 AND 681
-      OR start_pos_row BETWEEN 713 AND 716
-      OR start_pos_row BETWEEN 755 AND 758
-      OR start_pos_row BETWEEN 791 AND 794
-    )
+    AND start_pos_row BETWEEN 854 AND 879
   )
 )
 AND operator_name NOT LIKE 'core/ReplaceBinaryOperator_BitOr_%'
@@ -37,7 +31,7 @@ AND operator_name NOT LIKE 'core/ReplaceBinaryOperator_BitOr_%'
 
 
 def filter_work_items(db_path: Path, *, clear_results: bool) -> tuple[int, int]:
-    """Restrict a Cosmic Ray database to PDF component factory payload items."""
+    """Restrict a Cosmic Ray database to PDF group factory payload items."""
     with sqlite3.connect(db_path) as conn:
         cursor = conn.cursor()
         before = cursor.execute("SELECT COUNT(*) FROM work_items").fetchone()[0]

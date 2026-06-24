@@ -10,7 +10,6 @@ from __future__ import annotations
 import abc
 import math
 import os
-import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
@@ -257,6 +256,41 @@ def _pdf_optional_sequence(payload: Mapping[str, object], name: str, owner: str)
     if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
         raise TypeError(f"{owner} {name} must be a sequence")
     return value
+
+
+def _pdf_required_sequence(payload: Mapping[str, object], name: str, owner: str) -> Sequence[object]:
+    """Return a required serialized PDF sequence field or fail explicitly."""
+    value = _pdf_required_field(payload, name, owner)
+    if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
+        raise TypeError(f"{owner} {name} must be a sequence")
+    return value
+
+
+def _pdf_single_mapping_entry(payload: object, owner: str) -> tuple[str, Mapping[str, object]]:
+    """Return the single typed payload entry for a PDF group child or style."""
+    if not isinstance(payload, Mapping):
+        raise TypeError(f"{owner} entry must be a mapping")
+    if len(payload) != 1:
+        raise ValueError(f"{owner} entry must contain one type")
+    entry_type = next(iter(payload))
+    if not isinstance(entry_type, str):
+        raise TypeError(f"{owner} type must be a string")
+    entry_payload = payload[entry_type]
+    if not isinstance(entry_payload, Mapping):
+        raise TypeError(f"{owner} payload must be a mapping")
+    return entry_type, entry_payload
+
+
+def _pdf_style_entry(payload: object) -> tuple[str, Mapping[str, object], str, type]:
+    """Return a validated PDF child style envelope."""
+    style_type, style_payload = _pdf_single_mapping_entry(payload, "PDF component style")
+    style_name = style_payload.get("name")
+    if not isinstance(style_name, str):
+        raise TypeError("PDF component style name must be a string")
+    style_class = globals().get(style_type)
+    if style_class not in (DrawingStyle, TextStyle):
+        raise ValueError(f"Unsupported PDF component style payload type: {style_type}")
+    return style_type, style_payload, style_name, style_class
 
 
 def _path_command_from_dict(data: object) -> PathCommand:
@@ -794,6 +828,14 @@ PDF_RENDER_COMPONENT_TYPES = (
 )
 
 
+def _pdf_component_class(component_type: str) -> type:
+    """Return a supported built-in PDF component class by serialized type name."""
+    component_class = globals().get(component_type)
+    if component_class not in PDF_RENDER_COMPONENT_TYPES:
+        raise ValueError(f"Unsupported PDF component payload type: {component_type}")
+    return component_class
+
+
 class ComponentGroupPDF(ComponentGroup, LabelGenerator, SegmentGenerator):
     """Component group that serializes child PDF components."""
 
@@ -809,28 +851,25 @@ class ComponentGroupPDF(ComponentGroup, LabelGenerator, SegmentGenerator):
     @classmethod
     def create_from_dict(cls, data: dict, styles: dict | None = None) -> ComponentGroupPDF:
         """Recreate a ComponentGroupPDF from serialized parameters."""
-        payload = data["ComponentGroupPDF"]
-        group = cls(payload["group_label"])
+        payload = _pdf_payload(data, "ComponentGroupPDF")
+        group = cls(_pdf_required_field(payload, "group_label", "ComponentGroupPDF"))
         restore_extraction_truth_annotations(group, payload.get("extraction_truth", []))
         restore_grammar_truth_annotations(group, payload.get("grammar_truth", []))
         if styles is None:
             styles = {}
         component_annotations = payload.get("component_extraction_truth", [])
         component_grammar_annotations = payload.get("component_grammar_truth", [])
-        for index, component_data in enumerate(payload["components"]):
+        for index, component_data in enumerate(_pdf_required_sequence(payload, "components", "ComponentGroupPDF")):
             style = None
-            component_class_name = list(component_data.keys())[0]
-            component_payload = component_data[component_class_name]
+            component_class_name, component_payload = _pdf_single_mapping_entry(component_data, "PDF component")
             if "style" in component_payload:
-                style_name = list(component_payload["style"].keys())[0]
-                stored_name = component_payload["style"][style_name]["name"]
+                _, _, stored_name, style_class = _pdf_style_entry(component_payload["style"])
                 if stored_name not in styles:
-                    style_class = getattr(sys.modules[__name__], style_name)
                     style = style_class.create_from_dict(component_payload["style"])
                     styles[stored_name] = style
                 else:
                     style = styles[stored_name]
-            component_class = getattr(sys.modules[__name__], component_class_name)
+            component_class = _pdf_component_class(component_class_name)
             component = component_class.create_from_dict(component_data, style)
             if index < len(component_annotations):
                 restore_extraction_truth_annotations(component, component_annotations[index])
