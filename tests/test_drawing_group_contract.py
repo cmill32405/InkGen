@@ -78,6 +78,35 @@ def test_drawing_group_materializes_svg_and_pdf_groups(drawing_style: DrawingSty
     assert get_grammar_truth_annotations(next(pdf_group.components()))[0].condition_id == "RECT"
 
 
+@pytest.mark.condition("DRAWING-GROUP-COMPONENTS-P2")
+def test_drawing_group_constructor_accepts_valid_component_sequences(drawing_style: DrawingStyle) -> None:
+    """DRAWING-GROUP-COMPONENTS-P2: Constructor normalizes valid primitive sequences."""
+    rectangle = RectangleDrawing((1.0, 2.0), 3.0, 4.0, 0.0, drawing_style)
+    group = DrawingComponentGroup("direct", (rectangle,))
+
+    svg_group = group.to_group(OutputFormat.SVG)
+
+    assert group.components == [rectangle]
+    assert [component.__class__.__name__ for component in svg_group.components()] == ["RectangleSVG"]
+
+
+@pytest.mark.condition("DRAWING-GROUP-COMPONENTS-P2")
+@pytest.mark.parametrize(
+    "components",
+    [
+        "bad",
+        b"bad",
+        object(),
+        [object()],
+        [_AttributeOnlyPrimitive()],
+    ],
+)
+def test_drawing_group_constructor_rejects_malformed_components(components: object) -> None:
+    """DRAWING-GROUP-COMPONENTS-P2: Constructor rejects malformed component collections."""
+    with pytest.raises(TypeError, match="component|components"):
+        DrawingComponentGroup("invalid", components)  # type: ignore[arg-type]
+
+
 @pytest.mark.condition("DRAWING-GROUP-P1")
 def test_drawing_group_rejects_invalid_recipe_boundaries(drawing_style: DrawingStyle) -> None:
     """DRAWING-GROUP-P1: Invalid neutral recipes fail before silent renderer omission."""

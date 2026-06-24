@@ -273,15 +273,26 @@ class DrawingComponentGroup:
     components: list[DrawingPrimitive] = field(default_factory=list)
 
     def __post_init__(self) -> None:
-        """Validate the public group label boundary."""
+        """Validate the public group construction boundary."""
         if not isinstance(self.group_label, str):
             raise TypeError("group_label must be a string")
+        if isinstance(self.components, (str, bytes)) or not isinstance(self.components, Sequence):
+            raise TypeError("components must be a sequence of drawing primitives")
+        components = list(self.components)
+        for component in components:
+            self._validate_component(component)
+        self.components = components
 
     def add_component(self, component: DrawingPrimitive) -> None:
         """Append a renderer-neutral primitive to the group."""
+        self._validate_component(component)
+        self.components.append(component)
+
+    @staticmethod
+    def _validate_component(component: DrawingPrimitive) -> None:
+        """Validate that an object follows the renderer-neutral primitive boundary."""
         if not callable(getattr(component, "to_component", None)):
             raise TypeError("component must implement to_component(output_format)")
-        self.components.append(component)
 
     def to_group(self, output_format: OutputFormat | str) -> ComponentGroup:
         """Materialize the recipe as a concrete InkGen component group."""

@@ -61,6 +61,10 @@ Before/after edge changes:
   stringified arbitrary objects, so an object whose `__str__()` returned
   `"svg"` or `"pdf"` could cross a boundary documented as accepting only
   strings or `OutputFormat` enum values.
+- Before `DRAWING-GROUP-COMPONENTS-P2`, direct
+  `DrawingComponentGroup("label", components)` construction could store
+  malformed component collections and fail later with incidental errors during
+  materialization.
 - After this slice, neutral components must expose a callable
   `to_component(output_format)` and concrete materialization must return an
   InkGen `Component`.
@@ -70,6 +74,9 @@ Before/after edge changes:
 - After the format-selector hardening update, backend selectors must be
   `OutputFormat` members or real strings before unsupported-value normalization
   can run.
+- After `DRAWING-GROUP-COMPONENTS-P2`, constructor-supplied components must be
+  a non-string sequence of primitives with callable `to_component`, and the
+  accepted collection is normalized to a list.
 - No dependency direction changed and no third-party dependency was introduced.
 
 Cycle/layer/coupling/redundancy result:
@@ -106,6 +113,9 @@ ADR/rule impact:
   primitives.
 - `group_label` must be a real string. Empty strings remain valid for callers
   that intentionally want renderer defaults.
+- Constructor-supplied `components` must be a non-string sequence of drawing
+  primitives. Accepted constructor collections are normalized to a mutable list
+  to preserve existing `add_component()` behavior.
 - A valid primitive provides a callable `to_component(output_format)` method.
 - A valid concrete materialization returns an InkGen `Component`.
 - Supported group output formats are `svg` and `pdf`, represented by strings or
@@ -125,6 +135,10 @@ ADR/rule impact:
   labels, so invalid labels fail at the neutral group boundary.
 - `normalize_output_format()` now rejects non-string, non-`OutputFormat`
   selectors instead of stringifying arbitrary objects.
+- `DrawingComponentGroup.__post_init__()` now rejects malformed constructor
+  component collections before materialization.
+- `DrawingComponentGroup.add_component()` and constructor validation now share
+  the same callable-primitive boundary helper.
 
 ## Comprehensiveness Matrix
 
@@ -135,6 +149,8 @@ ADR/rule impact:
 | Invalid group label | Reject non-string labels before rendering or serialization | PO-DGROUP-005 | `test_drawing_group_rejects_non_string_labels` | killed |
 | Invalid serialized flow-document drawing label | Reject instead of stringifying during hydration | PO-DGROUP-005 | `test_flow_document_drawing_group_hydration_rejects_malformed_label` | behavioral evidence |
 | Attribute-only invalid primitive | Reject at add boundary | PO-DGROUP-002 | `test_drawing_group_rejects_invalid_recipe_boundaries` | killed |
+| Malformed constructor component collection | Reject raw strings, bytes, non-sequences, non-primitives, and attribute-only primitives before materialization | PO-DGROUP-007 | `test_drawing_group_constructor_rejects_malformed_components` | killed |
+| Valid constructor component sequence | Normalize to mutable list and preserve materialization | PO-DGROUP-007 | `test_drawing_group_constructor_accepts_valid_component_sequences` | killed |
 | Primitive returning non-component | Reject at materialization boundary | PO-DGROUP-002 | same | killed |
 | Unsupported output format | Reject before materialization | PO-DGROUP-003 | `test_drawing_group_rejects_unsupported_formats_before_materializing` | killed/equivalent |
 | Stringifiable non-string output selector | Reject before materialization | PO-DGROUP-006 | `test_normalize_output_format_rejects_stringifiable_objects`, `test_drawing_group_rejects_non_string_format_before_materializing` | killed |
@@ -147,7 +163,7 @@ ADR/rule impact:
 |---|---|---|---|
 | Unit | yes | Group boundary validation is deterministic. | DRAWING-GROUP-P1 tests |
 | Behavioral/condition | yes | The slice defines a renderer-neutral group contract. | Tests are marked `@pytest.mark.condition("DRAWING-GROUP-P1")`. |
-| Failure-mode | yes | Invalid labels, invalid primitives, unsupported formats, and wrong-type backend selectors must fail loudly. | Invalid-boundary, hydration, and format-selector tests |
+| Failure-mode | yes | Invalid labels, malformed constructor component collections, invalid primitives, unsupported formats, and wrong-type backend selectors must fail loudly. | Invalid-boundary, constructor-boundary, hydration, and format-selector tests |
 | Integration/live-path | yes | Group materialization crosses into SVG/PDF group classes, grammar truth, and flow-document hydration. | Materialization, flow-document, and existing zoning tests |
 | Contract/API compatibility | yes | Existing zoning and primitive materialization behavior must remain compatible. | Existing `PDF-P3` tests |
 | Property/fuzz | no | The slice is finite dispatch and type-boundary behavior. | Not applicable |
@@ -167,6 +183,8 @@ Proof-critical mutation targets:
   and prove group materialization does not start.
 - Weakening group-label validation should fail invalid-label and flow-document
   hydration tests.
+- Weakening constructor component collection validation should fail malformed
+  constructor tests.
 - Weakening callable validation should fail invalid-add tests.
 - Weakening concrete `Component` validation should fail invalid-materialization
   tests.
@@ -190,6 +208,8 @@ Current result:
     were killed.
 - Cosmic Ray 8.4.6, scoped to format-selector type validation after the
   format-selector hardening update: 3 work items, 3 killed, and 0 survived.
+- Cosmic Ray 8.4.6, scoped to constructor component collection validation
+  after `DRAWING-GROUP-COMPONENTS-P2`: 8 work items, 8 killed, and 0 survived.
 
 ## PO-DGROUP-001: Valid Groups Materialize To Concrete Groups
 
@@ -336,6 +356,43 @@ because DXF and renderer defaults use them intentionally.
 ### Conclusion
 
 Proven for the stated domain after tests and mutation pass.
+
+## PO-DGROUP-007: Constructor Component Collections Are Validated
+
+### Claim
+
+`DrawingComponentGroup` accepts constructor-supplied component collections only
+when they are non-string sequences of renderer-neutral primitives with callable
+`to_component(output_format)` methods, normalizes accepted collections to a
+list, and rejects malformed collections before materialization.
+
+### Domain
+
+Public `DrawingComponentGroup(group_label, components)` construction with
+`components` supplied as a valid primitive sequence, raw string, bytes,
+non-sequence object, sequence containing a non-primitive object, or sequence
+containing an object whose `to_component` attribute is not callable.
+
+### Proof Method
+
+`DrawingComponentGroup.__post_init__()` first validates `group_label`, then
+rejects raw strings, bytes, and non-sequence component collections. It copies
+accepted sequences to a list and validates every member through
+`_validate_component()`. The same helper is used by `add_component()`, so direct
+constructor and append paths enforce the same callable primitive boundary.
+State is assigned to the normalized list only after every supplied component
+passes validation.
+
+### Counterexamples And Exclusions
+
+Post-construction mutation of the public `components` list remains outside the
+constructor contract. Existing downstream guards in `to_group()`, DXF export,
+and flow-document output still fail loudly when a caller mutates the list to
+insert invalid components.
+
+### Conclusion
+
+Proven for the stated constructor domain after tests and mutation pass.
 
 ## Current Slice Decision
 
