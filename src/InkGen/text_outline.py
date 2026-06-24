@@ -15,7 +15,10 @@ ADD_ONE_PIXEL_MARGIN_DEFAULT = False
 def set_add_one_pixel_margin_default(enabled: bool) -> None:
     """Set global default for adding a one-pixel margin around text outlines."""
     global ADD_ONE_PIXEL_MARGIN_DEFAULT
-    ADD_ONE_PIXEL_MARGIN_DEFAULT = bool(enabled)
+    if not isinstance(enabled, bool):
+        raise TypeError("enabled must be a boolean.")
+    ADD_ONE_PIXEL_MARGIN_DEFAULT = enabled
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -55,7 +58,7 @@ def sample_path_points(d: str, px_step: float = 0.5, *, units: str = "mm", dpi: 
     step = _px_to_units(px_step, units, dpi)
     path = parse_path(d)
     pts = []
-    for seg in path:                                  # <-- iterates ALL segments, all subpaths
+    for seg in path:  # <-- iterates ALL segments, all subpaths
         L = seg.length(error=1e-5)
         n = max(1, int(math.ceil(L / step)))
         for i in range(n + 1):
@@ -65,7 +68,9 @@ def sample_path_points(d: str, px_step: float = 0.5, *, units: str = "mm", dpi: 
     return pts
 
 
-def _shape_with_harfbuzz(font_bytes: bytes, text: str, features: dict[str, bool] | None = None) -> tuple[list[int], list[tuple[int, int]], int]:
+def _shape_with_harfbuzz(
+    font_bytes: bytes, text: str, features: dict[str, bool] | None = None
+) -> tuple[list[int], list[tuple[int, int]], int]:
     """Shape text with HarfBuzz and return glyph information.
 
     Args:
@@ -82,7 +87,7 @@ def _shape_with_harfbuzz(font_bytes: bytes, text: str, features: dict[str, bool]
     face = hb.Face(font_bytes)
     font = hb.Font(face)
     upem = face.upem  # units-per-em
-    font.scale = (upem, upem)          # positions in font units
+    font.scale = (upem, upem)  # positions in font units
     hb.ot_font_set_funcs(font)
 
     buf = hb.Buffer()
@@ -94,7 +99,7 @@ def _shape_with_harfbuzz(font_bytes: bytes, text: str, features: dict[str, bool]
     hb.shape(font, buf, features)
 
     infos = buf.glyph_infos
-    poss  = buf.glyph_positions
+    poss = buf.glyph_positions
 
     gids = [info.codepoint for info in infos]
     # cumulative pen position in font units; HarfBuzz gives deltas per glyph
@@ -116,7 +121,7 @@ def _glyphs_to_svg_path(
     upem: int,
     size_px: float,
     origin: tuple[float, float],
-    y_down: bool = True
+    y_down: bool = True,
 ) -> str:
     """Build a single SVG path `d` for all glyph outlines positioned & scaled.
 
@@ -175,6 +180,7 @@ def _sample_svg_path(d: str, step_px: float = 0.75) -> list[tuple[float, float]]
     # Close any subpath gaps: parse_path already keeps moveto boundaries; sampling covers ends.
     return pts
 
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Public API
 # ──────────────────────────────────────────────────────────────────────────────
@@ -187,7 +193,7 @@ def outline_for_text(
     x: float = 0.0,
     y: float = 0.0,
     dpi: float = 96.0,
-    units: str = "mm",              # <- pass your document units here
+    units: str = "mm",  # <- pass your document units here
     add_one_pixel_margin: bool | None = None,
     y_down: bool = True,
     features: dict[str, bool] | None = None,
@@ -279,11 +285,7 @@ def outline_for_text(
 
     xmin, ymin, xmax, ymax = hull_poly.bounds
     bbox_coords = [(xmin, ymin), (xmin, ymax), (xmax, ymax), (xmax, ymin)]
-    hull_coords = (
-        list(hull_poly.exterior.coords)
-        if hasattr(hull_poly, "exterior") and not hull_poly.is_empty
-        else []
-    )
+    hull_coords = list(hull_poly.exterior.coords) if hasattr(hull_poly, "exterior") and not hull_poly.is_empty else []
 
     return {
         "svg_path": d,

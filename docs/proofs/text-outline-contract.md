@@ -52,6 +52,9 @@ Before/after edge changes:
 - After this slice, condition tests pin path endpoints, zero-length segments,
   visible glyph output shape, margin expansion, global margin behavior, and
   whitespace fallback dimensions.
+- The strict-global-default hardening update makes
+  `set_add_one_pixel_margin_default()` reject non-boolean values instead of
+  applying Python truthiness.
 
 Cycle/layer/coupling/redundancy result:
 
@@ -79,6 +82,8 @@ ADR/rule impact:
 - A one-pixel margin expands the hull by one converted pixel in the requested
   units.
 - When `add_one_pixel_margin` is `None`, the global margin default is used.
+- The global margin default setter accepts only explicit `True` or `False` and
+  rejects truthy/falsy stand-ins without changing the prior flag value.
 - Whitespace or zero-outline text uses font metrics to produce a finite bbox and
   hull.
 
@@ -87,6 +92,9 @@ ADR/rule impact:
 - Fixed `_px_to_units()` to honor the documented `dpi` argument.
 - Added condition-marked tests for unit conversion, path sampling, visible
   outlines, margin behavior, global defaults, and whitespace fallback.
+- Added strict boolean validation to `set_add_one_pixel_margin_default()`.
+- Added a failure-mode test proving malformed global-default values raise and
+  preserve existing global state.
 - Added scoped mutation configuration and filter.
 
 ## Comprehensiveness Matrix
@@ -98,6 +106,7 @@ ADR/rule impact:
 | Visible glyph output | Return non-empty path, points, bbox, hull, and path bbox with finite values | PO-TOUTLINE-003 | `test_text_outline_returns_finite_geometry_for_visible_text` | killed |
 | Margin expansion | Expand bbox by one converted pixel in requested units | PO-TOUTLINE-004 | `test_text_outline_margin_expands_bounds_by_requested_unit_size` | killed |
 | Global margin default | `None` uses global default and explicit values override it | PO-TOUTLINE-005 | `test_text_outline_global_margin_default_matches_explicit_margin` | killed |
+| Global margin setter validation | Reject non-boolean values and preserve prior global state | PO-TOUTLINE-007 | `test_text_outline_global_margin_default_rejects_non_boolean_values` | killed |
 | Whitespace fallback | Use font metrics and requested DPI for whitespace bbox/hull | PO-TOUTLINE-006 | `test_text_outline_whitespace_uses_font_metric_fallback_and_dpi` | killed |
 
 ## Test Applicability Matrix
@@ -106,7 +115,7 @@ ADR/rule impact:
 |---|---|---|---|
 | Unit | yes | Unit conversion and path sampling are deterministic. | TEXT-OUTLINE-P1 tests |
 | Behavioral/condition | yes | The slice defines public outline behavior. | Tests are marked `@pytest.mark.condition("TEXT-OUTLINE-P1")`. |
-| Failure-mode | yes | Zero-length path segments and whitespace text must return safe geometry rather than fail. | Sampling and whitespace tests |
+| Failure-mode | yes | Zero-length path segments and whitespace text must return safe geometry rather than fail; malformed global-default values must fail without mutating state. | Sampling, whitespace, and global-default validation tests |
 | Integration/live-path | yes | Text fitter, text components, and SVG tests consume outline behavior. | Focused gate includes existing text fitter/text/SVG tests |
 | Contract/API compatibility | yes | Existing outline tests and downstream text tests must continue passing. | Focused gate evidence |
 | Property/fuzz | no | The proof partitions deterministic unit, sampling, visible-text, and whitespace cases directly. | Not applicable |
@@ -125,13 +134,16 @@ Proof-critical mutation targets:
 - Weakening path sampling endpoint/zero-segment behavior must fail sampling
   tests.
 - Weakening margin-default selection or margin size must fail margin tests.
+- Weakening global-default setter type validation must fail strict-boolean
+  tests.
 - Weakening whitespace font-metric width/height calculations must fail fallback
   tests.
 
 Current result:
 
-- Cosmic Ray 8.4.6, scoped to executable TEXT-OUTLINE-P1 rows: 19 work items,
-  19 killed, and 0 survived.
+- Cosmic Ray 8.4.6, scoped to executable TEXT-OUTLINE-P1 rows after the
+  strict-global-default hardening update: 19 work items, 19 killed, and 0
+  survived.
 
 ## PO-TOUTLINE-001: Pixel Conversion Is DPI-Aware
 
@@ -248,6 +260,33 @@ Whitespace text with a valid TrueType font.
 
 Focused tests verify empty path/samples, finite positive bbox/hull output, DPI
 scaling, and an expected width calculated from the font's space advance.
+
+### Conclusion
+
+Proven for the stated domain after tests and mutation pass.
+
+## PO-TOUTLINE-007: Global Margin Setter Is Strict Boolean
+
+### Claim
+
+`set_add_one_pixel_margin_default()` accepts only explicit boolean values and
+does not mutate global state when malformed values are supplied.
+
+### Domain
+
+Public calls to `set_add_one_pixel_margin_default(enabled)`.
+
+### Proof Method
+
+The setter checks `isinstance(enabled, bool)` before assignment. The focused
+test covers string, integer, `None`, and arbitrary-object inputs while the
+global default is both `False` and `True`, and asserts the previous state is
+preserved after each failure.
+
+### Counterexamples And Exclusions
+
+Hostile direct mutation of `text_outline.ADD_ONE_PIXEL_MARGIN_DEFAULT` is
+outside the setter contract.
 
 ### Conclusion
 

@@ -20,9 +20,9 @@ AND (
   OR (
     definition_name = 'outline_for_text'
     AND (
-      start_pos_row BETWEEN 209 AND 210
-      OR start_pos_row BETWEEN 251 AND 278
-      OR start_pos_row BETWEEN 280 AND 285
+      start_pos_row BETWEEN 215 AND 216
+      OR start_pos_row BETWEEN 254 AND 278
+      OR start_pos_row BETWEEN 282 AND 288
     )
   )
 )
@@ -37,12 +37,12 @@ AND (
 )
 AND NOT (
   definition_name = 'sample_path_points'
-  AND start_pos_row IN (43, 59)
+  AND start_pos_row IN (46, 62)
   AND operator_name = 'core/NumberReplacer'
 )
 AND NOT (
   definition_name = 'outline_for_text'
-  AND start_pos_row IN (260, 269, 278, 284)
+  AND start_pos_row IN (254, 255, 260, 266, 269, 275, 278, 284, 288)
 )
 """
 
