@@ -7,7 +7,7 @@ embedding renderer-specific classes in higher-level synthetic drawing builders.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
 from math import isfinite
@@ -416,18 +416,24 @@ class ZoningDrawing:
         """Recreate a zoning recipe from serialized parameters."""
         if styles is None:
             styles = {}
-        payload = data["ZoningDrawing"]
-        line_style_payload = payload["line_style"]
-        text_style_payload = payload["text_style"]
-        line_style_name = line_style_payload["DrawingStyle"]["name"]
-        text_style_name = text_style_payload["TextStyle"]["name"]
+        if not isinstance(styles, Mapping):
+            raise TypeError("styles must be a mapping or None")
+        payload = _zoning_payload(data)
+        line_style_payload = _zoning_required_mapping(payload, "line_style")
+        text_style_payload = _zoning_required_mapping(payload, "text_style")
+        line_style_name = _zoning_style_name(line_style_payload, "DrawingStyle", "line_style")
+        text_style_name = _zoning_style_name(text_style_payload, "TextStyle", "text_style")
         line_style = styles.get(line_style_name) or DrawingStyle.create_from_dict(line_style_payload)
         text_style = styles.get(text_style_name) or TextStyle.create_from_dict(text_style_payload)
+        if not isinstance(line_style, DrawingStyle):
+            raise TypeError(f"style override for {line_style_name!r} must be a DrawingStyle")
+        if not isinstance(text_style, TextStyle):
+            raise TypeError(f"style override for {text_style_name!r} must be a TextStyle")
         return cls(
-            Canvas.create_from_dict(payload["canvas"]),
+            Canvas.create_from_dict(_zoning_required_field(payload, "canvas")),
             line_style,
             text_style,
-            **payload["parameters"],
+            **_zoning_required_mapping(payload, "parameters"),
         )
 
     def _apply_parameters(self, kwargs: dict[str, object]) -> None:
@@ -607,6 +613,46 @@ class ZoningDrawing:
             x_pos = first_number_horizontal - offset * multiplier
             self._group.add_component(TextDrawing(character, (x_pos, top_number_vertical), self._text_style))
             self._group.add_component(TextDrawing(character, (x_pos, bottom_number_vertical), self._text_style))
+
+
+def _zoning_payload(data: object) -> Mapping[str, object]:
+    """Return the serialized zoning payload or fail explicitly."""
+    if not isinstance(data, Mapping):
+        raise TypeError("ZoningDrawing data must be a mapping")
+    if "ZoningDrawing" not in data:
+        raise ValueError("ZoningDrawing data must include ZoningDrawing")
+    payload = data["ZoningDrawing"]
+    if not isinstance(payload, Mapping):
+        raise TypeError("ZoningDrawing payload must be a mapping")
+    return payload
+
+
+def _zoning_required_field(payload: Mapping[str, object], name: str) -> object:
+    """Return a required serialized zoning field or fail explicitly."""
+    if name not in payload:
+        raise ValueError(f"ZoningDrawing payload must include {name}")
+    return payload[name]
+
+
+def _zoning_required_mapping(payload: Mapping[str, object], name: str) -> Mapping[str, object]:
+    """Return a required serialized zoning mapping field or fail explicitly."""
+    value = _zoning_required_field(payload, name)
+    if not isinstance(value, Mapping):
+        raise TypeError(f"ZoningDrawing {name} must be a mapping")
+    return value
+
+
+def _zoning_style_name(payload: Mapping[str, object], style_key: str, field_name: str) -> str:
+    """Return a serialized zoning style name or fail explicitly."""
+    if style_key not in payload:
+        raise ValueError(f"ZoningDrawing {field_name} must include {style_key}")
+    style_payload = payload[style_key]
+    if not isinstance(style_payload, Mapping):
+        raise TypeError(f"ZoningDrawing {field_name} entry must be a mapping")
+    style_name = style_payload.get("name")
+    if not isinstance(style_name, str):
+        raise TypeError(f"ZoningDrawing {field_name} name must be a string")
+    return style_name
 
 
 def _coerce_finite_non_negative_float(value: object, *, name: str) -> float:
