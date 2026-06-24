@@ -61,11 +61,15 @@ Before/after edge changes:
 - Before the drawing-label hardening update, drawing block hydration stringified
   malformed serialized group labels instead of preserving the neutral drawing
   group contract.
+- Before the block-envelope hardening update, malformed serialized block
+  envelopes could fail through incidental `KeyError` or downstream type errors.
 - After this slice, DOCX ZIP parts use a fixed timestamp and drawing
   materialization must return an InkGen `Component`.
 - After the drawing-label hardening update, drawing block hydration passes
   serialized labels unchanged into `DrawingComponentGroup`, where non-string
   labels fail at the renderer-neutral boundary.
+- After the block-envelope hardening update, block hydration first validates
+  that each block is a mapping with a string `type` and mapping `payload`.
 - No new dependency edge or third-party dependency was introduced.
 
 Cycle/layer/coupling/redundancy result:
@@ -116,6 +120,8 @@ ADR/rule impact:
   and non-`Component` materialization results.
 - `_drawing_from_parameters()` now delegates serialized drawing labels to
   `DrawingComponentGroup` without stringifying malformed values.
+- `_block_from_parameters()` now validates serialized block envelopes before
+  dispatching to paragraph, table, or drawing hydration.
 
 ## Comprehensiveness Matrix
 
@@ -124,6 +130,7 @@ ADR/rule impact:
 | Repeated DOCX generation | Preserve exact bytes and fixed part order/timestamps | PO-FDOC-001 | `test_flow_document_docx_bytes_are_deterministic` | killed |
 | Text with XML/HTML/RTF controls | Escape per target format | PO-FDOC-002 | `test_flow_document_escapes_text_across_output_formats` | behavioral evidence |
 | Paragraph/table/drawing block order | Preserve through parameters and output | PO-FDOC-003 | `test_flow_document_preserves_mixed_block_order_after_round_trip` | behavioral evidence |
+| Serialized block envelope and dispatch | Reject malformed envelopes and dispatch valid dynamic type strings by value | PO-FDOC-007 | `test_flow_document_hydration_rejects_malformed_block_envelopes`, `test_flow_document_hydration_dispatches_dynamic_block_type_strings` | killed |
 | Malformed serialized drawing label | Reject through the neutral group label contract | PO-FDOC-006 | `test_flow_document_drawing_group_hydration_rejects_malformed_label` | behavioral evidence |
 | Invalid drawing materialization | Reject before silent omission | PO-FDOC-004 | `test_flow_document_rejects_invalid_drawing_materialization` | killed |
 | DOCX VML linework | Emit group-relative points | PO-FDOC-005 | `test_flow_document_docx_drawing_polyline_uses_group_relative_points` | killed |
@@ -136,7 +143,7 @@ ADR/rule impact:
 |---|---|---|---|
 | Unit | yes | Helpers are deterministic. | FLOW-DOCUMENT-P1 tests |
 | Behavioral/condition | yes | The slice defines document-output behavior. | Tests are marked `@pytest.mark.condition("FLOW-DOCUMENT-P1")`. |
-| Failure-mode | yes | Invalid content, malformed serialized drawing labels, and invalid output paths must fail loudly. | Invalid hydration, invalid materialization, and existing writer tests |
+| Failure-mode | yes | Invalid content, malformed serialized block envelopes, malformed serialized drawing labels, and invalid output paths must fail loudly. | Invalid hydration, invalid materialization, and existing writer tests |
 | Integration/live-path | yes | DOCX ZIP, HTML, RTF, text, table, and drawing paths cross module boundaries. | Focused and existing document-output tests |
 | Contract/API compatibility | yes | Parameters and public add methods must preserve existing behavior. | Round-trip and existing rejection tests |
 | Property/fuzz | no | This slice proves finite output and dispatch contracts. | Not applicable |
@@ -158,12 +165,17 @@ Proof-critical mutation targets:
 - Changing DOCX VML group-relative points should fail exact polyline tests.
 - Reintroducing drawing-label stringification should fail the serialized drawing
   label hydration test.
+- Weakening serialized block envelope validation or dispatch should fail the
+  malformed-envelope test.
 
 Current result:
 
 - Cosmic Ray 8.4.6, scoped to changed DOCX package assembly, drawing
   materialization guards, and VML point rows: 34 work items, 34 killed, and 0
   survived.
+- Cosmic Ray 8.4.6, scoped to serialized block-envelope validation and
+  dispatch rows after the block-envelope hardening update: 32 work items, 32
+  killed, and 0 survived.
 
 ## PO-FDOC-001: DOCX Bytes Are Deterministic
 
@@ -294,6 +306,37 @@ supplies a malformed serialized label and asserts the neutral group label error.
 ### Conclusion
 
 Proven for the stated domain after tests.
+
+## PO-FDOC-007: Serialized Block Envelopes Are Validated
+
+### Claim
+
+`FlowDocument.create_from_dict()` rejects malformed serialized block envelopes
+at the flow-document boundary instead of relying on incidental downstream
+errors.
+
+### Domain
+
+Each item in the serialized `FlowDocument.blocks` sequence.
+
+### Proof Method
+
+`_block_from_parameters()` first requires each block to be a mapping, then
+requires both `type` and `payload`, a string `type`, and a mapping `payload`.
+Only after those checks does it dispatch to paragraph, table, or drawing
+hydration by string value. Focused tests cover a non-mapping block, missing
+discriminator or payload, non-string discriminator, non-mapping payload,
+unsupported string discriminators, and valid dynamically constructed block type
+strings for all three supported block kinds.
+
+### Counterexamples And Exclusions
+
+Malformed payloads inside valid paragraph, table, or drawing envelopes are
+delegated to the owning paragraph, table, or drawing contract.
+
+### Conclusion
+
+Proven for the stated domain after tests and mutation pass.
 
 ## Current Slice Decision
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import zipfile
+from collections.abc import Mapping
 from enum import Enum
 from html import escape as html_escape
 from io import BytesIO
@@ -379,9 +380,18 @@ def _block_parameters(block: Paragraph | Table | DrawingComponentGroup) -> dict[
     return {"type": "drawing", "payload": _drawing_parameters(block)}
 
 
-def _block_from_parameters(data: dict[str, object], styles: dict[str, object] | None) -> Paragraph | Table | DrawingComponentGroup:
+def _block_from_parameters(data: object, styles: dict[str, object] | None) -> Paragraph | Table | DrawingComponentGroup:
+    if not isinstance(data, Mapping):
+        raise TypeError("flow document block must be a mapping")
+    if "type" not in data or "payload" not in data:
+        raise ValueError("flow document block must include type and payload")
     block_type = data["type"]
     payload = data["payload"]
+    if not isinstance(block_type, str):
+        raise TypeError("flow document block type must be a string")
+    if not isinstance(payload, Mapping):
+        raise TypeError("flow document block payload must be a mapping")
+    payload = dict(payload)
     if block_type == "paragraph":
         return Paragraph.create_from_dict(payload, styles)
     if block_type == "table":

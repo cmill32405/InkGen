@@ -164,6 +164,70 @@ def test_flow_document_preserves_mixed_block_order_after_round_trip() -> None:
     assert clone.to_plain_text() == "Intro\n\nPN\tQty\n\n[Drawing: flow-drawing; RectangleDrawing]"
 
 
+@pytest.mark.condition("FLOW-DOCUMENT-P1")
+@pytest.mark.parametrize(
+    ("block_payload", "exception_type", "message"),
+    [
+        (object(), TypeError, "flow document block must be a mapping"),
+        ({"payload": {}}, ValueError, "flow document block must include type and payload"),
+        ({"type": "paragraph"}, ValueError, "flow document block must include type and payload"),
+        ({"type": 123, "payload": {}}, TypeError, "flow document block type must be a string"),
+        ({"type": "paragraph", "payload": object()}, TypeError, "flow document block payload must be a mapping"),
+        ({"type": "arc", "payload": {}}, ValueError, "Unsupported flow document block type"),
+        ({"type": "unsupported", "payload": {}}, ValueError, "Unsupported flow document block type"),
+    ],
+)
+def test_flow_document_hydration_rejects_malformed_block_envelopes(
+    block_payload: object,
+    exception_type: type[Exception],
+    message: str,
+) -> None:
+    """FLOW-DOCUMENT-P1: Serialized block envelopes fail at the document boundary."""
+    payload = {
+        "FlowDocument": {
+            "title": "Malformed Blocks",
+            "blocks": [block_payload],
+        }
+    }
+
+    with pytest.raises(exception_type, match=message):
+        FlowDocument.create_from_dict(payload)
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-P1")
+def test_flow_document_hydration_dispatches_dynamic_block_type_strings() -> None:
+    """FLOW-DOCUMENT-P1: Block dispatch uses string equality, not object identity."""
+    document = FlowDocument(title="Dynamic Dispatch")
+    paragraph = _paragraph("Intro")
+    table = _table()
+    drawing = _drawing_group()
+    document.add_paragraph(paragraph)
+    document.add_table(table)
+    document.add_drawing_group(drawing)
+
+    payload = document.parameters
+    flow_payload = payload["FlowDocument"]
+    assert isinstance(flow_payload, dict)
+    blocks = flow_payload["blocks"]
+    assert isinstance(blocks, list)
+    for block in blocks:
+        assert isinstance(block, dict)
+        block_type = block["type"]
+        assert isinstance(block_type, str)
+        block["type"] = "".join([block_type[:-1], block_type[-1:]])
+
+    clone = FlowDocument.create_from_dict(
+        payload,
+        {
+            paragraph.style.name: paragraph.style,
+            drawing.components[0].style.name: drawing.components[0].style,
+        },
+    )
+
+    assert [block.__class__.__name__ for block in clone.blocks] == ["Paragraph", "Table", "DrawingComponentGroup"]
+    assert clone.to_plain_text() == "Intro\n\nPN\tQty\n\n[Drawing: flow-drawing; RectangleDrawing]"
+
+
 @pytest.mark.condition("DRAWING-GROUP-P1")
 def test_flow_document_drawing_group_hydration_rejects_malformed_label() -> None:
     """DRAWING-GROUP-P1: Flow-document hydration cannot stringify drawing labels."""
