@@ -24,6 +24,7 @@ nav:
       - Extraction Truth Contract: proofs/extraction-truth-contract.md
       - Boundary Canvas Contract: proofs/boundary-canvas-contract.md
       - Drawing Style Contract: proofs/drawing-style-contract.md
+      - Style Factory Payload Contract: proofs/style-factory-payload-contract.md
       - Font Contract: proofs/font-contract.md
       - Text Style Contract: proofs/text-style-contract.md
       - Document Model Contract: proofs/document-model-contract.md

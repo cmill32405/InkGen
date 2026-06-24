@@ -7,9 +7,29 @@ import itertools
 import os
 import platform
 import subprocess
+from collections.abc import Mapping
 from math import isfinite
 
 from matplotlib import font_manager
+
+
+def _style_payload(data: object, key: str) -> Mapping[str, object]:
+    """Return the serialized style payload for a class key or fail explicitly."""
+    if not isinstance(data, Mapping):
+        raise TypeError(f"{key} data must be a mapping.")
+    if key not in data:
+        raise ValueError(f"{key} data must include {key}.")
+    payload = data[key]
+    if not isinstance(payload, Mapping):
+        raise TypeError(f"{key} payload must be a mapping.")
+    return payload
+
+
+def _style_required_field(payload: Mapping[str, object], field: str, owner: str) -> object:
+    """Return a required serialized style field or fail explicitly."""
+    if field not in payload:
+        raise ValueError(f"{owner} payload must include {field}.")
+    return payload[field]
 
 
 def _coerce_finite_float(value: float | int, name: str) -> float:
@@ -167,7 +187,7 @@ class Style:
         return self._id
 
     @classmethod
-    def create_from_dict(cls, data: dict) -> Style:
+    def create_from_dict(cls, data: object) -> Style:
         """ Class method to recreate the object from its serialization dict.
 
         Args:
@@ -176,7 +196,8 @@ class Style:
         Returns:
             Style: instance of the class.
         """
-        style = cls(name=data['Style']['name'])
+        payload = _style_payload(data, "Style")
+        style = cls(name=_style_required_field(payload, "name", "Style"))
 
         return style
 
@@ -248,7 +269,7 @@ class DrawingStyle(Style):
         super().__init__(name=name)
 
     @classmethod
-    def create_from_dict(cls, data: dict) -> DrawingStyle:
+    def create_from_dict(cls, data: object) -> DrawingStyle:
         """ Class method to recreate the object from its serialization dict.
 
         Args:
@@ -257,12 +278,13 @@ class DrawingStyle(Style):
         Returns:
             DrawingStyle: instance of the class.
         """
-        style = cls(name=data['DrawingStyle']['name'],
-                    stroke=data['DrawingStyle']['stroke'],
-                    stroke_width=data['DrawingStyle']['stroke_width'],
-                    fill=data['DrawingStyle']['fill'],
-                    stroke_opacity=data['DrawingStyle']['stroke_opacity'],
-                    fill_opacity=data['DrawingStyle']['fill_opacity'])
+        payload = _style_payload(data, "DrawingStyle")
+        style = cls(name=_style_required_field(payload, "name", "DrawingStyle"),
+                    stroke=_style_required_field(payload, "stroke", "DrawingStyle"),
+                    stroke_width=_style_required_field(payload, "stroke_width", "DrawingStyle"),
+                    fill=_style_required_field(payload, "fill", "DrawingStyle"),
+                    stroke_opacity=_style_required_field(payload, "stroke_opacity", "DrawingStyle"),
+                    fill_opacity=_style_required_field(payload, "fill_opacity", "DrawingStyle"))
 
         return style
 
@@ -489,7 +511,7 @@ class Font:
         self.size = size
 
     @classmethod
-    def create_from_dict(cls, data: dict) -> Font:
+    def create_from_dict(cls, data: object) -> Font:
         """ Class method to recreate the object from its serialization dict.
 
         Args:
@@ -498,13 +520,14 @@ class Font:
         Returns:
             Font: instance of the class.
         """
-        font = Font(family=data['Font']['family'],
-                    style=data['Font']['style'],
-                    variant=data['Font']['variant'],
-                    stretch=data['Font']['stretch'],
-                    weight=data['Font']['weight'],
-                    size=data['Font']['size'],
-                    custom_font_paths=data['Font']['custom_font_paths'])
+        payload = _style_payload(data, "Font")
+        font = Font(family=_style_required_field(payload, "family", "Font"),
+                    style=_style_required_field(payload, "style", "Font"),
+                    variant=_style_required_field(payload, "variant", "Font"),
+                    stretch=_style_required_field(payload, "stretch", "Font"),
+                    weight=_style_required_field(payload, "weight", "Font"),
+                    size=_style_required_field(payload, "size", "Font"),
+                    custom_font_paths=_style_required_field(payload, "custom_font_paths", "Font"))
         return font
 
     @property
@@ -807,7 +830,7 @@ class TextStyle(Style):
         self.line_spacing = 1.0
 
     @classmethod
-    def create_from_dict(cls, data: dict) -> TextStyle:
+    def create_from_dict(cls, data: object) -> TextStyle:
         """ Class method to recreate the object from its serialization dict.
 
         Args:
@@ -816,13 +839,14 @@ class TextStyle(Style):
         Returns:
             TextStyle: instance of the class.
         """
-        font = Font.create_from_dict(data['TextStyle']['font'])
-        style = cls(name=data['TextStyle']['name'], font=font)
-        style.color = data['TextStyle']['color']
-        style.superscript = data['TextStyle']['superscript']
-        style.subscript = data['TextStyle']['subscript']
-        style.text_align = data['TextStyle']['text_align']
-        style.line_spacing = data['TextStyle']['line_spacing']
+        payload = _style_payload(data, "TextStyle")
+        font = Font.create_from_dict(_style_required_field(payload, "font", "TextStyle"))
+        style = cls(name=_style_required_field(payload, "name", "TextStyle"), font=font)
+        style.color = _style_required_field(payload, "color", "TextStyle")
+        style.superscript = _style_required_field(payload, "superscript", "TextStyle")
+        style.subscript = _style_required_field(payload, "subscript", "TextStyle")
+        style.text_align = _style_required_field(payload, "text_align", "TextStyle")
+        style.line_spacing = _style_required_field(payload, "line_spacing", "TextStyle")
 
         return style
 

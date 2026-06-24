@@ -1,0 +1,25 @@
+[cosmic-ray]
+module-path = [
+  "src/InkGen/style.py",
+]
+timeout = 120.0
+excluded-modules = []
+test-command = "python -m pytest -x tests/test_style_factory_payload_contract.py tests/test_style.py tests/test_drawing_style_contract.py tests/test_font_contract.py tests/test_text_style_contract.py tests/test_component_factory_payload_contract.py tests/test_component.py"
+
+[cosmic-ray.distributor]
+name = "local"
+
+[cosmic-ray.filters.operators-filter]
+exclude-operators = [
+  "core/ReplaceBinaryOperator_BitOr_Add",
+  "core/ReplaceBinaryOperator_BitOr_BitAnd",
+  "core/ReplaceBinaryOperator_BitOr_BitXor",
+  "core/ReplaceBinaryOperator_BitOr_Div",
+  "core/ReplaceBinaryOperator_BitOr_FloorDiv",
+  "core/ReplaceBinaryOperator_BitOr_LShift",
+  "core/ReplaceBinaryOperator_BitOr_Mod",
+  "core/ReplaceBinaryOperator_BitOr_Mul",
+  "core/ReplaceBinaryOperator_BitOr_Pow",
+  "core/ReplaceBinaryOperator_BitOr_RShift",
+  "core/ReplaceBinaryOperator_BitOr_Sub",
+]
