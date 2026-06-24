@@ -20,6 +20,23 @@ PRECISION = 3
 DEFAULT_CURVE_SAMPLES = 32
 
 
+def _component_payload(data: object, key: str) -> Mapping[str, object]:
+    if not isinstance(data, Mapping):
+        raise TypeError(f"{key} data must be a mapping")
+    if key not in data:
+        raise ValueError(f"{key} data must include {key}")
+    payload = data[key]
+    if not isinstance(payload, Mapping):
+        raise TypeError(f"{key} payload must be a mapping")
+    return payload
+
+
+def _component_required_field(payload: Mapping[str, object], name: str, owner: str) -> object:
+    if name not in payload:
+        raise ValueError(f"{owner} payload must include {name}")
+    return payload[name]
+
+
 def normalize_rectangle_corner_radii(
         corner_radii: float | int | tuple[float, float] | list[float],
         width: float | int,
@@ -64,7 +81,7 @@ class Component:
         self._component_type = self.__class__.__name__
 
     @classmethod
-    def create_from_dict(cls, data: dict) -> object:
+    def create_from_dict(cls, data: object) -> object:
         """ Class method to recreate the object from its serialization dict.
 
         Args:
@@ -73,7 +90,7 @@ class Component:
         Returns:
             object: instance of the class.
         """
-        _ = data
+        _component_payload(data, "Component")
         component = cls()
         return component
 
@@ -133,7 +150,7 @@ class DrawingComponent(Component):
         super().__init__()
 
     @classmethod
-    def create_from_dict(cls, data: dict, style: DrawingStyle = None) -> object:
+    def create_from_dict(cls, data: object, style: DrawingStyle = None) -> object:
         """ Class method to recreate the object from its serialization dict.
 
         Args:
@@ -142,8 +159,9 @@ class DrawingComponent(Component):
         Returns:
             object: instance of the class.
         """
+        payload = _component_payload(data, "DrawingComponent")
         if not style:
-            style = DrawingStyle.create_from_dict(data['DrawingComponent']['style'])
+            style = DrawingStyle.create_from_dict(_component_required_field(payload, "style", "DrawingComponent"))
         component = cls(style)
         return component
 
@@ -218,7 +236,7 @@ class StandardDrawingComponent(DrawingComponent):
         self._p2 = p2
 
     @classmethod
-    def create_from_dict(cls, data: dict, style: DrawingStyle=None) -> object:
+    def create_from_dict(cls, data: object, style: DrawingStyle=None) -> object:
         """ Class method to recreate the object from its serialization dict.
 
         Args:
@@ -227,10 +245,11 @@ class StandardDrawingComponent(DrawingComponent):
         Returns:
             object: instance of the class.
         """
+        payload = _component_payload(data, "StandardDrawingComponent")
         if not style:
-            style = DrawingStyle.create_from_dict(data['StandardDrawingComponent']['style'])
-        component = cls(data['StandardDrawingComponent']['point_1'],
-                        data['StandardDrawingComponent']['point_2'],
+            style = DrawingStyle.create_from_dict(_component_required_field(payload, "style", "StandardDrawingComponent"))
+        component = cls(_component_required_field(payload, "point_1", "StandardDrawingComponent"),
+                        _component_required_field(payload, "point_2", "StandardDrawingComponent"),
                         style)
         return component
 
@@ -412,7 +431,7 @@ class SingleDimensionDrawingComponent(StandardDrawingComponent):
         super().__init__(point_1 = position, point_2 = point_2, style=style)
 
     @classmethod
-    def create_from_dict(cls, data: dict, style: DrawingStyle=None) -> object:
+    def create_from_dict(cls, data: object, style: DrawingStyle=None) -> object:
         """ Class method to recreate the object from its serialization dict.
 
         Args:
@@ -421,10 +440,11 @@ class SingleDimensionDrawingComponent(StandardDrawingComponent):
         Returns:
             object: instance of the class.
         """
+        payload = _component_payload(data, "SingleDimensionDrawingComponent")
         if not style:
-            style = DrawingStyle.create_from_dict(data['SingleDimensionDrawingComponent']['style'])
-        component = cls(data['SingleDimensionDrawingComponent']['position'],
-                        data['SingleDimensionDrawingComponent']['size'],
+            style = DrawingStyle.create_from_dict(_component_required_field(payload, "style", "SingleDimensionDrawingComponent"))
+        component = cls(_component_required_field(payload, "position", "SingleDimensionDrawingComponent"),
+                        _component_required_field(payload, "size", "SingleDimensionDrawingComponent"),
                         style)
         return component
 
@@ -554,7 +574,7 @@ class WidthHeightDrawingComponent(StandardDrawingComponent):
         return numeric
 
     @classmethod
-    def create_from_dict(cls, data: dict, style: DrawingStyle=None) -> object:
+    def create_from_dict(cls, data: object, style: DrawingStyle=None) -> object:
         """ Class method to recreate the object from its serialization dict.
 
         Args:
@@ -563,11 +583,12 @@ class WidthHeightDrawingComponent(StandardDrawingComponent):
         Returns:
             object: instance of the class.
         """
+        payload = _component_payload(data, "WidthHeightDrawingComponent")
         if not style:
-            style = DrawingStyle.create_from_dict(data['WidthHeightDrawingComponent']['style'])
-        component = cls(data['WidthHeightDrawingComponent']['position'],
-                        data['WidthHeightDrawingComponent']['width'],
-                        data['WidthHeightDrawingComponent']['height'],
+            style = DrawingStyle.create_from_dict(_component_required_field(payload, "style", "WidthHeightDrawingComponent"))
+        component = cls(_component_required_field(payload, "position", "WidthHeightDrawingComponent"),
+                        _component_required_field(payload, "width", "WidthHeightDrawingComponent"),
+                        _component_required_field(payload, "height", "WidthHeightDrawingComponent"),
                         style)
         return component
 
@@ -1814,7 +1835,7 @@ class TextComponent(Component):
         super().__init__()
 
     @classmethod
-    def create_from_dict(cls, data: dict, style: TextStyle=None) -> object:
+    def create_from_dict(cls, data: object, style: TextStyle=None) -> object:
         """ Class method to recreate the object from its serialization dict.
 
         Args:
@@ -1823,10 +1844,11 @@ class TextComponent(Component):
         Returns:
             object: instance of the class.
         """
+        payload = _component_payload(data, "TextComponent")
         if not style:
-            style = TextStyle.create_from_dict(data['TextComponent']['style'])
-        component = cls(data['TextComponent']['text'],
-                        data['TextComponent']['position'],
+            style = TextStyle.create_from_dict(_component_required_field(payload, "style", "TextComponent"))
+        component = cls(_component_required_field(payload, "text", "TextComponent"),
+                        _component_required_field(payload, "position", "TextComponent"),
                         style)
         return component
 
