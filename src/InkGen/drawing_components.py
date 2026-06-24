@@ -35,8 +35,10 @@ def normalize_output_format(output_format: OutputFormat | str) -> OutputFormat:
     """Normalize a backend selector and fail loudly for unsupported formats."""
     if isinstance(output_format, OutputFormat):
         return output_format
+    if not isinstance(output_format, str):
+        raise TypeError("output_format must be an OutputFormat or string")
     try:
-        return OutputFormat(str(output_format).lower())
+        return OutputFormat(output_format.lower())
     except ValueError as exc:
         raise ValueError(f"Unsupported output format: {output_format!r}") from exc
 

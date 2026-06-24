@@ -6,7 +6,7 @@ from uuid import uuid4
 
 import pytest
 
-from InkGen.drawing_components import DrawingComponentGroup, OutputFormat, RectangleDrawing
+from InkGen.drawing_components import DrawingComponentGroup, OutputFormat, RectangleDrawing, normalize_output_format
 from InkGen.grammar_truth import annotate_grammar_truth, get_grammar_truth_annotations
 from InkGen.pdf_generator import ComponentGroupPDF
 from InkGen.style import DrawingStyle
@@ -20,6 +20,23 @@ class _AttributeOnlyPrimitive:
 class _InvalidMaterializationPrimitive:
     def to_component(self, output_format: OutputFormat | str) -> object:
         """Return a deliberately invalid concrete materialization."""
+        return object()
+
+
+class _StringifiesToSvg:
+    def __str__(self) -> str:
+        """Return a supported format name despite not being a string."""
+        return "svg"
+
+
+class _RecordingPrimitive:
+    def __init__(self) -> None:
+        """Create a primitive that records materialization attempts."""
+        self.calls: list[object] = []
+
+    def to_component(self, output_format: OutputFormat | str) -> object:
+        """Record materialization and return an invalid object."""
+        self.calls.append(output_format)
         return object()
 
 
@@ -84,3 +101,23 @@ def test_drawing_group_rejects_unsupported_formats_before_materializing(drawing_
 
     with pytest.raises(ValueError, match="Unsupported output format"):
         group.to_group("dxf")
+
+
+@pytest.mark.condition("DRAWING-FORMAT-P2")
+def test_normalize_output_format_rejects_stringifiable_objects() -> None:
+    """DRAWING-FORMAT-P2: Backend selectors must be strings or OutputFormat values."""
+    with pytest.raises(TypeError, match="OutputFormat or string"):
+        normalize_output_format(_StringifiesToSvg())  # type: ignore[arg-type]
+
+
+@pytest.mark.condition("DRAWING-FORMAT-P2")
+def test_drawing_group_rejects_non_string_format_before_materializing() -> None:
+    """DRAWING-FORMAT-P2: Invalid backend selector types fail before materialization."""
+    group = DrawingComponentGroup("bad_format_type")
+    primitive = _RecordingPrimitive()
+    group.add_component(primitive)  # type: ignore[arg-type]
+
+    with pytest.raises(TypeError, match="OutputFormat or string"):
+        group.to_group(_StringifiesToSvg())  # type: ignore[arg-type]
+
+    assert primitive.calls == []

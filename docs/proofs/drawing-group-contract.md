@@ -2,7 +2,8 @@
 
 This note applies the InkGen Definition of Done to the DRAWING-GROUP-P1
 renderer-neutral drawing group slice. It focuses on the boundary where neutral
-drawing recipes become concrete SVG or PDF component groups.
+drawing recipes become concrete SVG or PDF component groups and where backend
+selectors are normalized.
 
 ## Scope
 
@@ -56,12 +57,19 @@ Before/after edge changes:
 - Before the label-contract hardening update, `DrawingComponentGroup` could be
   constructed with non-string labels, and flow-document drawing hydration
   stringified malformed serialized labels.
+- Before the format-selector hardening update, `normalize_output_format()`
+  stringified arbitrary objects, so an object whose `__str__()` returned
+  `"svg"` or `"pdf"` could cross a boundary documented as accepting only
+  strings or `OutputFormat` enum values.
 - After this slice, neutral components must expose a callable
   `to_component(output_format)` and concrete materialization must return an
   InkGen `Component`.
 - After the label-contract hardening update, neutral drawing groups reject
   non-string labels at construction, and flow-document hydration delegates to
   that same boundary instead of repairing malformed labels.
+- After the format-selector hardening update, backend selectors must be
+  `OutputFormat` members or real strings before unsupported-value normalization
+  can run.
 - No dependency direction changed and no third-party dependency was introduced.
 
 Cycle/layer/coupling/redundancy result:
@@ -102,6 +110,8 @@ ADR/rule impact:
 - A valid concrete materialization returns an InkGen `Component`.
 - Supported group output formats are `svg` and `pdf`, represented by strings or
   `OutputFormat` enum values.
+- Non-string objects are not backend selectors, even if their string
+  representation matches a supported format.
 - Unsupported formats fail before component materialization.
 
 ## Fix Log
@@ -113,6 +123,8 @@ ADR/rule impact:
 - `DrawingComponentGroup.__post_init__()` now rejects non-string labels.
 - Flow-document drawing hydration no longer stringifies serialized group
   labels, so invalid labels fail at the neutral group boundary.
+- `normalize_output_format()` now rejects non-string, non-`OutputFormat`
+  selectors instead of stringifying arbitrary objects.
 
 ## Comprehensiveness Matrix
 
@@ -125,6 +137,7 @@ ADR/rule impact:
 | Attribute-only invalid primitive | Reject at add boundary | PO-DGROUP-002 | `test_drawing_group_rejects_invalid_recipe_boundaries` | killed |
 | Primitive returning non-component | Reject at materialization boundary | PO-DGROUP-002 | same | killed |
 | Unsupported output format | Reject before materialization | PO-DGROUP-003 | `test_drawing_group_rejects_unsupported_formats_before_materializing` | killed/equivalent |
+| Stringifiable non-string output selector | Reject before materialization | PO-DGROUP-006 | `test_normalize_output_format_rejects_stringifiable_objects`, `test_drawing_group_rejects_non_string_format_before_materializing` | killed |
 | Zoning pass-through | Delegate to neutral group and preserve existing geometry | PO-DGROUP-004 | `test_neutral_zoning_*` tests | killed/equivalent |
 | Arbitrary custom PDF renderer components | Excluded by ADR-0002 | Explicit exclusion | PDF renderer tests | Out of scope |
 
@@ -134,7 +147,7 @@ ADR/rule impact:
 |---|---|---|---|
 | Unit | yes | Group boundary validation is deterministic. | DRAWING-GROUP-P1 tests |
 | Behavioral/condition | yes | The slice defines a renderer-neutral group contract. | Tests are marked `@pytest.mark.condition("DRAWING-GROUP-P1")`. |
-| Failure-mode | yes | Invalid labels, invalid primitives, and unsupported formats must fail loudly. | Invalid-boundary and hydration tests |
+| Failure-mode | yes | Invalid labels, invalid primitives, unsupported formats, and wrong-type backend selectors must fail loudly. | Invalid-boundary, hydration, and format-selector tests |
 | Integration/live-path | yes | Group materialization crosses into SVG/PDF group classes, grammar truth, and flow-document hydration. | Materialization, flow-document, and existing zoning tests |
 | Contract/API compatibility | yes | Existing zoning and primitive materialization behavior must remain compatible. | Existing `PDF-P3` tests |
 | Property/fuzz | no | The slice is finite dispatch and type-boundary behavior. | Not applicable |
@@ -150,6 +163,8 @@ ADR/rule impact:
 Proof-critical mutation targets:
 
 - Weakening output-format normalization should fail unsupported-format tests.
+- Weakening output-format type validation should fail stringifiable-object tests
+  and prove group materialization does not start.
 - Weakening group-label validation should fail invalid-label and flow-document
   hydration tests.
 - Weakening callable validation should fail invalid-add tests.
@@ -173,6 +188,8 @@ Current result:
     the reachable outcomes.
   - The label-validation guard mutants in `DrawingComponentGroup.__post_init__()`
     were killed.
+- Cosmic Ray 8.4.6, scoped to format-selector type validation after the
+  format-selector hardening update: 3 work items, 3 killed, and 0 survived.
 
 ## PO-DGROUP-001: Valid Groups Materialize To Concrete Groups
 
@@ -237,6 +254,35 @@ component iteration. Invalid values fail in enum normalization.
 ### Conclusion
 
 Proven for the stated domain after tests and mutation pass.
+
+## PO-DGROUP-006: Output Selectors Do Not Use Arbitrary Stringification
+
+### Claim
+
+For every public backend selector passed to `normalize_output_format()` or
+`DrawingComponentGroup.to_group()`, only `OutputFormat` members and real strings
+can enter supported-format normalization; arbitrary objects are rejected before
+component materialization, even when their `__str__()` value is `"svg"` or
+`"pdf"`.
+
+### Domain
+
+All public selector values supplied to neutral primitive `to_component()` paths
+and group `to_group()` paths.
+
+### Proof Method
+
+`normalize_output_format()` returns enum values directly, rejects non-strings
+with `TypeError`, and only then lowercases and validates real strings through
+the `OutputFormat` enum. Focused tests cover direct helper rejection and the
+dependent group live path with a recording primitive that proves
+materialization was not attempted. The DRAWING-FORMAT-P2 mutation gate mutates
+the proof-critical rows and all 3 retained mutants are killed.
+
+### Conclusion
+
+Proven for the stated selector domain. Subclasses of `str` remain inside the
+accepted string domain.
 
 ## PO-DGROUP-004: Zoning Uses The Neutral Group Contract
 
