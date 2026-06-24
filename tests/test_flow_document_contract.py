@@ -319,6 +319,39 @@ def test_flow_document_drawing_group_hydration_rejects_malformed_label() -> None
 
 @pytest.mark.condition("FLOW-DOCUMENT-P1")
 @pytest.mark.parametrize(
+    ("drawing_payload", "exception_type", "message"),
+    [
+        ({"components": []}, ValueError, "flow document drawing payload must include group_label and components"),
+        ({"group_label": "drawing"}, ValueError, "flow document drawing payload must include group_label and components"),
+        ({"group_label": "drawing", "components": "not-components"}, TypeError, "flow document drawing components must be a sequence"),
+        ({"group_label": "drawing", "components": b"not-components"}, TypeError, "flow document drawing components must be a sequence"),
+        ({"group_label": "drawing", "components": object()}, TypeError, "flow document drawing components must be a sequence"),
+    ],
+)
+def test_flow_document_hydration_rejects_malformed_drawing_payloads(
+    drawing_payload: object,
+    exception_type: type[Exception],
+    message: str,
+) -> None:
+    """FLOW-DOCUMENT-P1: Drawing block payloads fail before component iteration."""
+    payload = {
+        "FlowDocument": {
+            "title": "Malformed Drawing",
+            "blocks": [
+                {
+                    "type": "drawing",
+                    "payload": drawing_payload,
+                }
+            ],
+        }
+    }
+
+    with pytest.raises(exception_type, match=message):
+        FlowDocument.create_from_dict(payload)
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-P1")
+@pytest.mark.parametrize(
     ("component_payload", "exception_type", "message"),
     [
         (object(), TypeError, "flow document drawing component must be a mapping"),

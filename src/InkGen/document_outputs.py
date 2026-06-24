@@ -527,9 +527,16 @@ def _drawing_parameters(group: DrawingComponentGroup) -> dict[str, object]:
     }
 
 
-def _drawing_from_parameters(data: dict[str, object], styles: dict[str, object] | None) -> DrawingComponentGroup:
+def _drawing_from_parameters(data: object, styles: dict[str, object] | None) -> DrawingComponentGroup:
+    if not isinstance(data, Mapping):
+        raise TypeError("flow document drawing payload must be a mapping")
+    if "group_label" not in data or "components" not in data:
+        raise ValueError("flow document drawing payload must include group_label and components")
+    components = data["components"]
+    if isinstance(components, (str, bytes)) or not isinstance(components, Sequence):
+        raise TypeError("flow document drawing components must be a sequence")
     group = DrawingComponentGroup(data["group_label"])
-    for component_data in data.get("components", []):
+    for component_data in components:
         group.add_component(_drawing_component_from_parameters(component_data, styles))
     return group
 

@@ -70,6 +70,9 @@ Before/after edge changes:
   drawing component envelopes could fail through incidental lookup errors, and
   unsupported component types could fail through style extraction before the
   intended unsupported-type check.
+- Before the drawing-payload hardening update, malformed serialized drawing
+  payloads could fail through incidental `KeyError` or character-by-character
+  component iteration.
 - After this slice, DOCX ZIP parts use a fixed timestamp and drawing
   materialization must return an InkGen `Component`.
 - After the drawing-label hardening update, drawing block hydration passes
@@ -83,6 +86,9 @@ Before/after edge changes:
   hydration validates component envelope shape and discriminator support before
   style extraction, then dispatches supported non-path primitives through an
   exact constructor map.
+- After the drawing-payload hardening update, drawing block hydration validates
+  that the drawing payload contains `group_label` and a non-string component
+  sequence before constructing the neutral drawing group.
 - No new dependency edge or third-party dependency was introduced.
 
 Cycle/layer/coupling/redundancy result:
@@ -139,6 +145,8 @@ ADR/rule impact:
   and serialized collection fields before block or paragraph iteration.
 - `_drawing_component_from_parameters()` validates drawing component envelopes
   and supported discriminators before style extraction.
+- `_drawing_from_parameters()` validates drawing payload keys and component
+  sequence shape before iterating components.
 
 ## Comprehensiveness Matrix
 
@@ -149,6 +157,7 @@ ADR/rule impact:
 | Paragraph/table/drawing block order | Preserve through parameters and output | PO-FDOC-003 | `test_flow_document_preserves_mixed_block_order_after_round_trip` | behavioral evidence |
 | Root payload shape | Accept wrapped/direct mappings and reject malformed payload roots or collection fields | PO-FDOC-008 | `test_flow_document_hydrates_direct_payload_mapping`, `test_flow_document_hydration_rejects_malformed_root_payloads` | killed |
 | Serialized block envelope and dispatch | Reject malformed envelopes and dispatch valid dynamic type strings by value | PO-FDOC-007 | `test_flow_document_hydration_rejects_malformed_block_envelopes`, `test_flow_document_hydration_dispatches_dynamic_block_type_strings` | killed |
+| Serialized drawing payload | Reject missing drawing payload keys and non-sequence component collections before component iteration | PO-FDOC-010 | `test_flow_document_hydration_rejects_malformed_drawing_payloads` | killed |
 | Serialized drawing component envelope and dispatch | Reject malformed component envelopes, reject unsupported types before style extraction, and dispatch valid dynamic type strings by value | PO-FDOC-009 | `test_flow_document_hydration_rejects_malformed_drawing_component_envelopes`, `test_flow_document_hydration_dispatches_dynamic_drawing_component_type_strings` | killed |
 | Malformed serialized drawing label | Reject through the neutral group label contract | PO-FDOC-006 | `test_flow_document_drawing_group_hydration_rejects_malformed_label` | behavioral evidence |
 | Invalid drawing materialization | Reject before silent omission | PO-FDOC-004 | `test_flow_document_rejects_invalid_drawing_materialization` | killed |
@@ -162,7 +171,7 @@ ADR/rule impact:
 |---|---|---|---|
 | Unit | yes | Helpers are deterministic. | FLOW-DOCUMENT-P1 tests |
 | Behavioral/condition | yes | The slice defines document-output behavior. | Tests are marked `@pytest.mark.condition("FLOW-DOCUMENT-P1")`. |
-| Failure-mode | yes | Invalid content, malformed root payloads, malformed serialized block envelopes, malformed drawing component envelopes, malformed serialized drawing labels, and invalid output paths must fail loudly. | Invalid hydration, invalid materialization, and existing writer tests |
+| Failure-mode | yes | Invalid content, malformed root payloads, malformed serialized block envelopes, malformed drawing payloads, malformed drawing component envelopes, malformed serialized drawing labels, and invalid output paths must fail loudly. | Invalid hydration, invalid materialization, and existing writer tests |
 | Integration/live-path | yes | DOCX ZIP, HTML, RTF, text, table, and drawing paths cross module boundaries. | Focused and existing document-output tests |
 | Contract/API compatibility | yes | Parameters and public add methods must preserve existing behavior. | Round-trip and existing rejection tests |
 | Property/fuzz | no | This slice proves finite output and dispatch contracts. | Not applicable |
@@ -190,6 +199,8 @@ Proof-critical mutation targets:
   tests.
 - Weakening serialized drawing component envelope validation or dispatch should
   fail malformed-component and dynamic-component-dispatch tests.
+- Weakening serialized drawing payload key or component-sequence validation
+  should fail malformed-drawing-payload tests.
 
 Current result:
 
@@ -204,6 +215,8 @@ Current result:
 - Cosmic Ray 8.4.6, scoped to drawing component envelope validation and
   dispatch rows after the drawing-component hardening update: 17 work items, 17
   killed, and 0 survived.
+- Cosmic Ray 8.4.6, scoped to drawing payload validation rows after the
+  drawing-payload hardening update: 7 work items, 7 killed, and 0 survived.
 
 ## PO-FDOC-001: DOCX Bytes Are Deterministic
 
@@ -429,6 +442,36 @@ type.
 Malformed style payloads and malformed primitive geometry inside a valid
 component envelope are delegated to the owning style and drawing primitive
 contracts.
+
+### Conclusion
+
+Proven for the stated domain after focused tests, mutation, and the full DoD
+gate pass.
+
+## PO-FDOC-010: Drawing Payloads Are Validated
+
+### Claim
+
+Flow-document drawing block hydration rejects malformed drawing payloads before
+constructing a `DrawingComponentGroup` or iterating component entries.
+
+### Domain
+
+Serialized drawing block payloads passed through `FlowDocument.create_from_dict()`.
+
+### Proof Method
+
+`_drawing_from_parameters()` requires the drawing payload to be a mapping with
+both `group_label` and `components`. It then requires `components` to be a
+non-string sequence before iterating. Focused tests cover missing
+`group_label`, missing `components`, string components, bytes components, and a
+non-sequence object.
+
+### Counterexamples And Exclusions
+
+Malformed labels are delegated to the `DrawingComponentGroup` label contract.
+Malformed component entries inside a valid component sequence are delegated to
+the drawing component envelope contract.
 
 ### Conclusion
 
