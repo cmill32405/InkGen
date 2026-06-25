@@ -956,8 +956,11 @@ class Cell:
             The top-left cell of the merged region.
 
         Raises:
+            TypeError: If other is not a Cell.
             ValueError: If cells belong to different tables.
         """
+        if not isinstance(other, Cell):
+            raise TypeError("Can only merge with another Cell")
         if self.table is not other.table:
             raise ValueError("Cells belong to different tables")
         top = min(self._row_index, other._row_index)

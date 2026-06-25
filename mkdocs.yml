@@ -79,6 +79,7 @@ nav:
       - Table Index Contract: proofs/table-index-contract.md
       - Table Matrix Dimensions Contract: proofs/table-matrix-dimensions-contract.md
       - Table Required Fields Contract: proofs/table-required-fields-contract.md
+      - Table Merge Argument Contract: proofs/table-merge-argument-contract.md
       - DXF Renderer Contract: proofs/dxf-renderer-contract.md
   - Architecture Diagrams: architecture-diagrams.md
   - Notes:

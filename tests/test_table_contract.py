@@ -43,6 +43,11 @@ class _StringEquivalent:
         return hash(self._value)
 
 
+class _EqualitySpoofingTable(Table):
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, Table)
+
+
 @pytest.mark.condition("TABLE-P1")
 def test_table_rejects_nonfinite_and_boolean_positions() -> None:
     """TABLE-P1: Table origins must be finite numeric coordinates."""
@@ -770,3 +775,66 @@ def test_table_hydration_required_fields_preserve_valid_round_trip() -> None:
     document.add_table(clone)
     assert "A1\tA2" in document.to_plain_text()
     assert "B1\tB2" in document.to_plain_text()
+
+
+@pytest.mark.condition("TABLE-MERGE-ARG-P2")
+@pytest.mark.parametrize("other", [None, object(), "cell", 1])
+def test_table_cell_merge_rejects_non_cell_arguments(other: object) -> None:
+    """TABLE-MERGE-ARG-P2: Cell.merge accepts only Cell instances."""
+    cell = _two_by_two_table().cell(0, 0)
+
+    with pytest.raises(TypeError, match="Can only merge with another Cell"):
+        cell.merge(other)  # type: ignore[arg-type]
+
+    assert cell.merged is False
+    assert cell.merge_start == (0, 0)
+    assert cell.merge_end == (0, 0)
+
+
+@pytest.mark.condition("TABLE-MERGE-ARG-P2")
+def test_table_cell_merge_preserves_cross_table_rejection() -> None:
+    """TABLE-MERGE-ARG-P2: Cell.merge still rejects cells from different tables."""
+    table = _EqualitySpoofingTable(position=(0.0, 0.0))
+    table.add_column(width=1.0)
+    table.add_row(height=1.0)
+    other_table = _EqualitySpoofingTable(position=(0.0, 0.0))
+    other_table.add_column(width=1.0)
+    other_table.add_row(height=1.0)
+    cell = table.cell(0, 0)
+    other = other_table.cell(0, 0)
+
+    with pytest.raises(ValueError, match="Cells belong to different tables"):
+        cell.merge(other)
+
+    assert cell.merged is False
+
+
+@pytest.mark.condition("TABLE-MERGE-ARG-P2")
+def test_table_cell_merge_valid_argument_remains_live() -> None:
+    """TABLE-MERGE-ARG-P2: Valid direct merges still feed output paths."""
+    table = _two_by_two_table()
+    table.add_column(width=30.0)
+    table.add_row(height=6.0)
+    table.cell(2, 2).add_paragraph("C3", style_id="body")
+
+    merged = table.cell(0, 0).merge(table.cell(2, 2))
+
+    assert merged is table.cell(0, 0)
+    for row_index in range(3):
+        for column_index in range(3):
+            cell = table.cell(row_index, column_index)
+            assert cell.merged is True
+            assert cell.merge_start == (0, 0)
+            assert cell.merge_end == (2, 2)
+
+    group = TableSVG.from_table(
+        table,
+        group_label="direct-merge-table",
+        border_style=_border_style(),
+        text_styles=_text_styles(),
+    )
+    assert any(type(component) is TextSVG and component.text == "A1" for component in group.components())
+
+    document = FlowDocument(title="Direct merge")
+    document.add_table(table)
+    assert "A1" in document.to_plain_text()
