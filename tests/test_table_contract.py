@@ -724,3 +724,49 @@ def test_table_hydration_matrix_dimensions_compare_by_value_not_identity() -> No
     column_heavy_clone = Table.create_from_dict(column_heavy_table.parameters)
     assert column_heavy_clone.row_count == 1
     assert column_heavy_clone.column_count == 300
+
+
+@pytest.mark.condition("TABLE-REQUIRED-FIELDS-P2")
+@pytest.mark.parametrize(
+    ("mutate", "message"),
+    [
+        (lambda payload: payload["Table"].pop("position"), "Table must include position"),
+        (lambda payload: payload["Table"].pop("auto_fit"), "Table must include auto_fit"),
+        (lambda payload: payload["Table"]["columns"][0].pop("width"), "column payload must include width"),
+        (lambda payload: payload["Table"]["columns"][0].pop("width_rule"), "column payload must include width_rule"),
+        (lambda payload: payload["Table"]["rows"][0].pop("height"), "row payload must include height"),
+        (lambda payload: payload["Table"]["rows"][0].pop("height_rule"), "row payload must include height_rule"),
+        (lambda payload: payload["Table"]["matrix"][0][0]["paragraphs"][0].pop("text"), "paragraph payload must include text"),
+    ],
+)
+def test_table_hydration_rejects_missing_required_fields(mutate, message: str) -> None:
+    """TABLE-REQUIRED-FIELDS-P2: Missing required table fields fail explicitly."""
+    payload = _two_by_two_table().parameters
+    mutate(payload)
+
+    with pytest.raises(ValueError, match=message):
+        Table.create_from_dict(payload)
+
+
+@pytest.mark.condition("TABLE-REQUIRED-FIELDS-P2")
+def test_table_hydration_required_fields_preserve_valid_round_trip() -> None:
+    """TABLE-REQUIRED-FIELDS-P2: Required-field checks preserve valid table payloads."""
+    clone = Table.create_from_dict(_two_by_two_table().parameters)
+
+    assert clone.position == (2.0, 3.0)
+    assert clone.autofit is False
+    assert clone.cell(0, 0).text == "A1"
+    assert clone.cell(1, 1).text == "B2"
+
+    group = TableSVG.from_table(
+        clone,
+        group_label="required-field-table",
+        border_style=_border_style(),
+        text_styles=_text_styles(),
+    )
+    assert any(type(component) is TextSVG and component.text == "B2" for component in group.components())
+
+    document = FlowDocument(title="Required fields")
+    document.add_table(clone)
+    assert "A1\tA2" in document.to_plain_text()
+    assert "B1\tB2" in document.to_plain_text()

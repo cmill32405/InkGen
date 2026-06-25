@@ -78,6 +78,7 @@ nav:
       - Table Payload Envelope Contract: proofs/table-payload-envelope-contract.md
       - Table Index Contract: proofs/table-index-contract.md
       - Table Matrix Dimensions Contract: proofs/table-matrix-dimensions-contract.md
+      - Table Required Fields Contract: proofs/table-required-fields-contract.md
       - DXF Renderer Contract: proofs/dxf-renderer-contract.md
   - Architecture Diagrams: architecture-diagrams.md
   - Notes:

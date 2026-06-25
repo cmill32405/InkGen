@@ -313,17 +313,26 @@ class Table(Component):
     def create_from_dict(cls, data: dict) -> Table:
         root = _normalize_payload_mapping(data, name="table payload")
         payload = _normalize_payload_mapping(root["Table"], name="Table payload") if "Table" in root else root
-        table = cls(position=tuple(payload["position"]), autofit=payload["auto_fit"])
+        table = cls(
+            position=tuple(_required_payload_field(payload, "position", owner="Table")),
+            autofit=_required_payload_field(payload, "auto_fit", owner="Table"),
+        )
         table.cell_padding = payload.get("padding", table.cell_padding)
         table._autofit_suppressed = True
         for column_data_value in _normalize_payload_sequence(payload.get("columns", []), name="columns"):
             column_data = _normalize_payload_mapping(column_data_value, name="column payload")
-            column = table.add_column(width=column_data["width"])
-            column.width_rule = _normalize_autofit_rule(column_data["width_rule"], name="width_rule")
+            column = table.add_column(width=_required_payload_field(column_data, "width", owner="column payload"))
+            column.width_rule = _normalize_autofit_rule(
+                _required_payload_field(column_data, "width_rule", owner="column payload"),
+                name="width_rule",
+            )
         for row_data_value in _normalize_payload_sequence(payload.get("rows", []), name="rows"):
             row_data = _normalize_payload_mapping(row_data_value, name="row payload")
-            row = table.add_row(height=row_data["height"])
-            row.height_rule = _normalize_autofit_rule(row_data["height_rule"], name="height_rule")
+            row = table.add_row(height=_required_payload_field(row_data, "height", owner="row payload"))
+            row.height_rule = _normalize_autofit_rule(
+                _required_payload_field(row_data, "height_rule", owner="row payload"),
+                name="height_rule",
+            )
         matrix_payload = _normalize_payload_sequence(payload.get("matrix", []), name="matrix")
         if len(matrix_payload) != table.row_count:
             raise ValueError("matrix row count must match table rows")
@@ -337,7 +346,7 @@ class Table(Component):
                 for paragraph_value in _normalize_payload_sequence(cell_payload.get("paragraphs", []), name="paragraphs"):
                     paragraph = _normalize_payload_mapping(paragraph_value, name="paragraph payload")
                     cell._append_paragraph(
-                        paragraph["text"],
+                        _required_payload_field(paragraph, "text", owner="paragraph payload"),
                         paragraph.get("style_id"),
                         trigger_autofit=False,
                     )
@@ -473,6 +482,13 @@ def _normalize_payload_sequence(value: object, *, name: str) -> Sequence[object]
     if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
         raise TypeError(f"{name} must be a sequence")
     return value
+
+
+def _required_payload_field(payload: Mapping[str, object], field: str, *, owner: str) -> object:
+    """Return a required serialized table payload field."""
+    if field not in payload:
+        raise ValueError(f"{owner} must include {field}")
+    return payload[field]
 
 
 def _normalize_autofit_rule(value: object, *, name: str) -> AutoFitRule:
