@@ -115,6 +115,14 @@ def _svg_required_sequence(payload: Mapping[str, object], name: str, owner: str)
     return value
 
 
+def _svg_required_mapping(payload: Mapping[str, object], name: str, owner: str) -> Mapping[str, object]:
+    """Return a required serialized SVG mapping field or fail explicitly."""
+    value = _svg_required_field(payload, name, owner)
+    if not isinstance(value, Mapping):
+        raise TypeError(f"{owner} {name} must be a mapping")
+    return value
+
+
 def _svg_single_mapping_entry(payload: object, owner: str) -> tuple[str, Mapping[str, object]]:
     """Return the single typed payload entry for an SVG group child or style."""
     if not isinstance(payload, Mapping):
@@ -2110,24 +2118,33 @@ class DocumentSVG(Document):
     @staticmethod
     def _layer_from_svg_dict(data: dict, styles: dict[str, object]) -> Layer:
         """Recreate a layer containing SVG component groups."""
-        canvas = Canvas.create_from_dict(data['Layer']['canvas'])
-        layer = Layer(data['Layer']['layer_name'], canvas, data['Layer']['model'])
-        for group_payload in data['Layer']['component_groups']:
-            if 'ComponentGroupSVG' in group_payload:
+        payload = _svg_payload(data, "Layer")
+        canvas = Canvas.create_from_dict(_svg_required_field(payload, "canvas", "Layer"))
+        layer = Layer(_svg_required_field(payload, "layer_name", "Layer"), canvas, _svg_required_field(payload, "model", "Layer"))
+        collision_settings = _svg_required_mapping(payload, "group_collision_settings", "Layer")
+        for group_payload in _svg_required_sequence(payload, "component_groups", "Layer"):
+            if not isinstance(group_payload, Mapping):
+                raise TypeError("Layer component group entries must be mappings")
+            if "ComponentGroupSVG" in group_payload:
                 group = ComponentGroupSVG.create_from_dict(group_payload, styles)
             else:
                 group = ComponentGroup.create_from_dict(group_payload, styles)
-            settings = data['Layer']['group_collision_settings'][group.group_label]
-            layer.add_component_group(group, settings['allow_collision'], settings['strict'])
+            settings = collision_settings.get(group.group_label, {})
+            if not isinstance(settings, Mapping):
+                raise TypeError("Layer group collision setting entries must be mappings")
+            allow_collision = _svg_required_field(settings, "allow_collision", "Layer group collision settings")
+            strict = _svg_required_field(settings, "strict", "Layer group collision settings")
+            layer.add_component_group(group, allow_collision, strict)
         return layer
 
     @staticmethod
     def _layers_from_svg_dict(data: dict, styles: dict[str, object]) -> Layers:
         """Recreate the page layer stack with SVG component groups."""
-        layers = Layers(Canvas.create_from_dict(data['Layers']['canvas']))
+        payload = _svg_payload(data, "Layers")
+        layers = Layers(Canvas.create_from_dict(_svg_required_field(payload, "canvas", "Layers")))
         for layer_name in list(layers.layers):
             layers.remove_layer(layer_name)
-        for _, layer_payload in data['Layers']['layers'].items():
+        for layer_payload in _svg_required_mapping(payload, "layers", "Layers").values():
             layer = DocumentSVG._layer_from_svg_dict(layer_payload, styles)
             layers.add_layer(layer.layer_name, layer)
         return layers
@@ -2144,9 +2161,10 @@ class DocumentSVG(Document):
         """
         if styles is None:
             styles = {}
-        document = cls(Canvas.create_from_dict(data['DocumentSVG']['canvas']))
-        for pg in range(len(data['DocumentSVG']['pages'])):
-            page = cls._layers_from_svg_dict(data['DocumentSVG']['pages'][pg], styles)
+        payload = _svg_payload(data, "DocumentSVG")
+        document = cls(Canvas.create_from_dict(_svg_required_field(payload, "canvas", "DocumentSVG")))
+        for page_payload in _svg_required_sequence(payload, "pages", "DocumentSVG"):
+            page = cls._layers_from_svg_dict(page_payload, styles)
             document.add_page(position=-1, page=page)
         return document
 
