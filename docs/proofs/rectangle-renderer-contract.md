@@ -20,6 +20,7 @@ The public behavior under review is:
 - `RectangleSVG.generate_svg()`
 - `RectanglePDF.corner_radii`
 - `RectanglePDF.generate_pdf()`
+- `RectangleDrawing.__post_init__()`
 - `RectangleDrawing.to_component(OutputFormat.SVG/PDF)`
 - `DXFDocument.add_group()` for `RectangleDrawing`
 
@@ -67,8 +68,16 @@ Before/after edge changes:
   `re` rectangle.
 - Before this slice, DXF accepted rounded neutral rectangles but always emitted
   four sharp vertices.
+- The `RECTANGLE-DRAWING-GEOMETRY-P2` continuation found that
+  `RectangleDrawing` could store malformed position, width, height, or
+  `corner_radii` payloads until SVG/PDF materialization failed. The same
+  malformed payloads could hydrate through `FlowDocument.create_from_dict()`
+  into public neutral drawing state.
 - After this slice, valid nonzero radii are rendered in all three output
   modalities and invalid radii fail at construction or export boundaries.
+- After `RECTANGLE-DRAWING-GEOMETRY-P2`, neutral rectangle geometry is validated
+  and normalized at construction before direct materialization, serialization,
+  or FlowDocument hydration can expose malformed state.
 - No new dependency edge or third-party dependency was introduced.
 
 Cycle/layer/coupling/redundancy result:
@@ -103,8 +112,14 @@ ADR/rule impact:
 
 ## Domain Definitions
 
-- A rectangle is defined by a nonnegative position, width, height, style, and
-  either a scalar radius or a two-value `(rx, ry)` radius pair.
+- A rectangle is defined by a finite position, width, height, style, and either
+  a scalar radius or a two-value `(rx, ry)` radius pair.
+- Negative positions remain valid placement coordinates because the concrete
+  rectangle component contract accepts finite anchors and does not impose a
+  canvas-origin restriction.
+- Neutral rectangle positions must be finite two-value numeric pairs.
+- Neutral rectangle widths and heights must be finite non-boolean numeric
+  values greater than or equal to zero.
 - Valid radii are finite numeric values where `0 <= rx <= width / 2` and
   `0 <= ry <= height / 2`.
 - A scalar radius applies the same value to `rx` and `ry`.
@@ -123,6 +138,9 @@ ADR/rule impact:
   radii.
 - Existing SVG tests no longer encode the old behavior that dropped nonzero
   radii.
+- `RectangleDrawing.__post_init__()` now validates and normalizes position,
+  width, and height, and validates `corner_radii` against the normalized
+  dimensions before style validation and renderer materialization.
 
 ## Comprehensiveness Matrix
 
@@ -136,6 +154,8 @@ ADR/rule impact:
 | SVG nonzero radius | Emit `rx`/`ry` attributes | PO-RECT-002 | `test_rectangle_svg_emits_corner_radius_attributes` | Must be killed or proven equivalent |
 | PDF nonzero radius | Emit cubic rounded-corner path | PO-RECT-003 | `test_rectangle_pdf_emits_rounded_corner_cubic_path` | Must be killed or proven equivalent |
 | Neutral materialization | Pass radii into SVG/PDF renderers | PO-RECT-004 | `test_rectangle_drawing_materializes_svg_and_pdf_components` | Must be killed or proven equivalent |
+| Neutral valid position/width/height | Normalize before public state is exposed | PO-RECT-006 | `test_rectangle_drawing_normalizes_geometry_before_materialization` | killed/equivalent |
+| Neutral malformed position/width/height/radius | Reject at construction and FlowDocument hydration | PO-RECT-006 | `test_rectangle_drawing_rejects_malformed_geometry_payloads`, `test_rectangle_drawing_rejects_negative_dimensions_at_dimension_boundary`, `test_flow_document_hydration_rejects_malformed_rectangle_geometry_payloads` | killed/equivalent |
 | DXF nonzero radius | Emit closed sampled rounded polyline | PO-RECT-005 | `test_dxf_rectangle_drawing_exports_rounded_closed_polyline` | Must be killed or proven equivalent |
 | Negative width/height and exact CAD bulge-arc semantics | Excluded from proven domain | Explicit exclusions | existing base component behavior only | Out of scope |
 
@@ -203,6 +223,8 @@ Proof-critical mutation targets:
   tests.
 - Redirecting `RectangleDrawing.to_component()` should fail materialization
   tests.
+- Weakening neutral rectangle point, width, height, or radius validation should
+  fail direct neutral recipe and FlowDocument hydration tests.
 - Changing DXF sample count, vertices, or closure should fail DXF live-path
   tests.
 
@@ -273,6 +295,19 @@ During mutation, real test gaps were found and closed:
 
 Gate result: passed for the declared domain. The mutation report has no
 surviving non-equivalent proof-critical mutants.
+
+`RECTANGLE-DRAWING-GEOMETRY-P2` continuation:
+
+- Cosmic Ray 8.4.6, scoped to `_coerce_point_pair()`,
+  `RectangleDrawing.__post_init__()`, and
+  `_coerce_finite_non_negative_float()`: 57 proof-critical work items.
+- Result: 55 killed, 2 survived and classified equivalent.
+- Equivalent survivors:
+  - `*` changed to `/` in `_coerce_point_pair(value, *, name)`.
+  - `*` changed to `/` in `_coerce_finite_non_negative_float(value, *, name)`.
+  - Both helpers are called with `value` positionally and `name` by keyword in
+    the declared domain. Changing `value` from positional-or-keyword to
+    positional-only does not change any public construction or hydration path.
 
 ## PO-RECT-001: Radius Validation
 
@@ -391,9 +426,57 @@ Static path proof over `dxf_generator.py`:
 
 Proven for the stated domain after tests and mutation pass.
 
+## PO-RECT-006: Neutral Rectangle Geometry Is Validated Before Public State
+
+### Claim
+
+`RectangleDrawing` cannot expose malformed rectangle geometry through direct
+construction, materialization, serialization, or FlowDocument hydration.
+
+### Domain
+
+All `RectangleDrawing` instances created directly and all serialized
+`RectangleDrawing` payloads hydrated through `FlowDocument.create_from_dict()`.
+
+### Assumptions
+
+The neutral rectangle recipe should match the concrete rectangle component
+contract for geometry: anchors are finite two-value numeric pairs; width and
+height are finite non-boolean numbers greater than or equal to zero; corner
+radii are accepted only if `normalize_rectangle_corner_radii()` accepts them for
+the normalized width and height. Negative positions remain valid placement
+coordinates.
+
+### Proof Method
+
+`RectangleDrawing.__post_init__()` routes every public construction path,
+including FlowDocument drawing hydration, through `_coerce_point_pair()`,
+`_coerce_finite_non_negative_float()`, and
+`normalize_rectangle_corner_radii()`. It stores normalized position, width, and
+height values before renderer materialization. Direct condition tests cover
+valid normalization and malformed position, width, height, and radius
+partitions. The FlowDocument condition test mutates serialized drawing payloads
+and proves malformed rectangle geometry cannot hydrate into returned document
+state.
+
+### Counterexamples And Exclusions
+
+Private mutation after construction remains outside the public contract. The
+slice does not change rounded-rectangle renderer math or introduce canvas-bound
+position restrictions.
+
+### Conclusion
+
+Proven for the stated public construction and FlowDocument hydration domain
+after focused tests and scoped mutation pass.
+
 ## Current Slice Decision
 
 The slice treats `corner_radii` as an existing public rectangle contract. SVG,
 PDF, and DXF must therefore either preserve that geometry or reject invalid
 inputs. Exact DXF bulge arcs are deferred; deterministic sampled polylines are
 inside the current dependency-free renderer boundary.
+
+The `RECTANGLE-DRAWING-GEOMETRY-P2` continuation keeps that renderer behavior
+unchanged while moving malformed neutral rectangle geometry rejection to the
+renderer-neutral recipe boundary.

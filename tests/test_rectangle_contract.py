@@ -6,6 +6,7 @@ import uuid
 
 import pytest
 
+from InkGen.document_outputs import FlowDocument
 from InkGen.drawing_components import DrawingComponentGroup, OutputFormat, RectangleDrawing
 from InkGen.dxf_generator import DXFDocument
 from InkGen.pdf_generator import RectanglePDF
@@ -174,6 +175,106 @@ def test_rectangle_drawing_materializes_svg_and_pdf_components(drawing_style: Dr
     assert isinstance(pdf, RectanglePDF)
     assert svg.corner_radii == (5.0, 3.0)
     assert pdf.corner_radii == (5.0, 3.0)
+
+
+@pytest.mark.condition("RECTANGLE-DRAWING-GEOMETRY-P2")
+def test_rectangle_drawing_normalizes_geometry_before_materialization(drawing_style: DrawingStyle) -> None:
+    """RECTANGLE-DRAWING-GEOMETRY-P2: Neutral rectangle geometry is normalized at construction."""
+    drawing = RectangleDrawing([10, 20], 40, 30, 0.0, drawing_style)  # type: ignore[arg-type]
+    zero_size = RectangleDrawing((1.0, 2.0), 0.0, 0.0, 0.0, drawing_style)
+
+    assert drawing.position == (10.0, 20.0)
+    assert drawing.width == 40.0
+    assert drawing.height == 30.0
+    assert zero_size.width == 0.0
+    assert zero_size.height == 0.0
+    assert drawing.to_component(OutputFormat.SVG).position == (10.0, 20.0)
+    assert drawing.to_component(OutputFormat.PDF).width == 40.0
+
+
+@pytest.mark.condition("RECTANGLE-DRAWING-GEOMETRY-P2")
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"position": "12", "width": 40.0, "height": 30.0, "corner_radii": 0.0},
+        {"position": [10.0], "width": 40.0, "height": 30.0, "corner_radii": 0.0},
+        {"position": [10.0, 20.0, 30.0], "width": 40.0, "height": 30.0, "corner_radii": 0.0},
+        {"position": {"x": 10.0, "y": 20.0}, "width": 40.0, "height": 30.0, "corner_radii": 0.0},
+        {"position": (object(), 20.0), "width": 40.0, "height": 30.0, "corner_radii": 0.0},
+        {"position": ("x", 20.0), "width": 40.0, "height": 30.0, "corner_radii": 0.0},
+        {"position": (True, 20.0), "width": 40.0, "height": 30.0, "corner_radii": 0.0},
+        {"position": (10.0, float("nan")), "width": 40.0, "height": 30.0, "corner_radii": 0.0},
+        {"position": (10.0, 20.0), "width": object(), "height": 30.0, "corner_radii": 0.0},
+        {"position": (10.0, 20.0), "width": -0.1, "height": 30.0, "corner_radii": 0.0},
+        {"position": (10.0, 20.0), "width": 40.0, "height": float("inf"), "corner_radii": 0.0},
+        {"position": (10.0, 20.0), "width": 40.0, "height": 30.0, "corner_radii": {"rx": 1.0}},
+    ],
+)
+def test_rectangle_drawing_rejects_malformed_geometry_payloads(
+    drawing_style: DrawingStyle,
+    kwargs: dict[str, object],
+) -> None:
+    """RECTANGLE-DRAWING-GEOMETRY-P2: Neutral rectangles reject malformed geometry early."""
+    with pytest.raises((TypeError, ValueError)):
+        RectangleDrawing(style=drawing_style, **kwargs)  # type: ignore[arg-type]
+
+
+@pytest.mark.condition("RECTANGLE-DRAWING-GEOMETRY-P2")
+@pytest.mark.parametrize(("field", "value"), [("width", -0.1), ("height", -0.1)])
+def test_rectangle_drawing_rejects_negative_dimensions_at_dimension_boundary(
+    drawing_style: DrawingStyle,
+    field: str,
+    value: object,
+) -> None:
+    """RECTANGLE-DRAWING-GEOMETRY-P2: Negative dimensions fail before radius validation."""
+    kwargs = {"position": (10.0, 20.0), "width": 40.0, "height": 30.0, "corner_radii": 0.0}
+    kwargs[field] = value
+
+    with pytest.raises(ValueError, match=f"RectangleDrawing {field} should be a finite non-negative number"):
+        RectangleDrawing(style=drawing_style, **kwargs)  # type: ignore[arg-type]
+
+
+@pytest.mark.condition("RECTANGLE-DRAWING-GEOMETRY-P2")
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("position", "12"),
+        ("position", [10.0]),
+        ("position", [10.0, 20.0, 30.0]),
+        ("position", {"x": 10.0, "y": 20.0}),
+        ("position", (object(), 20.0)),
+        ("position", ("x", 20.0)),
+        ("width", object()),
+        ("width", -0.1),
+        ("height", float("nan")),
+        ("corner_radii", {"rx": 1.0}),
+    ],
+)
+def test_flow_document_hydration_rejects_malformed_rectangle_geometry_payloads(
+    drawing_style: DrawingStyle,
+    field: str,
+    value: object,
+) -> None:
+    """RECTANGLE-DRAWING-GEOMETRY-P2: Flow documents cannot hydrate bad rectangles."""
+    group = DrawingComponentGroup("rect-flow")
+    group.add_component(RectangleDrawing((10.0, 20.0), 40.0, 30.0, 0.0, drawing_style))
+    document = FlowDocument(title="Bad Rectangle")
+    document.add_drawing_group(group)
+    payload = document.parameters
+    flow_payload = payload["FlowDocument"]
+    assert isinstance(flow_payload, dict)
+    blocks = flow_payload["blocks"]
+    assert isinstance(blocks, list)
+    block_payload = blocks[0]["payload"]
+    assert isinstance(block_payload, dict)
+    components = block_payload["components"]
+    assert isinstance(components, list)
+    component_payload = components[0]["payload"]
+    assert isinstance(component_payload, dict)
+    component_payload[field] = value
+
+    with pytest.raises((TypeError, ValueError)):
+        FlowDocument.create_from_dict(payload, {drawing_style.name: drawing_style})
 
 
 @pytest.mark.condition("RECT-P1")

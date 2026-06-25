@@ -14,7 +14,7 @@ from math import isfinite
 from typing import Protocol
 
 from InkGen.boundary import Canvas
-from InkGen.component import Component, ComponentGroup, PathCommand, TextComponent
+from InkGen.component import Component, ComponentGroup, PathCommand, TextComponent, normalize_rectangle_corner_radii
 from InkGen.style import DrawingStyle, TextStyle
 
 
@@ -63,6 +63,22 @@ def _coerce_text_value(value: object) -> str:
     raise TypeError("TextDrawing text must be a string or a non-iterable built in type")
 
 
+def _coerce_point_pair(value: object, *, name: str) -> tuple[float, float]:
+    """Normalize renderer-neutral point payloads to finite numeric pairs."""
+    if isinstance(value, (str, bytes)) or not isinstance(value, Sequence) or len(value) != 2:
+        raise ValueError(f"{name} must contain two numeric values")
+    if any(isinstance(coordinate, bool) for coordinate in value):
+        raise TypeError(f"{name} coordinates must be numeric values")
+    try:
+        x = float(value[0])
+        y = float(value[1])
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must contain two numeric values") from exc
+    if not isfinite(x) or not isfinite(y):
+        raise ValueError(f"{name} coordinates must be finite")
+    return x, y
+
+
 @dataclass(frozen=True)
 class RectangleDrawing:
     """Renderer-neutral rectangle primitive."""
@@ -74,7 +90,14 @@ class RectangleDrawing:
     style: DrawingStyle
 
     def __post_init__(self) -> None:
-        """Validate the neutral rectangle style boundary."""
+        """Validate the neutral rectangle geometry and style boundary."""
+        position = _coerce_point_pair(self.position, name="RectangleDrawing position")
+        width = _coerce_finite_non_negative_float(self.width, name="RectangleDrawing width")
+        height = _coerce_finite_non_negative_float(self.height, name="RectangleDrawing height")
+        normalize_rectangle_corner_radii(self.corner_radii, width, height)
+        object.__setattr__(self, "position", position)
+        object.__setattr__(self, "width", width)
+        object.__setattr__(self, "height", height)
         _require_drawing_style(self.style, "RectangleDrawing")
 
     def to_component(self, output_format: OutputFormat | str) -> Component:
