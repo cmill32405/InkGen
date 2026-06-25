@@ -244,7 +244,13 @@ class QuadraticBezierDrawing:
     style: DrawingStyle
 
     def __post_init__(self) -> None:
-        """Validate the neutral quadratic Bezier style boundary."""
+        """Validate the neutral quadratic Bezier geometry and style boundary."""
+        start_point = _coerce_point_pair(self.start_point, name="QuadraticBezierDrawing start_point")
+        control_point = _coerce_point_pair(self.control_point, name="QuadraticBezierDrawing control_point")
+        end_point = _coerce_point_pair(self.end_point, name="QuadraticBezierDrawing end_point")
+        object.__setattr__(self, "start_point", start_point)
+        object.__setattr__(self, "control_point", control_point)
+        object.__setattr__(self, "end_point", end_point)
         _require_drawing_style(self.style, "QuadraticBezierDrawing")
 
     def to_component(self, output_format: OutputFormat | str) -> Component:
@@ -270,7 +276,15 @@ class CubicBezierDrawing:
     style: DrawingStyle
 
     def __post_init__(self) -> None:
-        """Validate the neutral cubic Bezier style boundary."""
+        """Validate the neutral cubic Bezier geometry and style boundary."""
+        start_point = _coerce_point_pair(self.start_point, name="CubicBezierDrawing start_point")
+        control_point1 = _coerce_point_pair(self.control_point1, name="CubicBezierDrawing control_point1")
+        control_point2 = _coerce_point_pair(self.control_point2, name="CubicBezierDrawing control_point2")
+        end_point = _coerce_point_pair(self.end_point, name="CubicBezierDrawing end_point")
+        object.__setattr__(self, "start_point", start_point)
+        object.__setattr__(self, "control_point1", control_point1)
+        object.__setattr__(self, "control_point2", control_point2)
+        object.__setattr__(self, "end_point", end_point)
         _require_drawing_style(self.style, "CubicBezierDrawing")
 
     def to_component(self, output_format: OutputFormat | str) -> Component:
