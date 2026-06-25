@@ -88,6 +88,12 @@ Before/after edge changes:
 - After `PARAGRAPH-TAB-STOPS-P2`, direct `tab_stops` must be a sequence of
   `TabStop` values, and serialized `tab_stops` must be a sequence of mapping
   payloads before `TabStop` hydration begins.
+- Before `PARAGRAPH-TABSTOP-PAYLOAD-P2`, direct `TabStop.create_from_dict()`
+  and paragraph hydration could fail through incidental `TypeError` or raw
+  `KeyError` for malformed tab-stop payload roots or missing `position`.
+- After `PARAGRAPH-TABSTOP-PAYLOAD-P2`, serialized tab-stop payloads must be
+  mappings with a required `position` field before `TabStop` construction
+  begins.
 - Negative paragraph origins and negative first-line indents remain valid
   because they are legitimate layout choices.
 - No new third-party dependency or dependency edge was introduced.
@@ -119,6 +125,8 @@ ADR/rule impact:
   are all `TabStop` instances.
 - Serialized tab-stop collections are non-string sequences whose entries are
   all mapping payloads.
+- Serialized tab-stop payload roots are mappings with a required `position`
+  field. Optional `alignment` and `leader` retain existing defaults.
 - Tab-stop removal index is a non-boolean integer in the current tab-stop
   range.
 - Serialized hydration must reject malformed values instead of silently
@@ -143,6 +151,9 @@ ADR/rule impact:
 - Hardened direct and serialized paragraph tab-stop collection boundaries so
   malformed collections or entries fail before public state mutation or
   payload iteration.
+- Hardened `TabStop.create_from_dict()` so malformed roots and missing required
+  `position` fields fail explicitly before direct or paragraph-mediated
+  hydration.
 
 ## Comprehensiveness Matrix
 
@@ -158,6 +169,7 @@ ADR/rule impact:
 | Style override map boundary | Reject non-mapping `styles` values before style lookup | PO-PARA-008 | `test_paragraph_hydration_rejects_malformed_style_override_maps` | killed |
 | Tab-stop removal index | Reject bool, non-integer, negative, and out-of-range indexes before mutation | PO-PARA-009 | `test_paragraph_remove_tab_stop_rejects_python_index_coercion`, `test_paragraph_remove_tab_stop_preserves_valid_order_and_round_trip` | killed |
 | Tab-stop collections | Reject malformed direct and serialized tab-stop collections before public state or hydration iteration | PO-PARA-010 | `test_paragraph_constructor_rejects_malformed_tab_stop_collections`, `test_paragraph_constructor_rejects_non_tab_stop_entries`, `test_paragraph_hydration_rejects_malformed_tab_stop_collections`, `test_paragraph_hydration_rejects_non_mapping_tab_stop_entries` | killed |
+| Tab-stop payloads | Reject malformed roots and missing required position fields before tab-stop construction | PO-PARA-011 | `test_tab_stop_factory_rejects_malformed_payload_roots`, `test_tab_stop_factory_rejects_missing_position`, `test_paragraph_hydration_rejects_tab_stop_entries_missing_position` | killed |
 
 ## Test Applicability Matrix
 
@@ -192,6 +204,8 @@ Proof-critical mutation targets:
   fail public index-boundary tests.
 - Allowing malformed direct or serialized tab-stop collections into paragraph
   state or hydration iteration must fail collection-boundary tests.
+- Allowing malformed tab-stop payload roots or missing required fields into
+  factory construction must fail tab-stop payload tests.
 
 Current result:
 
@@ -207,6 +221,8 @@ Current result:
   `PARAGRAPH-TAB-INDEX-P2`: 19 work items, 19 killed, and 0 survived.
 - Cosmic Ray 8.4.6, scoped to tab-stop collection validation after
   `PARAGRAPH-TAB-STOPS-P2`: 14 work items, 14 killed, and 0 survived.
+- Cosmic Ray 8.4.6, scoped to tab-stop payload validation after
+  `PARAGRAPH-TABSTOP-PAYLOAD-P2`: 3 work items, 3 killed, and 0 survived.
 
 ## PO-PARA-001: Valid Paragraphs Remain Live
 
@@ -437,6 +453,34 @@ which rejects string/bytes and non-sequence containers, and rejects non-mapping
 entries before `TabStop.create_from_dict()` is called. Focused tests cover
 malformed direct containers, malformed direct entries, malformed serialized
 containers, malformed serialized entries, and valid direct tuple preservation.
+
+### Conclusion
+
+Proven for the stated domain after tests and mutation pass.
+
+## PO-PARA-011: Tab-Stop Payloads Are Explicit
+
+### Claim
+
+`TabStop.create_from_dict()` accepts only mapping payloads with a required
+`position` field, and paragraph hydration preserves that same tab-stop payload
+boundary.
+
+### Domain
+
+Direct public calls to `TabStop.create_from_dict(data)` and
+`Paragraph.create_from_dict()` calls whose serialized `tab_stops` collection
+contains tab-stop payload entries.
+
+### Proof Method
+
+`TabStop.create_from_dict()` routes its input through `_tab_stop_payload()`,
+which rejects non-mapping roots, and `_required_tab_stop_field()`, which rejects
+missing `position` before constructing the `TabStop`. Paragraph hydration first
+normalizes the tab-stop collection and then calls the same public factory for
+each entry. Focused tests cover malformed direct roots, missing direct
+`position`, valid minimal payload defaults, and the paragraph hydration path for
+missing tab-stop position.
 
 ### Conclusion
 

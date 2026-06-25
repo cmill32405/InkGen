@@ -59,12 +59,13 @@ class TabStop:
         }
 
     @classmethod
-    def create_from_dict(cls, data: dict[str, object]) -> TabStop:
+    def create_from_dict(cls, data: object) -> TabStop:
         """Recreate a tab stop from serialized parameters."""
+        payload = _tab_stop_payload(data)
         return cls(
-            position=data["position"],  # type: ignore[arg-type]
-            alignment=data.get("alignment", ParagraphAlignment.LEFT.value),  # type: ignore[arg-type]
-            leader=data.get("leader"),
+            position=_required_tab_stop_field(payload, "position"),  # type: ignore[arg-type]
+            alignment=payload.get("alignment", ParagraphAlignment.LEFT.value),  # type: ignore[arg-type]
+            leader=payload.get("leader"),
         )
 
 
@@ -596,3 +597,17 @@ def _normalize_tab_stop_payloads(tab_stops: object) -> Sequence[Mapping[str, obj
         if not isinstance(stop, Mapping):
             raise TypeError("tab_stops entries must be mappings")
     return tab_stops
+
+
+def _tab_stop_payload(data: object) -> Mapping[str, object]:
+    """Normalize a serialized tab-stop payload."""
+    if not isinstance(data, Mapping):
+        raise TypeError("tab stop payload must be a mapping")
+    return data
+
+
+def _required_tab_stop_field(payload: Mapping[str, object], name: str) -> object:
+    """Return a required serialized tab-stop field."""
+    if name not in payload:
+        raise ValueError(f"tab stop payload must include {name}")
+    return payload[name]

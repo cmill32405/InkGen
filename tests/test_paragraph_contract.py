@@ -295,6 +295,35 @@ def test_paragraph_hydration_rejects_non_mapping_tab_stop_entries() -> None:
         Paragraph.create_from_dict(payload, {paragraph.style.name: paragraph.style})
 
 
+@pytest.mark.condition("PARAGRAPH-TABSTOP-PAYLOAD-P2")
+@pytest.mark.parametrize("payload", [object(), "tab-stop", ["position", 1.0]])
+def test_tab_stop_factory_rejects_malformed_payload_roots(payload: object) -> None:
+    """PARAGRAPH-TABSTOP-PAYLOAD-P2: Tab-stop factory payloads must be mappings."""
+    with pytest.raises(TypeError, match="tab stop payload must be a mapping"):
+        TabStop.create_from_dict(payload)
+
+
+@pytest.mark.condition("PARAGRAPH-TABSTOP-PAYLOAD-P2")
+@pytest.mark.parametrize("payload", [{}, {"alignment": "left"}])
+def test_tab_stop_factory_rejects_missing_position(payload: object) -> None:
+    """PARAGRAPH-TABSTOP-PAYLOAD-P2: Tab-stop factory payloads require position."""
+    with pytest.raises(ValueError, match="tab stop payload must include position"):
+        TabStop.create_from_dict(payload)
+
+    assert TabStop.create_from_dict({"position": 1.0}) == TabStop(1.0)
+
+
+@pytest.mark.condition("PARAGRAPH-TABSTOP-PAYLOAD-P2")
+def test_paragraph_hydration_rejects_tab_stop_entries_missing_position() -> None:
+    """PARAGRAPH-TABSTOP-PAYLOAD-P2: Paragraph hydration preserves tab-stop payload errors."""
+    paragraph = _paragraph("Persisted")
+    payload = paragraph.parameters
+    payload["Paragraph"]["tab_stops"] = [{"alignment": "left"}]
+
+    with pytest.raises(ValueError, match="tab stop payload must include position"):
+        Paragraph.create_from_dict(payload, {paragraph.style.name: paragraph.style})
+
+
 @pytest.mark.condition("PARAGRAPH-P1")
 def test_paragraph_contract_remains_live_through_render_and_document_paths() -> None:
     """PARAGRAPH-P1: Valid paragraphs still materialize and export through dependent paths."""
