@@ -254,6 +254,47 @@ def test_paragraph_remove_tab_stop_preserves_valid_order_and_round_trip() -> Non
     assert clone.to_drawing_group("tab-index").to_group("svg").components()
 
 
+@pytest.mark.condition("PARAGRAPH-TAB-STOPS-P2")
+@pytest.mark.parametrize("tab_stops", ["tabs", b"tabs", object()])
+def test_paragraph_constructor_rejects_malformed_tab_stop_collections(tab_stops: object) -> None:
+    """PARAGRAPH-TAB-STOPS-P2: Direct tab-stop collections must be real sequences."""
+    with pytest.raises(TypeError, match="tab_stops must be a sequence of TabStop values"):
+        Paragraph("bad", style=_style(), tab_stops=tab_stops)  # type: ignore[arg-type]
+
+
+@pytest.mark.condition("PARAGRAPH-TAB-STOPS-P2")
+def test_paragraph_constructor_rejects_non_tab_stop_entries() -> None:
+    """PARAGRAPH-TAB-STOPS-P2: Direct tab-stop entries must be TabStop values."""
+    with pytest.raises(TypeError, match="tab_stops entries must be TabStop values"):
+        Paragraph("bad", style=_style(), tab_stops=[TabStop(1.0), object()])  # type: ignore[list-item]
+
+    paragraph = Paragraph("ok", style=_style(), tab_stops=(TabStop(2.0), TabStop(1.0)))
+    assert paragraph.tab_stops == (TabStop(2.0), TabStop(1.0))
+
+
+@pytest.mark.condition("PARAGRAPH-TAB-STOPS-P2")
+@pytest.mark.parametrize("tab_stops", ["tabs", b"tabs", object()])
+def test_paragraph_hydration_rejects_malformed_tab_stop_collections(tab_stops: object) -> None:
+    """PARAGRAPH-TAB-STOPS-P2: Serialized tab-stop collections fail before iteration."""
+    paragraph = _paragraph("Persisted")
+    payload = paragraph.parameters
+    payload["Paragraph"]["tab_stops"] = tab_stops
+
+    with pytest.raises(TypeError, match="tab_stops must be a sequence of mappings"):
+        Paragraph.create_from_dict(payload, {paragraph.style.name: paragraph.style})
+
+
+@pytest.mark.condition("PARAGRAPH-TAB-STOPS-P2")
+def test_paragraph_hydration_rejects_non_mapping_tab_stop_entries() -> None:
+    """PARAGRAPH-TAB-STOPS-P2: Serialized tab-stop entries must be mappings."""
+    paragraph = _paragraph("Persisted")
+    payload = paragraph.parameters
+    payload["Paragraph"]["tab_stops"] = [{"position": 1.0}, object()]
+
+    with pytest.raises(TypeError, match="tab_stops entries must be mappings"):
+        Paragraph.create_from_dict(payload, {paragraph.style.name: paragraph.style})
+
+
 @pytest.mark.condition("PARAGRAPH-P1")
 def test_paragraph_contract_remains_live_through_render_and_document_paths() -> None:
     """PARAGRAPH-P1: Valid paragraphs still materialize and export through dependent paths."""

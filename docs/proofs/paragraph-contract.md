@@ -21,6 +21,7 @@ The slice covers:
 - `Paragraph.space_after`
 - `Paragraph.line_spacing`
 - `Paragraph.outline_level`
+- `Paragraph.__init__(..., tab_stops=...)`
 - `Paragraph.add_tab_stop()`
 - `Paragraph.remove_tab_stop()`
 - `Paragraph.create_from_dict()`
@@ -80,6 +81,13 @@ Before/after edge changes:
   could remove real tab stops.
 - After `PARAGRAPH-TAB-INDEX-P2`, public tab-stop removal indexes must be
   non-boolean integers within `[0, len(tab_stops))`.
+- Before `PARAGRAPH-TAB-STOPS-P2`, direct constructor `tab_stops` could store
+  arbitrary objects or strings as public tab-stop state, and serialized
+  `tab_stops` could fail through incidental string-index errors during
+  hydration.
+- After `PARAGRAPH-TAB-STOPS-P2`, direct `tab_stops` must be a sequence of
+  `TabStop` values, and serialized `tab_stops` must be a sequence of mapping
+  payloads before `TabStop` hydration begins.
 - Negative paragraph origins and negative first-line indents remain valid
   because they are legitimate layout choices.
 - No new third-party dependency or dependency edge was introduced.
@@ -107,6 +115,10 @@ ADR/rule impact:
 - Line spacing is a finite numeric value greater than zero.
 - Outline level is an integer from 0 through 9, excluding booleans.
 - Tab-stop position is a finite numeric value greater than or equal to zero.
+- Direct tab-stop collections are `None` or non-string sequences whose entries
+  are all `TabStop` instances.
+- Serialized tab-stop collections are non-string sequences whose entries are
+  all mapping payloads.
 - Tab-stop removal index is a non-boolean integer in the current tab-stop
   range.
 - Serialized hydration must reject malformed values instead of silently
@@ -128,6 +140,9 @@ ADR/rule impact:
   override containers fail at the public boundary.
 - Hardened `Paragraph.remove_tab_stop()` so booleans, non-integers, negative
   indexes, and out-of-range indexes fail without mutating tab-stop state.
+- Hardened direct and serialized paragraph tab-stop collection boundaries so
+  malformed collections or entries fail before public state mutation or
+  payload iteration.
 
 ## Comprehensiveness Matrix
 
@@ -142,6 +157,7 @@ ADR/rule impact:
 | Enum selectors | Accept enum members and real strings; reject arbitrary stringifiable objects | PO-PARA-007 | `test_paragraph_rejects_stringifiable_enum_selectors`, `test_paragraph_hydration_rejects_stringifiable_enum_selectors` | killed |
 | Style override map boundary | Reject non-mapping `styles` values before style lookup | PO-PARA-008 | `test_paragraph_hydration_rejects_malformed_style_override_maps` | killed |
 | Tab-stop removal index | Reject bool, non-integer, negative, and out-of-range indexes before mutation | PO-PARA-009 | `test_paragraph_remove_tab_stop_rejects_python_index_coercion`, `test_paragraph_remove_tab_stop_preserves_valid_order_and_round_trip` | killed |
+| Tab-stop collections | Reject malformed direct and serialized tab-stop collections before public state or hydration iteration | PO-PARA-010 | `test_paragraph_constructor_rejects_malformed_tab_stop_collections`, `test_paragraph_constructor_rejects_non_tab_stop_entries`, `test_paragraph_hydration_rejects_malformed_tab_stop_collections`, `test_paragraph_hydration_rejects_non_mapping_tab_stop_entries` | killed |
 
 ## Test Applicability Matrix
 
@@ -174,6 +190,8 @@ Proof-critical mutation targets:
 - Breaking valid paragraph materialization must fail live-path tests.
 - Allowing Python bool or negative index coercion through tab-stop removal must
   fail public index-boundary tests.
+- Allowing malformed direct or serialized tab-stop collections into paragraph
+  state or hydration iteration must fail collection-boundary tests.
 
 Current result:
 
@@ -187,6 +205,8 @@ Current result:
   `PARAGRAPH-STYLES-MAPPING-P2`: 6 work items, 6 killed, and 0 survived.
 - Cosmic Ray 8.4.6, scoped to tab-stop index validation after
   `PARAGRAPH-TAB-INDEX-P2`: 19 work items, 19 killed, and 0 survived.
+- Cosmic Ray 8.4.6, scoped to tab-stop collection validation after
+  `PARAGRAPH-TAB-STOPS-P2`: 14 work items, 14 killed, and 0 survived.
 
 ## PO-PARA-001: Valid Paragraphs Remain Live
 
@@ -389,6 +409,34 @@ failure-mode test asserts invalid indexes preserve tab-stop state. The valid
 path test removes a middle tab stop, round-trips the paragraph through
 serialization, and materializes the paragraph through a renderer-neutral
 drawing group.
+
+### Conclusion
+
+Proven for the stated domain after tests and mutation pass.
+
+## PO-PARA-010: Tab-Stop Collections Are Explicit
+
+### Claim
+
+Direct paragraph tab-stop collections contain only `TabStop` values, and
+serialized tab-stop collections contain only mapping payloads before hydration
+iteration begins.
+
+### Domain
+
+`Paragraph(..., tab_stops=...)` and `Paragraph.create_from_dict()` over the
+public `tab_stops` collection field.
+
+### Proof Method
+
+The constructor routes `tab_stops` through `_normalize_tab_stops()`, which
+accepts `None` as an empty collection, rejects string/bytes and non-sequence
+containers, and rejects non-`TabStop` entries before assigning public state.
+Hydration routes the serialized field through `_normalize_tab_stop_payloads()`,
+which rejects string/bytes and non-sequence containers, and rejects non-mapping
+entries before `TabStop.create_from_dict()` is called. Focused tests cover
+malformed direct containers, malformed direct entries, malformed serialized
+containers, malformed serialized entries, and valid direct tuple preservation.
 
 ### Conclusion
 

@@ -7,7 +7,7 @@ cleanly, and can materialize text lines into renderer-neutral drawing recipes.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
 from math import isfinite
@@ -142,7 +142,7 @@ class Paragraph(Component):
         self.page_break_before = page_break_before
         self.widow_control = widow_control
         self.outline_level = outline_level
-        self._tab_stops = tuple(tab_stops or [])
+        self._tab_stops = _normalize_tab_stops(tab_stops)
 
     @property
     def text(self) -> str:
@@ -423,7 +423,7 @@ class Paragraph(Component):
             page_break_before=payload["page_break_before"],
             widow_control=payload["widow_control"],
             outline_level=payload["outline_level"],
-            tab_stops=[TabStop.create_from_dict(stop) for stop in payload.get("tab_stops", [])],
+            tab_stops=[TabStop.create_from_dict(stop) for stop in _normalize_tab_stop_payloads(payload.get("tab_stops", []))],
         )
 
     def layout_lines(self) -> tuple[ParagraphLine, ...]:
@@ -573,3 +573,26 @@ def _normalize_tab_stop_index(index: object, tab_stop_count: int) -> int:
     if index < 0 or index >= tab_stop_count:
         raise IndexError("tab stop index out of range")
     return index
+
+
+def _normalize_tab_stops(tab_stops: object) -> tuple[TabStop, ...]:
+    """Normalize direct paragraph tab-stop collections."""
+    if tab_stops is None:
+        return ()
+    if isinstance(tab_stops, (str, bytes)) or not isinstance(tab_stops, Sequence):
+        raise TypeError("tab_stops must be a sequence of TabStop values")
+    stops = tuple(tab_stops)
+    for stop in stops:
+        if not isinstance(stop, TabStop):
+            raise TypeError("tab_stops entries must be TabStop values")
+    return stops
+
+
+def _normalize_tab_stop_payloads(tab_stops: object) -> Sequence[Mapping[str, object]]:
+    """Normalize serialized paragraph tab-stop payload collections."""
+    if isinstance(tab_stops, (str, bytes)) or not isinstance(tab_stops, Sequence):
+        raise TypeError("tab_stops must be a sequence of mappings")
+    for stop in tab_stops:
+        if not isinstance(stop, Mapping):
+            raise TypeError("tab_stops entries must be mappings")
+    return tab_stops
