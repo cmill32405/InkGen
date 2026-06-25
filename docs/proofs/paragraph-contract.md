@@ -115,6 +115,12 @@ Before/after edge changes:
   must be present before constructor routing begins, and missing fields fail
   with explicit `ValueError` messages through both direct paragraph hydration
   and `FlowDocument` paragraph-block hydration.
+- Before `PARAGRAPH-POSITION-PAYLOAD-P2`, serialized paragraph positions were
+  converted with `tuple(position)`, allowing string and bytes payloads such as
+  `"12"` and `b"\x01\x02"` to hydrate into numeric coordinates.
+- After `PARAGRAPH-POSITION-PAYLOAD-P2`, serialized paragraph positions must
+  be explicit two-value list or tuple payloads before numeric coordinate
+  coercion begins.
 - Negative paragraph origins and negative first-line indents remain valid
   because they are legitimate layout choices.
 - No new third-party dependency or dependency edge was introduced.
@@ -159,6 +165,9 @@ ADR/rule impact:
   `space_after`, `line_spacing`, `line_spacing_rule`, `keep_together`,
   `keep_with_next`, `page_break_before`, `widow_control`, and
   `outline_level`.
+- Serialized paragraph position payloads are explicit two-value lists or
+  tuples; strings, bytes, mappings, objects, and wrong-length sequences are
+  rejected before tuple conversion or numeric coercion.
 - Tab-stop removal index is a non-boolean integer in the current tab-stop
   range.
 - Serialized hydration must reject malformed values instead of silently
@@ -195,6 +204,8 @@ ADR/rule impact:
   before override lookup or `TextStyle` construction.
 - Hardened required paragraph field hydration so missing required fields fail
   explicitly before raw mapping indexing errors can escape.
+- Hardened serialized paragraph position payloads so string, bytes, mapping,
+  object, and wrong-length payloads fail before position coercion.
 
 ## Comprehensiveness Matrix
 
@@ -215,6 +226,7 @@ ADR/rule impact:
 | Paragraph root payload | Reject malformed hydration roots and wrapped payloads before field access | PO-PARA-013 | `test_paragraph_hydration_rejects_malformed_root_payloads`, `test_paragraph_hydration_rejects_malformed_wrapped_payloads`, `test_paragraph_hydration_preserves_direct_payload_compatibility` | killed |
 | Paragraph style payload | Reject malformed style envelopes before style override lookup or style construction | PO-PARA-014 | `test_paragraph_hydration_rejects_malformed_style_payloads`, `test_flow_document_paragraph_hydration_rejects_malformed_style_payloads`, `test_paragraph_hydration_preserves_valid_style_override_lookup` | killed |
 | Required paragraph fields | Reject missing required hydration fields before constructor routing | PO-PARA-015 | `test_paragraph_hydration_rejects_missing_required_fields`, `test_flow_document_paragraph_hydration_rejects_missing_required_fields` | killed |
+| Paragraph position payload | Reject string, bytes, mapping, object, and wrong-length serialized positions before coordinate coercion | PO-PARA-016 | `test_paragraph_hydration_rejects_malformed_position_payloads`, `test_flow_document_paragraph_hydration_rejects_malformed_position_payloads`, `test_paragraph_hydration_preserves_valid_position_payloads` | killed |
 
 ## Test Applicability Matrix
 
@@ -259,6 +271,8 @@ Proof-critical mutation targets:
   construction must fail style-payload tests.
 - Allowing missing required paragraph hydration fields to reach raw mapping
   indexing must fail required-field tests.
+- Allowing string, bytes, mapping, object, or wrong-length serialized position
+  payloads to reach coordinate coercion must fail position-payload tests.
 
 Current result:
 
@@ -284,6 +298,8 @@ Current result:
   `PARAGRAPH-STYLE-PAYLOAD-P2`: 11 work items, 11 killed, and 0 survived.
 - Cosmic Ray 8.4.6, scoped to paragraph required-field validation after
   `PARAGRAPH-REQUIRED-FIELDS-P2`: 1 work item, 1 killed, and 0 survived.
+- Cosmic Ray 8.4.6, scoped to paragraph position payload validation after
+  `PARAGRAPH-POSITION-PAYLOAD-P2`: 14 work items, 14 killed, and 0 survived.
 
 ## PO-PARA-001: Valid Paragraphs Remain Live
 
@@ -646,6 +662,33 @@ Hydration routes every required serialized paragraph field through
 mapping and raises an explicit `ValueError` naming the missing field. Focused
 tests enumerate every required field and exercise the `FlowDocument` dependent
 path for a missing paragraph field.
+
+### Conclusion
+
+Proven for the stated domain after tests and mutation pass.
+
+## PO-PARA-016: Paragraph Position Payloads Are Explicit
+
+### Claim
+
+`Paragraph.create_from_dict()` rejects malformed serialized paragraph position
+payloads before tuple conversion or numeric coordinate coercion, and the same
+boundary is preserved when paragraphs are hydrated through `FlowDocument`.
+
+### Domain
+
+Public paragraph hydration through `Paragraph.create_from_dict()` and
+paragraph-block hydration through `FlowDocument.create_from_dict()` for the
+serialized `position` field. Valid list and tuple pairs remain supported.
+
+### Proof Method
+
+Hydration routes the required `position` field through
+`_paragraph_position_payload()`. The helper accepts only list or tuple payloads
+with exactly two entries and returns those two entries for the existing
+constructor coordinate validation. Focused tests cover strings, bytes, objects,
+mappings, short and long lists, the `FlowDocument` dependent path, and valid
+list/tuple pairs.
 
 ### Conclusion
 

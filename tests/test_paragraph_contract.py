@@ -347,6 +347,51 @@ def test_flow_document_paragraph_hydration_rejects_missing_required_fields() -> 
         FlowDocument.create_from_dict(flow_payload, {paragraph.style.name: paragraph.style})
 
 
+@pytest.mark.condition("PARAGRAPH-POSITION-PAYLOAD-P2")
+@pytest.mark.parametrize(
+    "position",
+    ["12", b"\x01\x02", object(), {"x": 1.0, "y": 2.0}, [1.0], [1.0, 2.0, 3.0]],
+)
+def test_paragraph_hydration_rejects_malformed_position_payloads(position: object) -> None:
+    """PARAGRAPH-POSITION-PAYLOAD-P2: Serialized positions must be explicit pairs."""
+    paragraph = _paragraph("Persisted")
+    payload = paragraph.parameters
+    payload["Paragraph"]["position"] = position
+
+    with pytest.raises(ValueError, match="Paragraph position payload must be a two-value list or tuple"):
+        Paragraph.create_from_dict(payload, {paragraph.style.name: paragraph.style})
+
+
+@pytest.mark.condition("PARAGRAPH-POSITION-PAYLOAD-P2")
+def test_flow_document_paragraph_hydration_rejects_malformed_position_payloads() -> None:
+    """PARAGRAPH-POSITION-PAYLOAD-P2: FlowDocument preserves position payload errors."""
+    paragraph = _paragraph("Persisted")
+    flow_payload = {
+        "FlowDocument": {
+            "title": "Bad Paragraph Position",
+            "blocks": [{"type": "paragraph", "payload": paragraph.parameters}],
+        },
+    }
+    paragraph_payload = flow_payload["FlowDocument"]["blocks"][0]["payload"]
+    paragraph_payload["Paragraph"]["position"] = "12"
+
+    with pytest.raises(ValueError, match="Paragraph position payload must be a two-value list or tuple"):
+        FlowDocument.create_from_dict(flow_payload, {paragraph.style.name: paragraph.style})
+
+
+@pytest.mark.condition("PARAGRAPH-POSITION-PAYLOAD-P2")
+@pytest.mark.parametrize("position", [[3.0, 4.0], (5.0, 6.0)])
+def test_paragraph_hydration_preserves_valid_position_payloads(position: object) -> None:
+    """PARAGRAPH-POSITION-PAYLOAD-P2: Valid serialized position pairs still hydrate."""
+    paragraph = _paragraph("Persisted")
+    payload = paragraph.parameters
+    payload["Paragraph"]["position"] = position
+
+    clone = Paragraph.create_from_dict(payload, {paragraph.style.name: paragraph.style})
+
+    assert clone.position == tuple(position)  # type: ignore[arg-type]
+
+
 @pytest.mark.condition("PARAGRAPH-TAB-INDEX-P2")
 def test_paragraph_remove_tab_stop_rejects_python_index_coercion() -> None:
     """PARAGRAPH-TAB-INDEX-P2: Tab-stop removal indexes must be explicit public indexes."""

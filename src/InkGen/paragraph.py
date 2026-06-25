@@ -406,11 +406,11 @@ class Paragraph(Component):
         style_payload = _paragraph_style_payload(payload)
         style_name = _paragraph_style_name(style_payload)
         style = styles.get(style_name) or TextStyle.create_from_dict(style_payload)
-        position = _required_paragraph_field(payload, "position")
+        position = _paragraph_position_payload(_required_paragraph_field(payload, "position"))
         tab_stops = _normalize_tab_stop_payloads(payload.get("tab_stops", []))
         return cls(
             _required_paragraph_field(payload, "text"),  # type: ignore[arg-type]
-            position=tuple(position),  # type: ignore[arg-type]
+            position=position,  # type: ignore[arg-type]
             width=_required_paragraph_field(payload, "width"),  # type: ignore[arg-type]
             style=style,
             alignment=_required_paragraph_field(payload, "alignment"),  # type: ignore[arg-type]
@@ -614,6 +614,13 @@ def _required_paragraph_field(payload: Mapping[str, object], name: str) -> objec
     if name not in payload:
         raise ValueError(f"Paragraph payload must include {name}")
     return payload[name]
+
+
+def _paragraph_position_payload(position: object) -> tuple[object, object]:
+    """Normalize a serialized paragraph position before numeric coercion."""
+    if not isinstance(position, (tuple, list)) or len(position) != 2:
+        raise ValueError("Paragraph position payload must be a two-value list or tuple")
+    return (position[0], position[1])
 
 
 def _normalize_tab_stop_index(index: object, tab_stop_count: int) -> int:
