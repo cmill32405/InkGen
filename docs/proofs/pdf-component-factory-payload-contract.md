@@ -57,8 +57,8 @@ Public contract:
 - Compact geometry payloads remain valid when an explicit style object is
   supplied.
 - Malformed roots, missing class keys, non-mapping payloads, missing required
-  fields, and malformed `PathPDF` command envelopes fail explicitly at the PDF
-  factory boundary.
+  fields, malformed `PathPDF` command envelopes, and non-string `PathPDF`
+  command types fail explicitly at the PDF factory boundary.
 
 Serialized/artifact contract:
 
@@ -100,6 +100,7 @@ ADR/rule impact:
 | Missing style without explicit style | Reject explicitly | PO-PDFCPF-003 | style-required tests | killed |
 | Explicit-style compact payload | Preserve compatibility | PO-PDFCPF-004 | compact-payload test | killed |
 | Path command envelope | Reject malformed commands explicitly | PO-PDFCPF-005 | path-command tests | killed |
+| Path command type | Reject non-string command types before `PathCommand` construction | PO-PDFCPF-007 | path-command tests | mutation target |
 | Component group dependent path | Child PDF factory contract remains live | PO-PDFCPF-006 | group-hydration test | killed |
 
 ## Test Applicability Matrix
@@ -131,6 +132,16 @@ Current result:
 - Raw work items: 1998.
 - Proof-critical work items after filter: 38.
 - Killed mutants: 38.
+- Surviving mutants: 0.
+- Gate result: pass.
+
+Extension result for `PDF-PATH-COMMAND-TYPE-P2`:
+
+- Config: `tests/mutation/pdf_path_command_type_cosmic_ray.toml`.
+- Filter: `tests/mutation/filter_pdf_path_command_type_work_items.py`.
+- Raw work items: 2019.
+- Proof-critical work items after filter: 5.
+- Killed mutants: 5.
 - Surviving mutants: 0.
 - Gate result: pass.
 
@@ -240,3 +251,25 @@ The dependent-path test hydrates a valid group, then removes a required
 ### Conclusion
 
 Proven for the `ComponentGroupPDF` child-factory dependent path.
+
+## PO-PDFCPF-007: Path Command Type Is Not Stringified
+
+### Claim
+
+`PathPDF.create_from_dict()` rejects non-string serialized command `type`
+values before they can be stringified into unsupported command names.
+
+### Domain
+
+Command mappings supplied through `PathPDF.create_from_dict()` and dependent
+PDF group hydration.
+
+### Proof Method
+
+`_path_command_from_dict()` reads `type` through `_pdf_required_field()` and
+checks that the value is a string before constructing `PathCommand`. Condition
+tests cover object, integer, and boolean command-type payloads.
+
+### Conclusion
+
+Proven after focused tests and mutation pass.

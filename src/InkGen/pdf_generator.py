@@ -305,7 +305,10 @@ def _path_command_from_dict(data: object) -> PathCommand:
     """Recreate a PathCommand from serialized command parameters."""
     if not isinstance(data, Mapping):
         raise TypeError("PathPDF command payload must be a mapping")
-    command = PathCommand(str(_pdf_required_field(data, "type", "PathPDF command")), data.get("points", []))
+    command_type = _pdf_required_field(data, "type", "PathPDF command")
+    if not isinstance(command_type, str):
+        raise TypeError("PathPDF command type must be a string")
+    command = PathCommand(command_type, data.get("points", []))
     flags = data.get("flags")
     if flags:
         command.flags = flags
