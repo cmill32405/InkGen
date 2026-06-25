@@ -324,8 +324,13 @@ class Table(Component):
             row_data = _normalize_payload_mapping(row_data_value, name="row payload")
             row = table.add_row(height=row_data["height"])
             row.height_rule = _normalize_autofit_rule(row_data["height_rule"], name="height_rule")
-        for row_index, row_payload_value in enumerate(_normalize_payload_sequence(payload.get("matrix", []), name="matrix")):
+        matrix_payload = _normalize_payload_sequence(payload.get("matrix", []), name="matrix")
+        if len(matrix_payload) != table.row_count:
+            raise ValueError("matrix row count must match table rows")
+        for row_index, row_payload_value in enumerate(matrix_payload):
             row_payload = _normalize_payload_sequence(row_payload_value, name="matrix row")
+            if len(row_payload) != table.column_count:
+                raise ValueError("matrix column count must match table columns")
             for column_index, cell_payload_value in enumerate(row_payload):
                 cell_payload = _normalize_payload_mapping(cell_payload_value, name="cell payload")
                 cell = table.cell(row_index, column_index)

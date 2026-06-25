@@ -654,3 +654,73 @@ def test_table_valid_indexes_remain_live_through_svg_and_flow_document() -> None
 
     assert "A1\tA2" in document.to_plain_text()
     assert "B1\tB2" in document.to_plain_text()
+
+
+@pytest.mark.condition("TABLE-MATRIX-DIMENSIONS-P2")
+@pytest.mark.parametrize(
+    ("mutate", "message"),
+    [
+        (lambda payload: payload["Table"].pop("matrix"), "matrix row count must match table rows"),
+        (lambda payload: payload["Table"].__setitem__("matrix", []), "matrix row count must match table rows"),
+        (lambda payload: payload["Table"]["matrix"].pop(), "matrix row count must match table rows"),
+        (lambda payload: payload["Table"]["matrix"].append(payload["Table"]["matrix"][0].copy()), "matrix row count must match table rows"),
+        (lambda payload: payload["Table"]["matrix"][0].pop(), "matrix column count must match table columns"),
+        (
+            lambda payload: payload["Table"]["matrix"][0].append(payload["Table"]["matrix"][0][0].copy()),
+            "matrix column count must match table columns",
+        ),
+    ],
+)
+def test_table_hydration_rejects_mismatched_matrix_dimensions(mutate, message: str) -> None:
+    """TABLE-MATRIX-DIMENSIONS-P2: Hydrated matrix dimensions must match rows and columns."""
+    payload = _two_by_two_table().parameters
+    mutate(payload)
+
+    with pytest.raises(ValueError, match=message):
+        Table.create_from_dict(payload)
+
+
+@pytest.mark.condition("TABLE-MATRIX-DIMENSIONS-P2")
+def test_table_hydration_rectangular_matrix_remains_live() -> None:
+    """TABLE-MATRIX-DIMENSIONS-P2: Rectangular matrices hydrate without data loss."""
+    clone = Table.create_from_dict(_two_by_two_table().parameters)
+
+    assert clone.row_count == 2
+    assert clone.column_count == 2
+    assert clone.cell(0, 0).text == "A1"
+    assert clone.cell(1, 1).text == "B2"
+
+    group = TableSVG.from_table(
+        clone,
+        group_label="matrix-table",
+        border_style=_border_style(),
+        text_styles=_text_styles(),
+    )
+    assert any(type(component) is TextSVG and component.text == "B2" for component in group.components())
+
+    document = FlowDocument(title="Matrix table")
+    document.add_table(clone)
+    assert "A1\tA2" in document.to_plain_text()
+    assert "B1\tB2" in document.to_plain_text()
+
+
+@pytest.mark.condition("TABLE-MATRIX-DIMENSIONS-P2")
+def test_table_hydration_matrix_dimensions_compare_by_value_not_identity() -> None:
+    """TABLE-MATRIX-DIMENSIONS-P2: Matrix dimensions compare numeric value, not object identity."""
+    row_heavy_table = Table(position=(0.0, 0.0))
+    row_heavy_table.add_column(width=1.0)
+    for _ in range(300):
+        row_heavy_table.add_row(height=1.0)
+
+    row_heavy_clone = Table.create_from_dict(row_heavy_table.parameters)
+    assert row_heavy_clone.row_count == 300
+    assert row_heavy_clone.column_count == 1
+
+    column_heavy_table = Table(position=(0.0, 0.0))
+    for _ in range(300):
+        column_heavy_table.add_column(width=1.0)
+    column_heavy_table.add_row(height=1.0)
+
+    column_heavy_clone = Table.create_from_dict(column_heavy_table.parameters)
+    assert column_heavy_clone.row_count == 1
+    assert column_heavy_clone.column_count == 300
