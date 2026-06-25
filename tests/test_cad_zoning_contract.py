@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from uuid import uuid4
 
 import pytest
@@ -101,6 +102,93 @@ def test_legacy_zoning_rejects_invalid_boundary_parameters(
         error_type = KeyError if "unknown" in kwargs else ValueError
         with pytest.raises(error_type):
             Zoning(canvas, line_style, text_style, **kwargs)
+
+
+@pytest.mark.condition("CAD-ZONING-FINITE-P2")
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"margins": True},
+        {"left_margin": False},
+        {"top_margin": -0.5},
+        {"zone_width": math.nan},
+        {"right_zone_width": math.inf},
+        {"bottom_zone_width": -math.inf},
+        {"inner_radius": math.nan},
+        {"outer_radius": math.inf},
+        {"horizontal_zones": True},
+        {"vertical_zones": False},
+        {"horizontal_zones": -2},
+        {"vertical_zones": -4},
+        {"first_horizontal_char": object()},
+        {"first_vertical_char": 64},
+        {"first_horizontal_char": True},
+        {"first_vertical_char": False},
+    ],
+)
+def test_legacy_zoning_rejects_bool_and_nonfinite_parameters(
+    canvas: Canvas,
+    line_style: DrawingStyle,
+    text_style: TextStyle,
+    kwargs: dict[str, object],
+) -> None:
+    """CAD-ZONING-FINITE-P2: Zoning rejects bool and non-finite numeric overrides."""
+    with pytest.raises(ValueError):
+        Zoning(canvas, line_style, text_style, **kwargs)
+
+
+@pytest.mark.condition("CAD-ZONING-FINITE-P2")
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"margins": True},
+        {"left_margin": False},
+        {"top_margin": -0.5},
+        {"zone_width": math.nan},
+        {"right_zone_width": math.inf},
+        {"bottom_zone_width": -math.inf},
+        {"inner_radius": math.nan},
+        {"outer_radius": math.inf},
+    ],
+)
+def test_legacy_zoning_rejects_malformed_positive_reals_at_boundary(
+    canvas: Canvas,
+    line_style: DrawingStyle,
+    text_style: TextStyle,
+    kwargs: dict[str, object],
+) -> None:
+    """CAD-ZONING-FINITE-P2: Positive-real failures occur at the zoning boundary."""
+    with pytest.raises(ValueError, match="finite positive floating point number or integer"):
+        Zoning(canvas, line_style, text_style, **kwargs)
+
+
+@pytest.mark.condition("CAD-ZONING-FINITE-P2")
+def test_legacy_zoning_accepts_finite_boundary_parameters(
+    canvas: Canvas,
+    line_style: DrawingStyle,
+    text_style: TextStyle,
+) -> None:
+    """CAD-ZONING-FINITE-P2: Valid finite boundary values remain accepted."""
+    zoning = Zoning(
+        canvas,
+        line_style,
+        text_style,
+        margins=0.0,
+        zone_width=0.0,
+        inner_radius=0.0,
+        outer_radius=0.0,
+        horizontal_zones=2,
+        vertical_zones=2,
+        first_horizontal_char=48,
+        first_vertical_char=65,
+    )
+
+    assert zoning._parameters["left_margin"] == 0.0
+    assert zoning._parameters["left_zone_width"] == 0.0
+    assert zoning._parameters["horizontal_zones"] == 2
+    assert zoning._parameters["vertical_zones"] == 2
+    assert zoning._parameters["first_horizontal_char"] == 48
+    assert zoning._parameters["first_vertical_char"] == 65
 
 
 @pytest.mark.condition("CAD-ZONING-P1")

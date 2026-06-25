@@ -1,9 +1,10 @@
 # CAD Zoning Contract Proof Obligations
 
 This note applies the InkGen Definition of Done to the CAD-ZONING-P1 legacy
-zoning slice. It focuses on documenting and proving the intentional
-SVG-specific `cad_component_groups.Zoning` path, including CSS-like parameter
-specificity and serialization.
+zoning slice and CAD-ZONING-FINITE-P2 boundary slice. It focuses on documenting
+and proving the intentional SVG-specific `cad_component_groups.Zoning` path,
+including CSS-like parameter specificity, finite numeric boundaries, and
+serialization.
 
 ## Scope
 
@@ -46,6 +47,10 @@ Before/after edge changes:
   but were ignored during specificity resolution because truthiness was used.
 - After this slice, explicit zero values are honored by the same specificity
   rules as any other provided value.
+- Before CAD-ZONING-FINITE-P2, `bool`, `nan`, and infinity could pass parts of
+  legacy zoning numeric validation and reach SVG geometry generation.
+- After CAD-ZONING-FINITE-P2, margin, width, and radius overrides must be
+  non-boolean finite nonnegative numbers before geometry generation.
 - No dependency edge or third-party dependency was introduced.
 
 Cycle/layer/coupling/redundancy result:
@@ -88,6 +93,8 @@ ADR/rule impact:
 
 - `_set_margins()` now treats `0.0` as a supplied value.
 - `_set_zoning_widths()` now treats `0.0` as a supplied value.
+- `Zoning.__init__()` now rejects boolean and non-finite margin, width, and
+  radius overrides before geometry generation.
 
 ## Comprehensiveness Matrix
 
@@ -96,6 +103,7 @@ ADR/rule impact:
 | Valid default zoning | Emit SVG rectangles, lines, and text labels | PO-CADZ-001 | `test_legacy_zoning_emits_only_svg_components` | behavioral evidence |
 | Explicit zero margin/width | Preserve as supplied most-specific values | PO-CADZ-002 | `test_legacy_zoning_honors_zero_specific_margins_and_widths` | killed |
 | Invalid parameter types/ranges/names | Reject before geometry generation | PO-CADZ-003 | `test_legacy_zoning_rejects_invalid_boundary_parameters` | behavioral evidence |
+| Boolean and non-finite positive-real overrides | Reject before SVG geometry generation | PO-CADZ-006 | `test_legacy_zoning_rejects_bool_and_nonfinite_parameters`, `test_legacy_zoning_accepts_finite_boundary_parameters` | mutation target |
 | Serialization with style registry | Preserve parameters and generated component geometry | PO-CADZ-004 | `test_legacy_zoning_round_trips_parameters_with_style_registry` | behavioral evidence |
 | Default zone width calculation | Use widest A/W/Y text outline plus padding | PO-CADZ-005 | `test_legacy_zoning_default_width_tracks_text_outline` | killed |
 | Multi-format zoning | Excluded from legacy helper | Explicit exclusion | `ZoningDrawing` tests | Out of scope |
@@ -106,7 +114,7 @@ ADR/rule impact:
 |---|---|---|---|
 | Unit | yes | Parameter specificity and serialization are deterministic. | CAD-ZONING-P1 tests |
 | Behavioral/condition | yes | The slice defines the legacy zoning contract. | Tests are marked `@pytest.mark.condition("CAD-ZONING-P1")`. |
-| Failure-mode | yes | Invalid parameters must fail before component generation. | Invalid-boundary test |
+| Failure-mode | yes | Invalid, boolean, and non-finite parameters must fail before component generation. | Invalid-boundary and finite-boundary tests |
 | Integration/live-path | yes | `Zoning.component_group` is consumed by SVG/component-group paths and compared to `ZoningDrawing`. | Focused and existing tests |
 | Contract/API compatibility | yes | Existing legacy parameters and round trip must remain compatible. | Existing legacy tests |
 | Property/fuzz | no | This slice proves finite parameter partitions. | Not applicable |
@@ -125,11 +133,23 @@ Proof-critical mutation targets:
   test.
 - Changing resolved margin or zone-width assignments should fail parameter and
   geometry assertions.
+- Weakening finite/non-boolean numeric validation should fail
+  `test_legacy_zoning_rejects_bool_and_nonfinite_parameters`.
 
 Current result:
 
 - Cosmic Ray 8.4.6, scoped to margin/zone-width specificity checks and resolved
   assignment rows: 20 work items, 20 killed, and 0 survived.
+
+CAD-ZONING-FINITE-P2 current result:
+
+- Focused tests: `35 passed`.
+- Mutation: `18` proof-critical work items, `18 killed`, `0 survivors`.
+- Ruff lint passed for touched Python files. Ruff format check passed for new
+  and already-formatted touched files; `src/InkGen/cad_component_groups.py`
+  remains a legacy broad-format exception and was not reformatted in this
+  narrow behavior slice.
+- Full coverage gate: `866 passed`, total coverage `94%`.
 
 ## PO-CADZ-001: Legacy Zoning Emits SVG Components
 
@@ -232,6 +252,37 @@ Valid zoning instances without explicit zone-width overrides.
 ### Conclusion
 
 Supported by behavioral evidence; assignment rows are included in mutation.
+
+## PO-CADZ-006: Numeric Overrides Are Finite And Non-Boolean
+
+### Claim
+
+Legacy `Zoning` rejects boolean and non-finite margin, width, and radius
+overrides before SVG geometry generation.
+
+### Domain
+
+Constructor keyword overrides for margin, zone-width, and radius fields.
+
+### Proof Method
+
+Positive-real override fields are accepted only when they are not booleans, are
+`int` or `float`, are finite under `math.isfinite(float(value))`, and are
+nonnegative. Focused tests cover booleans, `nan`, positive infinity, negative
+infinity, and accepted finite zero boundaries. Zone-count and first-character
+boolean cases remain covered as existing invalid-parameter partitions.
+
+### Counterexamples And Exclusions
+
+The legacy helper remains SVG-specific by design. It does not attempt to
+validate whether a valid finite set of overrides leaves enough interior drawing
+space; generated geometry compatibility remains covered by existing zoning
+geometry tests.
+
+### Conclusion
+
+Supported by focused CAD zoning tests, scoped mutation testing, and the full
+coverage gate for the stated positive-real finite boundary.
 
 ## Current Slice Decision
 

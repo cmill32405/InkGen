@@ -1,5 +1,7 @@
 """ CAD Generation Classes for Generating the Major components of a CAD drawing
 """
+import math
+
 from InkGen.boundary import Canvas
 from InkGen.component import ComponentGroup, TextComponent
 from InkGen.style import DrawingStyle, TextStyle
@@ -106,9 +108,8 @@ class Zoning:
 
         for k, v in kwargs.items():
             if k in self._parameters:
-                if k in positive_reals and (v is not None) and \
-                    (not isinstance(v, (float, int)) or v < 0):
-                    raise ValueError(f"{k} should be a positive floating point number or integer")
+                if k in positive_reals and v is not None and not _is_finite_nonnegative_number(v):
+                    raise ValueError(f"{k} should be a finite positive floating point number or integer")
                 if k in ints and (v is not None) and \
                     (not isinstance(v, int) or v % 2 != 0  or v <= 0):
                     raise ValueError(f"{k} should be an even integer")
@@ -387,3 +388,13 @@ class Zoning:
                      **data['Zoning']['parameters'])
 
         return zoning
+
+
+def _is_finite_nonnegative_number(value: object) -> bool:
+    """Return whether a zoning numeric override is finite and nonnegative."""
+    if isinstance(value, bool):
+        return False
+    if not isinstance(value, (float, int)):
+        return False
+    numeric = float(value)
+    return math.isfinite(numeric) and numeric >= 0
