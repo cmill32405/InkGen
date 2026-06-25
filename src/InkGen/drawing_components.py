@@ -87,6 +87,27 @@ def _coerce_non_negative_point_pair(value: object, *, name: str) -> tuple[float,
     return x, y
 
 
+def _coerce_finite_float(value: object, *, name: str) -> float:
+    """Normalize renderer-neutral scalar payloads to finite floats."""
+    if isinstance(value, bool):
+        raise TypeError(f"{name} must be numeric")
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise TypeError(f"{name} must be numeric") from exc
+    if not isfinite(number):
+        raise ValueError(f"{name} must be finite")
+    return number
+
+
+def _coerce_finite_positive_float(value: object, *, name: str) -> float:
+    """Normalize renderer-neutral scalar payloads to finite positive floats."""
+    number = _coerce_finite_float(value, name=name)
+    if number <= 0.0:
+        raise ValueError(f"{name} must be greater than zero")
+    return number
+
+
 @dataclass(frozen=True)
 class RectangleDrawing:
     """Renderer-neutral rectangle primitive."""
@@ -186,7 +207,19 @@ class ArcDrawing:
     rotation: float = 0.0
 
     def __post_init__(self) -> None:
-        """Validate the neutral arc style boundary."""
+        """Validate the neutral arc geometry and style boundary."""
+        center = _coerce_point_pair(self.center, name="ArcDrawing center")
+        radius_x = _coerce_finite_positive_float(self.radius_x, name="ArcDrawing radius_x")
+        radius_y = _coerce_finite_positive_float(self.radius_y, name="ArcDrawing radius_y")
+        start_angle = _coerce_finite_float(self.start_angle, name="ArcDrawing start_angle")
+        end_angle = _coerce_finite_float(self.end_angle, name="ArcDrawing end_angle")
+        rotation = _coerce_finite_float(self.rotation, name="ArcDrawing rotation")
+        object.__setattr__(self, "center", center)
+        object.__setattr__(self, "radius_x", radius_x)
+        object.__setattr__(self, "radius_y", radius_y)
+        object.__setattr__(self, "start_angle", start_angle)
+        object.__setattr__(self, "end_angle", end_angle)
+        object.__setattr__(self, "rotation", rotation)
         _require_drawing_style(self.style, "ArcDrawing")
 
     def to_component(self, output_format: OutputFormat | str) -> Component:

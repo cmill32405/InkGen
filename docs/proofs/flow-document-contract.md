@@ -189,6 +189,9 @@ ADR/rule impact:
   shape before delegating command semantics to `PathCommand`.
 - `PathCommand` validates serialized path command point-entry shape for
   `FlowDocument` path hydration.
+- `ArcDrawing` validates serialized neutral arc geometry during
+  `FlowDocument` drawing component hydration before malformed center, radius,
+  angle, or rotation payloads can become public neutral drawing state.
 - `_normalize_output_filepath()` validates all flow-document file-writer output
   paths before text or byte writes.
 
@@ -207,6 +210,7 @@ ADR/rule impact:
 | Serialized drawing style envelope | Reject missing/malformed style envelopes, mismatched style keys, non-string style names, and wrong-type style overrides | PO-FDOC-011 | `test_flow_document_hydration_rejects_malformed_drawing_style_payloads`, `test_flow_document_hydration_rejects_mismatched_drawing_style_overrides`, `test_flow_document_hydration_constructs_missing_drawing_style_overrides_by_kind` | killed |
 | Style override map boundary | Reject non-mapping `styles` values before block hydration | PO-FDOC-015 | `test_flow_document_hydration_rejects_malformed_style_override_maps` | killed |
 | Serialized path command envelope | Reject malformed `PathDrawing` command collections before `PathCommand` construction and delegate point-entry shape validation to `PathCommand` | PO-FDOC-012 | `test_flow_document_hydration_rejects_malformed_path_command_payloads` | killed |
+| Serialized arc drawing geometry | Reject malformed `ArcDrawing` center, radius, angle, and rotation payloads by dispatching through the neutral constructor | PO-FDOC-018 | `test_flow_document_hydration_rejects_malformed_arc_geometry_payloads` | mutation target in arc slice |
 | File writer path boundary | Accept string/path-like output paths and reject malformed output path values before writing | PO-FDOC-013 | `test_flow_document_file_writers_accept_pathlike_outputs`, `test_flow_document_file_writers_reject_malformed_paths`, `test_flow_document_file_writers_fail_on_missing_directory` | killed |
 | Malformed serialized drawing label | Reject through the neutral group label contract | PO-FDOC-006 | `test_flow_document_drawing_group_hydration_rejects_malformed_label` | behavioral evidence |
 | Invalid drawing materialization | Reject before silent omission | PO-FDOC-004 | `test_flow_document_rejects_invalid_drawing_materialization` | killed |
