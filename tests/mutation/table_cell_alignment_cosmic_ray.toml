@@ -1,0 +1,13 @@
+[cosmic-ray]
+module-path = [
+  "src/InkGen/table.py",
+]
+timeout = 90.0
+excluded-modules = []
+test-command = "/home/ubuntu/.cache/inkgen_mutation_venv/bin/python -m pytest -x tests/test_table_contract.py tests/test_table.py"
+
+[cosmic-ray.distributor]
+name = "local"
+
+[cosmic-ray.filters.operators-filter]
+exclude-operators = []

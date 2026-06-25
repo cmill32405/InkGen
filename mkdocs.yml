@@ -71,6 +71,7 @@ nav:
       - Zoning Drawing Payload Contract: proofs/zoning-drawing-payload-contract.md
       - Table Contract: proofs/table-contract.md
       - Table Autofit Boolean Contract: proofs/table-autofit-contract.md
+      - Table Cell Alignment Contract: proofs/table-cell-alignment-contract.md
       - DXF Renderer Contract: proofs/dxf-renderer-contract.md
   - Architecture Diagrams: architecture-diagrams.md
   - Notes:

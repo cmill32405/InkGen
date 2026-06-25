@@ -32,6 +32,17 @@ def _text_styles() -> dict[str, TextStyle]:
     return {"body": TextStyle(name=f"table_body_{uuid4().hex}", font=Font())}
 
 
+class _StringEquivalent:
+    def __init__(self, value: str) -> None:
+        self._value = value
+
+    def __eq__(self, other: object) -> bool:
+        return other == self._value
+
+    def __hash__(self) -> int:
+        return hash(self._value)
+
+
 @pytest.mark.condition("TABLE-P1")
 def test_table_rejects_nonfinite_and_boolean_positions() -> None:
     """TABLE-P1: Table origins must be finite numeric coordinates."""
@@ -212,3 +223,53 @@ def test_table_autofit_false_suppresses_queue_entries() -> None:
 
     assert table.autofit is False
     assert table.autofit_queue == []
+
+
+@pytest.mark.condition("TABLE-CELL-ALIGNMENT-P2")
+def test_table_cell_vertical_alignment_rejects_non_string_selectors() -> None:
+    """TABLE-CELL-ALIGNMENT-P2: Alignment accepts only real strings."""
+    cell = _table().cell(0, 0)
+    cell.vertical_alignment = "middle"
+
+    for value in [_StringEquivalent("bottom"), b"bottom", object(), None]:
+        with pytest.raises(TypeError, match="Alignment must be a string"):
+            cell.vertical_alignment = value  # type: ignore[assignment]
+        assert cell.vertical_alignment == "middle"
+
+    with pytest.raises(ValueError, match="Alignment must be one"):
+        cell.vertical_alignment = "diagonal"
+    assert cell.vertical_alignment == "middle"
+
+
+@pytest.mark.condition("TABLE-CELL-ALIGNMENT-P2")
+def test_table_cell_vertical_alignment_hydration_rejects_non_string_selector() -> None:
+    """TABLE-CELL-ALIGNMENT-P2: Serialized alignment cannot bypass string validation."""
+    payload = _table().parameters
+    payload["Table"]["matrix"][0][0]["vertical_alignment"] = _StringEquivalent("bottom")
+
+    with pytest.raises(TypeError, match="Alignment must be a string"):
+        Table.create_from_dict(payload)
+
+
+@pytest.mark.condition("TABLE-CELL-ALIGNMENT-P2")
+def test_table_cell_vertical_alignment_valid_strings_hydrate_and_render() -> None:
+    """TABLE-CELL-ALIGNMENT-P2: Valid alignment remains live through hydration and SVG output."""
+    table = _table()
+    table.cell(0, 0).vertical_alignment = "middle"
+
+    clone = Table.create_from_dict(table.parameters)
+    assert clone.cell(0, 0).vertical_alignment == "middle"
+
+    group = TableSVG.from_table(
+        clone,
+        group_label="aligned-table",
+        border_style=_border_style(),
+        text_styles=_text_styles(),
+    )
+    text_components = [component for component in group.components() if type(component) is TextSVG]
+    assert len(text_components) == 1
+    assert text_components[0].text == "A1"
+
+    document = FlowDocument(title="Aligned table")
+    document.add_table(clone)
+    assert "A1" in document.to_plain_text()

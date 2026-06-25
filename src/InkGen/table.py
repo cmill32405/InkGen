@@ -162,9 +162,7 @@ class Table(Component):
         """
         return tuple(self._matrix[row][column] for row in range(self.row_count))
 
-    def cell_bounds(
-        self, row: int, column: int
-    ) -> tuple[tuple[float, float], float, float]:
+    def cell_bounds(self, row: int, column: int) -> tuple[tuple[float, float], float, float]:
         """Return the top-left coordinate, width, and height for a cell."""
         if not (0 <= row < self.row_count and 0 <= column < self.column_count):
             raise IndexError("Cell coordinates outside table dimensions")
@@ -302,10 +300,7 @@ class Table(Component):
                 "rows": [row.parameters for row in self._rows],
                 "columns": [column.parameters for column in self._columns],
                 "padding": list(self._padding),
-                "matrix": [
-                    [cell.parameters for cell in row]
-                    for row in self._matrix
-                ],
+                "matrix": [[cell.parameters for cell in row] for row in self._matrix],
             }
         }
 
@@ -417,10 +412,7 @@ def _normalize_padding(value: float | tuple[float, float, float, float] | list[f
         pad = _coerce_finite_float(value, name="Padding", allow_negative=False)
         return (pad, pad, pad, pad)
     if isinstance(value, (tuple, list)) and len(value) == 4:
-        return tuple(
-            _coerce_finite_float(v, name="Padding", allow_negative=False)
-            for v in value
-        )  # type: ignore[arg-type]
+        return tuple(_coerce_finite_float(v, name="Padding", allow_negative=False) for v in value)  # type: ignore[arg-type]
     raise ValueError("Padding must be a float or an iterable of four floats")
 
 
@@ -445,6 +437,15 @@ def _normalize_bool(value: object, *, name: str) -> bool:
     return value
 
 
+def _normalize_vertical_alignment(value: object, allowed: set[str]) -> str:
+    """Normalize a public cell vertical-alignment selector."""
+    if not isinstance(value, str):
+        raise TypeError("Alignment must be a string")
+    if value not in allowed:
+        raise ValueError("Alignment must be one of 'top', 'middle', or 'bottom'")
+    return value
+
+
 def _coerce_finite_float(value: float, *, name: str, allow_negative: bool = True) -> float:
     """Coerce a public table dimension value into a finite float."""
     if isinstance(value, bool):
@@ -461,7 +462,6 @@ def _coerce_finite_float(value: float, *, name: str, allow_negative: bool = True
 
 
 class Row:
-
     """Row metadata wrapper."""
 
     def __init__(self, table: Table, height: float) -> None:
@@ -754,9 +754,7 @@ class Cell:
         Raises:
             ValueError: If value is not one of the allowed alignments.
         """
-        if value not in self._ALLOWED_ALIGNMENTS:
-            raise ValueError("Alignment must be one of 'top', 'middle', or 'bottom'")
-        self._vertical_alignment = value
+        self._vertical_alignment = _normalize_vertical_alignment(value, self._ALLOWED_ALIGNMENTS)
 
     # Paragraph handling ------------------------------------------------
     @property
@@ -867,8 +865,7 @@ class Cell:
     def parameters(self) -> dict:
         return {
             "paragraphs": [
-                {"text": text, "style_id": style_id}
-                for text, style_id in zip(self._paragraph_text, self._paragraph_styles, strict=False)
+                {"text": text, "style_id": style_id} for text, style_id in zip(self._paragraph_text, self._paragraph_styles, strict=False)
             ],
             "merged": self._merged,
             "merge_start": list(self._merge_start),
