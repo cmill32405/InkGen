@@ -456,3 +456,61 @@ def test_table_autofit_rule_hydration_valid_strings_remain_live() -> None:
     assert clone.columns[0].width_rule is AutoFitRule.FIT
     assert clone.rows[0].height_rule is AutoFitRule.CUT
     assert clone.autofit_queue[-1] == ((0, 0), AutoFitRule.CUT, AutoFitRule.FIT)
+
+
+@pytest.mark.condition("TABLE-PAYLOAD-ENVELOPE-P2")
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        ("not a mapping", "table payload must be a mapping"),
+        ({"Table": "not a mapping"}, "Table payload must be a mapping"),
+    ],
+)
+def test_table_hydration_rejects_malformed_root_payloads(payload: object, message: str) -> None:
+    """TABLE-PAYLOAD-ENVELOPE-P2: Root table payloads must be mappings."""
+    with pytest.raises(TypeError, match=message):
+        Table.create_from_dict(payload)  # type: ignore[arg-type]
+
+
+@pytest.mark.condition("TABLE-PAYLOAD-ENVELOPE-P2")
+@pytest.mark.parametrize(
+    ("mutate", "message"),
+    [
+        (lambda payload: payload["Table"].__setitem__("columns", "bad"), "columns must be a sequence"),
+        (lambda payload: payload["Table"]["columns"].__setitem__(0, []), "column payload must be a mapping"),
+        (lambda payload: payload["Table"].__setitem__("rows", "bad"), "rows must be a sequence"),
+        (lambda payload: payload["Table"]["rows"].__setitem__(0, []), "row payload must be a mapping"),
+        (lambda payload: payload["Table"].__setitem__("matrix", "bad"), "matrix must be a sequence"),
+        (lambda payload: payload["Table"]["matrix"].__setitem__(0, "bad"), "matrix row must be a sequence"),
+        (lambda payload: payload["Table"]["matrix"][0].__setitem__(0, []), "cell payload must be a mapping"),
+        (lambda payload: payload["Table"]["matrix"][0][0].__setitem__("paragraphs", "bad"), "paragraphs must be a sequence"),
+        (lambda payload: payload["Table"]["matrix"][0][0]["paragraphs"].__setitem__(0, []), "paragraph payload must be a mapping"),
+    ],
+)
+def test_table_hydration_rejects_malformed_collection_envelopes(mutate, message: str) -> None:
+    """TABLE-PAYLOAD-ENVELOPE-P2: Nested table payload envelopes must be explicit shapes."""
+    payload = _table().parameters
+    mutate(payload)
+
+    with pytest.raises(TypeError, match=message):
+        Table.create_from_dict(payload)
+
+
+@pytest.mark.condition("TABLE-PAYLOAD-ENVELOPE-P2")
+def test_table_hydration_valid_envelopes_remain_live() -> None:
+    """TABLE-PAYLOAD-ENVELOPE-P2: Valid payload envelopes still hydrate and render."""
+    clone = Table.create_from_dict(_table().parameters)
+
+    assert clone.cell(0, 0).text == "A1"
+
+    group = TableSVG.from_table(
+        clone,
+        group_label="payload-table",
+        border_style=_border_style(),
+        text_styles=_text_styles(),
+    )
+    assert any(type(component) is TextSVG and component.text == "A1" for component in group.components())
+
+    document = FlowDocument(title="Payload table")
+    document.add_table(clone)
+    assert "A1" in document.to_plain_text()

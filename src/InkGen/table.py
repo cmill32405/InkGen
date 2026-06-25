@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from enum import Enum
 from math import isfinite
 
@@ -306,20 +307,26 @@ class Table(Component):
 
     @classmethod
     def create_from_dict(cls, data: dict) -> Table:
-        payload = data["Table"] if "Table" in data else data
+        root = _normalize_payload_mapping(data, name="table payload")
+        payload = _normalize_payload_mapping(root["Table"], name="Table payload") if "Table" in root else root
         table = cls(position=tuple(payload["position"]), autofit=payload["auto_fit"])
         table.cell_padding = payload.get("padding", table.cell_padding)
         table._autofit_suppressed = True
-        for column_data in payload.get("columns", []):
+        for column_data_value in _normalize_payload_sequence(payload.get("columns", []), name="columns"):
+            column_data = _normalize_payload_mapping(column_data_value, name="column payload")
             column = table.add_column(width=column_data["width"])
             column.width_rule = _normalize_autofit_rule(column_data["width_rule"], name="width_rule")
-        for row_data in payload.get("rows", []):
+        for row_data_value in _normalize_payload_sequence(payload.get("rows", []), name="rows"):
+            row_data = _normalize_payload_mapping(row_data_value, name="row payload")
             row = table.add_row(height=row_data["height"])
             row.height_rule = _normalize_autofit_rule(row_data["height_rule"], name="height_rule")
-        for row_index, row_payload in enumerate(payload.get("matrix", [])):
-            for column_index, cell_payload in enumerate(row_payload):
+        for row_index, row_payload_value in enumerate(_normalize_payload_sequence(payload.get("matrix", []), name="matrix")):
+            row_payload = _normalize_payload_sequence(row_payload_value, name="matrix row")
+            for column_index, cell_payload_value in enumerate(row_payload):
+                cell_payload = _normalize_payload_mapping(cell_payload_value, name="cell payload")
                 cell = table.cell(row_index, column_index)
-                for paragraph in cell_payload.get("paragraphs", []):
+                for paragraph_value in _normalize_payload_sequence(cell_payload.get("paragraphs", []), name="paragraphs"):
+                    paragraph = _normalize_payload_mapping(paragraph_value, name="paragraph payload")
                     cell._append_paragraph(
                         paragraph["text"],
                         paragraph.get("style_id"),
@@ -444,6 +451,20 @@ def _normalize_bool(value: object, *, name: str) -> bool:
     """Normalize a public table boolean option without truthiness coercion."""
     if not isinstance(value, bool):
         raise TypeError(f"{name} must be a bool")
+    return value
+
+
+def _normalize_payload_mapping(value: object, *, name: str) -> Mapping[str, object]:
+    """Normalize a serialized table payload envelope."""
+    if not isinstance(value, Mapping):
+        raise TypeError(f"{name} must be a mapping")
+    return value
+
+
+def _normalize_payload_sequence(value: object, *, name: str) -> Sequence[object]:
+    """Normalize a serialized table payload collection."""
+    if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
+        raise TypeError(f"{name} must be a sequence")
     return value
 
 
