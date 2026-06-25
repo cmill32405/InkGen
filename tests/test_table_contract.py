@@ -514,3 +514,143 @@ def test_table_hydration_valid_envelopes_remain_live() -> None:
     document = FlowDocument(title="Payload table")
     document.add_table(clone)
     assert "A1" in document.to_plain_text()
+
+
+def _two_by_two_table() -> Table:
+    """Return a 2x2 table for index-boundary tests."""
+    table = Table(position=(2.0, 3.0))
+    table.add_column(width=10.0)
+    table.add_column(width=20.0)
+    table.add_row(height=4.0)
+    table.add_row(height=5.0)
+    table.cell(0, 0).add_paragraph("A1", style_id="body")
+    table.cell(0, 1).add_paragraph("A2", style_id="body")
+    table.cell(1, 0).add_paragraph("B1", style_id="body")
+    table.cell(1, 1).add_paragraph("B2", style_id="body")
+    return table
+
+
+@pytest.mark.condition("TABLE-INDEX-P2")
+def test_table_public_access_indexes_reject_bool_and_non_integer_values() -> None:
+    """TABLE-INDEX-P2: Table accessors require non-bool integer indexes."""
+    table = _two_by_two_table()
+
+    assert table.cell(1, 0).text == "B1"
+    assert [cell.text for cell in table.row_cells(0)] == ["A1", "A2"]
+    assert [cell.text for cell in table.column_cells(1)] == ["A2", "B2"]
+    assert table.cell_bounds(1, 1) == ((12.0, 7.0), 20.0, 5.0)
+
+    table.add_column(width=30.0)
+    table.add_row(height=6.0)
+    table.cell(2, 2).add_paragraph("C3", style_id="body")
+    assert table.cell(2, 2).text == "C3"
+    assert table.cell_bounds(2, 2) == ((32.0, 12.0), 30.0, 6.0)
+
+    invalid_calls = [
+        lambda: table.cell(True, 0),
+        lambda: table.cell(0, False),
+        lambda: table.cell(0.0, 0),  # type: ignore[arg-type]
+        lambda: table.cell(0, object()),  # type: ignore[arg-type]
+        lambda: table.row_cells(False),
+        lambda: table.column_cells(True),
+        lambda: table.cell_bounds(True, 0),
+        lambda: table.cell_bounds(0, False),
+    ]
+    for call in invalid_calls:
+        with pytest.raises(TypeError, match="must be an integer"):
+            call()
+
+    out_of_bounds_calls = [
+        lambda: table.cell(-1, 0),
+        lambda: table.cell(0, 3),
+        lambda: table.row_cells(3),
+        lambda: table.column_cells(-1),
+        lambda: table.cell_bounds(3, 0),
+    ]
+    for call in out_of_bounds_calls:
+        with pytest.raises(IndexError, match="outside valid range"):
+            call()
+
+
+@pytest.mark.condition("TABLE-INDEX-P2")
+def test_table_insert_locations_reject_bool_and_non_integer_values() -> None:
+    """TABLE-INDEX-P2: Row and column insertion locations require non-bool integers."""
+    table = Table(position=(0.0, 0.0))
+    table.add_column(width=10.0)
+    table.add_row(height=5.0)
+
+    for call in [
+        lambda: table.add_column(location=True, width=15.0),  # type: ignore[arg-type]
+        lambda: table.add_row(location=False, height=6.0),  # type: ignore[arg-type]
+        lambda: table.add_column(location=0.0, width=15.0),  # type: ignore[arg-type]
+        lambda: table.add_row(location=object(), height=6.0),  # type: ignore[arg-type]
+    ]:
+        with pytest.raises(TypeError, match="must be an integer"):
+            call()
+
+    assert table.row_count == 1
+    assert table.column_count == 1
+
+    table.add_column(location=1, width=15.0)
+    table.add_row(location=0, height=6.0)
+
+    assert [column.width for column in table.columns] == [10.0, 15.0]
+    assert [row.height for row in table.rows] == [6.0, 5.0]
+
+
+@pytest.mark.condition("TABLE-INDEX-P2")
+def test_row_column_and_paragraph_indexes_reject_bool_and_non_integer_values() -> None:
+    """TABLE-INDEX-P2: Row, column, and paragraph accessors require integer indexes."""
+    table = _two_by_two_table()
+    row = table.rows[0]
+    column = table.columns[1]
+    cell = table.cell(0, 0)
+    cell.add_paragraph("A1 second", style_id="body")
+
+    assert row.column(1).text == "A2"
+    assert column.row(1).text == "B2"
+    assert cell.paragraph(1) == "A1 second"
+
+    for call in [
+        lambda: row.column(True),
+        lambda: column.row(False),
+        lambda: cell.paragraph(True),
+        lambda: cell.remove_paragraph(False),
+        lambda: row.column("1"),  # type: ignore[arg-type]
+        lambda: column.row(1.0),  # type: ignore[arg-type]
+    ]:
+        with pytest.raises(TypeError, match="must be an integer"):
+            call()
+
+    for call in [
+        lambda: row.column(2),
+        lambda: column.row(-1),
+        lambda: cell.paragraph(2),
+        lambda: cell.remove_paragraph(-1),
+    ]:
+        with pytest.raises(IndexError, match="outside valid range"):
+            call()
+
+    assert cell.paragraphs == ["A1", "A1 second"]
+    cell.remove_paragraph(0)
+    assert cell.paragraphs == ["A1 second"]
+
+
+@pytest.mark.condition("TABLE-INDEX-P2")
+def test_table_valid_indexes_remain_live_through_svg_and_flow_document() -> None:
+    """TABLE-INDEX-P2: Valid integer indexes still feed table output paths."""
+    table = _two_by_two_table()
+
+    group = TableSVG.from_table(
+        table,
+        group_label="indexed-table",
+        border_style=_border_style(),
+        text_styles=_text_styles(),
+    )
+    assert any(type(component) is TextSVG and component.text == "B2" for component in group.components())
+
+    document = FlowDocument(title="Indexed table")
+    document.add_table(table)
+
+    assert "A1\tA2" in document.to_plain_text()
+    assert "B1\tB2" in document.to_plain_text()

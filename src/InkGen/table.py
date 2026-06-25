@@ -139,7 +139,9 @@ class Table(Component):
         Raises:
             IndexError: If row or column is out of bounds.
         """
-        return self._matrix[row][column]
+        row_index = _normalize_public_index(row, name="Row index", upper=self.row_count)
+        column_index = _normalize_public_index(column, name="Column index", upper=self.column_count)
+        return self._matrix[row_index][column_index]
 
     def row_cells(self, row: int) -> tuple[Cell, ...]:
         """Get all cells in a specific row.
@@ -150,7 +152,8 @@ class Table(Component):
         Returns:
             Tuple of all Cell objects in the row.
         """
-        return tuple(self._matrix[row])
+        row_index = _normalize_public_index(row, name="Row index", upper=self.row_count)
+        return tuple(self._matrix[row_index])
 
     def column_cells(self, column: int) -> tuple[Cell, ...]:
         """Get all cells in a specific column.
@@ -161,16 +164,17 @@ class Table(Component):
         Returns:
             Tuple of all Cell objects in the column.
         """
-        return tuple(self._matrix[row][column] for row in range(self.row_count))
+        column_index = _normalize_public_index(column, name="Column index", upper=self.column_count)
+        return tuple(self._matrix[row][column_index] for row in range(self.row_count))
 
     def cell_bounds(self, row: int, column: int) -> tuple[tuple[float, float], float, float]:
         """Return the top-left coordinate, width, and height for a cell."""
-        if not (0 <= row < self.row_count and 0 <= column < self.column_count):
-            raise IndexError("Cell coordinates outside table dimensions")
-        x = self._position[0] + sum(self.columns[idx].width for idx in range(column))
-        y = self._position[1] + sum(self.rows[idx].height for idx in range(row))
-        width = float(self.columns[column].width)
-        height = float(self.rows[row].height)
+        row_index = _normalize_public_index(row, name="Row index", upper=self.row_count)
+        column_index = _normalize_public_index(column, name="Column index", upper=self.column_count)
+        x = self._position[0] + sum(self.columns[idx].width for idx in range(column_index))
+        y = self._position[1] + sum(self.rows[idx].height for idx in range(row_index))
+        width = float(self.columns[column_index].width)
+        height = float(self.rows[row_index].height)
         return (x, y), width, height
 
     # ------------------------------------------------------------------
@@ -395,9 +399,7 @@ class Table(Component):
     def _validate_insert_index(self, location: int | None, upper: int) -> int:
         if location is None:
             return upper
-        if not 0 <= location <= upper:
-            raise IndexError("Insert location outside valid range")
-        return location
+        return _normalize_public_index(location, name="Insert location", upper=upper, allow_end=True)
 
     def _sync_views(self) -> None:
         for row_index, row in enumerate(self._rows):
@@ -514,6 +516,22 @@ def _normalize_cell_coordinate(
     return row_index, column_index
 
 
+def _normalize_public_index(
+    value: object,
+    *,
+    name: str,
+    upper: int,
+    allow_end: bool = False,
+) -> int:
+    """Normalize a public zero-based table index without bool coercion."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{name} must be an integer")
+    limit = upper if allow_end else upper - 1
+    if not 0 <= value <= limit:
+        raise IndexError(f"{name} outside valid range")
+    return value
+
+
 def _coerce_finite_float(value: float, *, name: str, allow_negative: bool = True) -> float:
     """Coerce a public table dimension value into a finite float."""
     if isinstance(value, bool):
@@ -568,7 +586,8 @@ class Row:
         Raises:
             IndexError: If index is out of bounds.
         """
-        return self._cells[index]
+        column_index = _normalize_public_index(index, name="Column index", upper=len(self._cells))
+        return self._cells[column_index]
 
     @property
     def height(self) -> float:
@@ -670,7 +689,8 @@ class Column:
         Raises:
             IndexError: If index is out of bounds.
         """
-        return self._cells[index]
+        row_index = _normalize_public_index(index, name="Row index", upper=len(self._cells))
+        return self._cells[row_index]
 
     @property
     def width(self) -> float:
@@ -885,8 +905,9 @@ class Cell:
         Raises:
             IndexError: If index is out of bounds.
         """
-        del self._paragraph_text[index]
-        del self._paragraph_styles[index]
+        paragraph_index = _normalize_public_index(index, name="Paragraph index", upper=len(self._paragraph_text))
+        del self._paragraph_text[paragraph_index]
+        del self._paragraph_styles[paragraph_index]
 
     def paragraph(self, index: int) -> str:
         """Get a specific paragraph by index.
@@ -900,7 +921,8 @@ class Cell:
         Raises:
             IndexError: If index is out of bounds.
         """
-        return self._paragraph_text[index]
+        paragraph_index = _normalize_public_index(index, name="Paragraph index", upper=len(self._paragraph_text))
+        return self._paragraph_text[paragraph_index]
 
     # Merge -------------------------------------------------------------
     def merge(self, other: Cell) -> Cell:
