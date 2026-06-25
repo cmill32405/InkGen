@@ -23,6 +23,7 @@ The public behavior under review is:
 - `TextComponent.convex_hull`
 - `TextSVG.generate_svg()`
 - `TextPDF.generate_pdf()`
+- `TextDrawing.__post_init__()`
 - `TextDrawing.to_component(OutputFormat.SVG/PDF)`
 - `DXFDocument.add_group()` for `TextDrawing`
 
@@ -64,6 +65,13 @@ Before/after edge changes:
   coerced into `nan`, `inf`, or boolean coordinates.
 - After this slice, malformed, boolean, and non-finite text positions fail at
   construction or setter boundaries.
+- The `TEXT-DRAWING-TEXT-P2` continuation found that `TextDrawing` stored
+  arbitrary non-scalar text until SVG/PDF materialization failed, and
+  `FlowDocument.create_from_dict()` could hydrate malformed serialized
+  `TextDrawing.text` payloads into public neutral drawing state.
+- After `TEXT-DRAWING-TEXT-P2`, `TextDrawing` normalizes accepted scalar text to
+  strings at construction and rejects non-scalar values before materialization
+  or flow-document hydration can expose malformed state.
 - Text remains allowed at negative coordinates; this preserves existing text
   placement semantics and differs from the shared drawing-line boundary.
 - No new dependency edge or third-party dependency was introduced.
@@ -102,6 +110,12 @@ ADR/rule impact:
 - Each coordinate value must be numeric, finite, and not boolean.
 - Negative text coordinates are valid.
 - Text values accepted by `TextComponent.text` are converted to strings.
+- `TextDrawing.text` accepts the same scalar text domain as `TextComponent`
+  (`str`, `int`, `float`, `complex`, and `bool`) and stores the normalized
+  string immediately.
+- Non-scalar `TextDrawing.text` values such as arbitrary objects, lists,
+  mappings, and `None` are invalid and must fail at the neutral recipe
+  boundary.
 - SVG output must XML-escape text content.
 - PDF output must escape literal-string controls.
 - DXF output is a `TEXT` entity and normalizes embedded newlines to spaces.
@@ -115,6 +129,9 @@ ADR/rule impact:
   black/10-point fallback constants.
 - DXF text export is proven to emit a `0/TEXT` entity pair and apply optional
   canvas-height Y inversion.
+- `TextDrawing.__post_init__()` now stores normalized scalar text strings and
+  rejects non-scalar payloads before direct materialization or
+  `FlowDocument.create_from_dict()` can hold malformed neutral text state.
 
 ## Comprehensiveness Matrix
 
@@ -128,6 +145,8 @@ ADR/rule impact:
 | PDF defensive defaults | Use black and 10-point defaults for incomplete internals | PO-TEXT-004 | `test_text_pdf_uses_black_and_ten_point_defensive_defaults` | killed |
 | Serialization | Preserve parameters round trip | PO-TEXT-005 | `test_text_primitives_round_trip_parameters` | killed/equivalent |
 | Neutral materialization | Materialize to `TextSVG`/`TextPDF` | PO-TEXT-006 | `test_text_drawing_materializes_svg_and_pdf_components` | killed/equivalent |
+| Neutral scalar text payloads | Normalize to strings before public state is exposed | PO-TEXT-008 | `test_text_drawing_normalizes_scalar_text_before_materialization` | killed |
+| Non-scalar neutral text payloads | Reject at `TextDrawing` construction and FlowDocument hydration | PO-TEXT-008 | `test_text_drawing_rejects_non_scalar_text_payloads`, `test_flow_document_hydration_rejects_malformed_text_drawing_payloads` | killed |
 | DXF output | Emit `TEXT` entity with transformed anchor | PO-TEXT-007 | `test_dxf_text_drawing_exports_text_entity_with_canvas_transform` | killed/equivalent |
 | Multiline text layout, rich text runs, and font embedding | Excluded from proven domain | Explicit exclusion | Not applicable | Out of scope |
 
@@ -159,6 +178,8 @@ Proof-critical mutation targets:
 - Changing PDF color, font-size, matrix, escaping, or text operators should fail
   exact output tests.
 - Redirecting `TextDrawing.to_component()` should fail materialization tests.
+- Weakening `TextDrawing` text coercion or non-scalar rejection should fail
+  direct neutral text and FlowDocument hydration tests.
 - Changing DXF entity type, layer, anchor codes, z coordinate, text height, text
   value, or Y inversion should fail live DXF tests.
 
@@ -176,6 +197,9 @@ Current result:
     `OutputFormat.SVG` is the first supported string enum value in this
     normalized two-format branch; existing SVG and PDF materialization
     assertions cover the reachable outcomes.
+- `TEXT-DRAWING-TEXT-P2` continuation: Cosmic Ray 8.4.6 scoped to
+  `_coerce_text_value()` and `TextDrawing.__post_init__()` produced
+  1 proof-critical work item. Result: 1 killed, 0 survived.
 
 ## PO-TEXT-001: Valid Text Geometry Is Preserved
 
@@ -326,9 +350,53 @@ All valid neutral `TextDrawing` instances exported through
 
 Proven for the stated domain after tests and mutation pass.
 
+## PO-TEXT-008: Neutral Text Payloads Are Normalized Or Rejected
+
+### Claim
+
+`TextDrawing` cannot expose malformed text state through direct construction,
+materialization, serialization, or `FlowDocument` hydration.
+
+### Domain
+
+All `TextDrawing` instances created directly and all serialized
+`TextDrawing` payloads hydrated through `FlowDocument.create_from_dict()`.
+
+### Assumptions
+
+The neutral text recipe should match the scalar text domain already accepted by
+`TextComponent.text`: `str`, `int`, `float`, `complex`, and `bool` values are
+converted to strings; non-scalar values are invalid.
+
+### Proof Method
+
+`TextDrawing.__post_init__()` routes every construction path, including
+FlowDocument drawing hydration, through `_coerce_text_value()`. The helper has a
+closed scalar type check and stores the normalized string by using
+`object.__setattr__()` on the frozen dataclass before validating the text style.
+Direct condition tests cover accepted scalar partitions and rejected non-scalar
+partitions. The FlowDocument condition test mutates serialized drawing payloads
+and proves the dependent hydration path fails before returning malformed public
+block state.
+
+### Counterexamples And Exclusions
+
+Private mutation of `TextDrawing.__dict__` after construction is outside the
+public contract. Rich text runs and structured text spans remain out of scope.
+
+### Conclusion
+
+Proven for the stated public construction and FlowDocument hydration domain
+after focused tests and mutation pass.
+
 ## Current Slice Decision
 
 The slice chooses fail-fast validation for non-finite text anchors while
 preserving negative text coordinates. That keeps existing text placement
 semantics intact and prevents invalid geometry from reaching SVG, PDF, DXF, or
 downstream parser fixtures.
+
+The `TEXT-DRAWING-TEXT-P2` continuation preserves the existing scalar
+text-to-string compatibility while making malformed neutral text states
+impossible through the public constructor and FlowDocument drawing hydration
+paths.

@@ -56,6 +56,13 @@ def _require_text_style(style: object, owner: str) -> None:
         raise TypeError(f"{owner} style must be a TextStyle")
 
 
+def _coerce_text_value(value: object) -> str:
+    """Normalize renderer-neutral text to the scalar text component contract."""
+    if isinstance(value, (str, int, float, complex, bool)):
+        return str(value)
+    raise TypeError("TextDrawing text must be a string or a non-iterable built in type")
+
+
 @dataclass(frozen=True)
 class RectangleDrawing:
     """Renderer-neutral rectangle primitive."""
@@ -115,7 +122,8 @@ class TextDrawing:
     style: TextStyle
 
     def __post_init__(self) -> None:
-        """Validate the neutral text style boundary."""
+        """Validate the neutral text payload and style boundary."""
+        object.__setattr__(self, "text", _coerce_text_value(self.text))
         _require_text_style(self.style, "TextDrawing")
 
     def to_component(self, output_format: OutputFormat | str) -> Component:

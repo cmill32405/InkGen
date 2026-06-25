@@ -550,7 +550,9 @@ type.
 
 Malformed style payloads and malformed primitive geometry inside a valid
 component envelope are delegated to the owning style and drawing primitive
-contracts.
+contracts. Malformed `TextDrawing.text` payload values are delegated to
+PO-TEXT-008 in `text-renderer-contract.md`; the flow-document dependent-path
+test proves those payloads cannot hydrate into public document state.
 
 ### Conclusion
 

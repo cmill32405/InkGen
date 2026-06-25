@@ -481,6 +481,32 @@ def test_flow_document_hydration_rejects_mismatched_drawing_style_overrides() ->
         FlowDocument.create_from_dict(text_document.parameters, {text_style_name: _drawing_style()})
 
 
+@pytest.mark.condition("TEXT-DRAWING-TEXT-P2")
+@pytest.mark.parametrize("text", [object(), ["NOTE"], {"text": "NOTE"}, None])
+def test_flow_document_hydration_rejects_malformed_text_drawing_payloads(text: object) -> None:
+    """TEXT-DRAWING-TEXT-P2: Serialized text drawings cannot hold malformed text."""
+    text_style = _text_style()
+    text_document = FlowDocument(title="Bad Text Payload")
+    text_group = DrawingComponentGroup("text-flow-drawing")
+    text_group.add_component(TextDrawing("NOTE", (2.0, 3.0), text_style))
+    text_document.add_drawing_group(text_group)
+    payload = text_document.parameters
+    flow_payload = payload["FlowDocument"]
+    assert isinstance(flow_payload, dict)
+    blocks = flow_payload["blocks"]
+    assert isinstance(blocks, list)
+    block_payload = blocks[0]["payload"]
+    assert isinstance(block_payload, dict)
+    components = block_payload["components"]
+    assert isinstance(components, list)
+    component_payload = components[0]["payload"]
+    assert isinstance(component_payload, dict)
+    component_payload["text"] = text
+
+    with pytest.raises(TypeError, match="TextDrawing text must be a string"):
+        FlowDocument.create_from_dict(payload, {text_style.name: text_style})
+
+
 @pytest.mark.condition("FLOW-DOCUMENT-STYLES-MAPPING-P2")
 @pytest.mark.parametrize("styles", [object(), ["style-name"], "style-name", b"style-name"])
 def test_flow_document_hydration_rejects_malformed_style_override_maps(styles: object) -> None:

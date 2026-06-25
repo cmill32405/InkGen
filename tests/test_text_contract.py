@@ -156,6 +156,25 @@ def test_text_drawing_materializes_svg_and_pdf_components(text_style: TextStyle)
         drawing.to_component("dxf")
 
 
+@pytest.mark.condition("TEXT-DRAWING-TEXT-P2")
+@pytest.mark.parametrize("text", [123, 1.5, 1 + 2j, True])
+def test_text_drawing_normalizes_scalar_text_before_materialization(text_style: TextStyle, text: object) -> None:
+    """TEXT-DRAWING-TEXT-P2: Neutral text recipes store scalar text as strings."""
+    drawing = TextDrawing(text, (12.5, 7.5), text_style)  # type: ignore[arg-type]
+
+    assert drawing.text == str(text)
+    assert drawing.to_component(OutputFormat.SVG).text == str(text)
+    assert drawing.to_component(OutputFormat.PDF).text == str(text)
+
+
+@pytest.mark.condition("TEXT-DRAWING-TEXT-P2")
+@pytest.mark.parametrize("text", [object(), ["NOTE"], {"text": "NOTE"}, None])
+def test_text_drawing_rejects_non_scalar_text_payloads(text_style: TextStyle, text: object) -> None:
+    """TEXT-DRAWING-TEXT-P2: Neutral text recipes reject malformed text at construction."""
+    with pytest.raises(TypeError, match="TextDrawing text must be a string"):
+        TextDrawing(text, (12.5, 7.5), text_style)  # type: ignore[arg-type]
+
+
 @pytest.mark.condition("TEXT-P1")
 def test_dxf_text_drawing_exports_text_entity_with_canvas_transform(text_style: TextStyle) -> None:
     """TEXT-P1: DXF text export emits a TEXT entity, normalized text, and transformed position."""
