@@ -9,7 +9,8 @@ The slice adds grammar cue, construct, link, and assessment annotations that can
 be attached to InkGen PDF documents, component groups, and components. The
 public output is `DocumentPDF.grammar_truth()` and
 `DocumentPDF.grammar_truth_json()`. It also covers serialized grammar
-annotation payload validation at restore boundaries.
+annotation payload validation at restore boundaries and finite/non-boolean bbox
+coordinate normalization inherited from extraction truth.
 
 ## Architecture Impact
 
@@ -75,6 +76,12 @@ Before/after edge changes:
 - After TRUTH-ANNOTATION-PAYLOAD-P2, serialized grammar-truth annotation
   payloads must be mappings with required string fields and optional string
   fields before restore can attach them to a target.
+- Before TRUTH-BBOX-FINITE-P2, the shared bbox normalization path treated
+  booleans as numbers and could pass `nan` or infinity into grammar-truth PDF
+  coordinates.
+- After TRUTH-BBOX-FINITE-P2, grammar-truth body bboxes use the shared
+  extraction-truth finite/non-boolean coordinate filter before PDF coordinate
+  conversion.
 
 Cycle/layer/coupling/redundancy result:
 
@@ -134,6 +141,7 @@ The proof set is comprehensive only for the following declared partitions.
 |---|---|---|---|---|
 | Body-sourced annotation on a target with a normalizable bbox | Emit page-local PDF bbox | PO-GT-001 | `test_document_pdf_emits_grammar_truth_in_pdf_coordinates` | Must be killed or proven equivalent |
 | Body-sourced annotation on a target without a usable bbox | Emit body record with `bbox is None` | PO-GT-001 exclusion path | `test_body_annotation_without_bbox_emits_none_bbox` | Must be killed or proven equivalent |
+| Body-sourced annotation with boolean or non-finite bbox coordinates | Suppress malformed rectangular bboxes or ignore malformed point entries before PDF conversion | PO-GT-007 | `test_grammar_truth_bbox_normalization_rejects_bool_and_nonfinite_coordinates` | killed |
 | Non-body annotation | Emit document-level record with `page == 0` and `bbox is None` | PO-GT-002 | `test_document_pdf_emits_assessment_and_link_truth` | Must be killed or proven equivalent |
 | Valid grammar kinds: `cue`, `construct`, `link`, `assessment` | Accept and serialize | PO-GT-003 | grammar-truth happy path, link/assessment, and neutral propagation tests | Must be killed or proven equivalent |
 | Invalid grammar kind or empty condition id | Reject near annotation boundary | Constructor invariant | `test_grammar_truth_rejects_empty_condition_and_invalid_kind` | Must be killed or proven equivalent |
@@ -157,7 +165,7 @@ slice.
 |---|---|---|---|
 | Unit | yes | Grammar annotations, record serialization, sorting, helper contracts, and render-contract guards are small deterministic units. | `tests/test_grammar_truth.py`; `test_pdf_render_contract_helpers_keep_keyword_only_message` |
 | Behavioral/condition | yes | The slice implements PDF-P3 grammar-truth behavior. | All grammar-truth tests are marked `@pytest.mark.condition("PDF-P3")`; PDF guard tests use PDF-P1/PDF-P3 markers where the guard crosses the existing PDF backend. |
-| Failure-mode | yes | Invalid condition ids, invalid kinds, malformed serialized annotation payloads, invalid optional fields, unsupported components, non-PDF groups, and bad file paths must fail loudly. | `test_grammar_truth_rejects_empty_condition_and_invalid_kind`; `test_grammar_truth_from_dict_rejects_malformed_serialized_fields`; `test_restore_grammar_truth_rejects_malformed_serialized_annotations`; `test_grammar_truth_rejects_invalid_optional_fields`; `test_component_group_pdf_rejects_non_pdf_components`; `test_document_pdf_rejects_non_pdf_child_in_standard_group`; existing `test_document_pdf_create_pdf_writes_bytes_and_rejects_missing_directory` |
+| Failure-mode | yes | Invalid condition ids, invalid kinds, malformed serialized annotation payloads, invalid optional fields, boolean/non-finite bboxes, unsupported components, non-PDF groups, and bad file paths must fail loudly or degrade safely. | `test_grammar_truth_rejects_empty_condition_and_invalid_kind`; `test_grammar_truth_from_dict_rejects_malformed_serialized_fields`; `test_restore_grammar_truth_rejects_malformed_serialized_annotations`; `test_grammar_truth_bbox_normalization_rejects_bool_and_nonfinite_coordinates`; `test_grammar_truth_rejects_invalid_optional_fields`; `test_component_group_pdf_rejects_non_pdf_components`; `test_document_pdf_rejects_non_pdf_child_in_standard_group`; existing `test_document_pdf_create_pdf_writes_bytes_and_rejects_missing_directory` |
 | Integration/live-path | yes | Grammar truth must be reachable through public PDF document and renderer-neutral drawing paths, not only helper calls. | `test_document_pdf_emits_grammar_truth_in_pdf_coordinates`; `test_grammar_truth_round_trips_with_document_pdf_parameters`; `test_neutral_drawing_annotations_materialize_to_pdf_grammar_truth`; `test_grammar_truth_annotations_do_not_change_pdf_bytes` |
 | Contract/API compatibility | yes | Public grammar APIs, `DocumentPDF.parameters`, legacy unannotated parameters, and closed PDF component contracts changed. | `test_grammar_truth_round_trips_with_document_pdf_parameters`; `test_unannotated_pdf_parameters_do_not_gain_grammar_truth_keys`; `test_grammar_truth_public_helpers_keep_keyword_only_contracts`; PDF round-trip tests in `tests/test_pdf_generator.py` |
 | Property/fuzz | yes | Coordinate conversion, sorting determinism, and serialization have invariant-like behavior. InkGen does not currently include a property-test dependency, so this slice uses deterministic bounded property-style tests over declared domain partitions rather than randomized fuzzing. | PO-GT-001 through PO-GT-005; `test_grammar_truth_bbox_property_cases_emit_pdf_coordinates`; `test_grammar_truth_annotation_property_cases_round_trip_and_sort_deterministically`; sorting tests for `None` and dictionary values. |
@@ -222,6 +230,8 @@ Proof-critical mutation targets:
   should fail `test_grammar_truth_round_trips_with_document_pdf_parameters`.
 - Weakening serialized annotation payload validation should fail from-dict and
   restore tests.
+- Weakening finite/non-boolean bbox coordinate validation should fail the
+  grammar finite-bbox test.
 
 The gate is automated. Manual perturbation or LLM-as-judge review cannot pass
 this slice. Current command sequence:
@@ -266,6 +276,13 @@ TRUTH-ANNOTATION-PAYLOAD-P2 current result:
 - Mutation: `23` proof-critical work items across extraction and grammar truth,
   `23 killed`, `0 survivors`.
 - Full coverage gate: `841 passed`, total coverage `94%`.
+- Ruff lint and format passed for touched Python files.
+
+TRUTH-BBOX-FINITE-P2 current result:
+
+- Focused tests: `87 passed`.
+- Mutation: `35` proof-critical work items, `35 killed`, `0 survivors`.
+- Full coverage gate: `876 passed`, total coverage `94%`.
 - Ruff lint and format passed for touched Python files.
 
 ## PO-GT-001: PDF BBox Conversion
@@ -600,6 +617,36 @@ may contain structured JSON-like values. Generated dictionaries produced by
 
 Supported by focused extraction/grammar/PDF tests, scoped mutation testing, and
 the full coverage gate for the stated serialized annotation payload boundary.
+
+## PO-GT-007: Grammar BBox Coordinates Use The Finite Truth Filter
+
+### Claim
+
+Grammar truth bbox emission does not emit parser-facing coordinates from
+booleans, `nan`, or infinite values.
+
+### Domain
+
+Body-sourced grammar annotations attached to targets whose `bbox` is a
+rectangular bbox tuple/list or a point-list bbox shape.
+
+### Proof Method
+
+`grammar_truth.records_for_annotated_target()` delegates bbox conversion to
+`extraction_truth.bbox_to_pdf_points()`. That helper delegates to
+`normalize_bbox()`, whose numeric candidate predicate rejects booleans, `nan`,
+and infinity. Focused grammar tests cover rectangular bbox suppression and
+point-list degradation through the public grammar record path.
+
+### Counterexamples And Exclusions
+
+This proof inherits extraction truth's finite-coordinate predicate. It does not
+validate semantic correctness of caller-provided finite bboxes.
+
+### Conclusion
+
+Supported by focused extraction/grammar/PDF tests, scoped mutation testing, and
+the full coverage gate for the stated finite bbox boundary.
 
 ## Current Slice Decision
 

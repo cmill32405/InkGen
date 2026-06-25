@@ -4,7 +4,8 @@ This note applies the InkGen Definition of Done to the PDF-P2 extraction-truth
 slice. It separates the extraction-truth schema, PDF coordinate theorem,
 deterministic serialization, parameter round trip, and rendered-byte
 noninterference proof obligations. It also covers serialized annotation
-payload validation at restore boundaries.
+payload validation at restore boundaries and finite/non-boolean bbox coordinate
+normalization.
 
 ## Scope
 
@@ -64,6 +65,10 @@ Before/after edge changes:
 - After TRUTH-ANNOTATION-PAYLOAD-P2, serialized extraction-truth annotation
   payloads must be mappings with required string fields and optional string
   fields before restore can attach them to a target.
+- Before TRUTH-BBOX-FINITE-P2, bbox normalization treated booleans as numbers
+  and could pass `nan` or infinity into parser-facing PDF coordinates.
+- After TRUTH-BBOX-FINITE-P2, bbox coordinate candidates must be non-boolean
+  finite integers or floats before they can contribute to an emitted bbox.
 
 Cycle/layer/coupling/redundancy result:
 
@@ -107,6 +112,7 @@ ADR/rule impact:
 | Malformed serialized annotation payloads | Reject before stringifying schema fields during direct restore | PO-ET-005 | `test_extraction_truth_from_dict_rejects_malformed_serialized_fields`, `test_restore_extraction_truth_rejects_malformed_serialized_annotations`, `test_extraction_truth_from_dict_preserves_default_truth_flag` | killed |
 | Invalid schema fields | Fail near annotation boundary | Constructor invariant | `test_extraction_truth_rejects_empty_required_fields`, `test_extraction_truth_rejects_invalid_optional_fields` | one equivalent survivor |
 | Malformed bbox shapes | Ignore malformed entries or return `None` without partial coercion | Defensive invariant | `test_extraction_truth_bbox_normalization_rejects_malformed_shapes` | killed |
+| Boolean or non-finite bbox coordinates | Ignore malformed point entries or suppress malformed rectangular bboxes before PDF conversion | PO-ET-006 | `test_extraction_truth_bbox_normalization_rejects_bool_and_nonfinite_coordinates` | killed |
 | Unannotated legacy PDF parameters | Preserve prior parameter shape | Compatibility invariant | `test_unannotated_pdf_parameters_do_not_gain_extraction_truth_keys` | killed |
 | Extraction annotations only | Do not affect rendered PDF bytes | PO-ET-004 | `test_extraction_truth_annotations_do_not_change_pdf_bytes` | killed |
 | Sorting and JSON serialization | Emit deterministic order and compact sorted-key JSON | Determinism invariant | sorting and JSON tests | killed |
@@ -118,7 +124,7 @@ ADR/rule impact:
 |---|---|---|---|
 | Unit | yes | Annotation, bbox, sorting, and JSON helpers are deterministic units. | `tests/test_extraction_truth.py` |
 | Behavioral/condition | yes | The slice defines PDF-P2 extraction-truth behavior. | Tests are marked `@pytest.mark.condition("PDF-P2")`. |
-| Failure-mode | yes | Empty fields, malformed serialized annotation payloads, invalid optional types, missing geometry, malformed bboxes, and positional contract misuse must fail or degrade safely. | invalid-field, serialized-payload, no-bbox, malformed-bbox, and keyword-only tests |
+| Failure-mode | yes | Empty fields, malformed serialized annotation payloads, invalid optional types, missing geometry, malformed/boolean/non-finite bboxes, and positional contract misuse must fail or degrade safely. | invalid-field, serialized-payload, no-bbox, malformed-bbox, finite-bbox, and keyword-only tests |
 | Integration/live-path | yes | Truth must be reachable through `DocumentPDF`, groups, and components. | Document PDF emission, round-trip, and byte-stability tests |
 | Contract/API compatibility | yes | Public helper signatures, parameter shape, and deterministic JSON are protected. | keyword-only, unannotated parameters, round-trip, and JSON tests |
 | Property/fuzz | limited yes | InkGen has no property-test dependency, so bounded deterministic partitions cover coordinate and annotation domains. | bbox and annotation property-case tests |
@@ -141,6 +147,8 @@ Proof-critical mutation targets:
   coordinate theorem tests.
 - Weakening bbox normalization must fail malformed-shape and property-case
   tests.
+- Weakening finite/non-boolean coordinate validation must fail
+  `test_extraction_truth_bbox_normalization_rejects_bool_and_nonfinite_coordinates`.
 - Removing serialization, sorting, or JSON determinism must fail round-trip and
   deterministic-output tests.
 
@@ -165,6 +173,13 @@ TRUTH-ANNOTATION-PAYLOAD-P2 current result:
 - Mutation: `23` proof-critical work items across extraction and grammar truth,
   `23 killed`, `0 survivors`.
 - Full coverage gate: `841 passed`, total coverage `94%`.
+- Ruff lint and format passed for touched Python files.
+
+TRUTH-BBOX-FINITE-P2 current result:
+
+- Focused tests: `87 passed`.
+- Mutation: `35` proof-critical work items, `35 killed`, `0 survivors`.
+- Full coverage gate: `876 passed`, total coverage `94%`.
 - Ruff lint and format passed for touched Python files.
 
 ## PO-ET-001: PDF BBox Conversion
@@ -328,3 +343,35 @@ domain covered by PO-ET-003.
 
 Supported by focused extraction/grammar/PDF tests, scoped mutation testing, and
 the full coverage gate for the stated serialized annotation payload boundary.
+
+## PO-ET-006: BBox Coordinates Are Finite Non-Boolean Numbers
+
+### Claim
+
+Extraction truth bbox normalization does not emit parser-facing coordinates
+from booleans, `nan`, or infinite values.
+
+### Domain
+
+Rectangular bbox tuples/lists and point-list bbox shapes passed to
+`normalize_bbox()` and `records_for_annotated_target()`.
+
+### Proof Method
+
+`normalize_bbox()` accepts a rectangular bbox only when all four values satisfy
+`_is_number()`. Point-list bboxes ignore any point whose x/y values do not
+satisfy `_is_number()`. `_is_number()` rejects booleans, non-number objects,
+`nan`, and infinity before conversion to PDF bottom-left coordinates. Focused
+tests cover rectangular bbox suppression and point-list degradation where
+malformed points are ignored while valid points still emit deterministic PDF
+coordinates.
+
+### Counterexamples And Exclusions
+
+This proof does not validate semantic correctness of a caller-provided finite
+bbox. It only proves the numeric domain accepted by the truth emitter.
+
+### Conclusion
+
+Supported by focused extraction/grammar/PDF tests, scoped mutation testing, and
+the full coverage gate for the stated finite bbox boundary.

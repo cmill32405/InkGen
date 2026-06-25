@@ -375,6 +375,28 @@ def test_grammar_truth_bbox_property_cases_emit_pdf_coordinates() -> None:
         assert records[0].bbox == expected
 
 
+@pytest.mark.condition("TRUTH-BBOX-FINITE-P2")
+@pytest.mark.parametrize(
+    ("bbox", "expected_bbox"),
+    [
+        ((True, 2.0, 3.0, 4.0), None),
+        ((1.0, 2.0, float("nan"), 4.0), None),
+        ([(1.0, float("inf")), (3.0, 4.0)], [3.0, 76.0, 3.0, 76.0]),
+    ],
+)
+def test_grammar_truth_bbox_normalization_rejects_bool_and_nonfinite_coordinates(
+    bbox: object,
+    expected_bbox: list[float] | None,
+) -> None:
+    """TRUTH-BBOX-FINITE-P2: Grammar truth uses the shared finite bbox filter."""
+    target = _TargetWithBBox(bbox)
+    annotate_grammar_truth(target, "BBOX-FINITE", "cue")
+
+    records = records_for_annotated_target(target, page=2, canvas_height=80.0)
+
+    assert records[0].bbox == expected_bbox
+
+
 @pytest.mark.condition("PDF-P3")
 def test_grammar_truth_annotation_property_cases_round_trip_and_sort_deterministically() -> None:
     """PDF-P3: Bounded valid annotation partitions round-trip and sort deterministically."""

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
@@ -272,4 +273,4 @@ def _optional_string_or_none(value: object, name: str) -> str | None:
 
 
 def _is_number(value: object) -> bool:
-    return isinstance(value, int | float)
+    return not isinstance(value, bool) and isinstance(value, int | float) and math.isfinite(float(value))
