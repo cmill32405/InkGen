@@ -621,6 +621,18 @@ class ZoningDrawing:
             if key in self._ZONE_CHARS and value is not None and (not isinstance(value, int) or value not in self._VALID_ZONE_CHARS):
                 raise ValueError(f"{key} should be an int between 65 and 90 or 97 and 123 or between 48 and 57")
             self._parameters[key] = value
+        self._validate_zone_label_ranges()
+
+    def _validate_zone_label_ranges(self) -> None:
+        """Reject zoning label sequences that leave their alphanumeric range."""
+        for char_key, count_key in (
+            ("first_horizontal_char", "horizontal_zones"),
+            ("first_vertical_char", "vertical_zones"),
+        ):
+            first_code = int(self._parameters[char_key])
+            zone_count = int(self._parameters[count_key])
+            if not _zone_label_sequence_fits(first_code, zone_count):
+                raise ValueError(f"{char_key} and {count_key} should produce alphanumeric ASCII labels")
 
     def _set_defaults(self) -> None:
         self._parameters["inner_radius"] = 0.0
@@ -827,6 +839,15 @@ def _zoning_style_name(payload: Mapping[str, object], style_key: str, field_name
     if not isinstance(style_name, str):
         raise TypeError(f"ZoningDrawing {field_name} name must be a string")
     return style_name
+
+
+def _zone_label_sequence_fits(first_code: int, zone_count: int) -> bool:
+    """Return whether a zoning label run stays inside one ASCII label range."""
+    ranges = ((48, 57), (65, 90), (97, 122))
+    for lower, upper in ranges:
+        if lower <= first_code <= upper:
+            return first_code + zone_count - 1 <= upper
+    return False
 
 
 def _coerce_finite_non_negative_float(value: object, *, name: str) -> float:

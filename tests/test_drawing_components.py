@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from uuid import uuid4
 
 import pytest
@@ -44,7 +45,14 @@ def test_neutral_zoning_recipe_materializes_svg_components() -> None:
     """PDF-P3: ZoningDrawing can emit an SVG component group without PDF coupling."""
     canvas = Canvas(210.0, 297.0, "mm")
     line_style, text_style = _styles()
-    zoning = ZoningDrawing(canvas, line_style, text_style, horizontal_zones=10, vertical_zones=8)
+    zoning = ZoningDrawing(
+        canvas,
+        line_style,
+        text_style,
+        horizontal_zones=10,
+        vertical_zones=8,
+        first_horizontal_char=48,
+    )
 
     group = zoning.to_group(OutputFormat.SVG)
     component_types = {type(component).__name__ for component in group.components()}
@@ -59,7 +67,14 @@ def test_neutral_zoning_recipe_materializes_pdf_components() -> None:
     """PDF-P3: ZoningDrawing can emit a PDF component group that renders in DocumentPDF."""
     canvas = Canvas(210.0, 297.0, "mm")
     line_style, text_style = _styles()
-    zoning = ZoningDrawing(canvas, line_style, text_style, horizontal_zones=10, vertical_zones=8)
+    zoning = ZoningDrawing(
+        canvas,
+        line_style,
+        text_style,
+        horizontal_zones=10,
+        vertical_zones=8,
+        first_horizontal_char=48,
+    )
 
     group = zoning.to_group("pdf")
     document = DocumentPDF(canvas)
@@ -134,7 +149,15 @@ def test_zoning_recipe_round_trips_without_renderer_specific_components() -> Non
     """PDF-P3: ZoningDrawing serialization stores recipe inputs, not SVG/PDF classes."""
     canvas = Canvas(210.0, 297.0, "mm")
     line_style, text_style = _styles()
-    zoning = ZoningDrawing(canvas, line_style, text_style, margins=5, horizontal_zones=10, vertical_zones=8)
+    zoning = ZoningDrawing(
+        canvas,
+        line_style,
+        text_style,
+        margins=5,
+        horizontal_zones=10,
+        vertical_zones=8,
+        first_horizontal_char=48,
+    )
 
     recreated = ZoningDrawing.create_from_dict(
         zoning.parameters,
@@ -185,6 +208,7 @@ def test_zoning_drawing_preserves_zero_dimension_overrides() -> None:
         left_zone_width=0.0,
         horizontal_zones=10,
         vertical_zones=8,
+        first_horizontal_char=48,
     )
 
     params = zoning.parameters["ZoningDrawing"]["parameters"]
@@ -212,12 +236,112 @@ def test_zoning_drawing_hydration_rejects_invalid_dimensions() -> None:
         ZoningDrawing.create_from_dict(payload, {line_style.name: line_style, text_style.name: text_style})
 
 
+@pytest.mark.condition("ZONING-DRAWING-LABEL-RANGE-P2")
+@pytest.mark.parametrize(
+    ("parameters", "valid"),
+    [
+        ({"first_horizontal_char": 48, "horizontal_zones": 10, "first_vertical_char": 65, "vertical_zones": 8}, True),
+        ({"first_horizontal_char": 49, "horizontal_zones": 8, "first_vertical_char": 65, "vertical_zones": 26}, True),
+        ({"first_horizontal_char": 56, "horizontal_zones": 2, "first_vertical_char": 65, "vertical_zones": 2}, True),
+        ({"first_horizontal_char": 65, "horizontal_zones": 26, "first_vertical_char": 65, "vertical_zones": 2}, True),
+        ({"first_horizontal_char": 89, "horizontal_zones": 2, "first_vertical_char": 65, "vertical_zones": 2}, True),
+        ({"first_horizontal_char": 97, "horizontal_zones": 26, "first_vertical_char": 65, "vertical_zones": 2}, True),
+        ({"first_horizontal_char": 121, "horizontal_zones": 2, "first_vertical_char": 65, "vertical_zones": 2}, True),
+        ({"first_horizontal_char": 47, "horizontal_zones": 2, "first_vertical_char": 65, "vertical_zones": 2}, False),
+        ({"first_horizontal_char": 58, "horizontal_zones": 2, "first_vertical_char": 65, "vertical_zones": 2}, False),
+        ({"first_horizontal_char": 64, "horizontal_zones": 2, "first_vertical_char": 65, "vertical_zones": 2}, False),
+        ({"first_horizontal_char": 91, "horizontal_zones": 2, "first_vertical_char": 65, "vertical_zones": 2}, False),
+        ({"first_horizontal_char": 96, "horizontal_zones": 2, "first_vertical_char": 65, "vertical_zones": 2}, False),
+        ({"first_horizontal_char": 123, "horizontal_zones": 2, "first_vertical_char": 65, "vertical_zones": 2}, False),
+        ({"first_horizontal_char": 49, "horizontal_zones": 10, "first_vertical_char": 65, "vertical_zones": 8}, False),
+        ({"first_horizontal_char": 57, "horizontal_zones": 4, "first_vertical_char": 65, "vertical_zones": 8}, False),
+        ({"first_horizontal_char": 90, "horizontal_zones": 2, "first_vertical_char": 65, "vertical_zones": 2}, False),
+        ({"first_horizontal_char": 122, "horizontal_zones": 2, "first_vertical_char": 65, "vertical_zones": 2}, False),
+        ({"first_horizontal_char": 48, "horizontal_zones": 10, "first_vertical_char": 122, "vertical_zones": 8}, False),
+        ({"first_horizontal_char": 48, "horizontal_zones": 10, "first_vertical_char": 89, "vertical_zones": 4}, False),
+    ],
+)
+def test_zoning_drawing_label_range_validator_partitions(parameters: dict[str, object], valid: bool) -> None:
+    """ZONING-DRAWING-LABEL-RANGE-P2: Label range partitions are explicit."""
+    zoning = object.__new__(ZoningDrawing)
+    zoning._parameters = parameters
+
+    if valid:
+        zoning._validate_zone_label_ranges()
+    else:
+        with pytest.raises(ValueError, match="alphanumeric ASCII labels"):
+            zoning._validate_zone_label_ranges()
+
+
+@pytest.mark.condition("ZONING-DRAWING-LABEL-RANGE-P2")
+def test_zoning_drawing_preserves_alphanumeric_label_sequences() -> None:
+    """ZONING-DRAWING-LABEL-RANGE-P2: Valid zoning labels stay alphanumeric."""
+    canvas = Canvas(210.0, 297.0, "mm")
+    line_style, text_style = _styles()
+
+    zoning = ZoningDrawing(
+        canvas,
+        line_style,
+        text_style,
+        horizontal_zones=10,
+        vertical_zones=8,
+        first_horizontal_char=48,
+        first_vertical_char=65,
+    )
+    labels = [component.text for component in zoning.drawing_group.components if isinstance(component, TextDrawing)]
+
+    assert set("0123456789").issubset(labels)
+    assert set("ABCDEFGH").issubset(labels)
+    assert all(label.isalnum() and len(label) == 1 for label in labels)
+
+
+@pytest.mark.condition("ZONING-DRAWING-LABEL-RANGE-P2")
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"horizontal_zones": 10},
+        {"horizontal_zones": 4, "first_horizontal_char": 57},
+        {"horizontal_zones": 8, "first_horizontal_char": 52},
+        {"vertical_zones": 4, "first_vertical_char": 89},
+        {"vertical_zones": 8, "first_vertical_char": 122},
+        {"vertical_zones": 4, "first_vertical_char": 121},
+    ],
+)
+def test_zoning_drawing_rejects_label_sequences_that_leave_ascii_ranges(kwargs: dict[str, object]) -> None:
+    """ZONING-DRAWING-LABEL-RANGE-P2: Label ranges fail before text generation."""
+    canvas = Canvas(210.0, 297.0, "mm")
+    line_style, text_style = _styles()
+
+    with pytest.raises(ValueError, match="alphanumeric ASCII labels"):
+        ZoningDrawing(canvas, line_style, text_style, **kwargs)
+
+
+@pytest.mark.condition("ZONING-DRAWING-LABEL-RANGE-P2")
+def test_zoning_drawing_hydration_rejects_label_ranges_that_leave_ascii_ranges() -> None:
+    """ZONING-DRAWING-LABEL-RANGE-P2: Serialized label ranges cannot bypass validation."""
+    canvas = Canvas(210.0, 297.0, "mm")
+    line_style, text_style = _styles()
+    zoning = ZoningDrawing(
+        canvas,
+        line_style,
+        text_style,
+        horizontal_zones=10,
+        vertical_zones=8,
+        first_horizontal_char=48,
+    )
+    payload = deepcopy(zoning.parameters)
+    payload["ZoningDrawing"]["parameters"]["first_horizontal_char"] = 49
+
+    with pytest.raises(ValueError, match="alphanumeric ASCII labels"):
+        ZoningDrawing.create_from_dict(payload, {line_style.name: line_style, text_style.name: text_style})
+
+
 @pytest.mark.condition("PDF-P3")
 def test_neutral_zoning_svg_output_matches_legacy_zoning_geometry() -> None:
     """PDF-P3: ZoningDrawing keeps the existing SVG zoning geometry while removing backend coupling."""
     canvas = Canvas(210.0, 297.0, "mm")
     line_style, text_style = _styles()
-    kwargs = {"margins": 5, "horizontal_zones": 10, "vertical_zones": 8}
+    kwargs = {"margins": 5, "horizontal_zones": 10, "vertical_zones": 8, "first_horizontal_char": 48}
 
     legacy_components = list(Zoning(canvas, line_style, text_style, **kwargs).component_group.components())
     neutral_components = list(ZoningDrawing(canvas, line_style, text_style, **kwargs).to_group(OutputFormat.SVG).components())

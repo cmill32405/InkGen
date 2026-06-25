@@ -68,6 +68,7 @@ nav:
       - Flow Document Title Contract: proofs/flow-document-title-contract.md
       - CAD Zoning Contract: proofs/cad-zoning-contract.md
       - Zoning Drawing Finite Boundary Contract: proofs/zoning-drawing-finite-contract.md
+      - Zoning Drawing Label Range Contract: proofs/zoning-drawing-label-range-contract.md
       - Zoning Drawing Payload Contract: proofs/zoning-drawing-payload-contract.md
       - Table Contract: proofs/table-contract.md
       - Table Autofit Boolean Contract: proofs/table-autofit-contract.md

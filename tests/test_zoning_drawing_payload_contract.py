@@ -30,6 +30,7 @@ def _zoning() -> tuple[ZoningDrawing, DrawingStyle, TextStyle]:
         margins=5.0,
         horizontal_zones=10,
         vertical_zones=8,
+        first_horizontal_char=48,
     )
     return zoning, line_style, text_style
 
