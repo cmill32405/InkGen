@@ -310,9 +310,21 @@ report the legacy format exception, or explicitly choose a formatting-only slice
 The report should be factual, evidence-based, and specific. Use PASS/FAIL, not
 vague confidence language.
 
+Every completed slice report must include:
+
+- Slice ID and commit hash.
+- What was found or improved.
+- Any code, test, proof, or documentation files changed.
+- One PASS/PARTIAL/FAIL line for each applicable DoD gate.
+- Residual risk, waived checks, or legacy exceptions, if any.
+
 Example:
 
 ```text
+- Slice: TABLE-P1
+- Commit: abc1234 Harden table geometry
+- Found/improved: invalid table geometry now fails at the public boundary
+  before SVG or document output paths consume it.
 - PASS: Pre-change dependency/contract review
 - PASS: TABLE-P1 condition tests added
 - PASS: Failure-mode tests for malformed, boolean, non-finite, and negative geometry
