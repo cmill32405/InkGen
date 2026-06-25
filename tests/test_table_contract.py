@@ -319,3 +319,90 @@ def test_table_cell_paragraph_style_id_valid_values_hydrate_and_render() -> None
     )
     text_components = [component for component in group.components() if type(component) is TextSVG]
     assert [component.text for component in text_components] == ["A1", "Default"]
+
+
+def _merged_table_payload() -> dict:
+    table = Table(position=(0.0, 0.0))
+    table.add_column(width=12.0)
+    table.add_column(width=8.0)
+    table.add_row(height=6.0)
+    table.add_row(height=4.0)
+    table.cell(0, 0).add_paragraph("Merged", style_id="body")
+    table.cell(0, 0).merge(table.cell(1, 1))
+    return table.parameters
+
+
+@pytest.mark.condition("TABLE-CELL-MERGE-P2")
+def test_table_cell_merge_hydration_rejects_non_bool_merge_flags() -> None:
+    """TABLE-CELL-MERGE-P2: Serialized merge flags accept only real bool values."""
+    payload = _merged_table_payload()
+    payload["Table"]["matrix"][0][0]["merged"] = "false"
+
+    with pytest.raises(TypeError, match="merged must be a bool"):
+        Table.create_from_dict(payload)
+
+
+@pytest.mark.condition("TABLE-CELL-MERGE-P2")
+def test_table_cell_merge_hydration_defaults_missing_merge_flag_to_false() -> None:
+    """TABLE-CELL-MERGE-P2: Missing serialized merge flags hydrate as unmerged."""
+    payload = _table().parameters
+    del payload["Table"]["matrix"][0][0]["merged"]
+
+    clone = Table.create_from_dict(payload)
+
+    assert clone.cell(0, 0).merged is False
+
+
+@pytest.mark.condition("TABLE-CELL-MERGE-P2")
+@pytest.mark.parametrize(
+    ("field", "value", "exception", "message"),
+    [
+        ("merge_start", "0,0", TypeError, "two-integer coordinate"),
+        ("merge_start", [0], ValueError, "exactly two indexes"),
+        ("merge_start", [True, 0], TypeError, "indexes must be integers"),
+        ("merge_start", [-1, 0], ValueError, "inside table bounds"),
+        ("merge_end", [0.0, 1], TypeError, "indexes must be integers"),
+        ("merge_end", [2, 1], ValueError, "inside table bounds"),
+        ("merge_end", [3, 1], ValueError, "inside table bounds"),
+        ("merge_end", [1, -1], ValueError, "inside table bounds"),
+        ("merge_end", [1, 2], ValueError, "inside table bounds"),
+        ("merge_end", [1, 3], ValueError, "inside table bounds"),
+    ],
+)
+def test_table_cell_merge_hydration_rejects_invalid_coordinates(
+    field: str,
+    value: object,
+    exception: type[Exception],
+    message: str,
+) -> None:
+    """TABLE-CELL-MERGE-P2: Serialized merge coordinates must be bounded integer pairs."""
+    payload = _merged_table_payload()
+    payload["Table"]["matrix"][0][0][field] = value
+
+    with pytest.raises(exception, match=message):
+        Table.create_from_dict(payload)
+
+
+@pytest.mark.condition("TABLE-CELL-MERGE-P2")
+def test_table_cell_merge_hydration_valid_state_remains_live() -> None:
+    """TABLE-CELL-MERGE-P2: Valid merge state hydrates and remains usable by output paths."""
+    clone = Table.create_from_dict(_merged_table_payload())
+
+    for row_index in range(2):
+        for column_index in range(2):
+            cell = clone.cell(row_index, column_index)
+            assert cell.merged is True
+            assert cell.merge_start == (0, 0)
+            assert cell.merge_end == (1, 1)
+
+    group = TableSVG.from_table(
+        clone,
+        group_label="merged-table",
+        border_style=_border_style(),
+        text_styles=_text_styles(),
+    )
+    assert any(type(component) is TextSVG and component.text == "Merged" for component in group.components())
+
+    document = FlowDocument(title="Merged table")
+    document.add_table(clone)
+    assert "Merged" in document.to_plain_text()

@@ -325,9 +325,19 @@ class Table(Component):
                         paragraph.get("style_id"),
                         trigger_autofit=False,
                     )
-                cell._merged = cell_payload.get("merged", False)
-                cell._merge_start = tuple(cell_payload.get("merge_start", (row_index, column_index)))
-                cell._merge_end = tuple(cell_payload.get("merge_end", (row_index, column_index)))
+                cell._merged = _normalize_bool(cell_payload.get("merged", False), name="merged")
+                cell._merge_start = _normalize_cell_coordinate(
+                    cell_payload.get("merge_start", (row_index, column_index)),
+                    name="merge_start",
+                    row_count=table.row_count,
+                    column_count=table.column_count,
+                )
+                cell._merge_end = _normalize_cell_coordinate(
+                    cell_payload.get("merge_end", (row_index, column_index)),
+                    name="merge_end",
+                    row_count=table.row_count,
+                    column_count=table.column_count,
+                )
                 cell.vertical_alignment = cell_payload.get("vertical_alignment", "top")
         table._autofit_suppressed = False
         table.clear_autofit_queue()
@@ -451,6 +461,29 @@ def _normalize_style_id(value: object) -> str | None:
     if value is None or isinstance(value, str):
         return value
     raise TypeError("Paragraph style_id must be a string or None")
+
+
+def _normalize_cell_coordinate(
+    value: object,
+    *,
+    name: str,
+    row_count: int,
+    column_count: int,
+) -> tuple[int, int]:
+    """Normalize a serialized cell coordinate inside table bounds."""
+    if isinstance(value, (str, bytes)):
+        raise TypeError(f"{name} must be a two-integer coordinate")
+    try:
+        row_index, column_index = value
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must contain exactly two indexes") from exc
+    if isinstance(row_index, bool) or isinstance(column_index, bool):
+        raise TypeError(f"{name} indexes must be integers")
+    if not isinstance(row_index, int) or not isinstance(column_index, int):
+        raise TypeError(f"{name} indexes must be integers")
+    if not (0 <= row_index < row_count and 0 <= column_index < column_count):
+        raise ValueError(f"{name} indexes must be inside table bounds")
+    return row_index, column_index
 
 
 def _coerce_finite_float(value: float, *, name: str, allow_negative: bool = True) -> float:
