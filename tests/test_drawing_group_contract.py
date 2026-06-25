@@ -122,6 +122,16 @@ def test_drawing_group_rejects_invalid_recipe_boundaries(drawing_style: DrawingS
         group.to_group(OutputFormat.SVG)
 
 
+@pytest.mark.condition("DRAWING-GROUP-LIVE-COMPONENTS-P2")
+def test_drawing_group_to_group_revalidates_mutable_component_list() -> None:
+    """DRAWING-GROUP-LIVE-COMPONENTS-P2: Live materialization rejects mutated component lists."""
+    group = DrawingComponentGroup("mutated")
+    group.components.append(object())  # type: ignore[arg-type]
+
+    with pytest.raises(TypeError, match="to_component"):
+        group.to_group(OutputFormat.SVG)
+
+
 @pytest.mark.condition("DRAWING-GROUP-P1")
 def test_drawing_group_rejects_unsupported_formats_before_materializing(drawing_style: DrawingStyle) -> None:
     """DRAWING-GROUP-P1: Unsupported formats fail before component materialization."""

@@ -358,6 +358,7 @@ class DrawingComponentGroup:
             group = ComponentGroupPDF(self.group_label)
         copy_grammar_truth_annotations(self, group)
         for component in self.components:
+            self._validate_component(component)
             concrete = component.to_component(target)
             if not isinstance(concrete, Component):
                 raise TypeError("to_component(output_format) must return an InkGen Component")

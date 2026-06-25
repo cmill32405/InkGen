@@ -65,6 +65,9 @@ Before/after edge changes:
   `DrawingComponentGroup("label", components)` construction could store
   malformed component collections and fail later with incidental errors during
   materialization.
+- Before `DRAWING-GROUP-LIVE-COMPONENTS-P2`, callers could mutate the public
+  `components` list after construction and cause `to_group()` to fail through
+  incidental attribute errors instead of the neutral group boundary.
 - After this slice, neutral components must expose a callable
   `to_component(output_format)` and concrete materialization must return an
   InkGen `Component`.
@@ -77,6 +80,9 @@ Before/after edge changes:
 - After `DRAWING-GROUP-COMPONENTS-P2`, constructor-supplied components must be
   a non-string sequence of primitives with callable `to_component`, and the
   accepted collection is normalized to a list.
+- After `DRAWING-GROUP-LIVE-COMPONENTS-P2`, live materialization revalidates
+  every current component before calling `to_component()`, so post-construction
+  list mutation cannot bypass the callable-primitive contract.
 - No dependency direction changed and no third-party dependency was introduced.
 
 Cycle/layer/coupling/redundancy result:
@@ -139,6 +145,8 @@ ADR/rule impact:
   component collections before materialization.
 - `DrawingComponentGroup.add_component()` and constructor validation now share
   the same callable-primitive boundary helper.
+- `DrawingComponentGroup.to_group()` now reuses the callable-primitive boundary
+  helper for the live `components` list before materializing each component.
 
 ## Comprehensiveness Matrix
 
@@ -151,6 +159,7 @@ ADR/rule impact:
 | Attribute-only invalid primitive | Reject at add boundary | PO-DGROUP-002 | `test_drawing_group_rejects_invalid_recipe_boundaries` | killed |
 | Malformed constructor component collection | Reject raw strings, bytes, non-sequences, non-primitives, and attribute-only primitives before materialization | PO-DGROUP-007 | `test_drawing_group_constructor_rejects_malformed_components` | killed |
 | Valid constructor component sequence | Normalize to mutable list and preserve materialization | PO-DGROUP-007 | `test_drawing_group_constructor_accepts_valid_component_sequences` | killed |
+| Post-construction component-list mutation | Revalidate current components before live materialization | PO-DGROUP-008 | `test_drawing_group_to_group_revalidates_mutable_component_list` | killed |
 | Primitive returning non-component | Reject at materialization boundary | PO-DGROUP-002 | same | killed |
 | Unsupported output format | Reject before materialization | PO-DGROUP-003 | `test_drawing_group_rejects_unsupported_formats_before_materializing` | killed/equivalent |
 | Stringifiable non-string output selector | Reject before materialization | PO-DGROUP-006 | `test_normalize_output_format_rejects_stringifiable_objects`, `test_drawing_group_rejects_non_string_format_before_materializing` | killed |
@@ -163,7 +172,7 @@ ADR/rule impact:
 |---|---|---|---|
 | Unit | yes | Group boundary validation is deterministic. | DRAWING-GROUP-P1 tests |
 | Behavioral/condition | yes | The slice defines a renderer-neutral group contract. | Tests are marked `@pytest.mark.condition("DRAWING-GROUP-P1")`. |
-| Failure-mode | yes | Invalid labels, malformed constructor component collections, invalid primitives, unsupported formats, and wrong-type backend selectors must fail loudly. | Invalid-boundary, constructor-boundary, hydration, and format-selector tests |
+| Failure-mode | yes | Invalid labels, malformed constructor component collections, post-construction component-list mutation, invalid primitives, unsupported formats, and wrong-type backend selectors must fail loudly. | Invalid-boundary, live-list-boundary, constructor-boundary, hydration, and format-selector tests |
 | Integration/live-path | yes | Group materialization crosses into SVG/PDF group classes, grammar truth, and flow-document hydration. | Materialization, flow-document, and existing zoning tests |
 | Contract/API compatibility | yes | Existing zoning and primitive materialization behavior must remain compatible. | Existing `PDF-P3` tests |
 | Property/fuzz | no | The slice is finite dispatch and type-boundary behavior. | Not applicable |
@@ -185,6 +194,8 @@ Proof-critical mutation targets:
   hydration tests.
 - Weakening constructor component collection validation should fail malformed
   constructor tests.
+- Weakening live component-list validation should fail mutable-list
+  materialization tests.
 - Weakening callable validation should fail invalid-add tests.
 - Weakening concrete `Component` validation should fail invalid-materialization
   tests.
@@ -210,6 +221,8 @@ Current result:
   format-selector hardening update: 3 work items, 3 killed, and 0 survived.
 - Cosmic Ray 8.4.6, scoped to constructor component collection validation
   after `DRAWING-GROUP-COMPONENTS-P2`: 8 work items, 8 killed, and 0 survived.
+- Cosmic Ray 8.4.6, scoped to live component-list validation after
+  `DRAWING-GROUP-LIVE-COMPONENTS-P2`: 4 work items, 4 killed, and 0 survived.
 
 ## PO-DGROUP-001: Valid Groups Materialize To Concrete Groups
 
@@ -250,6 +263,30 @@ Objects without callable `to_component()` and primitives whose
 
 `add_component()` checks callability before appending. `to_group()` checks the
 concrete return value before copying annotations or adding to a concrete group.
+
+### Conclusion
+
+Proven for the stated domain after tests and mutation pass.
+
+## PO-DGROUP-008: Live Component Lists Are Revalidated
+
+### Claim
+
+`DrawingComponentGroup.to_group()` rejects malformed values present in the
+public mutable `components` list before attempting renderer materialization.
+
+### Domain
+
+All `DrawingComponentGroup` instances at materialization time, including groups
+whose public `components` list was mutated after construction.
+
+### Proof Method
+
+The materialization loop calls the same `_validate_component()` helper used by
+construction and `add_component()` before invoking `to_component()`. The
+focused condition test mutates the public list with an arbitrary object and
+asserts that `to_group()` raises the documented callable-primitive `TypeError`
+instead of an incidental attribute error.
 
 ### Conclusion
 
