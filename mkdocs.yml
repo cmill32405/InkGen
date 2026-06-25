@@ -74,6 +74,7 @@ nav:
       - Table Cell Alignment Contract: proofs/table-cell-alignment-contract.md
       - Table Cell Style ID Contract: proofs/table-cell-style-id-contract.md
       - Table Cell Merge Contract: proofs/table-cell-merge-contract.md
+      - Table Autofit Rule Contract: proofs/table-autofit-rule-contract.md
       - DXF Renderer Contract: proofs/dxf-renderer-contract.md
   - Architecture Diagrams: architecture-diagrams.md
   - Notes:

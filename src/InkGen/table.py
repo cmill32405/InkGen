@@ -312,10 +312,10 @@ class Table(Component):
         table._autofit_suppressed = True
         for column_data in payload.get("columns", []):
             column = table.add_column(width=column_data["width"])
-            column.width_rule = AutoFitRule(column_data["width_rule"])
+            column.width_rule = _normalize_autofit_rule(column_data["width_rule"], name="width_rule")
         for row_data in payload.get("rows", []):
             row = table.add_row(height=row_data["height"])
-            row.height_rule = AutoFitRule(row_data["height_rule"])
+            row.height_rule = _normalize_autofit_rule(row_data["height_rule"], name="height_rule")
         for row_index, row_payload in enumerate(payload.get("matrix", [])):
             for column_index, cell_payload in enumerate(row_payload):
                 cell = table.cell(row_index, column_index)
@@ -445,6 +445,13 @@ def _normalize_bool(value: object, *, name: str) -> bool:
     if not isinstance(value, bool):
         raise TypeError(f"{name} must be a bool")
     return value
+
+
+def _normalize_autofit_rule(value: object, *, name: str) -> AutoFitRule:
+    """Normalize a serialized row or column autofit rule selector."""
+    if not isinstance(value, str):
+        raise TypeError(f"{name} must be a string")
+    return AutoFitRule(value)
 
 
 def _normalize_vertical_alignment(value: object, allowed: set[str]) -> str:

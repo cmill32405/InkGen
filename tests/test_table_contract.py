@@ -10,7 +10,7 @@ import InkGen.table as table_module
 from InkGen.document_outputs import FlowDocument
 from InkGen.style import DrawingStyle, Font, TextStyle
 from InkGen.svg_generator import ComponentGroupSVG, RectangleSVG, TableSVG, TextSVG
-from InkGen.table import Table
+from InkGen.table import AutoFitRule, Table
 
 
 def _table() -> Table:
@@ -406,3 +406,53 @@ def test_table_cell_merge_hydration_valid_state_remains_live() -> None:
     document = FlowDocument(title="Merged table")
     document.add_table(clone)
     assert "Merged" in document.to_plain_text()
+
+
+@pytest.mark.condition("TABLE-AUTOFIT-RULE-P2")
+@pytest.mark.parametrize(
+    ("collection", "field"),
+    [
+        ("columns", "width_rule"),
+        ("rows", "height_rule"),
+    ],
+)
+def test_table_autofit_rule_hydration_rejects_non_string_selectors(collection: str, field: str) -> None:
+    """TABLE-AUTOFIT-RULE-P2: Serialized autofit rules must be real strings."""
+    payload = _table().parameters
+    payload["Table"][collection][0][field] = _StringEquivalent("FIT")
+
+    with pytest.raises(TypeError, match=f"{field} must be a string"):
+        Table.create_from_dict(payload)
+
+
+@pytest.mark.condition("TABLE-AUTOFIT-RULE-P2")
+@pytest.mark.parametrize(
+    ("collection", "field"),
+    [
+        ("columns", "width_rule"),
+        ("rows", "height_rule"),
+    ],
+)
+def test_table_autofit_rule_hydration_rejects_unknown_strings(collection: str, field: str) -> None:
+    """TABLE-AUTOFIT-RULE-P2: Serialized autofit rules must match supported enum values."""
+    payload = _table().parameters
+    payload["Table"][collection][0][field] = "SHRINK"
+
+    with pytest.raises(ValueError):
+        Table.create_from_dict(payload)
+
+
+@pytest.mark.condition("TABLE-AUTOFIT-RULE-P2")
+def test_table_autofit_rule_hydration_valid_strings_remain_live() -> None:
+    """TABLE-AUTOFIT-RULE-P2: Valid hydrated rules remain live through queue registration."""
+    payload = _table().parameters
+    payload["Table"]["auto_fit"] = True
+    payload["Table"]["columns"][0]["width_rule"] = "FIT"
+    payload["Table"]["rows"][0]["height_rule"] = "CUT"
+
+    clone = Table.create_from_dict(payload)
+    clone.cell(0, 0).add_paragraph("Queued")
+
+    assert clone.columns[0].width_rule is AutoFitRule.FIT
+    assert clone.rows[0].height_rule is AutoFitRule.CUT
+    assert clone.autofit_queue[-1] == ((0, 0), AutoFitRule.CUT, AutoFitRule.FIT)
