@@ -137,6 +137,24 @@ def test_dxf_document_layer_fallback_and_write_guard(tmp_path) -> None:
 
 
 @pytest.mark.condition("DXF-P1")
+@pytest.mark.parametrize("layer", [True, False, 123, 1.5, object()])
+def test_dxf_document_rejects_malformed_layer_overrides(layer: object) -> None:
+    """DXF-P1: DXF layer overrides reject values that would be silently stringified."""
+    style = _drawing_style()
+    group = DrawingComponentGroup("source-layer")
+    group.add_component(LineDrawing((0.0, 0.0), (1.0, 1.0), style))
+    document = DXFDocument()
+
+    with pytest.raises(TypeError, match="layer must be a string"):
+        DXFRenderContext(layer=layer)  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="layer must be a string"):
+        document.add_group(group, layer=layer)  # type: ignore[arg-type]
+
+    document.add_group(group, layer="")
+    assert "\n8\nsource-layer\n" in document.to_dxf_string()
+
+
+@pytest.mark.condition("DXF-P1")
 @pytest.mark.parametrize(
     ("filepath", "exception_type", "message"),
     [

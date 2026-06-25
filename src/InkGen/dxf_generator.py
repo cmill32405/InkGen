@@ -40,6 +40,7 @@ class DXFRenderContext:
                 "canvas_height",
                 _coerce_finite_float(self.canvas_height, name="canvas_height", minimum=0.0),
             )
+        object.__setattr__(self, "layer", _coerce_dxf_layer(self.layer, name="layer"))
 
     def point(self, x: float, y: float) -> tuple[float, float]:
         """Convert an InkGen point to DXF coordinates."""
@@ -62,6 +63,13 @@ def _coerce_finite_float(value: object, *, name: str, minimum: float | None = No
     return number
 
 
+def _coerce_dxf_layer(value: object, *, name: str) -> str:
+    """Return a DXF layer name and reject values that would be stringified."""
+    if not isinstance(value, str):
+        raise TypeError(f"{name} must be a string.")
+    return value
+
+
 class DXFDocument:
     """ASCII DXF document assembled from neutral drawing groups."""
 
@@ -74,6 +82,8 @@ class DXFDocument:
         """Append all supported entities from a neutral drawing group."""
         if not isinstance(group, DrawingComponentGroup):
             raise TypeError("group must be a DrawingComponentGroup")
+        if layer is not None:
+            layer = _coerce_dxf_layer(layer, name="layer")
         context = DXFRenderContext(canvas_height=self._canvas_height, layer=layer or group.group_label or "0")
         for component in group.components:
             self._entities.extend(_component_to_entities(component, context))

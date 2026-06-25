@@ -26,6 +26,9 @@ and this proof note. The finite-boundary hardening update changes the public
 DXF context and document canvas-height boundaries so malformed numeric values
 fail before DXF artifact text is emitted. The filepath hardening update changes
 the public DXF writer boundary so malformed output paths fail before `open()`.
+The layer-boundary hardening update changes the public DXF context and
+`DXFDocument.add_group()` layer override boundaries so malformed layer values
+fail before `_format_value()` can stringify them into artifact text.
 
 ## Architecture Impact
 
@@ -33,7 +36,8 @@ Affected surface:
 
 - `tests/test_dxf_contract.py`: DXF-P1 condition tests.
 - `src/InkGen/dxf_generator.py`: finite numeric validation for public DXF
-  coordinate and canvas-height boundaries, plus file-writer path validation.
+  coordinate and canvas-height boundaries, file-writer path validation, and
+  layer override validation.
 - `tests/mutation/dxf_renderer_cosmic_ray.toml`: scoped Cosmic Ray gate.
 - `tests/mutation/filter_dxf_renderer_work_items.py`: proof-critical mutation
   filter.
@@ -67,6 +71,8 @@ Before/after edge changes:
   helper from another InkGen layer and does not add a dependency.
 - The filepath hardening update adds a local DXF output path validator; it does
   not add a dependency or change DXF entity generation.
+- The layer-boundary hardening update adds a local DXF layer validator; it does
+  not add a dependency or change valid DXF entity generation.
 
 Cycle/layer/coupling/redundancy result:
 
@@ -92,8 +98,8 @@ ADR/rule impact:
 - If `canvas_height is None`, point coordinates are unchanged except for float
   coercion.
 - If `canvas_height == H`, DXF y is `H - y`.
-- A DXF layer is the explicit `layer` argument, else the group label, else
-  `"0"`.
+- A DXF layer is the explicit string `layer` argument, else the group label,
+  else `"0"`. Empty explicit layer strings use the existing fallback path.
 - Closed paths are paths whose final valid `PathCommand.type.upper()` is `"Z"`.
 - Rounded rectangles use 4 sampled points per corner and omit a duplicate final
   point when it equals the first point.
@@ -109,7 +115,7 @@ ADR/rule impact:
 |---|---|---|---|---|
 | Coordinate conversion | Preserve x and optionally flip y | PO-DXF-001 | `test_dxf_context_and_numeric_format_are_deterministic` | killed |
 | Coordinate and canvas-height validation | Reject booleans, non-numeric values, non-finite values, and negative heights | PO-DXF-008 | `test_dxf_context_rejects_malformed_coordinate_boundaries` | killed |
-| Layer selection | Explicit layer, group label fallback, `"0"` fallback | PO-DXF-002 | `test_dxf_document_layers_and_ascii_text_contract`, `test_dxf_document_layer_fallback_and_write_guard` | killed |
+| Layer selection and validation | Explicit string layer, group label fallback, `"0"` fallback, malformed non-string overrides rejected | PO-DXF-002, PO-DXF-009 | `test_dxf_document_layers_and_ascii_text_contract`, `test_dxf_document_layer_fallback_and_write_guard`, `test_dxf_document_rejects_malformed_layer_overrides` | killed |
 | File output | String/path-like existing-directory paths write ASCII; malformed paths and missing directories fail before writing | PO-DXF-003 | write-guard test, malformed-path test, and existing DXF generator tests | killed |
 | Rounded and sharp rectangles | Emit deterministic closed LWPOLYLINE vertices | PO-DXF-004 | rectangle/closure tests | equivalent survivors documented |
 | Path closure | `Z` closes; non-`Z` valid commands remain open | PO-DXF-005 | open/closed path tests | equivalent survivor documented |
@@ -124,7 +130,7 @@ ADR/rule impact:
 |---|---|---|---|
 | Unit | yes | Entity helpers and numeric formatting are deterministic. | `tests/test_dxf_contract.py` |
 | Behavioral/condition | yes | The slice defines DXF-P1 renderer behavior. | Tests are marked `@pytest.mark.condition("DXF-P1")`. |
-| Failure-mode | yes | Bad coordinates, bad canvas heights, bad group types, unsupported components, malformed output paths, and missing directories must fail. | DXF generator and contract tests |
+| Failure-mode | yes | Bad coordinates, bad canvas heights, bad layer overrides, bad group types, unsupported components, malformed output paths, and missing directories must fail. | DXF generator and contract tests |
 | Integration/live-path | yes | `DXFDocument.add_group()` and `to_dxf_string()` are exercised with neutral drawing groups. | document layer/text tests and existing DXF generator tests |
 | Contract/API compatibility | yes | Public `DXFDocument`/`DXFRenderContext` behavior and private proof-critical entity contracts are pinned. | focused DXF gate |
 | Property/fuzz | limited yes | Bounded deterministic partitions cover coordinate, layer, closure, and sampled-geometry domains. | DXF-P1 tests |
@@ -161,6 +167,19 @@ Current result after the filepath hardening update:
 - Raw work items: 690.
 - Proof-critical work items after filter: 7.
 - Killed mutants: 7.
+- Surviving mutants: 0.
+- Gate result: pass.
+
+Current result after the layer-boundary hardening update:
+
+- Tool: Cosmic Ray 8.4.6.
+- Environment: WSL Python 3.12 virtualenv.
+- Config: `tests/mutation/dxf_layer_cosmic_ray.toml`.
+- Filter: `tests/mutation/filter_dxf_layer_work_items.py`.
+- Test selection: focused DXF-P1 layer contract tests.
+- Raw work items: 705.
+- Proof-critical work items after filter: 6.
+- Killed mutants: 6.
 - Surviving mutants: 0.
 - Gate result: pass.
 
@@ -256,7 +275,7 @@ Proven for the stated public DXF numeric boundaries.
 
 ### Claim
 
-DXF entities use the explicit layer, then group label, then `"0"`.
+DXF entities use the explicit string layer, then group label, then `"0"`.
 
 ### Proof Method
 
@@ -267,6 +286,49 @@ empty-label fallback cases.
 ### Conclusion
 
 Proven for `DrawingComponentGroup` inputs.
+
+## PO-DXF-009: DXF Layer Boundaries Fail Closed
+
+### Claim
+
+DXF context and document layer overrides reject malformed values before DXF
+artifact text is emitted.
+
+### Domain
+
+Public `DXFRenderContext(layer=...)` and
+`DXFDocument.add_group(group, layer=...)` calls.
+
+### Assumptions
+
+`DrawingComponentGroup` validates `group_label` as a string at the neutral
+drawing boundary. This obligation covers the public DXF override path and direct
+DXF context construction.
+
+### Theorem
+
+For all accepted public DXF layer override values, the stored layer is a string.
+All tested boolean, numeric, and arbitrary object overrides raise `TypeError`.
+Empty explicit strings preserve the existing fallback contract in
+`DXFDocument.add_group()`.
+
+### Proof Method
+
+`DXFRenderContext.__post_init__()` and `DXFDocument.add_group()` route layer
+values through `_coerce_dxf_layer()`. The helper accepts only strings and
+rejects values that `_format_value()` would otherwise stringify into DXF group
+code text. The condition test covers direct context construction, the public
+document add path, and the empty-string fallback path.
+
+### Counterexamples And Exclusions
+
+Private mutation of `DrawingComponentGroup.group_label`, hostile monkey
+patching, and DXF consumers with stricter layer-name character policies are
+outside this slice.
+
+### Conclusion
+
+Proven for the stated public DXF layer override boundaries.
 
 ## PO-DXF-003: File Output Guard
 
