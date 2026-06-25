@@ -446,6 +446,13 @@ def _normalize_vertical_alignment(value: object, allowed: set[str]) -> str:
     return value
 
 
+def _normalize_style_id(value: object) -> str | None:
+    """Normalize a public cell paragraph style identifier."""
+    if value is None or isinstance(value, str):
+        return value
+    raise TypeError("Paragraph style_id must be a string or None")
+
+
 def _coerce_finite_float(value: float, *, name: str, allow_negative: bool = True) -> float:
     """Coerce a public table dimension value into a finite float."""
     if isinstance(value, bool):
@@ -802,6 +809,7 @@ class Cell:
     ) -> None:
         if not isinstance(text, str):
             raise TypeError("Paragraph text must be a string")
+        style_id = _normalize_style_id(style_id)
         self._paragraph_text.append(text)
         self._paragraph_styles.append(style_id)
         if trigger_autofit:

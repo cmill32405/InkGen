@@ -72,6 +72,7 @@ nav:
       - Table Contract: proofs/table-contract.md
       - Table Autofit Boolean Contract: proofs/table-autofit-contract.md
       - Table Cell Alignment Contract: proofs/table-cell-alignment-contract.md
+      - Table Cell Style ID Contract: proofs/table-cell-style-id-contract.md
       - DXF Renderer Contract: proofs/dxf-renderer-contract.md
   - Architecture Diagrams: architecture-diagrams.md
   - Notes:

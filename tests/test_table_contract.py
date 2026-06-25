@@ -273,3 +273,49 @@ def test_table_cell_vertical_alignment_valid_strings_hydrate_and_render() -> Non
     document = FlowDocument(title="Aligned table")
     document.add_table(clone)
     assert "A1" in document.to_plain_text()
+
+
+@pytest.mark.condition("TABLE-CELL-STYLE-ID-P2")
+def test_table_cell_paragraph_style_id_rejects_non_string_values() -> None:
+    """TABLE-CELL-STYLE-ID-P2: Paragraph style IDs accept only strings or None."""
+    cell = _table().cell(0, 0)
+
+    for value in [_StringEquivalent("body"), b"body", object(), 1]:
+        with pytest.raises(TypeError, match="style_id must be a string or None"):
+            cell.add_paragraph("Bad style", style_id=value)  # type: ignore[arg-type]
+
+    assert cell.paragraphs == ["A1"]
+    assert cell.paragraph_styles == ["body"]
+    cell.add_paragraph("No style", style_id=None)
+    assert cell.paragraph_styles[-1] is None
+
+
+@pytest.mark.condition("TABLE-CELL-STYLE-ID-P2")
+def test_table_cell_paragraph_style_id_hydration_rejects_non_string_values() -> None:
+    """TABLE-CELL-STYLE-ID-P2: Serialized style IDs cannot bypass validation."""
+    payload = _table().parameters
+    payload["Table"]["matrix"][0][0]["paragraphs"][0]["style_id"] = _StringEquivalent("body")
+
+    with pytest.raises(TypeError, match="style_id must be a string or None"):
+        Table.create_from_dict(payload)
+
+
+@pytest.mark.condition("TABLE-CELL-STYLE-ID-P2")
+def test_table_cell_paragraph_style_id_valid_values_hydrate_and_render() -> None:
+    """TABLE-CELL-STYLE-ID-P2: Valid style IDs remain live through hydration and SVG output."""
+    table = _table()
+    table.cell(0, 0).add_paragraph("Default", style_id=None)
+
+    clone = Table.create_from_dict(table.parameters)
+    assert clone.cell(0, 0).paragraph_styles == ["body", None]
+
+    text_styles = _text_styles()
+    text_styles[None] = TextStyle(name=f"default_table_style_{uuid4().hex}", font=Font())  # type: ignore[index]
+    group = TableSVG.from_table(
+        clone,
+        group_label="style-table",
+        border_style=_border_style(),
+        text_styles=text_styles,  # type: ignore[arg-type]
+    )
+    text_components = [component for component in group.components() if type(component) is TextSVG]
+    assert [component.text for component in text_components] == ["A1", "Default"]
