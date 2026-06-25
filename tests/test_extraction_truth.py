@@ -15,6 +15,7 @@ from InkGen.extraction_truth import (
     extraction_truth_json,
     normalize_bbox,
     records_for_annotated_target,
+    restore_extraction_truth_annotations,
     sort_extraction_truth_records,
 )
 from InkGen.pdf_generator import ComponentGroupPDF, DocumentPDF, RectanglePDF
@@ -205,6 +206,55 @@ def test_extraction_truth_rejects_invalid_optional_fields() -> None:
         ExtractionTruthAnnotation("field", "value", is_truth="yes")
     with pytest.raises(TypeError, match="instance_id must be a string or None"):
         ExtractionTruthAnnotation("field", "value", instance_id=object())
+
+
+@pytest.mark.condition("TRUTH-ANNOTATION-PAYLOAD-P2")
+@pytest.mark.parametrize(
+    ("payload", "exception_type", "message"),
+    [
+        (object(), TypeError, "extraction truth annotation data must be a mapping"),
+        ({"value": "v"}, ValueError, "field_name is required"),
+        ({"field_name": "field"}, ValueError, "value is required"),
+        ({"field_name": object(), "value": "v"}, TypeError, "field_name must be a string"),
+        ({"field_name": "field", "value": object()}, TypeError, "value must be a string"),
+        ({"field_name": "field", "value": "v", "role": object()}, TypeError, "role must be a string"),
+        (
+            {"field_name": "field", "value": "v", "source_channel": object()},
+            TypeError,
+            "source_channel must be a string",
+        ),
+        (
+            {"field_name": "field", "value": "v", "instance_id": object()},
+            TypeError,
+            "instance_id must be a string or None",
+        ),
+    ],
+)
+def test_extraction_truth_from_dict_rejects_malformed_serialized_fields(
+    payload: object,
+    exception_type: type[Exception],
+    message: str,
+) -> None:
+    """TRUTH-ANNOTATION-PAYLOAD-P2: Serialized extraction truth cannot stringify malformed fields."""
+    with pytest.raises(exception_type, match=message):
+        ExtractionTruthAnnotation.from_dict(payload)
+
+
+@pytest.mark.condition("TRUTH-ANNOTATION-PAYLOAD-P2")
+def test_restore_extraction_truth_rejects_malformed_serialized_annotations() -> None:
+    """TRUTH-ANNOTATION-PAYLOAD-P2: Restore path uses the same annotation payload boundary."""
+    target = _TargetWithBBox(None)
+
+    with pytest.raises(TypeError, match="field_name must be a string"):
+        restore_extraction_truth_annotations(target, [{"field_name": object(), "value": "v"}])
+
+
+@pytest.mark.condition("TRUTH-ANNOTATION-PAYLOAD-P2")
+def test_extraction_truth_from_dict_preserves_default_truth_flag() -> None:
+    """TRUTH-ANNOTATION-PAYLOAD-P2: Missing is_truth defaults to a true annotation."""
+    annotation = ExtractionTruthAnnotation.from_dict({"field_name": "field", "value": "v"})
+
+    assert annotation.is_truth is True
 
 
 @pytest.mark.condition("PDF-P2")

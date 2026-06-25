@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
 COORDINATE_FRAME_PDF = "pdf_points_bottom_left"
@@ -38,17 +38,18 @@ class ExtractionTruthAnnotation:
             raise TypeError("instance_id must be a string or None.")
 
     @classmethod
-    def from_dict(cls, data: dict[str, object]) -> ExtractionTruthAnnotation:
+    def from_dict(cls, data: object) -> ExtractionTruthAnnotation:
         """Recreate an annotation from serialized data."""
-        instance_id = data.get("instance_id")
-        is_truth = data.get("is_truth", True)
+        payload = _annotation_payload(data)
+        instance_id = payload.get("instance_id")
+        is_truth = payload.get("is_truth", True)
         return cls(
-            field_name=str(data["field_name"]),
-            value=str(data["value"]),
-            role=str(data.get("role", "value")),
-            source_channel=str(data.get("source_channel", BODY_SOURCE_CHANNEL)),
+            field_name=_required_string(payload, "field_name"),
+            value=_required_string(payload, "value"),
+            role=_optional_string(payload, "role", "value"),
+            source_channel=_optional_string(payload, "source_channel", BODY_SOURCE_CHANNEL),
             is_truth=is_truth,
-            instance_id=None if instance_id is None else str(instance_id),
+            instance_id=_optional_string_or_none(instance_id, "instance_id"),
         )
 
     def to_dict(self) -> dict[str, object]:
@@ -238,6 +239,36 @@ def _coerce_annotation(annotation: ExtractionTruthAnnotation | dict[str, object]
     if isinstance(annotation, ExtractionTruthAnnotation):
         return annotation
     return ExtractionTruthAnnotation.from_dict(annotation)
+
+
+def _annotation_payload(data: object) -> Mapping[str, object]:
+    if not isinstance(data, Mapping):
+        raise TypeError("extraction truth annotation data must be a mapping")
+    return data
+
+
+def _required_string(payload: Mapping[str, object], name: str) -> str:
+    if name not in payload:
+        raise ValueError(f"{name} is required.")
+    value = payload[name]
+    if not isinstance(value, str):
+        raise TypeError(f"{name} must be a string.")
+    return value
+
+
+def _optional_string(payload: Mapping[str, object], name: str, default: str) -> str:
+    value = payload.get(name, default)
+    if not isinstance(value, str):
+        raise TypeError(f"{name} must be a string.")
+    return value
+
+
+def _optional_string_or_none(value: object, name: str) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise TypeError(f"{name} must be a string or None.")
+    return value
 
 
 def _is_number(value: object) -> bool:

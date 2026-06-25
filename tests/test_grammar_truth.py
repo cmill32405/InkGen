@@ -15,6 +15,7 @@ from InkGen.grammar_truth import (
     annotate_grammar_truth,
     grammar_truth_json,
     records_for_annotated_target,
+    restore_grammar_truth_annotations,
     sort_grammar_truth_records,
 )
 from InkGen.pdf_generator import ComponentGroupPDF, DocumentPDF, RectanglePDF
@@ -239,6 +240,47 @@ def test_grammar_truth_rejects_invalid_optional_fields() -> None:
         GrammarTruthAnnotation("B1", "cue", instance_id=object())
 
 
+@pytest.mark.condition("TRUTH-ANNOTATION-PAYLOAD-P2")
+@pytest.mark.parametrize(
+    ("payload", "exception_type", "message"),
+    [
+        (object(), TypeError, "grammar truth annotation data must be a mapping"),
+        ({"kind": "cue"}, ValueError, "condition_id is required"),
+        ({"condition_id": "B1"}, ValueError, "kind is required"),
+        ({"condition_id": object(), "kind": "cue"}, TypeError, "condition_id must be a string"),
+        ({"condition_id": "B1", "kind": object()}, TypeError, "kind must be a string"),
+        ({"condition_id": "B1", "kind": "cue", "links_to": object()}, TypeError, "links_to must be a string or None"),
+        (
+            {"condition_id": "B1", "kind": "cue", "source_channel": object()},
+            TypeError,
+            "source_channel must be a string",
+        ),
+        (
+            {"condition_id": "B1", "kind": "cue", "instance_id": object()},
+            TypeError,
+            "instance_id must be a string or None",
+        ),
+    ],
+)
+def test_grammar_truth_from_dict_rejects_malformed_serialized_fields(
+    payload: object,
+    exception_type: type[Exception],
+    message: str,
+) -> None:
+    """TRUTH-ANNOTATION-PAYLOAD-P2: Serialized grammar truth cannot stringify malformed fields."""
+    with pytest.raises(exception_type, match=message):
+        GrammarTruthAnnotation.from_dict(payload)
+
+
+@pytest.mark.condition("TRUTH-ANNOTATION-PAYLOAD-P2")
+def test_restore_grammar_truth_rejects_malformed_serialized_annotations() -> None:
+    """TRUTH-ANNOTATION-PAYLOAD-P2: Restore path uses the same annotation payload boundary."""
+    target = _TargetWithBBox(None)
+
+    with pytest.raises(TypeError, match="condition_id must be a string"):
+        restore_grammar_truth_annotations(target, [{"condition_id": object(), "kind": "cue"}])
+
+
 @pytest.mark.condition("PDF-P3")
 def test_grammar_truth_public_helpers_keep_keyword_only_contracts() -> None:
     """PDF-P3: Grammar helpers reject positional values for keyword-only options."""
@@ -342,10 +384,7 @@ def test_grammar_truth_annotation_property_cases_round_trip_and_sort_determinist
     records: list[GrammarTruthRecord] = []
 
     for index, (kind, source_channel, value) in enumerate(
-        (kind, source_channel, value)
-        for kind in kinds
-        for source_channel in channels
-        for value in values
+        (kind, source_channel, value) for kind in kinds for source_channel in channels for value in values
     ):
         annotation = GrammarTruthAnnotation(
             f"COND-{index}",

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
 from InkGen.extraction_truth import BODY_SOURCE_CHANNEL, COORDINATE_FRAME_PDF, bbox_to_pdf_points
@@ -38,17 +38,18 @@ class GrammarTruthAnnotation:
             raise TypeError("instance_id must be a string or None.")
 
     @classmethod
-    def from_dict(cls, data: dict[str, object]) -> GrammarTruthAnnotation:
+    def from_dict(cls, data: object) -> GrammarTruthAnnotation:
         """Recreate an annotation from serialized data."""
-        links_to = data.get("links_to")
-        instance_id = data.get("instance_id")
+        payload = _annotation_payload(data)
+        links_to = payload.get("links_to")
+        instance_id = payload.get("instance_id")
         return cls(
-            condition_id=str(data["condition_id"]),
-            kind=str(data["kind"]),
-            value=data.get("value"),
-            links_to=None if links_to is None else str(links_to),
-            source_channel=str(data.get("source_channel", BODY_SOURCE_CHANNEL)),
-            instance_id=None if instance_id is None else str(instance_id),
+            condition_id=_required_string(payload, "condition_id"),
+            kind=_required_string(payload, "kind"),
+            value=payload.get("value"),
+            links_to=_optional_string_or_none(links_to, "links_to"),
+            source_channel=_optional_string(payload, "source_channel", BODY_SOURCE_CHANNEL),
+            instance_id=_optional_string_or_none(instance_id, "instance_id"),
         )
 
     def to_dict(self) -> dict[str, object]:
@@ -215,6 +216,36 @@ def _coerce_annotation(annotation: GrammarTruthAnnotation | dict[str, object]) -
     if isinstance(annotation, GrammarTruthAnnotation):
         return annotation
     return GrammarTruthAnnotation.from_dict(annotation)
+
+
+def _annotation_payload(data: object) -> Mapping[str, object]:
+    if not isinstance(data, Mapping):
+        raise TypeError("grammar truth annotation data must be a mapping")
+    return data
+
+
+def _required_string(payload: Mapping[str, object], name: str) -> str:
+    if name not in payload:
+        raise ValueError(f"{name} is required.")
+    value = payload[name]
+    if not isinstance(value, str):
+        raise TypeError(f"{name} must be a string.")
+    return value
+
+
+def _optional_string(payload: Mapping[str, object], name: str, default: str) -> str:
+    value = payload.get(name, default)
+    if not isinstance(value, str):
+        raise TypeError(f"{name} must be a string.")
+    return value
+
+
+def _optional_string_or_none(value: object, name: str) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise TypeError(f"{name} must be a string or None.")
+    return value
 
 
 def _stable_value(value: object | None) -> str:

@@ -1,0 +1,16 @@
+[cosmic-ray]
+module-path = [
+  "src/InkGen/extraction_truth.py",
+  "src/InkGen/grammar_truth.py",
+]
+timeout = 30.0
+excluded-modules = []
+test-command = "python -m pytest -x tests/test_extraction_truth.py tests/test_grammar_truth.py tests/test_pdf_generator.py"
+
+[cosmic-ray.distributor]
+name = "local"
+
+[cosmic-ray.filters.operators-filter]
+exclude-operators = [
+  "core/ReplaceBinaryOperator_BitOr_.*",
+]

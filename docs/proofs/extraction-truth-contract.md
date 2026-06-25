@@ -3,7 +3,8 @@
 This note applies the InkGen Definition of Done to the PDF-P2 extraction-truth
 slice. It separates the extraction-truth schema, PDF coordinate theorem,
 deterministic serialization, parameter round trip, and rendered-byte
-noninterference proof obligations.
+noninterference proof obligations. It also covers serialized annotation
+payload validation at restore boundaries.
 
 ## Scope
 
@@ -57,6 +58,12 @@ Before/after edge changes:
 - Annotation validation is stricter for `is_truth` and `instance_id`, matching
   the declared generated-data schema instead of silently accepting arbitrary
   objects.
+- Before TRUTH-ANNOTATION-PAYLOAD-P2, `ExtractionTruthAnnotation.from_dict()`
+  stringified malformed serialized `field_name`, `value`, `role`,
+  `source_channel`, and `instance_id` fields.
+- After TRUTH-ANNOTATION-PAYLOAD-P2, serialized extraction-truth annotation
+  payloads must be mappings with required string fields and optional string
+  fields before restore can attach them to a target.
 
 Cycle/layer/coupling/redundancy result:
 
@@ -97,6 +104,7 @@ ADR/rule impact:
 | Body annotation without usable bbox | Preserve record with `bbox is None` | PO-ET-001 exclusion path | `test_body_annotation_without_bbox_emits_none_bbox` | killed |
 | Non-body annotation | Emit page `0` and `bbox is None` | PO-ET-002 | `test_document_pdf_emits_component_and_out_of_band_truth`, `test_non_body_source_channels_suppress_page_and_bbox_regardless_of_sort_order` | killed |
 | Valid generated annotations | Round-trip through dicts and PDF parameters | PO-ET-003 | `test_extraction_truth_round_trips_with_document_pdf_parameters`, `test_extraction_truth_annotation_property_cases_round_trip_and_sort_deterministically` | killed |
+| Malformed serialized annotation payloads | Reject before stringifying schema fields during direct restore | PO-ET-005 | `test_extraction_truth_from_dict_rejects_malformed_serialized_fields`, `test_restore_extraction_truth_rejects_malformed_serialized_annotations`, `test_extraction_truth_from_dict_preserves_default_truth_flag` | killed |
 | Invalid schema fields | Fail near annotation boundary | Constructor invariant | `test_extraction_truth_rejects_empty_required_fields`, `test_extraction_truth_rejects_invalid_optional_fields` | one equivalent survivor |
 | Malformed bbox shapes | Ignore malformed entries or return `None` without partial coercion | Defensive invariant | `test_extraction_truth_bbox_normalization_rejects_malformed_shapes` | killed |
 | Unannotated legacy PDF parameters | Preserve prior parameter shape | Compatibility invariant | `test_unannotated_pdf_parameters_do_not_gain_extraction_truth_keys` | killed |
@@ -110,7 +118,7 @@ ADR/rule impact:
 |---|---|---|---|
 | Unit | yes | Annotation, bbox, sorting, and JSON helpers are deterministic units. | `tests/test_extraction_truth.py` |
 | Behavioral/condition | yes | The slice defines PDF-P2 extraction-truth behavior. | Tests are marked `@pytest.mark.condition("PDF-P2")`. |
-| Failure-mode | yes | Empty fields, invalid optional types, missing geometry, malformed bboxes, and positional contract misuse must fail or degrade safely. | invalid-field, no-bbox, malformed-bbox, and keyword-only tests |
+| Failure-mode | yes | Empty fields, malformed serialized annotation payloads, invalid optional types, missing geometry, malformed bboxes, and positional contract misuse must fail or degrade safely. | invalid-field, serialized-payload, no-bbox, malformed-bbox, and keyword-only tests |
 | Integration/live-path | yes | Truth must be reachable through `DocumentPDF`, groups, and components. | Document PDF emission, round-trip, and byte-stability tests |
 | Contract/API compatibility | yes | Public helper signatures, parameter shape, and deterministic JSON are protected. | keyword-only, unannotated parameters, round-trip, and JSON tests |
 | Property/fuzz | limited yes | InkGen has no property-test dependency, so bounded deterministic partitions cover coordinate and annotation domains. | bbox and annotation property-case tests |
@@ -126,6 +134,8 @@ ADR/rule impact:
 Proof-critical mutation targets:
 
 - Weakening annotation field validation must fail invalid-schema tests.
+- Weakening serialized annotation payload validation must fail from-dict and
+  restore tests.
 - Changing body/non-body channel branching must fail page/bbox tests.
 - Changing `bbox_to_pdf_points()` from bottom-left conversion must fail
   coordinate theorem tests.
@@ -148,6 +158,14 @@ Current result:
     less than or equal to the empty string, so the accepted/rejected set is
     unchanged.
 - Gate result: pass with documented equivalent survivor.
+
+TRUTH-ANNOTATION-PAYLOAD-P2 current result:
+
+- Focused tests: `77 passed`.
+- Mutation: `23` proof-critical work items across extraction and grammar truth,
+  `23 killed`, `0 survivors`.
+- Full coverage gate: `841 passed`, total coverage `94%`.
+- Ruff lint and format passed for touched Python files.
 
 ## PO-ET-001: PDF BBox Conversion
 
@@ -277,3 +295,36 @@ Adding extraction annotations does not alter rendered PDF bytes.
 ### Conclusion
 
 Proven for the stated domain by static path review and byte-stability tests.
+
+## PO-ET-005: Serialized Extraction Annotation Payloads Are Validated
+
+### Claim
+
+`ExtractionTruthAnnotation.from_dict()` rejects malformed serialized annotation
+payloads before schema fields can be stringified.
+
+### Domain
+
+Serialized extraction-truth annotation dictionaries supplied to direct
+`from_dict()` calls or restore through `restore_extraction_truth_annotations()`.
+
+### Proof Method
+
+`from_dict()` first requires the payload to be a mapping. It then requires
+`field_name` and `value` to exist and be strings, validates optional `role` and
+`source_channel` as strings when present, and validates `instance_id` as a
+string or `None`. The dataclass constructor retains the non-empty string and
+boolean checks. Focused tests cover non-mapping payloads, missing required
+fields, malformed required fields, malformed optional fields, and the restore
+path.
+
+### Counterexamples And Exclusions
+
+The `value` field is intentionally still a string for extraction truth.
+Generated dictionaries produced by `to_dict()` remain in the valid round-trip
+domain covered by PO-ET-003.
+
+### Conclusion
+
+Supported by focused extraction/grammar/PDF tests, scoped mutation testing, and
+the full coverage gate for the stated serialized annotation payload boundary.

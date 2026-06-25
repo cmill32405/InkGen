@@ -7,7 +7,9 @@ separates mathematical proof obligations from engineering evidence.
 
 The slice adds grammar cue, construct, link, and assessment annotations that can
 be attached to InkGen PDF documents, component groups, and components. The
-public output is `DocumentPDF.grammar_truth()` and `DocumentPDF.grammar_truth_json()`.
+public output is `DocumentPDF.grammar_truth()` and
+`DocumentPDF.grammar_truth_json()`. It also covers serialized grammar
+annotation payload validation at restore boundaries.
 
 ## Architecture Impact
 
@@ -67,6 +69,12 @@ Before/after edge changes:
   `drawing_components.py -> pdf_generator.py` materialization edge and added
   grammar annotation propagation across that boundary.
 - No new third-party dependency edge was introduced.
+- Before TRUTH-ANNOTATION-PAYLOAD-P2, `GrammarTruthAnnotation.from_dict()`
+  stringified malformed serialized `condition_id`, `kind`, `links_to`,
+  `source_channel`, and `instance_id` fields.
+- After TRUTH-ANNOTATION-PAYLOAD-P2, serialized grammar-truth annotation
+  payloads must be mappings with required string fields and optional string
+  fields before restore can attach them to a target.
 
 Cycle/layer/coupling/redundancy result:
 
@@ -130,6 +138,7 @@ The proof set is comprehensive only for the following declared partitions.
 | Valid grammar kinds: `cue`, `construct`, `link`, `assessment` | Accept and serialize | PO-GT-003 | grammar-truth happy path, link/assessment, and neutral propagation tests | Must be killed or proven equivalent |
 | Invalid grammar kind or empty condition id | Reject near annotation boundary | Constructor invariant | `test_grammar_truth_rejects_empty_condition_and_invalid_kind` | Must be killed or proven equivalent |
 | Invalid optional reference fields or empty source channel | Reject near annotation boundary | Constructor invariant | `test_grammar_truth_rejects_invalid_optional_fields` | Must be killed or proven equivalent |
+| Malformed serialized annotation payloads | Reject before stringifying schema fields during direct restore | PO-GT-006 | `test_grammar_truth_from_dict_rejects_malformed_serialized_fields`, `test_restore_grammar_truth_rejects_malformed_serialized_annotations` | killed |
 | Annotation serialization from InkGen-generated dictionaries | Round-trip exactly under equality assumptions | PO-GT-003 | `test_grammar_truth_round_trips_with_document_pdf_parameters` | Must be killed or proven equivalent |
 | Unannotated legacy PDF parameters | Preserve prior parameter shape; no grammar keys appear | Compatibility invariant | `test_unannotated_pdf_parameters_do_not_gain_grammar_truth_keys` | Must be killed or proven equivalent |
 | Grammar annotations only | Do not affect rendered PDF bytes | PO-GT-004 | `test_grammar_truth_annotations_do_not_change_pdf_bytes` | Must be killed or proven equivalent |
@@ -148,7 +157,7 @@ slice.
 |---|---|---|---|
 | Unit | yes | Grammar annotations, record serialization, sorting, helper contracts, and render-contract guards are small deterministic units. | `tests/test_grammar_truth.py`; `test_pdf_render_contract_helpers_keep_keyword_only_message` |
 | Behavioral/condition | yes | The slice implements PDF-P3 grammar-truth behavior. | All grammar-truth tests are marked `@pytest.mark.condition("PDF-P3")`; PDF guard tests use PDF-P1/PDF-P3 markers where the guard crosses the existing PDF backend. |
-| Failure-mode | yes | Invalid condition ids, invalid kinds, invalid optional fields, unsupported components, non-PDF groups, and bad file paths must fail loudly. | `test_grammar_truth_rejects_empty_condition_and_invalid_kind`; `test_grammar_truth_rejects_invalid_optional_fields`; `test_component_group_pdf_rejects_non_pdf_components`; `test_document_pdf_rejects_non_pdf_child_in_standard_group`; existing `test_document_pdf_create_pdf_writes_bytes_and_rejects_missing_directory` |
+| Failure-mode | yes | Invalid condition ids, invalid kinds, malformed serialized annotation payloads, invalid optional fields, unsupported components, non-PDF groups, and bad file paths must fail loudly. | `test_grammar_truth_rejects_empty_condition_and_invalid_kind`; `test_grammar_truth_from_dict_rejects_malformed_serialized_fields`; `test_restore_grammar_truth_rejects_malformed_serialized_annotations`; `test_grammar_truth_rejects_invalid_optional_fields`; `test_component_group_pdf_rejects_non_pdf_components`; `test_document_pdf_rejects_non_pdf_child_in_standard_group`; existing `test_document_pdf_create_pdf_writes_bytes_and_rejects_missing_directory` |
 | Integration/live-path | yes | Grammar truth must be reachable through public PDF document and renderer-neutral drawing paths, not only helper calls. | `test_document_pdf_emits_grammar_truth_in_pdf_coordinates`; `test_grammar_truth_round_trips_with_document_pdf_parameters`; `test_neutral_drawing_annotations_materialize_to_pdf_grammar_truth`; `test_grammar_truth_annotations_do_not_change_pdf_bytes` |
 | Contract/API compatibility | yes | Public grammar APIs, `DocumentPDF.parameters`, legacy unannotated parameters, and closed PDF component contracts changed. | `test_grammar_truth_round_trips_with_document_pdf_parameters`; `test_unannotated_pdf_parameters_do_not_gain_grammar_truth_keys`; `test_grammar_truth_public_helpers_keep_keyword_only_contracts`; PDF round-trip tests in `tests/test_pdf_generator.py` |
 | Property/fuzz | yes | Coordinate conversion, sorting determinism, and serialization have invariant-like behavior. InkGen does not currently include a property-test dependency, so this slice uses deterministic bounded property-style tests over declared domain partitions rather than randomized fuzzing. | PO-GT-001 through PO-GT-005; `test_grammar_truth_bbox_property_cases_emit_pdf_coordinates`; `test_grammar_truth_annotation_property_cases_round_trip_and_sort_deterministically`; sorting tests for `None` and dictionary values. |
@@ -211,6 +220,8 @@ Proof-critical mutation targets:
   the PDF render-contract helper tests and the live PDF render-path tests.
 - Removing grammar annotation restore/serialization from PDF parameter handling
   should fail `test_grammar_truth_round_trips_with_document_pdf_parameters`.
+- Weakening serialized annotation payload validation should fail from-dict and
+  restore tests.
 
 The gate is automated. Manual perturbation or LLM-as-judge review cannot pass
 this slice. Current command sequence:
@@ -248,6 +259,14 @@ Current result:
   - `src/InkGen/grammar_truth.py`: 178 mutants.
   - `src/InkGen/pdf_render_contract.py`: 25 mutants.
 - Gate result: pass.
+
+TRUTH-ANNOTATION-PAYLOAD-P2 current result:
+
+- Focused tests: `77 passed`.
+- Mutation: `23` proof-critical work items across extraction and grammar truth,
+  `23 killed`, `0 survivors`.
+- Full coverage gate: `841 passed`, total coverage `94%`.
+- Ruff lint and format passed for touched Python files.
 
 ## PO-GT-001: PDF BBox Conversion
 
@@ -548,6 +567,39 @@ Static reasoning over `DrawingComponentGroup.to_group()`:
 ### Conclusion
 
 Proven for the stated domain, assuming well-behaved `to_component()` methods.
+
+## PO-GT-006: Serialized Grammar Annotation Payloads Are Validated
+
+### Claim
+
+`GrammarTruthAnnotation.from_dict()` rejects malformed serialized annotation
+payloads before schema fields can be stringified.
+
+### Domain
+
+Serialized grammar-truth annotation dictionaries supplied to direct
+`from_dict()` calls or restore through `restore_grammar_truth_annotations()`.
+
+### Proof Method
+
+`from_dict()` first requires the payload to be a mapping. It then requires
+`condition_id` and `kind` to exist and be strings, validates optional
+`source_channel` as a string when present, and validates `links_to` and
+`instance_id` as strings or `None`. The dataclass constructor retains the
+non-empty string and allowed-kind checks. Focused tests cover non-mapping
+payloads, missing required fields, malformed required fields, malformed
+optional fields, and the restore path.
+
+### Counterexamples And Exclusions
+
+The `value` field intentionally remains open-ended because grammar assessments
+may contain structured JSON-like values. Generated dictionaries produced by
+`to_dict()` remain in the valid round-trip domain covered by PO-GT-003.
+
+### Conclusion
+
+Supported by focused extraction/grammar/PDF tests, scoped mutation testing, and
+the full coverage gate for the stated serialized annotation payload boundary.
 
 ## Current Slice Decision
 
