@@ -46,8 +46,7 @@ class TabStop:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "position", _coerce_finite_float(self.position, name="Tab stop position", minimum=0.0))
-        if not isinstance(self.alignment, ParagraphAlignment):
-            object.__setattr__(self, "alignment", ParagraphAlignment(self.alignment))
+        object.__setattr__(self, "alignment", _normalize_paragraph_alignment(self.alignment, name="tab stop alignment"))
 
     @property
     def parameters(self) -> dict[str, object]:
@@ -63,7 +62,7 @@ class TabStop:
         """Recreate a tab stop from serialized parameters."""
         return cls(
             position=data["position"],  # type: ignore[arg-type]
-            alignment=ParagraphAlignment(str(data.get("alignment", ParagraphAlignment.LEFT.value))),
+            alignment=data.get("alignment", ParagraphAlignment.LEFT.value),  # type: ignore[arg-type]
             leader=data.get("leader"),
         )
 
@@ -196,10 +195,7 @@ class Paragraph(Component):
 
     @alignment.setter
     def alignment(self, value: ParagraphAlignment | str) -> None:
-        if isinstance(value, ParagraphAlignment):
-            self._alignment = value
-        else:
-            self._alignment = ParagraphAlignment(str(value).lower())
+        self._alignment = _normalize_paragraph_alignment(value, name="alignment")
 
     @property
     def first_line_indent(self) -> float:
@@ -271,10 +267,7 @@ class Paragraph(Component):
 
     @line_spacing_rule.setter
     def line_spacing_rule(self, value: LineSpacingRule | str) -> None:
-        if isinstance(value, LineSpacingRule):
-            self._line_spacing_rule = value
-        else:
-            self._line_spacing_rule = LineSpacingRule(str(value).lower())
+        self._line_spacing_rule = _normalize_line_spacing_rule(value)
 
     @property
     def keep_together(self) -> bool:
@@ -336,9 +329,7 @@ class Paragraph(Component):
         leader: str | None = None,
     ) -> TabStop:
         """Add a tab stop to the paragraph."""
-        if not isinstance(alignment, ParagraphAlignment):
-            alignment = ParagraphAlignment(str(alignment).lower())
-        stop = TabStop(position, alignment, leader)
+        stop = TabStop(position, _normalize_paragraph_alignment(alignment, name="tab stop alignment"), leader)
         self._tab_stops = tuple(sorted((*self._tab_stops, stop), key=lambda item: item.position))
         return stop
 
@@ -416,7 +407,7 @@ class Paragraph(Component):
             position=tuple(payload["position"]),
             width=payload["width"],
             style=style,
-            alignment=ParagraphAlignment(str(payload["alignment"])),
+            alignment=payload["alignment"],
             first_line_indent=payload["first_line_indent"],
             hanging_indent=payload["hanging_indent"],
             left_indent=payload["left_indent"],
@@ -424,7 +415,7 @@ class Paragraph(Component):
             space_before=payload["space_before"],
             space_after=payload["space_after"],
             line_spacing=payload["line_spacing"],
-            line_spacing_rule=LineSpacingRule(str(payload["line_spacing_rule"])),
+            line_spacing_rule=payload["line_spacing_rule"],
             keep_together=payload["keep_together"],
             keep_with_next=payload["keep_with_next"],
             page_break_before=payload["page_break_before"],
@@ -544,3 +535,21 @@ def _coerce_finite_float(
         if not include_minimum and number <= minimum:
             raise ValueError(f"{name} must be greater than {minimum}")
     return number
+
+
+def _normalize_paragraph_alignment(value: ParagraphAlignment | str, *, name: str) -> ParagraphAlignment:
+    """Normalize paragraph alignment without stringifying arbitrary objects."""
+    if isinstance(value, ParagraphAlignment):
+        return value
+    if not isinstance(value, str):
+        raise TypeError(f"{name} must be a ParagraphAlignment or string")
+    return ParagraphAlignment(value.lower())
+
+
+def _normalize_line_spacing_rule(value: LineSpacingRule | str) -> LineSpacingRule:
+    """Normalize line-spacing rule without stringifying arbitrary objects."""
+    if isinstance(value, LineSpacingRule):
+        return value
+    if not isinstance(value, str):
+        raise TypeError("line_spacing_rule must be a LineSpacingRule or string")
+    return LineSpacingRule(value.lower())

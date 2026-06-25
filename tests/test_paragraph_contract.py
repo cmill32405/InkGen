@@ -23,6 +23,18 @@ def _paragraph(text: str = "Alpha beta gamma") -> Paragraph:
     return Paragraph(text, position=(4.0, 6.0), width=32.0, style=_style(), line_spacing=1.2)
 
 
+class _StringifiesToLeft:
+    def __str__(self) -> str:
+        """Return a valid paragraph alignment despite not being a string."""
+        return "left"
+
+
+class _StringifiesToMultiple:
+    def __str__(self) -> str:
+        """Return a valid line-spacing rule despite not being a string."""
+        return "multiple"
+
+
 @pytest.mark.condition("PARAGRAPH-P1")
 def test_paragraph_rejects_nonfinite_boolean_and_malformed_positions() -> None:
     """PARAGRAPH-P1: Paragraph origins must be finite numeric coordinates."""
@@ -116,6 +128,27 @@ def test_tab_stops_reject_invalid_positions() -> None:
     assert stop == TabStop(8.0, ParagraphAlignment.RIGHT)
 
 
+@pytest.mark.condition("PARAGRAPH-ENUM-SELECTOR-P2")
+def test_paragraph_rejects_stringifiable_enum_selectors() -> None:
+    """PARAGRAPH-ENUM-SELECTOR-P2: Enum selectors must be enums or real strings."""
+    style = _style()
+
+    with pytest.raises(TypeError, match="alignment must be a ParagraphAlignment or string"):
+        Paragraph("bad", style=style, alignment=_StringifiesToLeft())  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="line_spacing_rule must be a LineSpacingRule or string"):
+        Paragraph("bad", style=style, line_spacing_rule=_StringifiesToMultiple())  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="tab stop alignment must be a ParagraphAlignment or string"):
+        TabStop(1.0, _StringifiesToLeft())  # type: ignore[arg-type]
+
+    paragraph = _paragraph()
+    with pytest.raises(TypeError, match="alignment must be a ParagraphAlignment or string"):
+        paragraph.alignment = _StringifiesToLeft()  # type: ignore[assignment]
+    with pytest.raises(TypeError, match="line_spacing_rule must be a LineSpacingRule or string"):
+        paragraph.line_spacing_rule = _StringifiesToMultiple()  # type: ignore[assignment]
+    with pytest.raises(TypeError, match="tab stop alignment must be a ParagraphAlignment or string"):
+        paragraph.add_tab_stop(2.0, alignment=_StringifiesToLeft())  # type: ignore[arg-type]
+
+
 @pytest.mark.condition("PARAGRAPH-P1")
 def test_paragraph_hydration_uses_public_validation_boundaries() -> None:
     """PARAGRAPH-P1: Serialized payloads cannot bypass paragraph validation."""
@@ -138,6 +171,33 @@ def test_paragraph_hydration_uses_public_validation_boundaries() -> None:
     payload = paragraph.parameters
     payload["Paragraph"]["tab_stops"] = [{"position": float("inf"), "alignment": "left", "leader": None}]
     with pytest.raises(ValueError, match="finite"):
+        Paragraph.create_from_dict(payload, {paragraph.style.name: paragraph.style})
+
+
+@pytest.mark.condition("PARAGRAPH-ENUM-SELECTOR-P2")
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("alignment", _StringifiesToLeft(), "alignment must be a ParagraphAlignment or string"),
+        ("line_spacing_rule", _StringifiesToMultiple(), "line_spacing_rule must be a LineSpacingRule or string"),
+    ],
+)
+def test_paragraph_hydration_rejects_stringifiable_enum_selectors(
+    field: str,
+    value: object,
+    message: str,
+) -> None:
+    """PARAGRAPH-ENUM-SELECTOR-P2: Hydration cannot stringify enum selectors."""
+    paragraph = _paragraph("Persisted")
+    payload = paragraph.parameters
+    payload["Paragraph"][field] = value
+
+    with pytest.raises(TypeError, match=message):
+        Paragraph.create_from_dict(payload, {paragraph.style.name: paragraph.style})
+
+    payload = paragraph.parameters
+    payload["Paragraph"]["tab_stops"] = [{"position": 1.0, "alignment": _StringifiesToLeft(), "leader": None}]
+    with pytest.raises(TypeError, match="tab stop alignment must be a ParagraphAlignment or string"):
         Paragraph.create_from_dict(payload, {paragraph.style.name: paragraph.style})
 
 

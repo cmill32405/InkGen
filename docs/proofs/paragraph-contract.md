@@ -61,9 +61,14 @@ Before/after edge changes:
 - Before this slice, paragraph positions, tab stops, line spacing, outline
   levels, and several measurements could accept `nan`, `inf`, booleans, or
   malformed serialized values.
+- Before `PARAGRAPH-ENUM-SELECTOR-P2`, paragraph alignment, line-spacing rule,
+  and tab-stop alignment selectors could accept arbitrary objects whose
+  `__str__()` returned a valid enum value.
 - After this slice, public paragraph measurements must be finite numeric values,
   bounded fields enforce their bounds, outline levels reject booleans, and
   serialized hydration uses the same public validation boundaries.
+- After `PARAGRAPH-ENUM-SELECTOR-P2`, enum selectors must be real enum members
+  or strings before enum-value normalization can run.
 - Negative paragraph origins and negative first-line indents remain valid
   because they are legitimate layout choices.
 - No new third-party dependency or dependency edge was introduced.
@@ -103,6 +108,9 @@ ADR/rule impact:
 - Made `Paragraph.create_from_dict()` route text, booleans, numeric values, and
   outline level through the public constructor validation instead of coercing
   with `str()`, `bool()`, `int()`, or `float()` first.
+- Hardened paragraph alignment, line-spacing rule, tab-stop alignment, and
+  serialized selector hydration so arbitrary stringifiable objects cannot cross
+  the public enum boundary.
 
 ## Comprehensiveness Matrix
 
@@ -114,6 +122,7 @@ ADR/rule impact:
 | Line spacing and outline levels | Enforce finite positive spacing and integer outline range | PO-PARA-004 | `test_paragraph_rejects_invalid_line_spacing_and_outline_level` | killed |
 | Tab stops | Enforce finite non-negative tab-stop positions and alignment normalization | PO-PARA-005 | `test_tab_stops_reject_invalid_positions` | killed |
 | Hydrated payloads | Reject malformed serialized text, booleans, outline level, and tab stops | PO-PARA-006 | `test_paragraph_hydration_uses_public_validation_boundaries` | killed |
+| Enum selectors | Accept enum members and real strings; reject arbitrary stringifiable objects | PO-PARA-007 | `test_paragraph_rejects_stringifiable_enum_selectors`, `test_paragraph_hydration_rejects_stringifiable_enum_selectors` | killed |
 
 ## Test Applicability Matrix
 
@@ -121,7 +130,7 @@ ADR/rule impact:
 |---|---|---|---|
 | Unit | yes | Numeric normalization and enum/range validation are deterministic. | PARAGRAPH-P1 tests |
 | Behavioral/condition | yes | PARAGRAPH-P1 defines public paragraph model behavior. | Tests are marked `@pytest.mark.condition("PARAGRAPH-P1")`. |
-| Failure-mode | yes | Invalid measurements and payloads must fail before rendering/export. | Invalid boundary and hydration tests |
+| Failure-mode | yes | Invalid measurements, payloads, and enum selectors must fail before rendering/export. | Invalid boundary, hydration, and enum-selector tests |
 | Integration/live-path | yes | Paragraphs materialize through drawing groups and flow-document output. | Live path test |
 | Contract/API compatibility | yes | Existing paragraph layout and serialization behavior must continue passing. | Existing `test_paragraph.py` |
 | Property/fuzz | no | This slice covers finite scalar partitions directly. | Not applicable |
@@ -140,6 +149,8 @@ Proof-critical mutation targets:
 - Allowing boolean or malformed numeric values must fail failure-mode tests.
 - Loosening line-spacing or outline boundaries must fail boundary tests.
 - Bypassing public validation during hydration must fail payload tests.
+- Reintroducing stringification of enum selectors must fail direct and
+  hydration selector-boundary tests.
 - Breaking valid paragraph materialization must fail live-path tests.
 
 Current result:
@@ -148,6 +159,8 @@ Current result:
   rows: 81 work items, 81 killed, and 0 survived. Type-annotation union
   mutations and a keyword-only signature marker mutation were excluded as
   non-executable equivalents.
+- Cosmic Ray 8.4.6, scoped to enum selector normalization after
+  `PARAGRAPH-ENUM-SELECTOR-P2`: 6 work items, 6 killed, and 0 survived.
 
 ## PO-PARA-001: Valid Paragraphs Remain Live
 
@@ -274,6 +287,32 @@ outline, tab-stop, or measurement values into valid state.
 Hydration passes payload values into the constructor and `TabStop` factory
 without lossy primitive coercion. Focused tests prove malformed text, booleans,
 outline level, and tab-stop values are rejected.
+
+### Conclusion
+
+Proven for the stated domain after tests and mutation pass.
+
+## PO-PARA-007: Enum Selectors Are Explicit Values
+
+### Claim
+
+Paragraph enum selectors accept only enum members or real strings, never
+arbitrary objects that stringify to supported enum values.
+
+### Domain
+
+`Paragraph.alignment`, `Paragraph.line_spacing_rule`, `TabStop.alignment`,
+`Paragraph.add_tab_stop()`, `Paragraph.create_from_dict()`, and
+`TabStop.create_from_dict()`.
+
+### Proof Method
+
+Paragraph alignment and line-spacing rule normalization now share explicit
+runtime type guards before enum construction. Hydration passes serialized
+selector values through those same guards instead of converting them with
+`str()`. The focused tests cover direct construction, property assignment,
+tab-stop creation, `add_tab_stop()`, paragraph hydration, and tab-stop
+hydration.
 
 ### Conclusion
 
