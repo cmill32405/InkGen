@@ -15,7 +15,7 @@ import base64
 import math
 import os
 import sys
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping, Sequence
 from enum import Flag, auto
 from xml.sax.saxutils import escape
 
@@ -79,6 +79,47 @@ def _primitive_parameters(name: str, *, values: dict[str, object], style: Drawin
     payload = dict(values)
     payload["style"] = style.parameters
     return {name: payload}
+
+
+def _svg_payload(data: object, key: str) -> Mapping[str, object]:
+    """Return the serialized SVG component payload for a class key or fail explicitly."""
+    if not isinstance(data, Mapping):
+        raise TypeError(f"{key} data must be a mapping")
+    if key not in data:
+        raise ValueError(f"{key} data must include {key}")
+    payload = data[key]
+    if not isinstance(payload, Mapping):
+        raise TypeError(f"{key} payload must be a mapping")
+    return payload
+
+
+def _svg_required_field(payload: Mapping[str, object], name: str, owner: str) -> object:
+    """Return a required serialized SVG field or fail explicitly."""
+    if name not in payload:
+        raise ValueError(f"{owner} payload must include {name}")
+    return payload[name]
+
+
+def _svg_optional_sequence(payload: Mapping[str, object], name: str, owner: str) -> Sequence[object]:
+    """Return an optional serialized SVG sequence field or fail explicitly."""
+    value = payload.get(name, [])
+    if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
+        raise TypeError(f"{owner} {name} must be a sequence")
+    return value
+
+
+def _path_svg_command_from_dict(data: object) -> PathCommand:
+    """Recreate a PathCommand from serialized SVG command parameters."""
+    if not isinstance(data, Mapping):
+        raise TypeError("PathSVG command payload must be a mapping")
+    command_type = _svg_required_field(data, "type", "PathSVG command")
+    if not isinstance(command_type, str):
+        raise TypeError("PathSVG command type must be a string")
+    command = PathCommand(command_type, data.get("points", []))
+    flags = data.get("flags")
+    if flags:
+        command.flags = flags
+    return command
 
 
 def _coerce_command_points(points: list[tuple[float, float]]) -> list[str]:
@@ -596,17 +637,15 @@ class PathSVG(PathComponent, DrawingGeneratorInterface):
         super().__init__(style=style, commands=commands)
 
     @classmethod
-    def create_from_dict(cls, data: dict, style: DrawingStyle = None) -> PathSVG:
+    def create_from_dict(cls, data: object, style: DrawingStyle | None = None) -> PathSVG:
         """Recreate a path primitive from serialized commands."""
-        if not style:
-            style = DrawingStyle.create_from_dict(data['PathSVG']['style'])
-        commands: list[PathCommand] = []
-        for cmd in data['PathSVG'].get('commands', []):
-            command = PathCommand(cmd['type'], cmd.get('points', []))
-            flags = cmd.get('flags')
-            if flags:
-                command.flags = flags
-            commands.append(command)
+        payload = _svg_payload(data, "PathSVG")
+        if style is None:
+            style = DrawingStyle.create_from_dict(_svg_required_field(payload, "style", "PathSVG"))
+        commands = [
+            _path_svg_command_from_dict(cmd)
+            for cmd in _svg_optional_sequence(payload, "commands", "PathSVG")
+        ]
         return cls(style=style, commands=commands)
 
     @property

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from uuid import uuid4
 
 import pytest
@@ -198,6 +199,71 @@ def test_path_svg_formats_axis_and_default_arc_commands() -> None:
     assert (
         'd="M 0.0,0.0 H 5.0 V 6.0 A 0.0,0.0 0.0 0 0 7.0,8.0 A 2.0,3.0 0.0 0 0 9.0,10.0 A 0.0,0.0 0.0 0 0 11.0,12.0"' in path.generate_svg()
     )
+
+
+@pytest.mark.condition("SVG-PATH-COMMAND-PAYLOAD-P2")
+def test_path_svg_factory_preserves_valid_command_payloads_and_flags() -> None:
+    """SVG-PATH-COMMAND-PAYLOAD-P2: PathSVG hydrates valid command payloads."""
+    style = _style()
+    arc = PathCommand("A", [(2.0, 3.0)])
+    arc.flags = {"radii": (1.0, 1.5), "rotation": 0.0, "large_arc": 0, "sweep": 1}
+    original = PathSVG(style, commands=[PathCommand("M", [(0.0, 0.0)]), arc])
+
+    explicit_style = PathSVG.create_from_dict(original.parameters, style)
+    serialized_payload = deepcopy(original.parameters)
+    serialized_payload["PathSVG"]["style"]["DrawingStyle"]["name"] = f"path_{uuid4().hex}"
+    serialized_style = PathSVG.create_from_dict(serialized_payload)
+
+    assert [command.parameters for command in explicit_style.commands] == [
+        {"type": "M", "points": [(0.0, 0.0)]},
+        {"type": "A", "points": [(2.0, 3.0)]},
+    ]
+    assert explicit_style.commands[1].flags == arc.flags
+    assert serialized_style.style.name == serialized_payload["PathSVG"]["style"]["DrawingStyle"]["name"]
+    assert serialized_style.commands[1].flags == arc.flags
+
+
+@pytest.mark.condition("SVG-PATH-COMMAND-PAYLOAD-P2")
+@pytest.mark.parametrize(
+    ("payload", "exception_type", "message"),
+    [
+        (object(), TypeError, "PathSVG data must be a mapping"),
+        ({}, ValueError, "PathSVG data must include PathSVG"),
+        ({"PathSVG": object()}, TypeError, "PathSVG payload must be a mapping"),
+        ({"PathSVG": {}}, ValueError, "PathSVG payload must include style"),
+    ],
+)
+def test_path_svg_factory_rejects_malformed_payload_roots(
+    payload: object,
+    exception_type: type[Exception],
+    message: str,
+) -> None:
+    """SVG-PATH-COMMAND-PAYLOAD-P2: PathSVG root payloads fail explicitly."""
+    with pytest.raises(exception_type, match=message):
+        PathSVG.create_from_dict(payload)
+
+
+@pytest.mark.condition("SVG-PATH-COMMAND-PAYLOAD-P2")
+@pytest.mark.parametrize(
+    ("payload", "exception_type", "message"),
+    [
+        ({"PathSVG": {"commands": "M 0 0"}}, TypeError, "PathSVG commands must be a sequence"),
+        ({"PathSVG": {"commands": object()}}, TypeError, "PathSVG commands must be a sequence"),
+        ({"PathSVG": {"commands": [object()]}}, TypeError, "PathSVG command payload must be a mapping"),
+        ({"PathSVG": {"commands": [{}]}}, ValueError, "PathSVG command payload must include type"),
+        ({"PathSVG": {"commands": [{"type": object()}]}}, TypeError, "PathSVG command type must be a string"),
+        ({"PathSVG": {"commands": [{"type": 1}]}}, TypeError, "PathSVG command type must be a string"),
+        ({"PathSVG": {"commands": [{"type": True}]}}, TypeError, "PathSVG command type must be a string"),
+    ],
+)
+def test_path_svg_factory_rejects_malformed_command_payloads(
+    payload: object,
+    exception_type: type[Exception],
+    message: str,
+) -> None:
+    """SVG-PATH-COMMAND-PAYLOAD-P2: Path command envelopes fail before incidental errors."""
+    with pytest.raises(exception_type, match=message):
+        PathSVG.create_from_dict(payload, _style())
 
 
 @pytest.mark.condition("PATH-P1")
