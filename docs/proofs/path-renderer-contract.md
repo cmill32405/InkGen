@@ -4,7 +4,7 @@ This note applies the InkGen Definition of Done to the PATH-P1 generic path
 renderer-contract slice and later path-boundary hardening slices. It focuses on
 command validation, deterministic PDF operator output, explicit failure for
 unsupported PDF path semantics, renderer-neutral materialization, SVG
-preservation, SVG command-payload hydration, and DXF polyline export.
+preservation, neutral/SVG command-payload hydration, and DXF polyline export.
 
 ## Scope
 
@@ -21,6 +21,7 @@ The public behavior under review is:
 - `PathCommand.points`
 - `PathCommand.add_point()`
 - `Path.add_command()`
+- `Path.create_from_dict()`
 - `Path.points`
 - `PathPDF.generate_pdf()`
 - `PathSVG.generate_svg()`
@@ -56,6 +57,9 @@ Incoming dependencies:
 - Renderer-neutral drawing callers rely on `PathDrawing` accepting command
   collections that contain `PathCommand` objects and failing before concrete
   renderer construction when the command collection is malformed.
+- Neutral `Path` callers rely on dictionary-sourced commands and serialized
+  command payloads being converted to `PathCommand` objects or rejected before
+  incidental subscription/attribute errors.
 - DXF consumers rely on `PathDrawing` producing a polyline with a closure flag
   derived from a terminal `Z` command.
 
@@ -93,6 +97,12 @@ Before/after edge changes:
   mapping root, a mapping `PathSVG` payload, a sequence `commands` field when
   present, mapping command entries, and string command types before constructing
   `PathCommand`.
+- Before `PATH-COMMAND-PAYLOAD-P2`, neutral `Path.create_from_dict()` and
+  dictionary-sourced `Path.add_command()` used raw command indexing and `get()`
+  calls.
+- After `PATH-COMMAND-PAYLOAD-P2`, neutral `Path` serialized commands require
+  sequence containers, mapping command entries, and string command types before
+  constructing `PathCommand`.
 - No new dependency edge or third-party dependency was introduced.
 
 Cycle/layer/coupling/redundancy result:
@@ -129,6 +139,9 @@ ADR/rule impact:
 
 - A path command is defined by an uppercase SVG command type from
   `PathCommand.VALID_COMMANDS` and zero or more coordinate pairs.
+- Neutral `Path.create_from_dict()` accepts wrapped `Path` payloads, optional
+  command sequences, and serialized command mappings with string `type` and
+  optional `points`.
 - `PathPDF` supports `M`, `L`, `H`, `V`, `C`, `Q`, `A`, and `Z` with the
   existing approximation rule that `A` is rendered as a line to the command end
   point.
@@ -159,6 +172,10 @@ ADR/rule impact:
 - `PathSVG.create_from_dict()` now rejects malformed roots, malformed command
   collections, non-mapping command entries, missing command types, and
   non-string command types before incidental hydration errors.
+- `Path.create_from_dict()` and dictionary-sourced `Path.add_command()` now
+  reject malformed command collections, non-mapping command entries, missing
+  command types, and non-string command types before incidental hydration
+  errors.
 
 ## Comprehensiveness Matrix
 
@@ -176,6 +193,7 @@ ADR/rule impact:
 | DXF path output | Emit `LWPOLYLINE` vertices and closure flag through live document path | PO-PATH-008 | `test_dxf_path_drawing_reuses_pdf_points_and_closure_flag` | Must be killed or proven equivalent |
 | Neutral path command collection boundary | Accept `None` or non-string sequences of `PathCommand`; reject raw strings, bytes, non-sequences, and non-command members before renderer materialization | PO-PATH-009 | `test_path_drawing_accepts_command_sequences_before_materialization`; `test_path_drawing_rejects_malformed_command_collections` | 7 validation mutants killed; 0 validation survivors |
 | SVG path command payload boundary | Preserve valid serialized command payloads and flags; reject malformed roots, command collections, command entries, missing command types, and non-string command types | PO-PATH-010 | `test_path_svg_factory_preserves_valid_command_payloads_and_flags`; `test_path_svg_factory_rejects_malformed_payload_roots`; `test_path_svg_factory_rejects_malformed_command_payloads` | 14 validation mutants killed; 0 survivors |
+| Neutral path command payload boundary | Preserve valid dictionary-sourced commands; reject malformed serialized command collections, command entries, missing command types, and non-string command types | PO-PATH-011 | `test_path_preserves_valid_command_dictionary_payloads`; `test_path_factory_rejects_malformed_command_payloads`; `test_path_add_command_rejects_malformed_command_dictionaries` | 7 validation mutants killed; 0 survivors |
 | Full SVG arc geometry, smooth-control reflection, fill-rule semantics, and Bézier-to-DXF curve fidelity | Excluded from proven domain | Explicit exclusions in PO-PATH-003 through PO-PATH-008 | existing tests only | Out of scope |
 
 ## Test Applicability Matrix
@@ -183,8 +201,8 @@ ADR/rule impact:
 | Test class | Applicable? | Reason | Evidence |
 |---|---|---|---|
 | Unit | yes | Command validation and PDF operator generation are deterministic. | PATH-P1 tests named above |
-| Behavioral/condition | yes | PATH-P1 defines expected path behavior across command, SVG, PDF, and DXF paths. PATH-DRAWING-COMMANDS-P2 defines the neutral path command collection boundary. SVG-PATH-COMMAND-PAYLOAD-P2 defines the concrete SVG command hydration boundary. | Tests are marked `@pytest.mark.condition("PATH-P1")`, `@pytest.mark.condition("PATH-DRAWING-COMMANDS-P2")`, or `@pytest.mark.condition("SVG-PATH-COMMAND-PAYLOAD-P2")`. |
-| Failure-mode | yes | Unsupported smooth commands, incomplete curve groups, malformed direct `PathDrawing` command collections, and malformed `PathSVG` command payloads must fail loudly. | `test_path_pdf_rejects_commands_it_cannot_render`; `test_path_pdf_rejects_incomplete_curve_segments`; `test_path_drawing_rejects_malformed_command_collections`; `test_path_svg_factory_rejects_malformed_payload_roots`; `test_path_svg_factory_rejects_malformed_command_payloads` |
+| Behavioral/condition | yes | PATH-P1 defines expected path behavior across command, SVG, PDF, and DXF paths. PATH-DRAWING-COMMANDS-P2 defines the neutral path command collection boundary. SVG-PATH-COMMAND-PAYLOAD-P2 defines the concrete SVG command hydration boundary. PATH-COMMAND-PAYLOAD-P2 defines the neutral `Path` command dictionary/hydration boundary. | Tests are marked `@pytest.mark.condition("PATH-P1")`, `@pytest.mark.condition("PATH-DRAWING-COMMANDS-P2")`, `@pytest.mark.condition("SVG-PATH-COMMAND-PAYLOAD-P2")`, or `@pytest.mark.condition("PATH-COMMAND-PAYLOAD-P2")`. |
+| Failure-mode | yes | Unsupported smooth commands, incomplete curve groups, malformed direct `PathDrawing` command collections, malformed `PathSVG` command payloads, and malformed neutral `Path` command payloads must fail loudly. | `test_path_pdf_rejects_commands_it_cannot_render`; `test_path_pdf_rejects_incomplete_curve_segments`; `test_path_drawing_rejects_malformed_command_collections`; `test_path_svg_factory_rejects_malformed_payload_roots`; `test_path_svg_factory_rejects_malformed_command_payloads`; `test_path_factory_rejects_malformed_command_payloads`; `test_path_add_command_rejects_malformed_command_dictionaries` |
 | Integration/live-path | yes | DXF must exercise the public neutral group path, not just `_lwpolyline_entity()`. | `test_dxf_path_drawing_reuses_pdf_points_and_closure_flag` calls `DXFDocument.add_group()`. |
 | Contract/API compatibility | yes | SVG keeps smooth commands while PDF rejects commands it cannot faithfully render. | `test_path_svg_preserves_smooth_commands_that_pdf_rejects`; `test_path_pdf_rejects_commands_it_cannot_render` |
 | Property/fuzz | limited | This slice proves representative command classes rather than arbitrary SVG path grammar. | Exact operator and failure tests over declared command partitions. |
@@ -204,6 +222,8 @@ Invariants:
 - Path command points contain exactly two numeric coordinates after public
   construction or append.
 - `Path.points` preserves command order.
+- `Path.create_from_dict()` and dictionary-sourced `Path.add_command()` accept
+  only mapping command payloads with string command types.
 - `PathPDF` never silently drops `S` or `T`.
 - `PathPDF` never silently truncates incomplete `C` or `Q` point groups.
 - `PathSVG` preserves `S` and `T` command data.
@@ -218,6 +238,8 @@ Preconditions:
 
 - Callers provide path commands through `PathCommand` or dictionaries accepted
   by `Path.add_command()`.
+- Serialized neutral `Path` callers provide a `Path` mapping payload; command
+  entries are mappings whose `type` values are real strings.
 - Direct `PathDrawing` callers provide `PathCommand` sequences; serialized
   dictionary payloads must be converted before construction.
 - Serialized `PathSVG` callers provide a `PathSVG` mapping payload; command
@@ -236,6 +258,11 @@ Postconditions:
   into `PathCommand` objects.
 - `PathSVG.create_from_dict()` raises `TypeError` or `ValueError` for malformed
   command payload boundaries before incidental subscription errors.
+- `Path.create_from_dict()` and dictionary-sourced `Path.add_command()` hydrate
+  valid command mappings into `PathCommand` objects.
+- `Path.create_from_dict()` and dictionary-sourced `Path.add_command()` raise
+  `TypeError` or `ValueError` for malformed command payload boundaries before
+  incidental subscription errors.
 - `PathDrawing.__post_init__()` rejects malformed command collections before
   concrete renderer materialization.
 - `PathDrawing.to_component(OutputFormat.SVG)` returns `PathSVG`.
@@ -258,6 +285,9 @@ Proof-critical mutation targets:
 - Weakening `PathSVG.create_from_dict()` root, command collection, command
   entry, command type, or flag-preservation validation should fail SVG payload
   hydration tests.
+- Weakening neutral `Path.create_from_dict()` or dictionary-sourced
+  `Path.add_command()` command collection, command entry, command type, or
+  valid dictionary hydration should fail neutral path payload tests.
 - Redirecting `PathDrawing.to_component()` should fail materialization tests.
 - Changing DXF closure flags or vertices should fail DXF live-path tests.
 
@@ -341,6 +371,25 @@ During mutation, real test gaps were found and closed:
   path_svg_factory_rejects_malformed_command_payloads'`.
 - Proof-critical work items after filtering: 14.
 - Mutants killed: 14.
+- Mutants survived: 0.
+
+`PATH-COMMAND-PAYLOAD-P2` extension result:
+
+- Tool and version: Cosmic Ray 8.4.6 in WSL.
+- Mutated source path: `src/InkGen/component.py`.
+- Reproducible setup:
+  `cosmic-ray baseline tests/mutation/path_command_payload_cosmic_ray.toml`,
+  `cosmic-ray init tests/mutation/path_command_payload_cosmic_ray.toml
+  path_command_payload_codex_20260625.sqlite`, then
+  `python tests/mutation/filter_path_command_payload_work_items.py
+  path_command_payload_codex_20260625.sqlite --clear-results`.
+- Test selection:
+  `python -m pytest -x tests/test_path_contract.py -k
+  'path_preserves_valid_command_dictionary_payloads or
+  path_factory_rejects_malformed_command_payloads or
+  path_add_command_rejects_malformed_command_dictionaries'`.
+- Proof-critical work items after filtering: 7.
+- Mutants killed: 7.
 - Mutants survived: 0.
 
 The companion PATH-FINITE-P2 slice closes the former non-finite coordinate

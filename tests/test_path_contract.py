@@ -78,6 +78,70 @@ def test_path_collects_command_points_and_rejects_bad_additions() -> None:
         path.add_command(object())  # type: ignore[arg-type]
 
 
+@pytest.mark.condition("PATH-COMMAND-PAYLOAD-P2")
+def test_path_preserves_valid_command_dictionary_payloads() -> None:
+    """PATH-COMMAND-PAYLOAD-P2: Path dictionary commands hydrate explicitly."""
+    style = _style()
+    path = Path(style, [PathCommand("M", [(0.0, 0.0)])])
+
+    path.add_command({"type": " l ", "points": [(1.0, 1.0), (2.0, 2.0)]})
+    recreated = Path.create_from_dict(path.parameters, style)
+
+    assert [command.parameters for command in recreated.commands] == [
+        {"type": "M", "points": [(0.0, 0.0)]},
+        {"type": "L", "points": [(1.0, 1.0), (2.0, 2.0)]},
+    ]
+    assert recreated.points == [(0.0, 0.0), (1.0, 1.0), (2.0, 2.0)]
+
+
+@pytest.mark.condition("PATH-COMMAND-PAYLOAD-P2")
+@pytest.mark.parametrize(
+    ("payload", "exception_type", "message"),
+    [
+        ({"Path": {"commands": "M 0 0"}}, TypeError, "Path commands must be a sequence"),
+        ({"Path": {"commands": object()}}, TypeError, "Path commands must be a sequence"),
+        ({"Path": {"commands": [object()]}}, TypeError, "Path command payload must be a mapping"),
+        ({"Path": {"commands": [{}]}}, ValueError, "Path command payload must include type"),
+        ({"Path": {"commands": [{"type": object()}]}}, TypeError, "Path command type must be a string"),
+        ({"Path": {"commands": [{"type": 1}]}}, TypeError, "Path command type must be a string"),
+        ({"Path": {"commands": [{"type": True}]}}, TypeError, "Path command type must be a string"),
+    ],
+)
+def test_path_factory_rejects_malformed_command_payloads(
+    payload: object,
+    exception_type: type[Exception],
+    message: str,
+) -> None:
+    """PATH-COMMAND-PAYLOAD-P2: Path command envelopes fail before incidental errors."""
+    with pytest.raises(exception_type, match=message):
+        Path.create_from_dict(payload, _style())
+
+
+@pytest.mark.condition("PATH-COMMAND-PAYLOAD-P2")
+@pytest.mark.parametrize(
+    ("command", "exception_type", "message"),
+    [
+        ({}, ValueError, "Path command payload must include type"),
+        ({"type": object()}, TypeError, "Path command type must be a string"),
+        ({"type": 1}, TypeError, "Path command type must be a string"),
+        ({"type": True}, TypeError, "Path command type must be a string"),
+    ],
+)
+def test_path_add_command_rejects_malformed_command_dictionaries(
+    command: object,
+    exception_type: type[Exception],
+    message: str,
+) -> None:
+    """PATH-COMMAND-PAYLOAD-P2: add_command rejects malformed command dictionaries atomically."""
+    path = Path(_style(), [PathCommand("M", [(0.0, 0.0)])])
+    before = path.parameters
+
+    with pytest.raises(exception_type, match=message):
+        path.add_command(command)  # type: ignore[arg-type]
+
+    assert path.parameters == before
+
+
 @pytest.mark.condition("PATH-P1")
 def test_path_pdf_emits_supported_commands_as_exact_operators() -> None:
     """PATH-P1: PathPDF maps supported SVG-style commands to exact PDF operators."""

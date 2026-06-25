@@ -37,6 +37,22 @@ def _component_required_field(payload: Mapping[str, object], name: str, owner: s
     return payload[name]
 
 
+def _component_optional_sequence(payload: Mapping[str, object], name: str, owner: str) -> Sequence[object]:
+    value = payload.get(name, [])
+    if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
+        raise TypeError(f"{owner} {name} must be a sequence")
+    return value
+
+
+def _path_command_from_mapping(command: object) -> "PathCommand":
+    if not isinstance(command, Mapping):
+        raise TypeError("Path command payload must be a mapping")
+    command_type = _component_required_field(command, "type", "Path command")
+    if not isinstance(command_type, str):
+        raise TypeError("Path command type must be a string")
+    return PathCommand(command_type, command.get("points", []))
+
+
 def normalize_rectangle_corner_radii(
         corner_radii: float | int | tuple[float, float] | list[float],
         width: float | int,
@@ -1785,9 +1801,10 @@ class Path(DrawingComponent):
         payload = _component_payload(data, "Path")
         if not style:
             style = DrawingStyle.create_from_dict(_component_required_field(payload, "style", "Path"))
-        commands = []
-        for command in payload.get('commands', []):
-            commands.append(PathCommand(command['type'], command.get('points', [])))
+        commands = [
+            _path_command_from_mapping(command)
+            for command in _component_optional_sequence(payload, "commands", "Path")
+        ]
         return cls(style=style, commands=commands)
 
     @property
@@ -1800,8 +1817,8 @@ class Path(DrawingComponent):
         """Append a new command to the path."""
         if isinstance(command, PathCommand):
             self._commands.append(command)
-        elif isinstance(command, dict):
-            self._commands.append(PathCommand(command['type'], command.get('points', [])))
+        elif isinstance(command, Mapping):
+            self._commands.append(_path_command_from_mapping(command))
         else:
             raise TypeError("Command must be a PathCommand or a dictionary.")
 
