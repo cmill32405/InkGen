@@ -297,6 +297,56 @@ def test_paragraph_hydration_preserves_valid_style_override_lookup() -> None:
     assert clone.style is paragraph.style
 
 
+@pytest.mark.condition("PARAGRAPH-REQUIRED-FIELDS-P2")
+@pytest.mark.parametrize(
+    "field",
+    [
+        "text",
+        "position",
+        "width",
+        "alignment",
+        "first_line_indent",
+        "hanging_indent",
+        "left_indent",
+        "right_indent",
+        "space_before",
+        "space_after",
+        "line_spacing",
+        "line_spacing_rule",
+        "keep_together",
+        "keep_with_next",
+        "page_break_before",
+        "widow_control",
+        "outline_level",
+    ],
+)
+def test_paragraph_hydration_rejects_missing_required_fields(field: str) -> None:
+    """PARAGRAPH-REQUIRED-FIELDS-P2: Required paragraph fields fail explicitly."""
+    paragraph = _paragraph("Persisted")
+    payload = paragraph.parameters
+    del payload["Paragraph"][field]
+
+    with pytest.raises(ValueError, match=f"Paragraph payload must include {field}"):
+        Paragraph.create_from_dict(payload, {paragraph.style.name: paragraph.style})
+
+
+@pytest.mark.condition("PARAGRAPH-REQUIRED-FIELDS-P2")
+def test_flow_document_paragraph_hydration_rejects_missing_required_fields() -> None:
+    """PARAGRAPH-REQUIRED-FIELDS-P2: FlowDocument preserves paragraph field errors."""
+    paragraph = _paragraph("Persisted")
+    flow_payload = {
+        "FlowDocument": {
+            "title": "Bad Paragraph Payload",
+            "blocks": [{"type": "paragraph", "payload": paragraph.parameters}],
+        },
+    }
+    paragraph_payload = flow_payload["FlowDocument"]["blocks"][0]["payload"]
+    del paragraph_payload["Paragraph"]["width"]
+
+    with pytest.raises(ValueError, match="Paragraph payload must include width"):
+        FlowDocument.create_from_dict(flow_payload, {paragraph.style.name: paragraph.style})
+
+
 @pytest.mark.condition("PARAGRAPH-TAB-INDEX-P2")
 def test_paragraph_remove_tab_stop_rejects_python_index_coercion() -> None:
     """PARAGRAPH-TAB-INDEX-P2: Tab-stop removal indexes must be explicit public indexes."""

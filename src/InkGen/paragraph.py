@@ -406,26 +406,31 @@ class Paragraph(Component):
         style_payload = _paragraph_style_payload(payload)
         style_name = _paragraph_style_name(style_payload)
         style = styles.get(style_name) or TextStyle.create_from_dict(style_payload)
+        position = _required_paragraph_field(payload, "position")
+        tab_stops = _normalize_tab_stop_payloads(payload.get("tab_stops", []))
         return cls(
-            payload["text"],
-            position=tuple(payload["position"]),
-            width=payload["width"],
+            _required_paragraph_field(payload, "text"),  # type: ignore[arg-type]
+            position=tuple(position),  # type: ignore[arg-type]
+            width=_required_paragraph_field(payload, "width"),  # type: ignore[arg-type]
             style=style,
-            alignment=payload["alignment"],
-            first_line_indent=payload["first_line_indent"],
-            hanging_indent=payload["hanging_indent"],
-            left_indent=payload["left_indent"],
-            right_indent=payload["right_indent"],
-            space_before=payload["space_before"],
-            space_after=payload["space_after"],
-            line_spacing=payload["line_spacing"],
-            line_spacing_rule=payload["line_spacing_rule"],
-            keep_together=payload["keep_together"],
-            keep_with_next=payload["keep_with_next"],
-            page_break_before=payload["page_break_before"],
-            widow_control=payload["widow_control"],
-            outline_level=payload["outline_level"],
-            tab_stops=[TabStop.create_from_dict(stop) for stop in _normalize_tab_stop_payloads(payload.get("tab_stops", []))],
+            alignment=_required_paragraph_field(payload, "alignment"),  # type: ignore[arg-type]
+            first_line_indent=_required_paragraph_field(
+                payload,
+                "first_line_indent",
+            ),  # type: ignore[arg-type]
+            hanging_indent=_required_paragraph_field(payload, "hanging_indent"),  # type: ignore[arg-type]
+            left_indent=_required_paragraph_field(payload, "left_indent"),  # type: ignore[arg-type]
+            right_indent=_required_paragraph_field(payload, "right_indent"),  # type: ignore[arg-type]
+            space_before=_required_paragraph_field(payload, "space_before"),  # type: ignore[arg-type]
+            space_after=_required_paragraph_field(payload, "space_after"),  # type: ignore[arg-type]
+            line_spacing=_required_paragraph_field(payload, "line_spacing"),  # type: ignore[arg-type]
+            line_spacing_rule=_required_paragraph_field(payload, "line_spacing_rule"),  # type: ignore[arg-type]
+            keep_together=_required_paragraph_field(payload, "keep_together"),  # type: ignore[arg-type]
+            keep_with_next=_required_paragraph_field(payload, "keep_with_next"),  # type: ignore[arg-type]
+            page_break_before=_required_paragraph_field(payload, "page_break_before"),  # type: ignore[arg-type]
+            widow_control=_required_paragraph_field(payload, "widow_control"),  # type: ignore[arg-type]
+            outline_level=_required_paragraph_field(payload, "outline_level"),  # type: ignore[arg-type]
+            tab_stops=[TabStop.create_from_dict(stop) for stop in tab_stops],
         )
 
     def layout_lines(self) -> tuple[ParagraphLine, ...]:
@@ -602,6 +607,13 @@ def _paragraph_style_name(style_payload: Mapping[str, object]) -> str:
     if not isinstance(style_name, str):
         raise TypeError("Paragraph TextStyle name must be a string")
     return style_name
+
+
+def _required_paragraph_field(payload: Mapping[str, object], name: str) -> object:
+    """Return a required serialized paragraph field."""
+    if name not in payload:
+        raise ValueError(f"Paragraph payload must include {name}")
+    return payload[name]
 
 
 def _normalize_tab_stop_index(index: object, tab_stop_count: int) -> int:

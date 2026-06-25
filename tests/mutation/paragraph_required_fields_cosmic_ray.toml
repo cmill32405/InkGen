@@ -1,0 +1,22 @@
+[cosmic-ray]
+module-path = [
+  "src/InkGen/paragraph.py",
+]
+timeout = 120.0
+excluded-modules = []
+test-command = "python -m pytest -x tests/test_paragraph_contract.py tests/test_paragraph.py tests/test_document_outputs.py tests/test_flow_document_contract.py"
+
+[cosmic-ray.distributor]
+name = "local"
+
+[cosmic-ray.execution-engine]
+name = "local"
+
+[cosmic-ray.cloning]
+method = "copy"
+
+[cosmic-ray.filters.operators-filter]
+exclude-operators = [
+  "core/ReplaceBinaryOperator_BitOr_UnChecked",
+  "core/ReplaceBinaryOperator_BitOr_Checked",
+]

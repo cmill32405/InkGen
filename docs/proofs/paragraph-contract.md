@@ -109,6 +109,12 @@ Before/after edge changes:
 - After `PARAGRAPH-STYLE-PAYLOAD-P2`, paragraph style payloads must be mappings
   with a `TextStyle` mapping containing a string `name` before style override
   lookup or `TextStyle` construction.
+- Before `PARAGRAPH-REQUIRED-FIELDS-P2`, missing required paragraph hydration
+  fields failed through raw `KeyError` lookups.
+- After `PARAGRAPH-REQUIRED-FIELDS-P2`, required paragraph hydration fields
+  must be present before constructor routing begins, and missing fields fail
+  with explicit `ValueError` messages through both direct paragraph hydration
+  and `FlowDocument` paragraph-block hydration.
 - Negative paragraph origins and negative first-line indents remain valid
   because they are legitimate layout choices.
 - No new third-party dependency or dependency edge was introduced.
@@ -147,6 +153,12 @@ ADR/rule impact:
   are mappings; direct unwrapped payload mappings remain supported.
 - Paragraph style payloads are mappings with a `TextStyle` mapping whose
   `name` value is a string.
+- Required paragraph hydration fields are present before constructor routing:
+  `text`, `position`, `width`, `alignment`, `first_line_indent`,
+  `hanging_indent`, `left_indent`, `right_indent`, `space_before`,
+  `space_after`, `line_spacing`, `line_spacing_rule`, `keep_together`,
+  `keep_with_next`, `page_break_before`, `widow_control`, and
+  `outline_level`.
 - Tab-stop removal index is a non-boolean integer in the current tab-stop
   range.
 - Serialized hydration must reject malformed values instead of silently
@@ -181,6 +193,8 @@ ADR/rule impact:
 - Hardened paragraph style payload hydration so malformed style roots, wrong
   style kind, malformed `TextStyle` entries, and non-string style names fail
   before override lookup or `TextStyle` construction.
+- Hardened required paragraph field hydration so missing required fields fail
+  explicitly before raw mapping indexing errors can escape.
 
 ## Comprehensiveness Matrix
 
@@ -200,6 +214,7 @@ ADR/rule impact:
 | Tab-stop leaders | Reject non-string, non-`None` leader values across direct, insertion, and hydration paths | PO-PARA-012 | `test_tab_stop_rejects_malformed_leaders`, `test_paragraph_add_tab_stop_rejects_malformed_leaders`, `test_paragraph_hydration_rejects_malformed_tab_stop_leaders` | killed |
 | Paragraph root payload | Reject malformed hydration roots and wrapped payloads before field access | PO-PARA-013 | `test_paragraph_hydration_rejects_malformed_root_payloads`, `test_paragraph_hydration_rejects_malformed_wrapped_payloads`, `test_paragraph_hydration_preserves_direct_payload_compatibility` | killed |
 | Paragraph style payload | Reject malformed style envelopes before style override lookup or style construction | PO-PARA-014 | `test_paragraph_hydration_rejects_malformed_style_payloads`, `test_flow_document_paragraph_hydration_rejects_malformed_style_payloads`, `test_paragraph_hydration_preserves_valid_style_override_lookup` | killed |
+| Required paragraph fields | Reject missing required hydration fields before constructor routing | PO-PARA-015 | `test_paragraph_hydration_rejects_missing_required_fields`, `test_flow_document_paragraph_hydration_rejects_missing_required_fields` | killed |
 
 ## Test Applicability Matrix
 
@@ -242,6 +257,8 @@ Proof-critical mutation targets:
   root-payload tests.
 - Allowing malformed paragraph style envelopes into override lookup or style
   construction must fail style-payload tests.
+- Allowing missing required paragraph hydration fields to reach raw mapping
+  indexing must fail required-field tests.
 
 Current result:
 
@@ -265,6 +282,8 @@ Current result:
   `PARAGRAPH-ROOT-PAYLOAD-P2`: 5 work items, 5 killed, and 0 survived.
 - Cosmic Ray 8.4.6, scoped to paragraph style payload validation after
   `PARAGRAPH-STYLE-PAYLOAD-P2`: 11 work items, 11 killed, and 0 survived.
+- Cosmic Ray 8.4.6, scoped to paragraph required-field validation after
+  `PARAGRAPH-REQUIRED-FIELDS-P2`: 1 work item, 1 killed, and 0 survived.
 
 ## PO-PARA-001: Valid Paragraphs Remain Live
 
@@ -600,6 +619,33 @@ kind, and require a string style name before override lookup. Focused tests
 cover missing style, malformed style root, wrong style kind, malformed
 `TextStyle` entry, missing/non-string name, the FlowDocument dependent path,
 and valid override reuse.
+
+### Conclusion
+
+Proven for the stated domain after tests and mutation pass.
+
+## PO-PARA-015: Required Paragraph Fields Are Explicit
+
+### Claim
+
+`Paragraph.create_from_dict()` rejects missing required paragraph fields before
+constructor routing begins, and the same field boundary is preserved when
+paragraphs are hydrated through `FlowDocument`.
+
+### Domain
+
+Public paragraph hydration through `Paragraph.create_from_dict()` and
+paragraph-block hydration through `FlowDocument.create_from_dict()` for required
+serialized paragraph fields. Optional `tab_stops` remains optional and defaults
+to an empty collection.
+
+### Proof Method
+
+Hydration routes every required serialized paragraph field through
+`_required_paragraph_field()`. The helper checks membership before reading the
+mapping and raises an explicit `ValueError` naming the missing field. Focused
+tests enumerate every required field and exercise the `FlowDocument` dependent
+path for a missing paragraph field.
 
 ### Conclusion
 
