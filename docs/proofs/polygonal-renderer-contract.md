@@ -22,7 +22,10 @@ The public behavior under review is:
 - `PolygonalDrawingComponent.parameters/create_from_dict()`
 - `PolygonalSVG.generate_svg()`
 - `PolygonalPDF.generate_pdf()`
+- `PolygonalDrawing.__post_init__()`
 - `PolygonalDrawing.to_component(OutputFormat.SVG/PDF)`
+- `FlowDocument.create_from_dict()` hydration of serialized
+  `PolygonalDrawing` payloads
 - `DXFDocument.add_group()` for `PolygonalDrawing`
 
 ## Architecture Impact
@@ -36,6 +39,12 @@ Affected surface:
 - `src/InkGen/dxf_generator.py`: closed DXF polyline output.
 - `tests/test_polygonal_contract.py`: validation, renderer, materialization,
   and live DXF evidence.
+- `tests/test_flow_document_contract.py`: dependent flow-document drawing
+  hydration path coverage.
+- `tests/mutation/polygonal_drawing_geometry_cosmic_ray.toml`: neutral polygon
+  mutation gate.
+- `tests/mutation/filter_polygonal_drawing_geometry_work_items.py`: neutral
+  polygon mutation filter.
 
 Incoming dependencies:
 
@@ -44,6 +53,8 @@ Incoming dependencies:
 - SVG/PDF fixture generation relies on deterministic vertex order.
 - DXF export relies on neutral polygon recipes becoming closed `LWPOLYLINE`
   entities.
+- `FlowDocument.create_from_dict()` hydrates serialized drawing payloads by
+  dispatching to `PolygonalDrawing(style=style, **payload)`.
 
 Outgoing dependencies:
 
@@ -62,6 +73,11 @@ Before/after edge changes:
 - After this slice, nonnumeric, non-finite, boolean, collinear, empty,
   self-intersecting, and non-positive-area polygons fail at construction or
   setter boundaries.
+- Before the neutral slice, `PolygonalDrawing` could store malformed point
+  payloads until SVG/PDF/DXF materialization or flow-document output.
+- After the neutral slice, direct neutral construction and `FlowDocument`
+  hydration reject malformed polygon payloads before public neutral drawing
+  state is exposed.
 - No new dependency edge or third-party dependency was introduced.
 
 Cycle/layer/coupling/redundancy result:
@@ -73,6 +89,8 @@ Cycle/layer/coupling/redundancy result:
 - Coupling check: SVG/PDF/DXF share the component geometry contract without
   sharing renderer-specific syntax.
 - Redundancy check: no duplicate polygon validation was added to renderers.
+- Redundancy check for the neutral boundary: `PolygonalDrawing` delegates to
+  the existing concrete `PolygonalDrawingComponent` validation source of truth.
 
 Evidence source and freshness:
 
@@ -100,6 +118,10 @@ ADR/rule impact:
   area.
 - The public point order is the exterior vertex order without the closing
   duplicate.
+- Neutral `PolygonalDrawing` mirrors the concrete component domain and stores
+  the normalized point list returned by `PolygonalDrawingComponent`.
+- Serialized neutral polygon payloads hydrated through `FlowDocument` must
+  satisfy the same polygon boundary.
 - SVG and PDF outputs are closed paths.
 - DXF output is a closed `LWPOLYLINE`.
 
@@ -110,6 +132,11 @@ ADR/rule impact:
   `1.0`.
 - Degenerate, empty, self-intersecting, and zero-area polygons are rejected.
 - The points setter uses the same validation path as construction.
+- `PolygonalDrawing.__post_init__()` now validates through
+  `PolygonalDrawingComponent` and stores normalized points before
+  materialization.
+- Added direct neutral and `FlowDocument` hydration tests for malformed
+  polygon payloads.
 
 ## Comprehensiveness Matrix
 
@@ -125,6 +152,8 @@ ADR/rule impact:
 | Serialization | Preserve parameters round trip | PO-POLYGON-005 | `test_polygonal_primitives_round_trip_parameters` | Must be killed or proven equivalent |
 | Neutral materialization | Materialize to `PolygonalSVG`/`PolygonalPDF` | PO-POLYGON-006 | `test_polygonal_drawing_materializes_svg_and_pdf_components` | Must be killed or proven equivalent |
 | DXF output | Emit closed `LWPOLYLINE` vertices | PO-POLYGON-007 | `test_dxf_polygonal_drawing_exports_closed_polyline` | Must be killed or proven equivalent |
+| Neutral polygon construction | Normalize valid point payloads and reject malformed polygon payloads before materialization | PO-POLYGON-008 | `test_polygonal_drawing_normalizes_geometry_before_materialization`; `test_polygonal_drawing_rejects_malformed_geometry_payloads` | mutation target |
+| Serialized neutral polygon hydration | Reject malformed serialized polygon payloads before flow-document public state is exposed | PO-POLYGON-009 | `test_flow_document_hydration_rejects_malformed_polygonal_geometry_payloads` | mutation target |
 | Polygon repair, holes, multipolygons, winding normalization, and fill-rule semantics | Excluded from proven domain | Explicit exclusion | Not applicable | Out of scope |
 
 ## Test Applicability Matrix
@@ -135,6 +164,7 @@ ADR/rule impact:
 | Behavioral/condition | yes | POLYGON-P1 defines polygon behavior across validation and renderers. | Tests are marked `@pytest.mark.condition("POLYGON-P1")`. |
 | Failure-mode | yes | Invalid polygons must fail before rendering. | `test_polygonal_component_rejects_invalid_inputs` |
 | Integration/live-path | yes | DXF proof must exercise `DXFDocument.add_group()`. | `test_dxf_polygonal_drawing_exports_closed_polyline` |
+| Integration/live-path | yes | Flow-document drawing hydration dispatches to the neutral polygon constructor. | `test_flow_document_hydration_rejects_malformed_polygonal_geometry_payloads` |
 | Contract/API compatibility | yes | Valid polygons preserve point order and serialization. | Geometry and round-trip tests |
 | Property/fuzz | limited | This slice proves representative polygon partitions rather than arbitrary computational geometry. | Edge matrix above |
 | Mutation | yes | Validation, output paths, materialization, and DXF closure are proof-critical. | Mutation result recorded below |
@@ -206,6 +236,13 @@ Current result:
     `OutputFormat.SVG` is the first supported string enum value in this
     normalized two-format branch; the existing SVG and PDF materialization
     assertions cover the reachable outcomes.
+- PASS for the neutral authoring extension. Cosmic Ray generated 4,624 raw
+  component/drawing mutants. The `POLYGONAL-DRAWING-GEOMETRY-P2` filter
+  reduced this to 58 proof-critical work items. Result: 57 killed, 1 survived.
+  The survivor is the equivalent `polygon.area <= 0.0` to
+  `polygon.area == 0.0` predicate already classified above; Shapely polygon
+  area is nonnegative in the declared domain, so both predicates reject
+  zero-area polygons and accept positive-area polygons.
 
 ## PO-POLYGON-001: Valid Geometry Is Preserved
 
@@ -355,6 +392,63 @@ All valid neutral `PolygonalDrawing` instances exported through
 ### Conclusion
 
 Proven for the stated domain after tests and mutation pass.
+
+## PO-POLYGON-008: Neutral PolygonalDrawing Geometry Boundary
+
+### Claim
+
+`PolygonalDrawing` normalizes valid point payloads at construction and rejects
+malformed polygon payloads before SVG/PDF/DXF materialization.
+
+### Domain
+
+Direct `PolygonalDrawing` construction with the same valid and invalid polygon
+partitions as `PolygonalDrawingComponent`: at least three finite numeric
+non-boolean coordinate pairs, positive-area valid Shapely polygon, and
+malformed partitions including too-few points, wrong arity, nonnumeric values,
+non-finite values, boolean coordinates, collinear points, self-intersections,
+and non-sequence point containers.
+
+### Proof Method
+
+`PolygonalDrawing.__post_init__()` checks the style boundary, constructs a
+temporary `PolygonalDrawingComponent` with the provided points, and stores that
+component's normalized public `points` list. Focused tests cover valid
+normalization, SVG/PDF materialization, and the declared malformed partitions.
+Mutation testing targets the constructor wiring and the existing component
+validation rows it delegates to.
+
+### Conclusion
+
+Proven for the stated public construction domain after focused tests and
+mutation pass, with only the equivalent Shapely area survivor.
+
+## PO-POLYGON-009: FlowDocument PolygonalDrawing Hydration Boundary
+
+### Claim
+
+Serialized `PolygonalDrawing` payloads hydrated through
+`FlowDocument.create_from_dict()` cannot expose malformed neutral polygon
+geometry.
+
+### Domain
+
+Flow-document drawing blocks containing serialized `PolygonalDrawing` payloads
+and style overrides for the malformed polygon partitions named in
+PO-POLYGON-008.
+
+### Proof Method
+
+`document_outputs._drawing_component_from_parameters()` dispatches exact
+component type names to `DRAWING_COMPONENT_CONSTRUCTORS[component_type]` with
+`style=style, **payload`. Therefore serialized neutral polygon payloads must
+pass `PolygonalDrawing.__post_init__()` before the hydrated group is returned.
+Focused tests mutate serialized payload fields and assert hydration raises.
+
+### Conclusion
+
+Proven for the stated flow-document hydration domain after focused tests and
+mutation pass, with only the equivalent Shapely area survivor.
 
 ## Current Slice Decision
 

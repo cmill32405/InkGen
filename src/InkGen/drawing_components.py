@@ -14,7 +14,14 @@ from math import isfinite
 from typing import Protocol
 
 from InkGen.boundary import Canvas
-from InkGen.component import Component, ComponentGroup, PathCommand, TextComponent, normalize_rectangle_corner_radii
+from InkGen.component import (
+    Component,
+    ComponentGroup,
+    PathCommand,
+    PolygonalDrawingComponent,
+    TextComponent,
+    normalize_rectangle_corner_radii,
+)
 from InkGen.style import DrawingStyle, TextStyle
 
 
@@ -386,8 +393,10 @@ class PolygonalDrawing:
     style: DrawingStyle
 
     def __post_init__(self) -> None:
-        """Validate the neutral polygonal style boundary."""
+        """Validate the neutral polygon geometry and style boundary."""
         _require_drawing_style(self.style, "PolygonalDrawing")
+        concrete = PolygonalDrawingComponent(self.points, self.style)
+        object.__setattr__(self, "points", concrete.points)
 
     def to_component(self, output_format: OutputFormat | str) -> Component:
         """Create an irregular polygon component for the requested backend."""

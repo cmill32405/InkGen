@@ -7,6 +7,7 @@ import uuid
 import pytest
 
 import InkGen.component as component_module
+from InkGen.document_outputs import FlowDocument
 from InkGen.drawing_components import DrawingComponentGroup, OutputFormat, PolygonalDrawing
 from InkGen.dxf_generator import DXFDocument
 from InkGen.errors import InvalidPolygonError
@@ -181,6 +182,85 @@ def test_polygonal_drawing_materializes_svg_and_pdf_components(drawing_style: Dr
     assert isinstance(pdf, PolygonalPDF)
     assert svg.points == points
     assert pdf.points == points
+
+
+@pytest.mark.condition("POLYGONAL-DRAWING-GEOMETRY-P2")
+def test_polygonal_drawing_normalizes_geometry_before_materialization(drawing_style: DrawingStyle) -> None:
+    """POLYGONAL-DRAWING-GEOMETRY-P2: Neutral polygon points normalize at construction."""
+    drawing = PolygonalDrawing([(1, 1), (5, 1), (4, 3), (2, 4)], drawing_style)  # type: ignore[list-item]
+
+    assert drawing.points == [(1.0, 1.0), (5.0, 1.0), (4.0, 3.0), (2.0, 4.0)]
+    assert drawing.to_component(OutputFormat.SVG).points == drawing.points
+    assert drawing.to_component(OutputFormat.PDF).points == drawing.points
+
+
+@pytest.mark.condition("POLYGONAL-DRAWING-GEOMETRY-P2")
+@pytest.mark.parametrize(
+    "points",
+    [
+        [(0.0, 0.0), (1.0, 1.0)],
+        [(0.0, 0.0), (1.0, 1.0), (2.0,)],
+        [(0.0, 0.0), (1.0, 1.0), (2.0, 2.0, 3.0)],
+        [(0.0, 0.0), (1.0, 1.0), ("x", 2.0)],
+        [(0.0, 0.0), (1.0, 1.0), (object(), 2.0)],
+        [(0.0, 0.0), (1.0, 1.0), (float("nan"), 2.0)],
+        [(0.0, 0.0), (1.0, 1.0), (2.0, float("inf"))],
+        [(0.0, 0.0), (1.0, 1.0), (True, 2.0)],
+        [(0.0, 0.0), (1.0, 1.0), (2.0, 2.0)],
+        [(0.0, 0.0), (2.0, 2.0), (0.0, 2.0), (2.0, 0.0)],
+        "not-points",
+    ],
+)
+def test_polygonal_drawing_rejects_malformed_geometry_payloads(
+    drawing_style: DrawingStyle,
+    points: object,
+) -> None:
+    """POLYGONAL-DRAWING-GEOMETRY-P2: Neutral polygons reject malformed points."""
+    with pytest.raises(InvalidPolygonError):
+        PolygonalDrawing(points, drawing_style)  # type: ignore[arg-type]
+
+
+@pytest.mark.condition("POLYGONAL-DRAWING-GEOMETRY-P2")
+@pytest.mark.parametrize(
+    "points",
+    [
+        [(0.0, 0.0), (1.0, 1.0)],
+        [(0.0, 0.0), (1.0, 1.0), (2.0,)],
+        [(0.0, 0.0), (1.0, 1.0), (2.0, 2.0, 3.0)],
+        [(0.0, 0.0), (1.0, 1.0), ("x", 2.0)],
+        [(0.0, 0.0), (1.0, 1.0), (object(), 2.0)],
+        [(0.0, 0.0), (1.0, 1.0), (float("nan"), 2.0)],
+        [(0.0, 0.0), (1.0, 1.0), (2.0, float("inf"))],
+        [(0.0, 0.0), (1.0, 1.0), (True, 2.0)],
+        [(0.0, 0.0), (1.0, 1.0), (2.0, 2.0)],
+        [(0.0, 0.0), (2.0, 2.0), (0.0, 2.0), (2.0, 0.0)],
+        "not-points",
+    ],
+)
+def test_flow_document_hydration_rejects_malformed_polygonal_geometry_payloads(
+    drawing_style: DrawingStyle,
+    points: object,
+) -> None:
+    """POLYGONAL-DRAWING-GEOMETRY-P2: Flow documents cannot hydrate bad polygons."""
+    group = DrawingComponentGroup("polygon-flow")
+    group.add_component(PolygonalDrawing([(1.0, 1.0), (5.0, 1.0), (4.0, 3.0), (2.0, 4.0)], drawing_style))
+    document = FlowDocument(title="Bad Polygon")
+    document.add_drawing_group(group)
+    payload = document.parameters
+    flow_payload = payload["FlowDocument"]
+    assert isinstance(flow_payload, dict)
+    blocks = flow_payload["blocks"]
+    assert isinstance(blocks, list)
+    block_payload = blocks[0]["payload"]
+    assert isinstance(block_payload, dict)
+    components = block_payload["components"]
+    assert isinstance(components, list)
+    component_payload = components[0]["payload"]
+    assert isinstance(component_payload, dict)
+    component_payload["points"] = points
+
+    with pytest.raises(InvalidPolygonError):
+        FlowDocument.create_from_dict(payload, {drawing_style.name: drawing_style})
 
 
 @pytest.mark.condition("POLYGON-P1")
