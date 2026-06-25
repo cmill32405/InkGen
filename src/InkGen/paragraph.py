@@ -336,8 +336,9 @@ class Paragraph(Component):
 
     def remove_tab_stop(self, index: int) -> None:
         """Remove a tab stop by index."""
+        normalized_index = _normalize_tab_stop_index(index, len(self._tab_stops))
         stops = list(self._tab_stops)
-        del stops[index]
+        del stops[normalized_index]
         self._tab_stops = tuple(stops)
 
     @property
@@ -563,3 +564,12 @@ def _normalize_text_style_overrides(styles: object) -> Mapping[str, object]:
     if not isinstance(styles, Mapping):
         raise TypeError("styles must be a mapping or None")
     return styles
+
+
+def _normalize_tab_stop_index(index: object, tab_stop_count: int) -> int:
+    """Normalize a public tab-stop index without Python bool/negative coercion."""
+    if isinstance(index, bool) or not isinstance(index, int):
+        raise TypeError("tab stop index must be an integer")
+    if index < 0 or index >= tab_stop_count:
+        raise IndexError("tab stop index out of range")
+    return index

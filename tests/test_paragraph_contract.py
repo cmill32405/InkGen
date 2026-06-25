@@ -214,6 +214,46 @@ def test_paragraph_hydration_rejects_malformed_style_override_maps(styles: objec
     assert clone.style is paragraph.style
 
 
+@pytest.mark.condition("PARAGRAPH-TAB-INDEX-P2")
+def test_paragraph_remove_tab_stop_rejects_python_index_coercion() -> None:
+    """PARAGRAPH-TAB-INDEX-P2: Tab-stop removal indexes must be explicit public indexes."""
+    paragraph = _paragraph("Indexed")
+    paragraph.add_tab_stop(1.0)
+    paragraph.add_tab_stop(2.0)
+    original = paragraph.tab_stops
+
+    type_errors = [True, False, object()]
+    for index in type_errors:
+        with pytest.raises(TypeError, match="tab stop index must be an integer"):
+            paragraph.remove_tab_stop(index)  # type: ignore[arg-type]
+        assert paragraph.tab_stops == original
+
+    range_errors = [-1, 2, 3]
+    for index in range_errors:
+        with pytest.raises(IndexError, match="tab stop index out of range"):
+            paragraph.remove_tab_stop(index)
+        assert paragraph.tab_stops == original
+
+
+@pytest.mark.condition("PARAGRAPH-TAB-INDEX-P2")
+def test_paragraph_remove_tab_stop_preserves_valid_order_and_round_trip() -> None:
+    """PARAGRAPH-TAB-INDEX-P2: Valid tab-stop removal preserves paragraph serialization."""
+    style = _style()
+    paragraph = Paragraph("Indexed", style=style)
+    paragraph.add_tab_stop(4.0)
+    paragraph.add_tab_stop(2.0)
+    paragraph.add_tab_stop(6.0)
+
+    paragraph.remove_tab_stop(1)
+
+    assert [stop.position for stop in paragraph.tab_stops] == [2.0, 6.0]
+    paragraph.remove_tab_stop(0)
+    assert [stop.position for stop in paragraph.tab_stops] == [6.0]
+    clone = Paragraph.create_from_dict(paragraph.parameters, {style.name: style})
+    assert clone.tab_stops == paragraph.tab_stops
+    assert clone.to_drawing_group("tab-index").to_group("svg").components()
+
+
 @pytest.mark.condition("PARAGRAPH-P1")
 def test_paragraph_contract_remains_live_through_render_and_document_paths() -> None:
     """PARAGRAPH-P1: Valid paragraphs still materialize and export through dependent paths."""

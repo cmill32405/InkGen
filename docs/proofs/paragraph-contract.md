@@ -22,6 +22,7 @@ The slice covers:
 - `Paragraph.line_spacing`
 - `Paragraph.outline_level`
 - `Paragraph.add_tab_stop()`
+- `Paragraph.remove_tab_stop()`
 - `Paragraph.create_from_dict()`
 - `Paragraph.to_drawing_group()`
 
@@ -74,6 +75,11 @@ Before/after edge changes:
   or strings before enum-value normalization can run.
 - After `PARAGRAPH-STYLES-MAPPING-P2`, optional paragraph style overrides must
   be mappings or `None` before style lookup begins.
+- Before `PARAGRAPH-TAB-INDEX-P2`, `Paragraph.remove_tab_stop()` delegated
+  directly to Python list deletion, so `True`, `False`, and negative indexes
+  could remove real tab stops.
+- After `PARAGRAPH-TAB-INDEX-P2`, public tab-stop removal indexes must be
+  non-boolean integers within `[0, len(tab_stops))`.
 - Negative paragraph origins and negative first-line indents remain valid
   because they are legitimate layout choices.
 - No new third-party dependency or dependency edge was introduced.
@@ -101,6 +107,8 @@ ADR/rule impact:
 - Line spacing is a finite numeric value greater than zero.
 - Outline level is an integer from 0 through 9, excluding booleans.
 - Tab-stop position is a finite numeric value greater than or equal to zero.
+- Tab-stop removal index is a non-boolean integer in the current tab-stop
+  range.
 - Serialized hydration must reject malformed values instead of silently
   coercing them into valid-looking state.
 
@@ -118,6 +126,8 @@ ADR/rule impact:
   the public enum boundary.
 - Hardened `Paragraph.create_from_dict(..., styles=...)` so malformed style
   override containers fail at the public boundary.
+- Hardened `Paragraph.remove_tab_stop()` so booleans, non-integers, negative
+  indexes, and out-of-range indexes fail without mutating tab-stop state.
 
 ## Comprehensiveness Matrix
 
@@ -131,6 +141,7 @@ ADR/rule impact:
 | Hydrated payloads | Reject malformed serialized text, booleans, outline level, and tab stops | PO-PARA-006 | `test_paragraph_hydration_uses_public_validation_boundaries` | killed |
 | Enum selectors | Accept enum members and real strings; reject arbitrary stringifiable objects | PO-PARA-007 | `test_paragraph_rejects_stringifiable_enum_selectors`, `test_paragraph_hydration_rejects_stringifiable_enum_selectors` | killed |
 | Style override map boundary | Reject non-mapping `styles` values before style lookup | PO-PARA-008 | `test_paragraph_hydration_rejects_malformed_style_override_maps` | killed |
+| Tab-stop removal index | Reject bool, non-integer, negative, and out-of-range indexes before mutation | PO-PARA-009 | `test_paragraph_remove_tab_stop_rejects_python_index_coercion`, `test_paragraph_remove_tab_stop_preserves_valid_order_and_round_trip` | killed |
 
 ## Test Applicability Matrix
 
@@ -161,6 +172,8 @@ Proof-critical mutation targets:
   hydration selector-boundary tests.
 - Weakening style override map validation must fail malformed-style-map tests.
 - Breaking valid paragraph materialization must fail live-path tests.
+- Allowing Python bool or negative index coercion through tab-stop removal must
+  fail public index-boundary tests.
 
 Current result:
 
@@ -172,6 +185,8 @@ Current result:
   `PARAGRAPH-ENUM-SELECTOR-P2`: 6 work items, 6 killed, and 0 survived.
 - Cosmic Ray 8.4.6, scoped to style override map validation after
   `PARAGRAPH-STYLES-MAPPING-P2`: 6 work items, 6 killed, and 0 survived.
+- Cosmic Ray 8.4.6, scoped to tab-stop index validation after
+  `PARAGRAPH-TAB-INDEX-P2`: 19 work items, 19 killed, and 0 survived.
 
 ## PO-PARA-001: Valid Paragraphs Remain Live
 
@@ -347,6 +362,33 @@ Hydration normalizes `styles` through `_normalize_text_style_overrides()` before
 style lookup. The focused condition test covers malformed object, list, string,
 and bytes containers, plus the valid mapping path that reuses the supplied
 `TextStyle`.
+
+### Conclusion
+
+Proven for the stated domain after tests and mutation pass.
+
+## PO-PARA-009: Tab-Stop Removal Uses Public Indexes
+
+### Claim
+
+`Paragraph.remove_tab_stop()` rejects booleans, non-integers, negative indexes,
+and out-of-range indexes before mutating the tab-stop tuple.
+
+### Domain
+
+All public calls to `Paragraph.remove_tab_stop(index)` over the current
+paragraph tab-stop collection.
+
+### Proof Method
+
+`remove_tab_stop()` first normalizes the supplied index through
+`_normalize_tab_stop_index()`. The helper rejects booleans before Python can
+coerce them to `0` or `1`, rejects non-integers, rejects negative indexes, and
+rejects indexes greater than or equal to the current tab-stop count. The
+failure-mode test asserts invalid indexes preserve tab-stop state. The valid
+path test removes a middle tab stop, round-trips the paragraph through
+serialization, and materializes the paragraph through a renderer-neutral
+drawing group.
 
 ### Conclusion
 
