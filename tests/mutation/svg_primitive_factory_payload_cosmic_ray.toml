@@ -1,0 +1,13 @@
+[cosmic-ray]
+module-path = [
+  "src/InkGen/svg_generator.py",
+]
+timeout = 120.0
+excluded-modules = []
+test-command = "env PYTHONPATH=src /home/ubuntu/.cache/inkgen_mutation_venv/bin/python -m pytest -x tests/test_svg_primitive_factory_payload_contract.py"
+
+[cosmic-ray.distributor]
+name = "local"
+
+[cosmic-ray.filters.operators-filter]
+exclude-operators = []

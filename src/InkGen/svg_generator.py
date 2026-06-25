@@ -263,7 +263,7 @@ class RectangleSVG(WidthHeightDrawingComponent, DrawingGeneratorInterface):
 
 
     @classmethod
-    def create_from_dict(cls, data: dict, style: DrawingStyle=None) -> object:
+    def create_from_dict(cls, data: object, style: DrawingStyle | None = None) -> object:
         """ Class method to recreate the object from its serialization dict.
 
         Args:
@@ -272,13 +272,14 @@ class RectangleSVG(WidthHeightDrawingComponent, DrawingGeneratorInterface):
         Returns:
             object: instance of the class.
         """
-        if not style:
-            style = DrawingStyle.create_from_dict(data['RectangleSVG']['style'])
+        payload = _svg_payload(data, "RectangleSVG")
+        if style is None:
+            style = DrawingStyle.create_from_dict(_svg_required_field(payload, "style", "RectangleSVG"))
 
-        component = cls(data['RectangleSVG']['position'],
-                        data['RectangleSVG']['width'],
-                        data['RectangleSVG']['height'],
-                        data['RectangleSVG']['corner_radii'],
+        component = cls(_svg_required_field(payload, "position", "RectangleSVG"),
+                        _svg_required_field(payload, "width", "RectangleSVG"),
+                        _svg_required_field(payload, "height", "RectangleSVG"),
+                        _svg_required_field(payload, "corner_radii", "RectangleSVG"),
                         style)
         return component
 
@@ -402,7 +403,7 @@ class LineSVG(StandardDrawingComponent, DrawingGeneratorInterface):
         super().__init__(point_1=point_1, point_2=point_2, style=style)
 
     @classmethod
-    def create_from_dict(cls, data: dict, style: DrawingStyle=None) -> object:
+    def create_from_dict(cls, data: object, style: DrawingStyle | None = None) -> object:
         """ Class method to recreate the object from its serialization dict.
 
         Args:
@@ -411,10 +412,11 @@ class LineSVG(StandardDrawingComponent, DrawingGeneratorInterface):
         Returns:
             object: instance of the class.
         """
-        if not style:
-            style = DrawingStyle.create_from_dict(data['LineSVG']['style'])
-        component = cls(data['LineSVG']['point_1'],
-                        data['LineSVG']['point_2'],
+        payload = _svg_payload(data, "LineSVG")
+        if style is None:
+            style = DrawingStyle.create_from_dict(_svg_required_field(payload, "style", "LineSVG"))
+        component = cls(_svg_required_field(payload, "point_1", "LineSVG"),
+                        _svg_required_field(payload, "point_2", "LineSVG"),
                         style)
         return component
 
@@ -713,7 +715,7 @@ class RegularPolygonSVG(RegularPolygonDrawingComponent, DrawingGeneratorInterfac
                          angle=angle, corner_radius=corner_radius)
 
     @classmethod
-    def create_from_dict(cls, data: dict, style: DrawingStyle=None) -> object:
+    def create_from_dict(cls, data: object, style: DrawingStyle | None = None) -> object:
         """ Class method to recreate the object from its serialization dict.
 
         Args:
@@ -722,14 +724,15 @@ class RegularPolygonSVG(RegularPolygonDrawingComponent, DrawingGeneratorInterfac
         Returns:
             object: instance of the class.
         """
-        if not style:
-            style = DrawingStyle.create_from_dict(data['RegularPolygonSVG']['style'])
-        component = cls(data['RegularPolygonSVG']['position'],
-                        data['RegularPolygonSVG']['sides'],
-                        data['RegularPolygonSVG']['radius'],
+        payload = _svg_payload(data, "RegularPolygonSVG")
+        if style is None:
+            style = DrawingStyle.create_from_dict(_svg_required_field(payload, "style", "RegularPolygonSVG"))
+        component = cls(_svg_required_field(payload, "position", "RegularPolygonSVG"),
+                        _svg_required_field(payload, "sides", "RegularPolygonSVG"),
+                        _svg_required_field(payload, "radius", "RegularPolygonSVG"),
                         style,
-                        data['RegularPolygonSVG']['angle'],
-                        data['RegularPolygonSVG']['corner_radius'],)
+                        _svg_required_field(payload, "angle", "RegularPolygonSVG"),
+                        _svg_required_field(payload, "corner_radius", "RegularPolygonSVG"),)
         return component
 
     @property
@@ -790,7 +793,7 @@ class PolygonalSVG(PolygonalDrawingComponent, DrawingGeneratorInterface):
         super().__init__(points=points, style=style)
 
     @classmethod
-    def create_from_dict(cls, data: dict, style: DrawingStyle=None) -> object:
+    def create_from_dict(cls, data: object, style: DrawingStyle | None = None) -> object:
         """ Class method to recreate the object from its serialization dict.
 
         Args:
@@ -799,9 +802,10 @@ class PolygonalSVG(PolygonalDrawingComponent, DrawingGeneratorInterface):
         Returns:
             object: instance of the class.
         """
-        if not style:
-            style = DrawingStyle.create_from_dict(data['PolygonalSVG']['style'])
-        component = cls(data['PolygonalSVG']['points'],
+        payload = _svg_payload(data, "PolygonalSVG")
+        if style is None:
+            style = DrawingStyle.create_from_dict(_svg_required_field(payload, "style", "PolygonalSVG"))
+        component = cls(_svg_required_field(payload, "points", "PolygonalSVG"),
                         style)
         return component
 
@@ -882,7 +886,7 @@ class CircleSVG(SingleDimensionDrawingComponent, DrawingGeneratorInterface):
         return numeric
 
     @classmethod
-    def create_from_dict(cls, data: dict, style: DrawingStyle=None) -> object:
+    def create_from_dict(cls, data: object, style: DrawingStyle | None = None) -> object:
         """ Class method to recreate the object from its serialization dict.
 
         Args:
@@ -891,10 +895,11 @@ class CircleSVG(SingleDimensionDrawingComponent, DrawingGeneratorInterface):
         Returns:
             object: instance of the class.
         """
-        if not style:
-            style = DrawingStyle.create_from_dict(data['CircleSVG']['style'])
-        component = cls(data['CircleSVG']['position'],
-                        data['CircleSVG']['radius'],
+        payload = _svg_payload(data, "CircleSVG")
+        if style is None:
+            style = DrawingStyle.create_from_dict(_svg_required_field(payload, "style", "CircleSVG"))
+        component = cls(_svg_required_field(payload, "position", "CircleSVG"),
+                        _svg_required_field(payload, "radius", "CircleSVG"),
                         style)
         return component
 
@@ -1042,7 +1047,7 @@ class TextSVG(TextComponent, DrawingGeneratorInterface):
         super().__init__(text=text, position=position, style=style)
 
     @classmethod
-    def create_from_dict(cls, data: dict, style: TextStyle=None) -> object:
+    def create_from_dict(cls, data: object, style: TextStyle | None = None) -> object:
         """ Class method to recreate the object from its serialization dict.
 
         Args:
@@ -1051,10 +1056,11 @@ class TextSVG(TextComponent, DrawingGeneratorInterface):
         Returns:
             object: instance of the class.
         """
-        if not style:
-            style = TextStyle.create_from_dict(data['TextSVG']['style'])
-        component = cls(data['TextSVG']['text'],
-                        data['TextSVG']['position'],
+        payload = _svg_payload(data, "TextSVG")
+        if style is None:
+            style = TextStyle.create_from_dict(_svg_required_field(payload, "style", "TextSVG"))
+        component = cls(_svg_required_field(payload, "text", "TextSVG"),
+                        _svg_required_field(payload, "position", "TextSVG"),
                         style)
         return component
 
