@@ -48,6 +48,7 @@ class TabStop:
     def __post_init__(self) -> None:
         object.__setattr__(self, "position", _coerce_finite_float(self.position, name="Tab stop position", minimum=0.0))
         object.__setattr__(self, "alignment", _normalize_paragraph_alignment(self.alignment, name="tab stop alignment"))
+        object.__setattr__(self, "leader", _normalize_tab_stop_leader(self.leader))
 
     @property
     def parameters(self) -> dict[str, object]:
@@ -611,3 +612,10 @@ def _required_tab_stop_field(payload: Mapping[str, object], name: str) -> object
     if name not in payload:
         raise ValueError(f"tab stop payload must include {name}")
     return payload[name]
+
+
+def _normalize_tab_stop_leader(leader: object) -> str | None:
+    """Normalize a tab-stop leader value."""
+    if leader is None or isinstance(leader, str):
+        return leader
+    raise TypeError("tab stop leader must be a string or None")

@@ -94,6 +94,11 @@ Before/after edge changes:
 - After `PARAGRAPH-TABSTOP-PAYLOAD-P2`, serialized tab-stop payloads must be
   mappings with a required `position` field before `TabStop` construction
   begins.
+- Before `PARAGRAPH-TABSTOP-LEADER-P2`, direct tab-stop construction,
+  `Paragraph.add_tab_stop()`, and tab-stop hydration could store arbitrary
+  objects as `leader` values even though the public type is `str | None`.
+- After `PARAGRAPH-TABSTOP-LEADER-P2`, tab-stop leaders must be strings or
+  `None` across direct construction, paragraph insertion, and hydration.
 - Negative paragraph origins and negative first-line indents remain valid
   because they are legitimate layout choices.
 - No new third-party dependency or dependency edge was introduced.
@@ -127,6 +132,7 @@ ADR/rule impact:
   all mapping payloads.
 - Serialized tab-stop payload roots are mappings with a required `position`
   field. Optional `alignment` and `leader` retain existing defaults.
+- Tab-stop leader values are strings or `None`.
 - Tab-stop removal index is a non-boolean integer in the current tab-stop
   range.
 - Serialized hydration must reject malformed values instead of silently
@@ -154,6 +160,8 @@ ADR/rule impact:
 - Hardened `TabStop.create_from_dict()` so malformed roots and missing required
   `position` fields fail explicitly before direct or paragraph-mediated
   hydration.
+- Hardened tab-stop leader values so direct construction, paragraph insertion,
+  and hydration reject non-string, non-`None` leaders.
 
 ## Comprehensiveness Matrix
 
@@ -170,6 +178,7 @@ ADR/rule impact:
 | Tab-stop removal index | Reject bool, non-integer, negative, and out-of-range indexes before mutation | PO-PARA-009 | `test_paragraph_remove_tab_stop_rejects_python_index_coercion`, `test_paragraph_remove_tab_stop_preserves_valid_order_and_round_trip` | killed |
 | Tab-stop collections | Reject malformed direct and serialized tab-stop collections before public state or hydration iteration | PO-PARA-010 | `test_paragraph_constructor_rejects_malformed_tab_stop_collections`, `test_paragraph_constructor_rejects_non_tab_stop_entries`, `test_paragraph_hydration_rejects_malformed_tab_stop_collections`, `test_paragraph_hydration_rejects_non_mapping_tab_stop_entries` | killed |
 | Tab-stop payloads | Reject malformed roots and missing required position fields before tab-stop construction | PO-PARA-011 | `test_tab_stop_factory_rejects_malformed_payload_roots`, `test_tab_stop_factory_rejects_missing_position`, `test_paragraph_hydration_rejects_tab_stop_entries_missing_position` | killed |
+| Tab-stop leaders | Reject non-string, non-`None` leader values across direct, insertion, and hydration paths | PO-PARA-012 | `test_tab_stop_rejects_malformed_leaders`, `test_paragraph_add_tab_stop_rejects_malformed_leaders`, `test_paragraph_hydration_rejects_malformed_tab_stop_leaders` | killed |
 
 ## Test Applicability Matrix
 
@@ -206,6 +215,8 @@ Proof-critical mutation targets:
   state or hydration iteration must fail collection-boundary tests.
 - Allowing malformed tab-stop payload roots or missing required fields into
   factory construction must fail tab-stop payload tests.
+- Allowing non-string, non-`None` tab-stop leaders into paragraph state must
+  fail leader-boundary tests.
 
 Current result:
 
@@ -223,6 +234,8 @@ Current result:
   `PARAGRAPH-TAB-STOPS-P2`: 14 work items, 14 killed, and 0 survived.
 - Cosmic Ray 8.4.6, scoped to tab-stop payload validation after
   `PARAGRAPH-TABSTOP-PAYLOAD-P2`: 3 work items, 3 killed, and 0 survived.
+- Cosmic Ray 8.4.6, scoped to tab-stop leader validation after
+  `PARAGRAPH-TABSTOP-LEADER-P2`: 3 work items, 3 killed, and 0 survived.
 
 ## PO-PARA-001: Valid Paragraphs Remain Live
 
@@ -481,6 +494,32 @@ normalizes the tab-stop collection and then calls the same public factory for
 each entry. Focused tests cover malformed direct roots, missing direct
 `position`, valid minimal payload defaults, and the paragraph hydration path for
 missing tab-stop position.
+
+### Conclusion
+
+Proven for the stated domain after tests and mutation pass.
+
+## PO-PARA-012: Tab-Stop Leaders Are Strings Or None
+
+### Claim
+
+Tab-stop leaders are either strings or `None` across direct construction,
+paragraph insertion, and serialized hydration.
+
+### Domain
+
+`TabStop(..., leader=...)`, `Paragraph.add_tab_stop(..., leader=...)`, and
+`TabStop.create_from_dict()` as called directly or through
+`Paragraph.create_from_dict()`.
+
+### Proof Method
+
+`TabStop.__post_init__()` routes `leader` through
+`_normalize_tab_stop_leader()`. Because all public paths construct `TabStop`
+instances, the same check covers direct construction, paragraph insertion, and
+hydration. Focused tests cover invalid integer and object leaders on all three
+paths, preservation of prior paragraph state after failed insertion, and valid
+string/`None` leaders.
 
 ### Conclusion
 

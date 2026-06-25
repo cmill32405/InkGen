@@ -324,6 +324,43 @@ def test_paragraph_hydration_rejects_tab_stop_entries_missing_position() -> None
         Paragraph.create_from_dict(payload, {paragraph.style.name: paragraph.style})
 
 
+@pytest.mark.condition("PARAGRAPH-TABSTOP-LEADER-P2")
+@pytest.mark.parametrize("leader", [123, object()])
+def test_tab_stop_rejects_malformed_leaders(leader: object) -> None:
+    """PARAGRAPH-TABSTOP-LEADER-P2: Direct tab-stop leaders must be strings or None."""
+    with pytest.raises(TypeError, match="tab stop leader must be a string or None"):
+        TabStop(1.0, leader=leader)  # type: ignore[arg-type]
+
+    assert TabStop(1.0, leader=".").leader == "."
+    assert TabStop(1.0, leader=None).leader is None
+
+
+@pytest.mark.condition("PARAGRAPH-TABSTOP-LEADER-P2")
+@pytest.mark.parametrize("leader", [123, object()])
+def test_paragraph_add_tab_stop_rejects_malformed_leaders(leader: object) -> None:
+    """PARAGRAPH-TABSTOP-LEADER-P2: Paragraph tab-stop insertion validates leaders."""
+    paragraph = _paragraph("Leaders")
+    original = paragraph.tab_stops
+
+    with pytest.raises(TypeError, match="tab stop leader must be a string or None"):
+        paragraph.add_tab_stop(1.0, leader=leader)  # type: ignore[arg-type]
+
+    assert paragraph.tab_stops == original
+    assert paragraph.add_tab_stop(1.0, leader="").leader == ""
+
+
+@pytest.mark.condition("PARAGRAPH-TABSTOP-LEADER-P2")
+@pytest.mark.parametrize("leader", [123, object()])
+def test_paragraph_hydration_rejects_malformed_tab_stop_leaders(leader: object) -> None:
+    """PARAGRAPH-TABSTOP-LEADER-P2: Hydrated tab-stop leaders must be strings or None."""
+    paragraph = _paragraph("Persisted")
+    payload = paragraph.parameters
+    payload["Paragraph"]["tab_stops"] = [{"position": 1.0, "leader": leader}]
+
+    with pytest.raises(TypeError, match="tab stop leader must be a string or None"):
+        Paragraph.create_from_dict(payload, {paragraph.style.name: paragraph.style})
+
+
 @pytest.mark.condition("PARAGRAPH-P1")
 def test_paragraph_contract_remains_live_through_render_and_document_paths() -> None:
     """PARAGRAPH-P1: Valid paragraphs still materialize and export through dependent paths."""
