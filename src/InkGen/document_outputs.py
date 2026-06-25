@@ -664,7 +664,23 @@ def _mm_to_twips(value: float) -> int:
 
 
 def _rtf_escape(value: str) -> str:
-    return value.replace("\\", r"\\").replace("{", r"\{").replace("}", r"\}")
+    parts = []
+    for character in value:
+        if character == "\\":
+            parts.append(r"\\")
+        elif character == "{":
+            parts.append(r"\{")
+        elif character == "}":
+            parts.append(r"\}")
+        elif ord(character) < 128:
+            parts.append(character)
+        else:
+            encoded = character.encode("utf-16-le")
+            for index in range(0, len(encoded), 2):
+                code_unit = int.from_bytes(encoded[index : index + 2], "little")
+                signed_code_unit = code_unit if code_unit < 0x8000 else code_unit - 0x10000
+                parts.append(rf"\u{signed_code_unit}?")
+    return "".join(parts)
 
 
 def _normalize_output_filepath(filepath: object) -> str:

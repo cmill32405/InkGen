@@ -113,6 +113,9 @@ Before/after edge changes:
 - After the filepath hardening update, file writers normalize string and
   path-like output paths through one boundary helper and reject non-string,
   bytes, and empty paths before writing.
+- After the RTF Unicode hardening update, `FlowDocument.to_rtf()` emits
+  non-ASCII title and paragraph text as RTF `\uN?` escapes instead of raw
+  Unicode text in an `\ansi` document.
 - No new dependency edge or third-party dependency was introduced.
 
 Cycle/layer/coupling/redundancy result:
@@ -190,6 +193,7 @@ ADR/rule impact:
 |---|---|---|---|---|
 | Repeated DOCX generation | Preserve exact bytes and fixed part order/timestamps | PO-FDOC-001 | `test_flow_document_docx_bytes_are_deterministic` | killed |
 | Text with XML/HTML/RTF controls | Escape per target format | PO-FDOC-002 | `test_flow_document_escapes_text_across_output_formats` | behavioral evidence |
+| RTF non-ASCII text | Emit RTF Unicode escapes for title and paragraph text | PO-FDOC-016 | `test_flow_document_rtf_escapes_unicode_text` | killed with documented equivalent survivors |
 | Paragraph/table/drawing block order | Preserve through parameters and output | PO-FDOC-003 | `test_flow_document_preserves_mixed_block_order_after_round_trip` | behavioral evidence |
 | Root payload shape | Accept wrapped/direct mappings and reject malformed payload roots or collection fields | PO-FDOC-008 | `test_flow_document_hydrates_direct_payload_mapping`, `test_flow_document_hydration_rejects_malformed_root_payloads` | killed |
 | Serialized block envelope and dispatch | Reject malformed envelopes and dispatch valid dynamic type strings by value | PO-FDOC-007 | `test_flow_document_hydration_rejects_malformed_block_envelopes`, `test_flow_document_hydration_dispatches_dynamic_block_type_strings` | killed |
@@ -236,6 +240,7 @@ Proof-critical mutation targets:
 - Changing DOCX VML group-relative points should fail exact polyline tests.
 - Reintroducing drawing-label stringification should fail the serialized drawing
   label hydration test.
+- Reintroducing raw non-ASCII RTF output should fail the RTF Unicode text test.
 - Weakening serialized block envelope validation or dispatch should fail the
   malformed-envelope test.
 - Weakening root payload or collection validation should fail malformed-root
@@ -257,6 +262,13 @@ Current result:
 - Cosmic Ray 8.4.6, scoped to changed DOCX package assembly, drawing
   materialization guards, and VML point rows: 34 work items, 34 killed, and 0
   survived.
+- Cosmic Ray 8.4.6, scoped to RTF title/paragraph call sites and
+  `_rtf_escape()` Unicode/control escaping rows after the RTF Unicode hardening
+  update: 34 work items, 31 killed, and 3 documented equivalent survivors. The
+  survivors are `==` to `is` mutations for the one-character RTF control
+  comparisons (`\`, `{`, `}`), which are equivalent under the target CPython
+  runtime's cached single-character string behavior. Strengthened U+0080 and
+  U+8000 edge assertions killed the actionable Unicode-boundary survivors.
 - Cosmic Ray 8.4.6, scoped to serialized block-envelope validation and
   dispatch rows after the block-envelope hardening update: 32 work items, 32
   killed, and 0 survived.
@@ -319,6 +331,38 @@ formats.
 ### Conclusion
 
 Supported by behavioral evidence for the stated representative domain.
+
+## PO-FDOC-016: RTF Unicode Text Is Escaped
+
+### Claim
+
+RTF output represents non-ASCII title and paragraph text with RTF Unicode
+escapes instead of raw Unicode characters.
+
+### Domain
+
+`FlowDocument.to_rtf()` output for valid Python `str` titles and paragraph
+text, including BMP and supplementary Unicode code points.
+
+### Proof Method
+
+`_rtf_escape()` preserves existing ASCII output, escapes RTF control characters,
+and encodes every non-ASCII character as one or more UTF-16 code units rendered
+as signed RTF `\uN?` fallback escapes. The focused test covers title and
+paragraph text, BMP characters, and a supplementary emoji represented as a
+surrogate pair.
+
+### Counterexamples And Exclusions
+
+Full RTF font-table internationalization and reader-specific fallback glyph
+selection are outside this dependency-free minimal backend. The contract is the
+artifact text shape emitted by InkGen.
+
+### Conclusion
+
+Proven for valid public `FlowDocument` title and paragraph strings, with the
+mutation gate limited only by documented equivalent single-character identity
+survivors.
 
 ## PO-FDOC-003: Mixed Block Order Round-Trips
 

@@ -150,6 +150,22 @@ def test_flow_document_escapes_text_across_output_formats() -> None:
     assert r"A&B <tag> \{x\}\\y" in rtf
 
 
+@pytest.mark.condition("FLOW-DOCUMENT-RTF-UNICODE-P2")
+def test_flow_document_rtf_escapes_unicode_text() -> None:
+    """FLOW-DOCUMENT-RTF-UNICODE-P2: RTF output escapes non-ASCII text."""
+    document = FlowDocument(title="Résumé 🚀 \u0080")
+    document.add_paragraph(_paragraph("Torque µ Ω 😀 \u8000"))
+
+    rtf = document.to_rtf()
+
+    assert "Résumé" not in rtf
+    assert "Torque µ Ω 😀" not in rtf
+    assert "\u0080" not in rtf
+    assert "\u8000" not in rtf
+    assert r"R\u233?sum\u233? \u-10179?\u-8576? \u128?" in rtf
+    assert r"Torque \u181? \u937? \u-10179?\u-8704? \u-32768?" in rtf
+
+
 @pytest.mark.condition("FLOW-DOCUMENT-TITLE-P2")
 @pytest.mark.parametrize("title", [123, object(), ["Doc"]])
 def test_flow_document_rejects_non_string_titles(title: object) -> None:
