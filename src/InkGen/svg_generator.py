@@ -477,16 +477,16 @@ class ArcSVG(ArcComponent, DrawingGeneratorInterface):
                          rotation=rotation)
 
     @classmethod
-    def create_from_dict(cls, data: dict, style: DrawingStyle = None) -> ArcSVG:
+    def create_from_dict(cls, data: object, style: DrawingStyle | None = None) -> ArcSVG:
         """Recreate an `ArcSVG` from serialized parameters."""
-        if not style:
-            style = DrawingStyle.create_from_dict(data['ArcSVG']['style'])
-        arc = data['ArcSVG']
-        return cls(center=tuple(arc['center']),
-                   radius_x=arc['radius_x'],
-                   radius_y=arc['radius_y'],
-                   start_angle=arc['start_angle'],
-                   end_angle=arc['end_angle'],
+        arc = _svg_payload(data, "ArcSVG")
+        if style is None:
+            style = DrawingStyle.create_from_dict(_svg_required_field(arc, "style", "ArcSVG"))
+        return cls(center=tuple(_svg_required_field(arc, "center", "ArcSVG")),
+                   radius_x=_svg_required_field(arc, "radius_x", "ArcSVG"),
+                   radius_y=_svg_required_field(arc, "radius_y", "ArcSVG"),
+                   start_angle=_svg_required_field(arc, "start_angle", "ArcSVG"),
+                   end_angle=_svg_required_field(arc, "end_angle", "ArcSVG"),
                    style=style,
                    rotation=arc.get('rotation', 0.0))
 
@@ -541,14 +541,14 @@ class QuadraticBezierSVG(QuadraticBezierComponent, DrawingGeneratorInterface):
                          style=style)
 
     @classmethod
-    def create_from_dict(cls, data: dict, style: DrawingStyle = None) -> QuadraticBezierSVG:
+    def create_from_dict(cls, data: object, style: DrawingStyle | None = None) -> QuadraticBezierSVG:
         """Recreate a quadratic Bezier primitive from serialized data."""
-        if not style:
-            style = DrawingStyle.create_from_dict(data['QuadraticBezierSVG']['style'])
-        bezier = data['QuadraticBezierSVG']
-        return cls(start_point=tuple(bezier['start_point']),
-                   control_point=tuple(bezier['control_point']),
-                   end_point=tuple(bezier['end_point']),
+        bezier = _svg_payload(data, "QuadraticBezierSVG")
+        if style is None:
+            style = DrawingStyle.create_from_dict(_svg_required_field(bezier, "style", "QuadraticBezierSVG"))
+        return cls(start_point=tuple(_svg_required_field(bezier, "start_point", "QuadraticBezierSVG")),
+                   control_point=tuple(_svg_required_field(bezier, "control_point", "QuadraticBezierSVG")),
+                   end_point=tuple(_svg_required_field(bezier, "end_point", "QuadraticBezierSVG")),
                    style=style)
 
     @property
@@ -591,15 +591,15 @@ class CubicBezierSVG(CubicBezierComponent, DrawingGeneratorInterface):
                          style=style)
 
     @classmethod
-    def create_from_dict(cls, data: dict, style: DrawingStyle = None) -> CubicBezierSVG:
+    def create_from_dict(cls, data: object, style: DrawingStyle | None = None) -> CubicBezierSVG:
         """Recreate a cubic Bezier primitive from serialized data."""
-        if not style:
-            style = DrawingStyle.create_from_dict(data['CubicBezierSVG']['style'])
-        bezier = data['CubicBezierSVG']
-        return cls(start_point=tuple(bezier['start_point']),
-                   control_point1=tuple(bezier['control_point1']),
-                   control_point2=tuple(bezier['control_point2']),
-                   end_point=tuple(bezier['end_point']),
+        bezier = _svg_payload(data, "CubicBezierSVG")
+        if style is None:
+            style = DrawingStyle.create_from_dict(_svg_required_field(bezier, "style", "CubicBezierSVG"))
+        return cls(start_point=tuple(_svg_required_field(bezier, "start_point", "CubicBezierSVG")),
+                   control_point1=tuple(_svg_required_field(bezier, "control_point1", "CubicBezierSVG")),
+                   control_point2=tuple(_svg_required_field(bezier, "control_point2", "CubicBezierSVG")),
+                   end_point=tuple(_svg_required_field(bezier, "end_point", "CubicBezierSVG")),
                    style=style)
 
     @property

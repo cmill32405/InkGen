@@ -47,6 +47,7 @@ nav:
       - Text Fitter Contract: proofs/text-fitter-contract.md
       - SVG Utilities Contract: proofs/svg-utils-contract.md
       - SVG Component Finite Boundary Contract: proofs/svg-component-finite-contract.md
+      - SVG Curve Factory Payload Contract: proofs/svg-curve-factory-payload-contract.md
       - PDF Render Guard Contract: proofs/pdf-render-contract.md
       - SVG Document Contract: proofs/svg-document-contract.md
       - PDF Document Contract: proofs/pdf-document-contract.md
