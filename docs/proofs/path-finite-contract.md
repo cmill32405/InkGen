@@ -42,6 +42,11 @@ Before/after edge changes:
   path commands and exposed to SVG/PDF/DXF renderers.
 - After this slice, all public path command coordinate boundaries require
   finite numeric non-boolean values.
+- Before `PATH-POINT-SHAPE-P2`, point entries such as `"12"` and `b"12"` could
+  be accepted as two numeric coordinates, and mapping point entries could fail
+  through raw key lookup.
+- After `PATH-POINT-SHAPE-P2`, point entries must be explicit two-value list or
+  tuple pairs before coordinate coercion begins.
 - Existing valid SVG-style command normalization and finite point formatting
   remain unchanged.
 
@@ -63,6 +68,9 @@ ADR/rule impact:
 
 - A path command point is a two-coordinate tuple/list whose coordinates are
   finite numeric non-boolean values.
+- String, bytes, mapping, object, and wrong-length point entries are outside
+  the valid point-entry domain and must fail before coordinate indexing or
+  numeric coercion.
 - Rejected `points` setter and `add_point()` inputs must not mutate prior valid
   command state.
 - `Path.add_command()` dictionary insertion must consume the same
@@ -71,6 +79,8 @@ ADR/rule impact:
 ## Fix Log
 
 - Added finite numeric coordinate validation to `PathCommand._coerce_point()`.
+- Hardened point-entry shape validation so only list/tuple coordinate pairs can
+  reach numeric coordinate coercion.
 
 ## Comprehensiveness Matrix
 
@@ -79,6 +89,7 @@ ADR/rule impact:
 | Valid finite command points | Preserve command normalization and points | PO-PFIN-001 | `test_path_command_preserves_valid_finite_points` | mutation target |
 | Invalid command points | Reject non-finite, nonnumeric, boolean, and malformed point values | PO-PFIN-002 | `test_path_command_rejects_invalid_constructor_and_setter_points` | mutation target |
 | Dictionary insertion | Reject invalid dictionary-sourced points and preserve path state | PO-PFIN-003 | `test_path_add_command_dictionary_rejects_nonfinite_coordinates` | focused test |
+| Invalid point-entry shapes | Reject string, bytes, mapping, object, and wrong-length point entries before coordinate indexing | PO-PFIN-004 | `test_path_command_rejects_malformed_point_shapes_without_mutation`, `test_path_add_command_dictionary_rejects_malformed_point_shapes`, `test_flow_document_hydration_rejects_malformed_path_command_payloads` | killed |
 
 ## Test Applicability Matrix
 
@@ -102,6 +113,8 @@ Proof-critical mutation targets:
 
 - Weakening boolean, numeric, finite, or arity checks must fail invalid command
   tests.
+- Weakening point-entry list/tuple checks must fail direct command, dictionary
+  insertion, and flow-document hydration tests.
 - Removing `points` or `add_point()` validation calls must fail invalid-input or
   state-preservation tests.
 
@@ -110,6 +123,8 @@ Current result:
 - PASS. Cosmic Ray generated 2,854 raw component mutants. The
   `PATH-FINITE-P2` filter reduced this to 17 proof-critical work items. All 17
   were killed and 0 survived.
+- `PATH-POINT-SHAPE-P2`: 14 proof-critical work items, 14 killed, and 0
+  survived.
 
 ## PO-PFIN-001: Valid Finite Path Inputs Preserve Geometry
 
@@ -177,3 +192,30 @@ the original path parameters remain unchanged.
 
 Proven for the stated representative dictionary insertion paths after focused
 tests pass.
+
+## PO-PFIN-004: Point Entries Are Explicit Coordinate Pairs
+
+### Claim
+
+Path command point entries reject string, bytes, mapping, object, and
+wrong-length shapes before coordinate indexing or numeric coercion, and that
+same boundary is consumed by `Path.add_command()` dictionary insertion and
+flow-document `PathDrawing` hydration.
+
+### Domain
+
+`PathCommand` construction, `PathCommand.points`, `PathCommand.add_point()`,
+`Path.add_command()` dictionary insertion, and `FlowDocument.create_from_dict()`
+for serialized `PathDrawing` command point payloads.
+
+### Proof Method
+
+`PathCommand._coerce_point()` accepts only list or tuple point entries with
+exactly two values, then delegates coordinate values to finite numeric
+coercion. Direct tests cover constructor, setter, and `add_point()` failure
+without state mutation; dictionary insertion and flow-document hydration tests
+prove dependent public paths consume the same boundary.
+
+### Conclusion
+
+Proven for the stated domain after tests and mutation pass.

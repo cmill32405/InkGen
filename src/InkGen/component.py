@@ -1328,7 +1328,7 @@ class PathCommand:
         Raises:
             ValueError: If point does not have exactly 2 elements.
         """
-        if len(point) != 2:
+        if not isinstance(point, (tuple, list)) or len(point) != 2:
             raise ValueError("Points must contain two numeric values.")
         return (
             self._coerce_finite_number(point[0], "point coordinate"),

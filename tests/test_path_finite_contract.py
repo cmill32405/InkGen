@@ -56,6 +56,31 @@ def test_path_command_rejects_invalid_constructor_and_setter_points() -> None:
         assert command.parameters == before
 
 
+@pytest.mark.condition("PATH-POINT-SHAPE-P2")
+def test_path_command_rejects_malformed_point_shapes_without_mutation() -> None:
+    """PATH-POINT-SHAPE-P2: Point entries must be explicit two-value pairs."""
+    malformed_points = ["12", b"12", {"x": 1.0, "y": 2.0}, object()]
+
+    for point in malformed_points:
+        with pytest.raises(ValueError, match="Points must contain two numeric values."):
+            PathCommand("L", [point])  # type: ignore[list-item]
+
+    command = PathCommand("L", [(0.0, 0.0)])
+    before = command.parameters
+
+    for point in malformed_points:
+        with pytest.raises(ValueError, match="Points must contain two numeric values."):
+            command.points = [point]  # type: ignore[list-item]
+        assert command.parameters == before
+
+        with pytest.raises(ValueError, match="Points must contain two numeric values."):
+            command.add_point(point)  # type: ignore[arg-type]
+        assert command.parameters == before
+
+    command.points = [[1.0, 2.0], (3.0, 4.0)]
+    assert command.points == [(1.0, 2.0), (3.0, 4.0)]
+
+
 @pytest.mark.condition("PATH-FINITE-P2")
 def test_path_add_command_dictionary_rejects_nonfinite_coordinates() -> None:
     """PATH-FINITE-P2: Path dictionary insertion consumes finite command boundary."""
@@ -68,4 +93,17 @@ def test_path_add_command_dictionary_rejects_nonfinite_coordinates() -> None:
 
     with pytest.raises(TypeError):
         path.add_command({"type": "L", "points": [(True, 1.0)]})
+    assert path.parameters == before
+
+
+@pytest.mark.condition("PATH-POINT-SHAPE-P2")
+@pytest.mark.parametrize("point", ["12", b"12", {"x": 1.0, "y": 2.0}, object()])
+def test_path_add_command_dictionary_rejects_malformed_point_shapes(point: object) -> None:
+    """PATH-POINT-SHAPE-P2: Dictionary insertion preserves point-shape validation."""
+    path = Path(_style(), [PathCommand("M", [(0.0, 0.0)])])
+    before = path.parameters
+
+    with pytest.raises(ValueError, match="Points must contain two numeric values."):
+        path.add_command({"type": "L", "points": [point]})
+
     assert path.parameters == before

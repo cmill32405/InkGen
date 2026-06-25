@@ -110,6 +110,9 @@ Before/after edge changes:
 - After the path-command hardening update, `PathDrawing` hydration validates
   that commands are a non-string sequence of command envelopes with `type` and
   `points` before constructing `PathCommand` objects.
+- After `PATH-POINT-SHAPE-P2`, malformed point entries inside serialized
+  `PathDrawing` commands are rejected by the delegated `PathCommand` point
+  boundary instead of being accepted as character/byte coordinate pairs.
 - After the filepath hardening update, file writers normalize string and
   path-like output paths through one boundary helper and reject non-string,
   bytes, and empty paths before writing.
@@ -184,6 +187,8 @@ ADR/rule impact:
   paragraph or drawing hydration can use membership or index lookups.
 - `_path_commands_from_payload()` validates serialized path command envelope
   shape before delegating command semantics to `PathCommand`.
+- `PathCommand` validates serialized path command point-entry shape for
+  `FlowDocument` path hydration.
 - `_normalize_output_filepath()` validates all flow-document file-writer output
   paths before text or byte writes.
 
@@ -201,7 +206,7 @@ ADR/rule impact:
 | Serialized drawing component envelope and dispatch | Reject malformed component envelopes, reject unsupported types before style extraction, and dispatch valid dynamic type strings by value | PO-FDOC-009 | `test_flow_document_hydration_rejects_malformed_drawing_component_envelopes`, `test_flow_document_hydration_dispatches_dynamic_drawing_component_type_strings` | killed |
 | Serialized drawing style envelope | Reject missing/malformed style envelopes, mismatched style keys, non-string style names, and wrong-type style overrides | PO-FDOC-011 | `test_flow_document_hydration_rejects_malformed_drawing_style_payloads`, `test_flow_document_hydration_rejects_mismatched_drawing_style_overrides`, `test_flow_document_hydration_constructs_missing_drawing_style_overrides_by_kind` | killed |
 | Style override map boundary | Reject non-mapping `styles` values before block hydration | PO-FDOC-015 | `test_flow_document_hydration_rejects_malformed_style_override_maps` | killed |
-| Serialized path command envelope | Reject malformed `PathDrawing` command collections before `PathCommand` construction | PO-FDOC-012 | `test_flow_document_hydration_rejects_malformed_path_command_payloads` | killed |
+| Serialized path command envelope | Reject malformed `PathDrawing` command collections before `PathCommand` construction and delegate point-entry shape validation to `PathCommand` | PO-FDOC-012 | `test_flow_document_hydration_rejects_malformed_path_command_payloads` | killed |
 | File writer path boundary | Accept string/path-like output paths and reject malformed output path values before writing | PO-FDOC-013 | `test_flow_document_file_writers_accept_pathlike_outputs`, `test_flow_document_file_writers_reject_malformed_paths`, `test_flow_document_file_writers_fail_on_missing_directory` | killed |
 | Malformed serialized drawing label | Reject through the neutral group label contract | PO-FDOC-006 | `test_flow_document_drawing_group_hydration_rejects_malformed_label` | behavioral evidence |
 | Invalid drawing materialization | Reject before silent omission | PO-FDOC-004 | `test_flow_document_rejects_invalid_drawing_materialization` | killed |

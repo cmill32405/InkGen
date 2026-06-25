@@ -575,6 +575,9 @@ def test_flow_document_hydration_constructs_missing_drawing_style_overrides_by_k
         ([{"type": "M"}], ValueError, "flow document path command must include type and points"),
         ([{"type": "M", "points": "not-points"}], TypeError, "flow document path command points must be a sequence"),
         ([{"type": "M", "points": object()}], TypeError, "flow document path command points must be a sequence"),
+        ([{"type": "M", "points": ["12"]}], ValueError, "Points must contain two numeric values."),
+        ([{"type": "M", "points": [b"12"]}], ValueError, "Points must contain two numeric values."),
+        ([{"type": "M", "points": [{"x": 1.0, "y": 2.0}]}], ValueError, "Points must contain two numeric values."),
     ],
 )
 def test_flow_document_hydration_rejects_malformed_path_command_payloads(
