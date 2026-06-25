@@ -7,6 +7,7 @@ cleanly, and can materialize text lines into renderer-neutral drawing recipes.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
 from math import isfinite
@@ -398,7 +399,7 @@ class Paragraph(Component):
     def create_from_dict(cls, data: dict[str, object], styles: dict[str, TextStyle] | None = None) -> Paragraph:
         """Recreate a paragraph from serialized parameters."""
         payload = data["Paragraph"] if "Paragraph" in data else data
-        styles = styles or {}
+        styles = _normalize_text_style_overrides(styles)
         style_payload = payload["style"]
         style_name = style_payload["TextStyle"]["name"]
         style = styles.get(style_name) or TextStyle.create_from_dict(style_payload)
@@ -553,3 +554,12 @@ def _normalize_line_spacing_rule(value: LineSpacingRule | str) -> LineSpacingRul
     if not isinstance(value, str):
         raise TypeError("line_spacing_rule must be a LineSpacingRule or string")
     return LineSpacingRule(value.lower())
+
+
+def _normalize_text_style_overrides(styles: object) -> Mapping[str, object]:
+    """Normalize optional paragraph style overrides before hydration."""
+    if styles is None:
+        return {}
+    if not isinstance(styles, Mapping):
+        raise TypeError("styles must be a mapping or None")
+    return styles

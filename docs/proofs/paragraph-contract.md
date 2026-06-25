@@ -64,11 +64,16 @@ Before/after edge changes:
 - Before `PARAGRAPH-ENUM-SELECTOR-P2`, paragraph alignment, line-spacing rule,
   and tab-stop alignment selectors could accept arbitrary objects whose
   `__str__()` returned a valid enum value.
+- Before `PARAGRAPH-STYLES-MAPPING-P2`, direct paragraph hydration could accept
+  a malformed non-mapping `styles` override container and fail later through an
+  incidental `.get()` error.
 - After this slice, public paragraph measurements must be finite numeric values,
   bounded fields enforce their bounds, outline levels reject booleans, and
   serialized hydration uses the same public validation boundaries.
 - After `PARAGRAPH-ENUM-SELECTOR-P2`, enum selectors must be real enum members
   or strings before enum-value normalization can run.
+- After `PARAGRAPH-STYLES-MAPPING-P2`, optional paragraph style overrides must
+  be mappings or `None` before style lookup begins.
 - Negative paragraph origins and negative first-line indents remain valid
   because they are legitimate layout choices.
 - No new third-party dependency or dependency edge was introduced.
@@ -111,6 +116,8 @@ ADR/rule impact:
 - Hardened paragraph alignment, line-spacing rule, tab-stop alignment, and
   serialized selector hydration so arbitrary stringifiable objects cannot cross
   the public enum boundary.
+- Hardened `Paragraph.create_from_dict(..., styles=...)` so malformed style
+  override containers fail at the public boundary.
 
 ## Comprehensiveness Matrix
 
@@ -123,6 +130,7 @@ ADR/rule impact:
 | Tab stops | Enforce finite non-negative tab-stop positions and alignment normalization | PO-PARA-005 | `test_tab_stops_reject_invalid_positions` | killed |
 | Hydrated payloads | Reject malformed serialized text, booleans, outline level, and tab stops | PO-PARA-006 | `test_paragraph_hydration_uses_public_validation_boundaries` | killed |
 | Enum selectors | Accept enum members and real strings; reject arbitrary stringifiable objects | PO-PARA-007 | `test_paragraph_rejects_stringifiable_enum_selectors`, `test_paragraph_hydration_rejects_stringifiable_enum_selectors` | killed |
+| Style override map boundary | Reject non-mapping `styles` values before style lookup | PO-PARA-008 | `test_paragraph_hydration_rejects_malformed_style_override_maps` | killed |
 
 ## Test Applicability Matrix
 
@@ -130,7 +138,7 @@ ADR/rule impact:
 |---|---|---|---|
 | Unit | yes | Numeric normalization and enum/range validation are deterministic. | PARAGRAPH-P1 tests |
 | Behavioral/condition | yes | PARAGRAPH-P1 defines public paragraph model behavior. | Tests are marked `@pytest.mark.condition("PARAGRAPH-P1")`. |
-| Failure-mode | yes | Invalid measurements, payloads, and enum selectors must fail before rendering/export. | Invalid boundary, hydration, and enum-selector tests |
+| Failure-mode | yes | Invalid measurements, payloads, enum selectors, and style override containers must fail before rendering/export. | Invalid boundary, hydration, enum-selector, and style-map tests |
 | Integration/live-path | yes | Paragraphs materialize through drawing groups and flow-document output. | Live path test |
 | Contract/API compatibility | yes | Existing paragraph layout and serialization behavior must continue passing. | Existing `test_paragraph.py` |
 | Property/fuzz | no | This slice covers finite scalar partitions directly. | Not applicable |
@@ -151,6 +159,7 @@ Proof-critical mutation targets:
 - Bypassing public validation during hydration must fail payload tests.
 - Reintroducing stringification of enum selectors must fail direct and
   hydration selector-boundary tests.
+- Weakening style override map validation must fail malformed-style-map tests.
 - Breaking valid paragraph materialization must fail live-path tests.
 
 Current result:
@@ -161,6 +170,8 @@ Current result:
   non-executable equivalents.
 - Cosmic Ray 8.4.6, scoped to enum selector normalization after
   `PARAGRAPH-ENUM-SELECTOR-P2`: 6 work items, 6 killed, and 0 survived.
+- Cosmic Ray 8.4.6, scoped to style override map validation after
+  `PARAGRAPH-STYLES-MAPPING-P2`: 6 work items, 6 killed, and 0 survived.
 
 ## PO-PARA-001: Valid Paragraphs Remain Live
 
@@ -313,6 +324,29 @@ selector values through those same guards instead of converting them with
 `str()`. The focused tests cover direct construction, property assignment,
 tab-stop creation, `add_tab_stop()`, paragraph hydration, and tab-stop
 hydration.
+
+### Conclusion
+
+Proven for the stated domain after tests and mutation pass.
+
+## PO-PARA-008: Style Overrides Are Mappings
+
+### Claim
+
+`Paragraph.create_from_dict(..., styles=...)` accepts only mappings or `None`
+as optional style override containers.
+
+### Domain
+
+Direct public paragraph hydration with caller-supplied style override
+containers.
+
+### Proof Method
+
+Hydration normalizes `styles` through `_normalize_text_style_overrides()` before
+style lookup. The focused condition test covers malformed object, list, string,
+and bytes containers, plus the valid mapping path that reuses the supplied
+`TextStyle`.
 
 ### Conclusion
 

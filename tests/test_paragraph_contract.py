@@ -201,6 +201,19 @@ def test_paragraph_hydration_rejects_stringifiable_enum_selectors(
         Paragraph.create_from_dict(payload, {paragraph.style.name: paragraph.style})
 
 
+@pytest.mark.condition("PARAGRAPH-STYLES-MAPPING-P2")
+@pytest.mark.parametrize("styles", [object(), ["style-name"], "style-name", b"style-name"])
+def test_paragraph_hydration_rejects_malformed_style_override_maps(styles: object) -> None:
+    """PARAGRAPH-STYLES-MAPPING-P2: Style overrides must be mappings before hydration."""
+    paragraph = _paragraph("Persisted")
+
+    with pytest.raises(TypeError, match="styles must be a mapping or None"):
+        Paragraph.create_from_dict(paragraph.parameters, styles)  # type: ignore[arg-type]
+
+    clone = Paragraph.create_from_dict(paragraph.parameters, {paragraph.style.name: paragraph.style})
+    assert clone.style is paragraph.style
+
+
 @pytest.mark.condition("PARAGRAPH-P1")
 def test_paragraph_contract_remains_live_through_render_and_document_paths() -> None:
     """PARAGRAPH-P1: Valid paragraphs still materialize and export through dependent paths."""
