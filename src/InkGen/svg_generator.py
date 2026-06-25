@@ -14,7 +14,6 @@ import abc
 import base64
 import math
 import os
-import sys
 from collections.abc import Iterable, Mapping, Sequence
 from enum import Flag, auto
 from xml.sax.saxutils import escape
@@ -106,6 +105,41 @@ def _svg_optional_sequence(payload: Mapping[str, object], name: str, owner: str)
     if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
         raise TypeError(f"{owner} {name} must be a sequence")
     return value
+
+
+def _svg_required_sequence(payload: Mapping[str, object], name: str, owner: str) -> Sequence[object]:
+    """Return a required serialized SVG sequence field or fail explicitly."""
+    value = _svg_required_field(payload, name, owner)
+    if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
+        raise TypeError(f"{owner} {name} must be a sequence")
+    return value
+
+
+def _svg_single_mapping_entry(payload: object, owner: str) -> tuple[str, Mapping[str, object]]:
+    """Return the single typed payload entry for an SVG group child or style."""
+    if not isinstance(payload, Mapping):
+        raise TypeError(f"{owner} entry must be a mapping")
+    if len(payload) != 1:
+        raise ValueError(f"{owner} entry must contain one type")
+    entry_type = next(iter(payload))
+    if not isinstance(entry_type, str):
+        raise TypeError(f"{owner} type must be a string")
+    entry_payload = payload[entry_type]
+    if not isinstance(entry_payload, Mapping):
+        raise TypeError(f"{owner} payload must be a mapping")
+    return entry_type, entry_payload
+
+
+def _svg_style_entry(payload: object) -> tuple[str, Mapping[str, object], str, type]:
+    """Return a validated SVG child style envelope."""
+    style_type, style_payload = _svg_single_mapping_entry(payload, "SVG component style")
+    style_name = style_payload.get("name")
+    if not isinstance(style_name, str):
+        raise TypeError("SVG component style name must be a string")
+    style_class = globals().get(style_type)
+    if style_class not in (DrawingStyle, TextStyle):
+        raise ValueError(f"Unsupported SVG component style payload type: {style_type}")
+    return style_type, style_payload, style_name, style_class
 
 
 def _path_svg_command_from_dict(data: object) -> PathCommand:
@@ -1317,6 +1351,28 @@ class SVGComponent(Component, DrawingGeneratorInterface):
             path_markup.append(f'<path d="{path["d"]}"{style_attr} />')
         content = "\n        ".join(path_markup)
         return f"<g{transform_attr}>\n        {content}\n    </g>"
+SVG_RENDER_COMPONENT_TYPES = (
+    RectangleSVG,
+    LineSVG,
+    ArcSVG,
+    QuadraticBezierSVG,
+    CubicBezierSVG,
+    PathSVG,
+    RegularPolygonSVG,
+    PolygonalSVG,
+    CircleSVG,
+    TextSVG,
+)
+
+
+def _svg_component_class(component_type: str) -> type:
+    """Return a supported built-in SVG component class by serialized type name."""
+    component_class = globals().get(component_type)
+    if component_class not in SVG_RENDER_COMPONENT_TYPES:
+        raise ValueError(f"Unsupported SVG component payload type: {component_type}")
+    return component_class
+
+
 class ComponentGroupSVG(ComponentGroup, LabelGenerator, SegmentGenerator):
     """
         Text to generate labeling data for component groups.
@@ -1331,23 +1387,22 @@ class ComponentGroupSVG(ComponentGroup, LabelGenerator, SegmentGenerator):
         Returns:
             object: instance of the class.
         """
-        group = cls(data['ComponentGroupSVG']['group_label'])
+        payload = _svg_payload(data, "ComponentGroupSVG")
+        group = cls(_svg_required_field(payload, "group_label", "ComponentGroupSVG"))
         if styles is None:
             styles = {}
 
-        for c in data['ComponentGroupSVG']['components']:
+        for c in _svg_required_sequence(payload, "components", "ComponentGroupSVG"):
             style = None
-            component_class_name = list(c.keys())[0]
-            if 'style' in list(c[component_class_name].keys()):
-                style_name = list(c[component_class_name]['style'].keys())[0]
-                if c[component_class_name]['style'][style_name]['name'] not in list(styles.keys()):
-                    style_class_name = list(c[component_class_name]['style'].keys())[0]
-                    style_class = getattr(sys.modules[__name__], style_class_name)
-                    style = style_class.create_from_dict(c[component_class_name]['style'])
-                    styles[c[component_class_name]['style'][style_name]['name']] = style
+            component_class_name, component_payload = _svg_single_mapping_entry(c, "SVG component")
+            if 'style' in component_payload:
+                _, _, style_name, style_class = _svg_style_entry(component_payload['style'])
+                if style_name not in styles:
+                    style = style_class.create_from_dict(component_payload['style'])
+                    styles[style_name] = style
                 else:
-                    style = styles[c[component_class_name]['style'][style_name]['name']]
-            component_class = getattr(sys.modules[__name__], component_class_name)
+                    style = styles[style_name]
+            component_class = _svg_component_class(component_class_name)
             component = component_class.create_from_dict(c, style)
             group.add_component(component)
 
