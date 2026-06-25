@@ -399,9 +399,9 @@ class Paragraph(Component):
         }
 
     @classmethod
-    def create_from_dict(cls, data: dict[str, object], styles: dict[str, TextStyle] | None = None) -> Paragraph:
+    def create_from_dict(cls, data: object, styles: dict[str, TextStyle] | None = None) -> Paragraph:
         """Recreate a paragraph from serialized parameters."""
-        payload = data["Paragraph"] if "Paragraph" in data else data
+        payload = _paragraph_payload(data)
         styles = _normalize_text_style_overrides(styles)
         style_payload = payload["style"]
         style_name = style_payload["TextStyle"]["name"]
@@ -566,6 +566,16 @@ def _normalize_text_style_overrides(styles: object) -> Mapping[str, object]:
     if not isinstance(styles, Mapping):
         raise TypeError("styles must be a mapping or None")
     return styles
+
+
+def _paragraph_payload(data: object) -> Mapping[str, object]:
+    """Normalize wrapped or direct serialized paragraph payloads."""
+    if not isinstance(data, Mapping):
+        raise TypeError("Paragraph payload must be a mapping")
+    payload = data["Paragraph"] if "Paragraph" in data else data
+    if not isinstance(payload, Mapping):
+        raise TypeError("Paragraph payload must be a mapping")
+    return payload
 
 
 def _normalize_tab_stop_index(index: object, tab_stop_count: int) -> int:

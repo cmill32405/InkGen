@@ -214,6 +214,33 @@ def test_paragraph_hydration_rejects_malformed_style_override_maps(styles: objec
     assert clone.style is paragraph.style
 
 
+@pytest.mark.condition("PARAGRAPH-ROOT-PAYLOAD-P2")
+@pytest.mark.parametrize("payload", [object(), "paragraph", b"paragraph"])
+def test_paragraph_hydration_rejects_malformed_root_payloads(payload: object) -> None:
+    """PARAGRAPH-ROOT-PAYLOAD-P2: Paragraph hydration roots must be mappings."""
+    with pytest.raises(TypeError, match="Paragraph payload must be a mapping"):
+        Paragraph.create_from_dict(payload)
+
+
+@pytest.mark.condition("PARAGRAPH-ROOT-PAYLOAD-P2")
+@pytest.mark.parametrize("wrapped_payload", [object(), "paragraph", b"paragraph"])
+def test_paragraph_hydration_rejects_malformed_wrapped_payloads(wrapped_payload: object) -> None:
+    """PARAGRAPH-ROOT-PAYLOAD-P2: Wrapped paragraph payloads must be mappings."""
+    with pytest.raises(TypeError, match="Paragraph payload must be a mapping"):
+        Paragraph.create_from_dict({"Paragraph": wrapped_payload})
+
+
+@pytest.mark.condition("PARAGRAPH-ROOT-PAYLOAD-P2")
+def test_paragraph_hydration_preserves_direct_payload_compatibility() -> None:
+    """PARAGRAPH-ROOT-PAYLOAD-P2: Direct unwrapped paragraph payloads remain supported."""
+    paragraph = _paragraph("Direct")
+    payload = paragraph.parameters["Paragraph"]
+
+    clone = Paragraph.create_from_dict(payload, {paragraph.style.name: paragraph.style})
+
+    assert clone.parameters == paragraph.parameters
+
+
 @pytest.mark.condition("PARAGRAPH-TAB-INDEX-P2")
 def test_paragraph_remove_tab_stop_rejects_python_index_coercion() -> None:
     """PARAGRAPH-TAB-INDEX-P2: Tab-stop removal indexes must be explicit public indexes."""

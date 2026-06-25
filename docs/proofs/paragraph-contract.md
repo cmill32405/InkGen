@@ -99,6 +99,10 @@ Before/after edge changes:
   objects as `leader` values even though the public type is `str | None`.
 - After `PARAGRAPH-TABSTOP-LEADER-P2`, tab-stop leaders must be strings or
   `None` across direct construction, paragraph insertion, and hydration.
+- Before `PARAGRAPH-ROOT-PAYLOAD-P2`, malformed paragraph hydration roots or
+  wrapped `Paragraph` payloads failed through incidental Python errors.
+- After `PARAGRAPH-ROOT-PAYLOAD-P2`, both wrapped and direct paragraph payloads
+  must be mappings before field hydration begins.
 - Negative paragraph origins and negative first-line indents remain valid
   because they are legitimate layout choices.
 - No new third-party dependency or dependency edge was introduced.
@@ -133,6 +137,8 @@ ADR/rule impact:
 - Serialized tab-stop payload roots are mappings with a required `position`
   field. Optional `alignment` and `leader` retain existing defaults.
 - Tab-stop leader values are strings or `None`.
+- Paragraph hydration roots are mappings; wrapped `Paragraph` payload values
+  are mappings; direct unwrapped payload mappings remain supported.
 - Tab-stop removal index is a non-boolean integer in the current tab-stop
   range.
 - Serialized hydration must reject malformed values instead of silently
@@ -162,6 +168,8 @@ ADR/rule impact:
   hydration.
 - Hardened tab-stop leader values so direct construction, paragraph insertion,
   and hydration reject non-string, non-`None` leaders.
+- Hardened `Paragraph.create_from_dict()` root normalization so malformed roots
+  and malformed wrapped payloads fail before paragraph field hydration.
 
 ## Comprehensiveness Matrix
 
@@ -179,6 +187,7 @@ ADR/rule impact:
 | Tab-stop collections | Reject malformed direct and serialized tab-stop collections before public state or hydration iteration | PO-PARA-010 | `test_paragraph_constructor_rejects_malformed_tab_stop_collections`, `test_paragraph_constructor_rejects_non_tab_stop_entries`, `test_paragraph_hydration_rejects_malformed_tab_stop_collections`, `test_paragraph_hydration_rejects_non_mapping_tab_stop_entries` | killed |
 | Tab-stop payloads | Reject malformed roots and missing required position fields before tab-stop construction | PO-PARA-011 | `test_tab_stop_factory_rejects_malformed_payload_roots`, `test_tab_stop_factory_rejects_missing_position`, `test_paragraph_hydration_rejects_tab_stop_entries_missing_position` | killed |
 | Tab-stop leaders | Reject non-string, non-`None` leader values across direct, insertion, and hydration paths | PO-PARA-012 | `test_tab_stop_rejects_malformed_leaders`, `test_paragraph_add_tab_stop_rejects_malformed_leaders`, `test_paragraph_hydration_rejects_malformed_tab_stop_leaders` | killed |
+| Paragraph root payload | Reject malformed hydration roots and wrapped payloads before field access | PO-PARA-013 | `test_paragraph_hydration_rejects_malformed_root_payloads`, `test_paragraph_hydration_rejects_malformed_wrapped_payloads`, `test_paragraph_hydration_preserves_direct_payload_compatibility` | killed |
 
 ## Test Applicability Matrix
 
@@ -217,6 +226,8 @@ Proof-critical mutation targets:
   factory construction must fail tab-stop payload tests.
 - Allowing non-string, non-`None` tab-stop leaders into paragraph state must
   fail leader-boundary tests.
+- Allowing non-mapping paragraph hydration roots into field hydration must fail
+  root-payload tests.
 
 Current result:
 
@@ -236,6 +247,8 @@ Current result:
   `PARAGRAPH-TABSTOP-PAYLOAD-P2`: 3 work items, 3 killed, and 0 survived.
 - Cosmic Ray 8.4.6, scoped to tab-stop leader validation after
   `PARAGRAPH-TABSTOP-LEADER-P2`: 3 work items, 3 killed, and 0 survived.
+- Cosmic Ray 8.4.6, scoped to paragraph root payload validation after
+  `PARAGRAPH-ROOT-PAYLOAD-P2`: 5 work items, 5 killed, and 0 survived.
 
 ## PO-PARA-001: Valid Paragraphs Remain Live
 
@@ -520,6 +533,30 @@ instances, the same check covers direct construction, paragraph insertion, and
 hydration. Focused tests cover invalid integer and object leaders on all three
 paths, preservation of prior paragraph state after failed insertion, and valid
 string/`None` leaders.
+
+### Conclusion
+
+Proven for the stated domain after tests and mutation pass.
+
+## PO-PARA-013: Paragraph Root Payloads Are Mappings
+
+### Claim
+
+`Paragraph.create_from_dict()` rejects malformed root inputs and malformed
+wrapped `Paragraph` payloads before paragraph field hydration begins, while
+preserving direct unwrapped payload mapping compatibility.
+
+### Domain
+
+Public paragraph hydration through `Paragraph.create_from_dict(data, styles)`.
+
+### Proof Method
+
+Hydration routes `data` through `_paragraph_payload()`. The helper rejects
+non-mapping roots, unwraps the `Paragraph` key when present, rejects malformed
+wrapped payloads, and returns direct unwrapped mappings unchanged. Focused tests
+cover malformed roots, malformed wrapped payloads, and valid direct payload
+round-trip compatibility.
 
 ### Conclusion
 
