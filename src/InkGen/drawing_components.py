@@ -79,6 +79,14 @@ def _coerce_point_pair(value: object, *, name: str) -> tuple[float, float]:
     return x, y
 
 
+def _coerce_non_negative_point_pair(value: object, *, name: str) -> tuple[float, float]:
+    """Normalize point payloads that use the nonnegative drawing component contract."""
+    x, y = _coerce_point_pair(value, name=name)
+    if x < 0 or y < 0:
+        raise ValueError(f"{name} coordinates must be greater than or equal to zero")
+    return x, y
+
+
 @dataclass(frozen=True)
 class RectangleDrawing:
     """Renderer-neutral rectangle primitive."""
@@ -121,7 +129,11 @@ class LineDrawing:
     style: DrawingStyle
 
     def __post_init__(self) -> None:
-        """Validate the neutral line style boundary."""
+        """Validate the neutral line geometry and style boundary."""
+        point_1 = _coerce_non_negative_point_pair(self.point_1, name="LineDrawing point_1")
+        point_2 = _coerce_non_negative_point_pair(self.point_2, name="LineDrawing point_2")
+        object.__setattr__(self, "point_1", point_1)
+        object.__setattr__(self, "point_2", point_2)
         _require_drawing_style(self.style, "LineDrawing")
 
     def to_component(self, output_format: OutputFormat | str) -> Component:

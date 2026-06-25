@@ -22,6 +22,7 @@ The public behavior under review is:
 - `StandardDrawingComponent.convex_hull`
 - `LineSVG.generate_svg()`
 - `LinePDF.generate_pdf()`
+- `LineDrawing.__post_init__()`
 - `LineDrawing.to_component(OutputFormat.SVG/PDF)`
 - `DXFDocument.add_group()` for `LineDrawing`
 
@@ -63,6 +64,13 @@ Before/after edge changes:
   fail at construction or setter boundaries.
 - Existing internal `Point` setter paths remain supported for size/radius
   updates in inherited components.
+- The `LINE-DRAWING-GEOMETRY-P2` continuation found that `LineDrawing` could
+  store malformed or negative endpoint payloads until SVG/PDF materialization
+  failed. The same payloads could hydrate through
+  `FlowDocument.create_from_dict()` into public neutral drawing state.
+- After `LINE-DRAWING-GEOMETRY-P2`, neutral line endpoints are validated and
+  normalized at construction before direct materialization, serialization, or
+  FlowDocument hydration can expose malformed state.
 - No new dependency edge or third-party dependency was introduced.
 
 Cycle/layer/coupling/redundancy result:
@@ -97,6 +105,8 @@ ADR/rule impact:
 - A valid line is two ordered points.
 - Each coordinate value must be numeric, finite, not boolean, and nonnegative.
 - Zero coordinates are valid.
+- Neutral line endpoints are normalized to float pairs at `LineDrawing`
+  construction.
 - The public point order is `[point_1, point_2]`.
 - SVG and PDF outputs are open paths.
 - DXF output is a `LINE` entity.
@@ -110,6 +120,9 @@ ADR/rule impact:
 - `LinePDF.generate_pdf()` is proven to ignore fill style and stroke only.
 - DXF line export is proven to emit a `0/LINE` entity pair and apply optional
   canvas-height Y inversion.
+- `LineDrawing.__post_init__()` now validates and normalizes both endpoint
+  pairs before renderer materialization or FlowDocument hydration can hold
+  malformed neutral line state.
 
 ## Comprehensiveness Matrix
 
@@ -123,6 +136,8 @@ ADR/rule impact:
 | PDF output | Emit exact open stroked path with no fill | PO-LINE-004 | `test_line_pdf_emits_exact_open_stroked_path` | killed/equivalent |
 | Serialization | Preserve parameters round trip | PO-LINE-005 | `test_line_primitives_round_trip_parameters` | killed/equivalent |
 | Neutral materialization | Materialize to `LineSVG`/`LinePDF` | PO-LINE-006 | `test_line_drawing_materializes_svg_and_pdf_components` | killed/equivalent |
+| Neutral valid endpoints | Normalize before public state is exposed | PO-LINE-008 | `test_line_drawing_normalizes_geometry_before_materialization` | killed/equivalent |
+| Neutral malformed endpoints | Reject at construction and FlowDocument hydration | PO-LINE-008 | `test_line_drawing_rejects_malformed_geometry_payloads`, `test_flow_document_hydration_rejects_malformed_line_geometry_payloads` | killed/equivalent |
 | DXF output | Emit `LINE` entity with transformed endpoints | PO-LINE-007 | `test_dxf_line_drawing_exports_line_entity_with_canvas_transform` | killed/equivalent |
 | Negative-coordinate drawing systems | Excluded from proven domain | Explicit exclusion | Not applicable | Out of scope |
 
@@ -152,6 +167,8 @@ Proof-critical mutation targets:
 - Changing zero-coordinate handling should fail valid-geometry tests.
 - Changing SVG or PDF endpoint operators should fail exact renderer tests.
 - Redirecting `LineDrawing.to_component()` should fail materialization tests.
+- Weakening neutral line endpoint validation should fail direct neutral recipe
+  and FlowDocument hydration tests.
 - Changing DXF entity type, layer, endpoint codes, z coordinates, or Y inversion
   should fail live DXF tests.
 
@@ -170,6 +187,17 @@ Current result:
     `OutputFormat.SVG` is the first supported string enum value in this
     normalized two-format branch; existing SVG and PDF materialization
     assertions cover the reachable outcomes.
+- `LINE-DRAWING-GEOMETRY-P2` continuation:
+  - Cosmic Ray 8.4.6, scoped to `_coerce_point_pair()`,
+    `_coerce_non_negative_point_pair()`, and `LineDrawing.__post_init__()`:
+    60 proof-critical work items.
+  - Result: 58 killed, 2 survived and classified equivalent.
+  - Equivalent survivors:
+    - `*` changed to `/` in `_coerce_point_pair(value, *, name)`.
+    - `*` changed to `/` in `_coerce_non_negative_point_pair(value, *, name)`.
+    - Both helpers are called with `value` positionally and `name` by keyword in
+      the declared domain. Changing `value` from positional-or-keyword to
+      positional-only does not change public construction or hydration behavior.
 
 ## PO-LINE-001: Valid Geometry Is Preserved
 
@@ -315,9 +343,53 @@ All valid neutral `LineDrawing` instances exported through
 
 Proven for the stated domain after tests and mutation pass.
 
+## PO-LINE-008: Neutral Line Geometry Is Validated Before Public State
+
+### Claim
+
+`LineDrawing` cannot expose malformed or negative endpoint geometry through
+direct construction, materialization, serialization, or FlowDocument hydration.
+
+### Domain
+
+All `LineDrawing` instances created directly and all serialized `LineDrawing`
+payloads hydrated through `FlowDocument.create_from_dict()`.
+
+### Assumptions
+
+The neutral line recipe should match the concrete line component endpoint
+contract: each endpoint is a finite two-value numeric pair, boolean coordinates
+are invalid, and coordinates must be greater than or equal to zero.
+
+### Proof Method
+
+`LineDrawing.__post_init__()` routes every public construction path, including
+FlowDocument drawing hydration, through `_coerce_non_negative_point_pair()`.
+That wrapper delegates shape, boolean, numeric, and finite checks to
+`_coerce_point_pair()` and then rejects negative coordinates before storing the
+normalized float pairs. Direct condition tests cover valid zero endpoints and
+malformed endpoint partitions. The FlowDocument condition test mutates
+serialized line payloads and proves malformed endpoints cannot hydrate into
+returned document state.
+
+### Counterexamples And Exclusions
+
+Private mutation after construction remains outside the public contract. The
+slice does not change concrete line renderer output, DXF entity semantics, or
+the existing nonnegative drawing-coordinate policy.
+
+### Conclusion
+
+Proven for the stated public construction and FlowDocument hydration domain
+after focused tests and scoped mutation pass.
+
 ## Current Slice Decision
 
 The slice keeps InkGen's existing nonnegative drawing-coordinate boundary and
 adds finite numeric validation before Shapely coercion. This prevents invalid
 geometry from reaching SVG, PDF, DXF, or downstream parser fixtures while
 preserving existing inherited component update paths.
+
+The `LINE-DRAWING-GEOMETRY-P2` continuation keeps renderer output unchanged
+while moving malformed neutral line endpoint rejection to the renderer-neutral
+recipe boundary.

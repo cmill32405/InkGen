@@ -7,6 +7,7 @@ import uuid
 import pytest
 from shapely import Point
 
+from InkGen.document_outputs import FlowDocument
 from InkGen.drawing_components import DrawingComponentGroup, LineDrawing, OutputFormat
 from InkGen.dxf_generator import DXFDocument
 from InkGen.pdf_generator import LinePDF
@@ -158,6 +159,86 @@ def test_line_drawing_materializes_svg_and_pdf_components(drawing_style: Drawing
     assert pdf.points == [(1.25, 2.5), (9.75, 6.0)]
     with pytest.raises(ValueError):
         drawing.to_component("dxf")
+
+
+@pytest.mark.condition("LINE-DRAWING-GEOMETRY-P2")
+def test_line_drawing_normalizes_geometry_before_materialization(drawing_style: DrawingStyle) -> None:
+    """LINE-DRAWING-GEOMETRY-P2: Neutral line endpoints normalize at construction."""
+    drawing = LineDrawing([0, 2], [3, 0], drawing_style)  # type: ignore[arg-type]
+
+    assert drawing.point_1 == (0.0, 2.0)
+    assert drawing.point_2 == (3.0, 0.0)
+    assert drawing.to_component(OutputFormat.SVG).points == [(0.0, 2.0), (3.0, 0.0)]
+    assert drawing.to_component(OutputFormat.PDF).points == [(0.0, 2.0), (3.0, 0.0)]
+
+
+@pytest.mark.condition("LINE-DRAWING-GEOMETRY-P2")
+@pytest.mark.parametrize(
+    ("point_1", "point_2"),
+    [
+        ("12", (2.0, 3.0)),
+        ([1.0], (2.0, 3.0)),
+        ([1.0, 2.0, 3.0], (2.0, 3.0)),
+        ({"x": 1.0, "y": 2.0}, (2.0, 3.0)),
+        ((object(), 1.0), (2.0, 3.0)),
+        (("x", 1.0), (2.0, 3.0)),
+        ((True, 1.0), (2.0, 3.0)),
+        ((float("nan"), 1.0), (2.0, 3.0)),
+        ((-0.1, 1.0), (2.0, 3.0)),
+        ((1.0, 1.0), (-0.1, 3.0)),
+    ],
+)
+def test_line_drawing_rejects_malformed_geometry_payloads(
+    drawing_style: DrawingStyle,
+    point_1: object,
+    point_2: object,
+) -> None:
+    """LINE-DRAWING-GEOMETRY-P2: Neutral line endpoints reject malformed payloads."""
+    with pytest.raises((TypeError, ValueError)):
+        LineDrawing(point_1, point_2, drawing_style)  # type: ignore[arg-type]
+
+
+@pytest.mark.condition("LINE-DRAWING-GEOMETRY-P2")
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("point_1", "12"),
+        ("point_1", [1.0]),
+        ("point_1", [1.0, 2.0, 3.0]),
+        ("point_2", {"x": 3.0, "y": 4.0}),
+        ("point_1", (object(), 1.0)),
+        ("point_1", ("x", 1.0)),
+        ("point_1", (True, 1.0)),
+        ("point_2", (3.0, float("nan"))),
+        ("point_1", (-0.1, 1.0)),
+        ("point_2", (3.0, -0.1)),
+    ],
+)
+def test_flow_document_hydration_rejects_malformed_line_geometry_payloads(
+    drawing_style: DrawingStyle,
+    field: str,
+    value: object,
+) -> None:
+    """LINE-DRAWING-GEOMETRY-P2: Flow documents cannot hydrate bad line endpoints."""
+    group = DrawingComponentGroup("line-flow")
+    group.add_component(LineDrawing((1.0, 2.0), (3.0, 4.0), drawing_style))
+    document = FlowDocument(title="Bad Line")
+    document.add_drawing_group(group)
+    payload = document.parameters
+    flow_payload = payload["FlowDocument"]
+    assert isinstance(flow_payload, dict)
+    blocks = flow_payload["blocks"]
+    assert isinstance(blocks, list)
+    block_payload = blocks[0]["payload"]
+    assert isinstance(block_payload, dict)
+    components = block_payload["components"]
+    assert isinstance(components, list)
+    component_payload = components[0]["payload"]
+    assert isinstance(component_payload, dict)
+    component_payload[field] = value
+
+    with pytest.raises((TypeError, ValueError)):
+        FlowDocument.create_from_dict(payload, {drawing_style.name: drawing_style})
 
 
 @pytest.mark.condition("LINE-P1")
