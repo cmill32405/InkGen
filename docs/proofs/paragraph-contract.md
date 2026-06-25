@@ -103,6 +103,12 @@ Before/after edge changes:
   wrapped `Paragraph` payloads failed through incidental Python errors.
 - After `PARAGRAPH-ROOT-PAYLOAD-P2`, both wrapped and direct paragraph payloads
   must be mappings before field hydration begins.
+- Before `PARAGRAPH-STYLE-PAYLOAD-P2`, malformed paragraph style envelopes
+  could fail through incidental indexing errors or reach `TextStyle`
+  construction with a non-string name.
+- After `PARAGRAPH-STYLE-PAYLOAD-P2`, paragraph style payloads must be mappings
+  with a `TextStyle` mapping containing a string `name` before style override
+  lookup or `TextStyle` construction.
 - Negative paragraph origins and negative first-line indents remain valid
   because they are legitimate layout choices.
 - No new third-party dependency or dependency edge was introduced.
@@ -139,6 +145,8 @@ ADR/rule impact:
 - Tab-stop leader values are strings or `None`.
 - Paragraph hydration roots are mappings; wrapped `Paragraph` payload values
   are mappings; direct unwrapped payload mappings remain supported.
+- Paragraph style payloads are mappings with a `TextStyle` mapping whose
+  `name` value is a string.
 - Tab-stop removal index is a non-boolean integer in the current tab-stop
   range.
 - Serialized hydration must reject malformed values instead of silently
@@ -170,6 +178,9 @@ ADR/rule impact:
   and hydration reject non-string, non-`None` leaders.
 - Hardened `Paragraph.create_from_dict()` root normalization so malformed roots
   and malformed wrapped payloads fail before paragraph field hydration.
+- Hardened paragraph style payload hydration so malformed style roots, wrong
+  style kind, malformed `TextStyle` entries, and non-string style names fail
+  before override lookup or `TextStyle` construction.
 
 ## Comprehensiveness Matrix
 
@@ -188,6 +199,7 @@ ADR/rule impact:
 | Tab-stop payloads | Reject malformed roots and missing required position fields before tab-stop construction | PO-PARA-011 | `test_tab_stop_factory_rejects_malformed_payload_roots`, `test_tab_stop_factory_rejects_missing_position`, `test_paragraph_hydration_rejects_tab_stop_entries_missing_position` | killed |
 | Tab-stop leaders | Reject non-string, non-`None` leader values across direct, insertion, and hydration paths | PO-PARA-012 | `test_tab_stop_rejects_malformed_leaders`, `test_paragraph_add_tab_stop_rejects_malformed_leaders`, `test_paragraph_hydration_rejects_malformed_tab_stop_leaders` | killed |
 | Paragraph root payload | Reject malformed hydration roots and wrapped payloads before field access | PO-PARA-013 | `test_paragraph_hydration_rejects_malformed_root_payloads`, `test_paragraph_hydration_rejects_malformed_wrapped_payloads`, `test_paragraph_hydration_preserves_direct_payload_compatibility` | killed |
+| Paragraph style payload | Reject malformed style envelopes before style override lookup or style construction | PO-PARA-014 | `test_paragraph_hydration_rejects_malformed_style_payloads`, `test_flow_document_paragraph_hydration_rejects_malformed_style_payloads`, `test_paragraph_hydration_preserves_valid_style_override_lookup` | killed |
 
 ## Test Applicability Matrix
 
@@ -228,6 +240,8 @@ Proof-critical mutation targets:
   fail leader-boundary tests.
 - Allowing non-mapping paragraph hydration roots into field hydration must fail
   root-payload tests.
+- Allowing malformed paragraph style envelopes into override lookup or style
+  construction must fail style-payload tests.
 
 Current result:
 
@@ -249,6 +263,8 @@ Current result:
   `PARAGRAPH-TABSTOP-LEADER-P2`: 3 work items, 3 killed, and 0 survived.
 - Cosmic Ray 8.4.6, scoped to paragraph root payload validation after
   `PARAGRAPH-ROOT-PAYLOAD-P2`: 5 work items, 5 killed, and 0 survived.
+- Cosmic Ray 8.4.6, scoped to paragraph style payload validation after
+  `PARAGRAPH-STYLE-PAYLOAD-P2`: 11 work items, 11 killed, and 0 survived.
 
 ## PO-PARA-001: Valid Paragraphs Remain Live
 
@@ -557,6 +573,33 @@ non-mapping roots, unwraps the `Paragraph` key when present, rejects malformed
 wrapped payloads, and returns direct unwrapped mappings unchanged. Focused tests
 cover malformed roots, malformed wrapped payloads, and valid direct payload
 round-trip compatibility.
+
+### Conclusion
+
+Proven for the stated domain after tests and mutation pass.
+
+## PO-PARA-014: Paragraph Style Payloads Are Explicit
+
+### Claim
+
+`Paragraph.create_from_dict()` rejects malformed style payload envelopes before
+style override lookup or `TextStyle` construction, and the same boundary is
+preserved when paragraphs are hydrated through `FlowDocument`.
+
+### Domain
+
+Public paragraph hydration through `Paragraph.create_from_dict()` and
+paragraph-block hydration through `FlowDocument.create_from_dict()`.
+
+### Proof Method
+
+Hydration routes the paragraph payload through `_paragraph_style_payload()` and
+`_paragraph_style_name()`. The helpers require a `style` field, require a
+mapping style payload, require a `TextStyle` mapping rather than another style
+kind, and require a string style name before override lookup. Focused tests
+cover missing style, malformed style root, wrong style kind, malformed
+`TextStyle` entry, missing/non-string name, the FlowDocument dependent path,
+and valid override reuse.
 
 ### Conclusion
 

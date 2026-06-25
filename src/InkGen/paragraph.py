@@ -403,8 +403,8 @@ class Paragraph(Component):
         """Recreate a paragraph from serialized parameters."""
         payload = _paragraph_payload(data)
         styles = _normalize_text_style_overrides(styles)
-        style_payload = payload["style"]
-        style_name = style_payload["TextStyle"]["name"]
+        style_payload = _paragraph_style_payload(payload)
+        style_name = _paragraph_style_name(style_payload)
         style = styles.get(style_name) or TextStyle.create_from_dict(style_payload)
         return cls(
             payload["text"],
@@ -576,6 +576,32 @@ def _paragraph_payload(data: object) -> Mapping[str, object]:
     if not isinstance(payload, Mapping):
         raise TypeError("Paragraph payload must be a mapping")
     return payload
+
+
+def _paragraph_style_payload(payload: Mapping[str, object]) -> Mapping[str, object]:
+    """Normalize a serialized paragraph style payload."""
+    if "style" not in payload:
+        raise ValueError("Paragraph payload must include style")
+    style_payload = payload["style"]
+    if not isinstance(style_payload, Mapping):
+        raise TypeError("Paragraph style payload must be a mapping")
+    if "TextStyle" not in style_payload:
+        raise ValueError("Paragraph style payload must include TextStyle")
+    text_style_payload = style_payload["TextStyle"]
+    if not isinstance(text_style_payload, Mapping):
+        raise TypeError("Paragraph TextStyle payload must be a mapping")
+    return style_payload
+
+
+def _paragraph_style_name(style_payload: Mapping[str, object]) -> str:
+    """Return the required paragraph text style name."""
+    text_style_payload = style_payload["TextStyle"]
+    if not isinstance(text_style_payload, Mapping):
+        raise TypeError("Paragraph TextStyle payload must be a mapping")
+    style_name = text_style_payload.get("name")
+    if not isinstance(style_name, str):
+        raise TypeError("Paragraph TextStyle name must be a string")
+    return style_name
 
 
 def _normalize_tab_stop_index(index: object, tab_stop_count: int) -> int:

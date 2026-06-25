@@ -241,6 +241,62 @@ def test_paragraph_hydration_preserves_direct_payload_compatibility() -> None:
     assert clone.parameters == paragraph.parameters
 
 
+@pytest.mark.condition("PARAGRAPH-STYLE-PAYLOAD-P2")
+@pytest.mark.parametrize(
+    ("style_payload", "exception_type", "message"),
+    [
+        (None, ValueError, "Paragraph payload must include style"),
+        (object(), TypeError, "Paragraph style payload must be a mapping"),
+        ({}, ValueError, "Paragraph style payload must include TextStyle"),
+        ({"DrawingStyle": {"name": "wrong-kind"}}, ValueError, "Paragraph style payload must include TextStyle"),
+        ({"TextStyle": object()}, TypeError, "Paragraph TextStyle payload must be a mapping"),
+        ({"TextStyle": {}}, TypeError, "Paragraph TextStyle name must be a string"),
+        ({"TextStyle": {"name": object()}}, TypeError, "Paragraph TextStyle name must be a string"),
+    ],
+)
+def test_paragraph_hydration_rejects_malformed_style_payloads(
+    style_payload: object,
+    exception_type: type[Exception],
+    message: str,
+) -> None:
+    """PARAGRAPH-STYLE-PAYLOAD-P2: Paragraph style envelopes fail before style lookup."""
+    paragraph = _paragraph("Persisted")
+    payload = paragraph.parameters
+    if style_payload is None:
+        del payload["Paragraph"]["style"]
+    else:
+        payload["Paragraph"]["style"] = style_payload
+
+    with pytest.raises(exception_type, match=message):
+        Paragraph.create_from_dict(payload, {paragraph.style.name: paragraph.style})
+
+
+@pytest.mark.condition("PARAGRAPH-STYLE-PAYLOAD-P2")
+def test_flow_document_paragraph_hydration_rejects_malformed_style_payloads() -> None:
+    """PARAGRAPH-STYLE-PAYLOAD-P2: FlowDocument preserves paragraph style payload errors."""
+    paragraph = _paragraph("Persisted")
+    flow_payload = {
+        "FlowDocument": {
+            "title": "Bad Paragraph Style",
+            "blocks": [{"type": "paragraph", "payload": paragraph.parameters}],
+        },
+    }
+    paragraph_payload = flow_payload["FlowDocument"]["blocks"][0]["payload"]
+    paragraph_payload["Paragraph"]["style"] = {"TextStyle": {"name": object()}}
+
+    with pytest.raises(TypeError, match="Paragraph TextStyle name must be a string"):
+        FlowDocument.create_from_dict(flow_payload, {paragraph.style.name: paragraph.style})
+
+
+@pytest.mark.condition("PARAGRAPH-STYLE-PAYLOAD-P2")
+def test_paragraph_hydration_preserves_valid_style_override_lookup() -> None:
+    """PARAGRAPH-STYLE-PAYLOAD-P2: Valid style override lookup remains live."""
+    paragraph = _paragraph("Persisted")
+    clone = Paragraph.create_from_dict(paragraph.parameters, {paragraph.style.name: paragraph.style})
+
+    assert clone.style is paragraph.style
+
+
 @pytest.mark.condition("PARAGRAPH-TAB-INDEX-P2")
 def test_paragraph_remove_tab_stop_rejects_python_index_coercion() -> None:
     """PARAGRAPH-TAB-INDEX-P2: Tab-stop removal indexes must be explicit public indexes."""
