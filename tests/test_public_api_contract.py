@@ -5,8 +5,26 @@ from __future__ import annotations
 import pytest
 
 import InkGen
-from InkGen import Canvas, ComponentGroupPDF, DocumentPDF, ExtractionTruthRecord, RectanglePDF, Table, ZoningDrawing
+from InkGen import (
+    Canvas,
+    ComponentGroupPDF,
+    DocumentOutputFormat,
+    DocumentPDF,
+    DXFDocument,
+    DXFRenderContext,
+    ExtractionTruthRecord,
+    FlowDocument,
+    GrammarTruthRecord,
+    RectanglePDF,
+    Table,
+    ZoningDrawing,
+)
+from InkGen.document_outputs import DocumentOutputFormat as ModuleDocumentOutputFormat
+from InkGen.document_outputs import FlowDocument as ModuleFlowDocument
+from InkGen.dxf_generator import DXFDocument as ModuleDXFDocument
+from InkGen.dxf_generator import DXFRenderContext as ModuleDXFRenderContext
 from InkGen.extraction_truth import ExtractionTruthRecord as ModuleExtractionTruthRecord
+from InkGen.grammar_truth import GrammarTruthRecord as ModuleGrammarTruthRecord
 from InkGen.pdf_generator import ComponentGroupPDF as ModuleComponentGroupPDF
 from InkGen.pdf_generator import DocumentPDF as ModuleDocumentPDF
 from InkGen.pdf_generator import RectanglePDF as ModuleRectanglePDF
@@ -31,10 +49,18 @@ DOCUMENTED_PUBLIC_SYMBOLS = {
     "Column",
     "Cell",
     "Table",
+    "DocumentOutputFormat",
+    "DXFDocument",
+    "DXFRenderContext",
+    "FlowDocument",
+    "GrammarTruthAnnotation",
+    "GrammarTruthRecord",
     "ZoningDrawing",
     "annotate_extraction_truth",
+    "annotate_grammar_truth",
     "extraction_truth_json",
     "flatten_svg",
+    "grammar_truth_json",
 }
 
 
@@ -65,6 +91,11 @@ def test_root_exports_match_submodule_identities() -> None:
     assert ComponentGroupPDF is ModuleComponentGroupPDF
     assert RectanglePDF is ModuleRectanglePDF
     assert ExtractionTruthRecord is ModuleExtractionTruthRecord
+    assert GrammarTruthRecord is ModuleGrammarTruthRecord
+    assert FlowDocument is ModuleFlowDocument
+    assert DocumentOutputFormat is ModuleDocumentOutputFormat
+    assert DXFDocument is ModuleDXFDocument
+    assert DXFRenderContext is ModuleDXFRenderContext
     assert Table is ModuleTable
 
 

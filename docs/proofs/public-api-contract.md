@@ -1,8 +1,9 @@
 # Public API Contract Proof Obligations
 
 This note applies the InkGen Definition of Done to the PUBLIC-API-P1 package
-root export slice. It covers the top-level `InkGen` import surface used by
-external callers and examples.
+root export slice and the PUBLIC-API-DOCS-P2 documented export coverage slice.
+It covers the top-level `InkGen` import surface used by external callers and
+examples.
 
 ## Scope
 
@@ -10,8 +11,9 @@ The slice covers:
 
 - `src/InkGen/__init__.py` import bindings
 - `src/InkGen/__init__.py::__all__`
-- Root exports for documented PDF classes, extraction-truth helpers, table row
-  objects, SVG flattening utilities, and renderer-neutral zoning recipes
+- Root exports for documented PDF classes, extraction-truth helpers,
+  grammar-truth helpers, flow-document objects, DXF helpers, table row objects,
+  SVG flattening utilities, and renderer-neutral zoning recipes
 
 ## Architecture Impact
 
@@ -48,6 +50,11 @@ Before/after edge changes:
 - After this slice, PDF primitives/documents, extraction truth, table
   row/column/cell types, SVG flattening utilities, and `ZoningDrawing` are also
   available from the package root.
+- Before PUBLIC-API-DOCS-P2, the documented-symbol test did not explicitly
+  protect already-exported grammar-truth, flow-document, or DXF root symbols
+  named in the API reference.
+- After PUBLIC-API-DOCS-P2, those documented exports are part of the finite
+  public API symbol set and representative identity checks.
 - Object identity is preserved; root exports alias the canonical submodule
   objects instead of wrapping or copying them.
 
@@ -77,6 +84,7 @@ ADR/rule impact:
 |---|---|---|---|---|
 | Bound `__all__` names | Every listed symbol exists on `InkGen` | PO-API-001 | `test_package_all_exports_are_bound_and_public` | mutation attempted |
 | Documented root symbols | PDF, extraction truth, table row objects, SVG utilities, zoning recipe exported | PO-API-002 | `test_documented_public_symbols_are_exported_from_package_root` | mutation attempted |
+| API-reference root symbols | Grammar truth, flow document, and DXF documented symbols remain exported | PO-API-006 | `test_documented_public_symbols_are_exported_from_package_root` | mutation not applicable |
 | Identity preservation | Root aliases match submodule objects | PO-API-003 | `test_root_exports_match_submodule_identities` | mutation attempted |
 | Dependent authoring path | Root-imported PDF classes generate valid bytes | PO-API-004 | `test_root_exports_work_in_pdf_authoring_path` | mutation attempted |
 | Private leakage | No `__all__` name starts with `_` | PO-API-005 | `test_package_all_exports_are_bound_and_public` | mutation attempted |
@@ -111,6 +119,14 @@ Current result:
 - Replacement evidence: focused PUBLIC-API-P1 tests directly exercise bound
   exports, documented symbol membership, canonical object identity, private-name
   exclusion, and a root-imported PDF authoring path.
+
+PUBLIC-API-DOCS-P2 current result:
+
+- Focused tests: `5 passed`.
+- Mutation applicability: `0` raw work items and `0` proof-critical work
+  items for `src/InkGen/__init__.py`.
+- Full coverage gate: `841 passed`, total coverage `94%`.
+- Ruff lint and format passed for touched Python files.
 
 ## PO-API-001: `__all__` Names Are Bound And Public
 
@@ -194,3 +210,31 @@ asserts the PDF header plus rectangle operator.
 
 Proven for the stated domain after focused tests pass. Mutation was attempted
 and produced no applicable work items for this import/export-only module.
+
+## PO-API-006: API-Reference Root Symbols Are Protected
+
+### Claim
+
+Root exports documented in the API reference for grammar truth, flow documents,
+and DXF remain included in `InkGen.__all__` and resolve to canonical submodule
+objects.
+
+### Domain
+
+The finite documented symbol set already exported by `src/InkGen/__init__.py`:
+`GrammarTruthAnnotation`, `GrammarTruthRecord`, `annotate_grammar_truth`,
+`grammar_truth_json`, `FlowDocument`, `DocumentOutputFormat`, `DXFDocument`,
+and `DXFRenderContext`.
+
+### Proof Method
+
+`test_documented_public_symbols_are_exported_from_package_root()` includes the
+documented symbols in the finite membership set. `test_root_exports_match_submodule_identities()`
+asserts representative grammar-truth, flow-document, document-output-format,
+and DXF exports are the canonical submodule objects.
+
+### Conclusion
+
+Supported by focused public API tests and the full coverage gate. Mutation was
+attempted and produced no applicable work items for this import/export-only
+module.
