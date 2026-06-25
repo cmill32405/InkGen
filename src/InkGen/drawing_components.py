@@ -108,6 +108,15 @@ def _coerce_finite_positive_float(value: object, *, name: str) -> float:
     return number
 
 
+def _coerce_regular_polygon_sides(value: object) -> int:
+    """Normalize renderer-neutral regular polygon side counts."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError("RegularPolygonDrawing sides must be an integer")
+    if value < 3:
+        raise ValueError("RegularPolygonDrawing sides must be 3 or greater")
+    return value
+
+
 @dataclass(frozen=True)
 class RectangleDrawing:
     """Renderer-neutral rectangle primitive."""
@@ -342,7 +351,19 @@ class RegularPolygonDrawing:
     corner_radius: float = 0.0
 
     def __post_init__(self) -> None:
-        """Validate the neutral regular polygon style boundary."""
+        """Validate the neutral regular polygon geometry and style boundary."""
+        position = _coerce_non_negative_point_pair(self.position, name="RegularPolygonDrawing position")
+        sides = _coerce_regular_polygon_sides(self.sides)
+        radius = _coerce_finite_positive_float(self.radius, name="RegularPolygonDrawing radius")
+        angle = _coerce_finite_float(self.angle, name="RegularPolygonDrawing angle")
+        corner_radius = _coerce_finite_non_negative_float(self.corner_radius, name="RegularPolygonDrawing corner_radius")
+        if corner_radius > (radius / 2.0):
+            raise ValueError("RegularPolygonDrawing corner_radius must not exceed half the radius")
+        object.__setattr__(self, "position", position)
+        object.__setattr__(self, "sides", sides)
+        object.__setattr__(self, "radius", radius)
+        object.__setattr__(self, "angle", angle)
+        object.__setattr__(self, "corner_radius", corner_radius)
         _require_drawing_style(self.style, "RegularPolygonDrawing")
 
     def to_component(self, output_format: OutputFormat | str) -> Component:
@@ -389,7 +410,11 @@ class CircleDrawing:
     style: DrawingStyle
 
     def __post_init__(self) -> None:
-        """Validate the neutral circle style boundary."""
+        """Validate the neutral circle geometry and style boundary."""
+        position = _coerce_non_negative_point_pair(self.position, name="CircleDrawing position")
+        radius = _coerce_finite_positive_float(self.radius, name="CircleDrawing radius")
+        object.__setattr__(self, "position", position)
+        object.__setattr__(self, "radius", radius)
         _require_drawing_style(self.style, "CircleDrawing")
 
     def to_component(self, output_format: OutputFormat | str) -> Component:
