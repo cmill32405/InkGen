@@ -469,6 +469,8 @@ def _table_html(table: Table) -> str:
 
 
 def _drawing_plain_text(group: DrawingComponentGroup) -> str:
+    for component in group.components:
+        _validate_drawing_component_boundary(component)
     names = ", ".join(component.__class__.__name__ for component in group.components)
     return f"[Drawing: {group.group_label}; {names}]"
 
@@ -582,15 +584,21 @@ def _drawing_from_parameters(data: object, styles: dict[str, object] | None) -> 
 
 
 def _drawing_component_parameters(component: object) -> dict[str, object]:
+    _validate_drawing_component_boundary(component)
+    if component.__class__.__name__ not in DRAWING_COMPONENT_TYPES:
+        raise TypeError("flow document drawing components must be supported serializable drawing primitives")
     payload = dict(component.__dict__)
     style = payload.pop("style", None)
     if style is not None:
         payload["style"] = style.parameters
-    if isinstance(component, TextDrawing):
-        payload["style"] = component.style.parameters
     if isinstance(component, PathDrawing):
         payload["commands"] = [command.parameters for command in component.commands or []]
     return {"type": component.__class__.__name__, "payload": payload}
+
+
+def _validate_drawing_component_boundary(component: object) -> None:
+    if not callable(getattr(component, "to_component", None)):
+        raise TypeError("drawing components must implement to_component(output_format)")
 
 
 def _drawing_component_from_parameters(data: object, styles: dict[str, object] | None) -> object:

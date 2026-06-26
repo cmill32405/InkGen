@@ -714,6 +714,68 @@ def test_flow_document_rejects_invalid_drawing_materialization() -> None:
         document.to_html()
 
 
+@pytest.mark.condition("FLOW-DOCUMENT-DRAWING-LIVE-COMPONENTS-P2")
+def test_flow_document_plain_text_revalidates_mutated_drawing_components() -> None:
+    """FLOW-DOCUMENT-DRAWING-LIVE-COMPONENTS-P2: Text summaries reject mutated invalid components."""
+    document = FlowDocument()
+    group = DrawingComponentGroup("invalid-plain-text")
+    group.components.append(object())  # type: ignore[arg-type]
+    document.add_drawing_group(group)
+
+    with pytest.raises(TypeError, match="drawing components must implement to_component"):
+        document.to_plain_text()
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-DRAWING-LIVE-COMPONENTS-P2")
+def test_flow_document_parameters_revalidate_mutated_drawing_components() -> None:
+    """FLOW-DOCUMENT-DRAWING-LIVE-COMPONENTS-P2: Serialized drawings reject mutated invalid components."""
+    document = FlowDocument()
+    group = DrawingComponentGroup("invalid-parameters")
+    document.add_drawing_group(group)
+
+    group.components.append(object())  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="drawing components must implement to_component"):
+        _ = document.parameters
+
+    group.components.clear()
+    group.components.append(_InvalidDrawingPrimitive())  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="supported serializable drawing primitives"):
+        _ = document.parameters
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-DRAWING-LIVE-COMPONENTS-P2")
+def test_flow_document_parameters_preserve_path_drawing_commands() -> None:
+    """FLOW-DOCUMENT-DRAWING-LIVE-COMPONENTS-P2: Serialized path drawings preserve commands."""
+    style = _drawing_style()
+    group = DrawingComponentGroup("path-parameters")
+    group.add_component(PathDrawing(style, [PathCommand("M", [(1.0, 2.0)]), PathCommand("L", [(3.0, 4.0)])]))
+    document = FlowDocument()
+    document.add_drawing_group(group)
+
+    payload = document.parameters
+    flow_payload = payload["FlowDocument"]
+    assert isinstance(flow_payload, dict)
+    blocks = flow_payload["blocks"]
+    assert isinstance(blocks, list)
+    block_payload = blocks[0]["payload"]
+    assert isinstance(block_payload, dict)
+    components = block_payload["components"]
+    assert isinstance(components, list)
+    component_payload = components[0]["payload"]
+    assert isinstance(component_payload, dict)
+
+    assert component_payload["commands"] == [
+        {"type": "M", "points": [(1.0, 2.0)]},
+        {"type": "L", "points": [(3.0, 4.0)]},
+    ]
+    clone = FlowDocument.create_from_dict(payload, {style.name: style})
+    cloned_group = clone.blocks[0]
+    assert isinstance(cloned_group, DrawingComponentGroup)
+    cloned_path = cloned_group.components[0]
+    assert isinstance(cloned_path, PathDrawing)
+    assert [command.parameters for command in cloned_path.commands] == component_payload["commands"]
+
+
 @pytest.mark.condition("FLOW-DOCUMENT-SVG-MATERIALIZATION-P2")
 def test_flow_document_rejects_materializations_without_render_fragments() -> None:
     """FLOW-DOCUMENT-SVG-MATERIALIZATION-P2: Drawing outputs fail instead of silently omitting malformed fragments."""

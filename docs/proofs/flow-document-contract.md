@@ -90,6 +90,10 @@ Before/after edge changes:
   mutated drawing primitives whose concrete materialization exposed malformed
   `points` could fail through incidental numeric formatting errors before the
   document-output boundary named the bad point surface.
+- Before the live drawing component hardening update, `to_plain_text()`
+  silently summarized malformed post-construction drawing-group mutations and
+  `parameters` could fail through incidental `AttributeError` while reading
+  `component.__dict__`.
 - After this slice, DOCX ZIP parts use a fixed timestamp and drawing
   materialization must return an InkGen `Component`.
 - After the drawing-label hardening update, drawing block hydration passes
@@ -126,6 +130,10 @@ Before/after edge changes:
 - After the materialized-points hardening update, HTML/DOCX drawing bounds and
   DOCX VML output validate materialized point surfaces as finite coordinate
   pairs before generated document artifacts consume them.
+- After the live drawing component hardening update, plain-text drawing
+  summaries revalidate public mutable drawing component lists before using
+  class names, and serialized flow-document drawing parameters reject malformed
+  or unsupported drawing primitives before reading component internals.
 - No new dependency edge or third-party dependency was introduced.
 
 Cycle/layer/coupling/redundancy result:
@@ -212,6 +220,11 @@ ADR/rule impact:
   paths before text or byte writes.
 - `_materialized_points()` validates concrete drawing materialization `points`
   surfaces before HTML bounds or DOCX VML output consume them.
+- `_drawing_plain_text()` validates each live drawing component before
+  summarizing names from a public mutable drawing-group list.
+- `_drawing_component_parameters()` validates each live drawing component and
+  requires a supported serializable neutral primitive type before reading
+  component internals for `FlowDocument.parameters`.
 
 ## Comprehensiveness Matrix
 
@@ -234,6 +247,7 @@ ADR/rule impact:
 | Serialized polygonal drawing geometry | Reject malformed `PolygonalDrawing` point payloads by dispatching through the neutral constructor | PO-FDOC-021 | `test_flow_document_hydration_rejects_malformed_polygonal_geometry_payloads` | mutation target in polygonal slice |
 | File writer path boundary | Accept string/path-like output paths and reject malformed output path values before writing | PO-FDOC-013 | `test_flow_document_file_writers_accept_pathlike_outputs`, `test_flow_document_file_writers_reject_malformed_paths`, `test_flow_document_file_writers_fail_on_missing_directory` | killed |
 | Materialized drawing point surface | Accept finite coordinate pairs and reject malformed/non-finite materialized point surfaces before HTML/DOCX artifacts consume them | PO-FDOC-022 | `test_flow_document_accepts_valid_materialized_drawing_points`, `test_flow_document_rejects_malformed_materialized_drawing_points` | killed |
+| Live drawing components in text/parameter paths | Reject malformed public drawing-group mutations before plain-text summaries or serialized parameters consume them | PO-FDOC-023 | `test_flow_document_plain_text_revalidates_mutated_drawing_components`, `test_flow_document_parameters_revalidate_mutated_drawing_components`, `test_flow_document_parameters_preserve_path_drawing_commands` | killed |
 | Malformed serialized drawing label | Reject through the neutral group label contract | PO-FDOC-006 | `test_flow_document_drawing_group_hydration_rejects_malformed_label` | behavioral evidence |
 | Invalid drawing materialization | Reject before silent omission | PO-FDOC-004 | `test_flow_document_rejects_invalid_drawing_materialization` | killed |
 | Invalid drawing render fragments | Reject SVG materializations without string `generate_svg()` fragments and DOCX/PDF materializations without points | PO-FDOC-014 | `test_flow_document_rejects_materializations_without_render_fragments` | killed |
@@ -246,8 +260,8 @@ ADR/rule impact:
 | Test class | Applicable? | Reason | Evidence |
 |---|---|---|---|
 | Unit | yes | Helpers are deterministic. | FLOW-DOCUMENT-P1 tests |
-| Behavioral/condition | yes | The slice defines document-output behavior. | Tests are marked `@pytest.mark.condition("FLOW-DOCUMENT-P1")`, `@pytest.mark.condition("FLOW-DOCUMENT-SVG-MATERIALIZATION-P2")`, and `@pytest.mark.condition("FLOW-DOCUMENT-STYLES-MAPPING-P2")`. |
-| Failure-mode | yes | Invalid content, malformed root payloads, malformed serialized block envelopes, malformed drawing payloads, malformed drawing component envelopes, malformed drawing style envelopes, malformed style override maps, malformed path command envelopes, malformed serialized drawing labels, malformed materialization fragments, malformed materialized point surfaces, malformed output paths, and invalid output paths must fail loudly. | Invalid hydration, invalid materialization, render-fragment, point-surface, style-map, and writer tests |
+| Behavioral/condition | yes | The slice defines document-output behavior. | Tests are marked `@pytest.mark.condition("FLOW-DOCUMENT-P1")`, `@pytest.mark.condition("FLOW-DOCUMENT-SVG-MATERIALIZATION-P2")`, `@pytest.mark.condition("FLOW-DOCUMENT-STYLES-MAPPING-P2")`, and `@pytest.mark.condition("FLOW-DOCUMENT-DRAWING-LIVE-COMPONENTS-P2")`. |
+| Failure-mode | yes | Invalid content, malformed root payloads, malformed serialized block envelopes, malformed drawing payloads, malformed drawing component envelopes, malformed drawing style envelopes, malformed style override maps, malformed path command envelopes, malformed serialized drawing labels, malformed materialization fragments, malformed materialized point surfaces, malformed live drawing components, malformed output paths, and invalid output paths must fail loudly. | Invalid hydration, invalid materialization, render-fragment, point-surface, live-component, style-map, and writer tests |
 | Integration/live-path | yes | DOCX ZIP, HTML, RTF, text, table, and drawing paths cross module boundaries. | Focused and existing document-output tests |
 | Contract/API compatibility | yes | Parameters and public add methods must preserve existing behavior. | Round-trip and existing rejection tests |
 | Property/fuzz | no | This slice proves finite output and dispatch contracts. | Not applicable |
@@ -289,6 +303,8 @@ Proof-critical mutation targets:
   path-like output tests.
 - Weakening materialized drawing point validation should fail point-surface
   failure-mode tests or exact bounds/VML assertions.
+- Weakening live drawing component validation before plain-text summaries or
+  serialized parameters should fail live-component mutation tests.
 
 Current result:
 
@@ -324,6 +340,10 @@ Current result:
   style-mapping hardening update: 4 work items, 4 killed, and 0 survived.
 - Cosmic Ray 8.4.6, scoped to materialized drawing point validation after the
   point-surface hardening update: 18 work items, 18 killed, and 0 survived.
+- `FLOW-DOCUMENT-DRAWING-LIVE-COMPONENTS-P2` continuation: Cosmic Ray 8.4.6
+  scoped to `_drawing_plain_text()`, `_drawing_component_parameters()`, and
+  `_validate_drawing_component_boundary()` produced 8 proof-critical work
+  items. Result: 8 killed, 0 survived.
 
 ## PO-FDOC-001: DOCX Bytes Are Deterministic
 
@@ -820,6 +840,49 @@ the public `FlowDocument` export call.
 Proven for the stated domain after focused tests and mutation pass. Full
 coverage, lint, docs, and diff hygiene remain release-gate checks for the
 slice.
+
+## PO-FDOC-023: Live Drawing Components Are Revalidated For Text And Parameters
+
+### Claim
+
+Flow-document plain-text summaries and serialized parameters reject malformed
+post-construction mutations in a drawing group's public `components` list before
+consuming component names or internals.
+
+### Domain
+
+`FlowDocument.to_plain_text()` and `FlowDocument.parameters` calls on documents
+containing `DrawingComponentGroup` blocks whose public `components` list was
+mutated after construction.
+
+### Proof Method
+
+`_drawing_plain_text()` validates each live component has a callable
+`to_component(output_format)` boundary before reading class names for the text
+summary. `_drawing_component_parameters()` uses the same callable boundary and
+then restricts serialized output to supported hydrateable neutral primitive
+types before reading `component.__dict__`. Focused tests mutate the public list
+with an arbitrary object and prove both public paths fail with explicit
+boundary errors. A second serialization test uses a callable but unsupported
+primitive and proves `FlowDocument.parameters` rejects it before producing an
+unhydrateable serialized component envelope. The path-command preservation test
+closes the dependent serialized `PathDrawing.commands` regression surface
+exposed during mutation testing.
+
+### Counterexamples And Exclusions
+
+`DrawingComponentGroup.to_group()`, HTML, and DOCX materialization are already
+covered by drawing-group and flow-document materialization obligations.
+Custom drawing primitives can still be used for live materialization if they
+meet the renderer contract, but flow-document serialization remains limited to
+the supported neutral primitive set that `FlowDocument.create_from_dict()` can
+hydrate.
+
+### Conclusion
+
+Proven for the stated public text and parameter domains after focused tests and
+mutation pass. Full coverage, lint, docs, and diff hygiene remain release-gate
+checks for the slice.
 
 ## Current Slice Decision
 
