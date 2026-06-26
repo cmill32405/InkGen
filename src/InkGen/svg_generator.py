@@ -150,6 +150,23 @@ def _svg_style_entry(payload: object) -> tuple[str, Mapping[str, object], str, t
     return style_type, style_payload, style_name, style_class
 
 
+def _svg_component_path_entries(payload: Mapping[str, object]) -> list[dict[str, object]]:
+    """Return validated serialized path entries for an embedded SVG component."""
+    paths = _svg_required_sequence(payload, "paths", "SVGComponent")
+    entries: list[dict[str, object]] = []
+    for path in paths:
+        if not isinstance(path, Mapping):
+            raise TypeError("SVGComponent path entries must be mappings")
+        path_d = _svg_required_field(path, "d", "SVGComponent path")
+        if not isinstance(path_d, str):
+            raise TypeError("SVGComponent path d must be a string")
+        style = path.get("style")
+        if style is not None and not isinstance(style, str):
+            raise TypeError("SVGComponent path style must be a string or None")
+        entries.append(dict(path))
+    return entries
+
+
 def _path_svg_command_from_dict(data: object) -> PathCommand:
     """Recreate a PathCommand from serialized SVG command parameters."""
     if not isinstance(data, Mapping):
@@ -1333,11 +1350,10 @@ class SVGComponent(Component, DrawingGeneratorInterface):
 
     @classmethod
     def create_from_dict(cls, data: dict) -> SVGComponent:
-        payload = data["SVGComponent"]
-        bbox_data = tuple(tuple(coord) for coord in payload["bbox"])
+        payload = _svg_payload(data, "SVGComponent")
         return cls(
-            paths=payload["paths"],
-            bbox=bbox_data,
+            paths=_svg_component_path_entries(payload),
+            bbox=_svg_required_field(payload, "bbox", "SVGComponent"),
             position=tuple(payload.get("position", (0.0, 0.0))),
             scale=payload.get("scale", 1.0),
             width=payload.get("width"),

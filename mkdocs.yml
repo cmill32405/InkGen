@@ -47,6 +47,7 @@ nav:
       - Text Fitter Contract: proofs/text-fitter-contract.md
       - SVG Utilities Contract: proofs/svg-utils-contract.md
       - SVG Component Finite Boundary Contract: proofs/svg-component-finite-contract.md
+      - SVG Component Factory Payload Contract: proofs/svg-component-factory-payload-contract.md
       - SVG Curve Factory Payload Contract: proofs/svg-curve-factory-payload-contract.md
       - SVG Primitive Factory Payload Contract: proofs/svg-primitive-factory-payload-contract.md
       - SVG Group Factory Payload Contract: proofs/svg-group-factory-payload-contract.md
