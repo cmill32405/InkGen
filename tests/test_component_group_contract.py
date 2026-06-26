@@ -8,7 +8,7 @@ import pytest
 
 from InkGen.component import Component, ComponentGroup, DrawingComponent, StandardDrawingComponent, WidthHeightDrawingComponent
 from InkGen.errors import InvalidComponentID
-from InkGen.style import DrawingStyle
+from InkGen.style import DrawingStyle, Font, TextStyle
 
 
 def _style() -> DrawingStyle:
@@ -188,6 +188,62 @@ def test_component_group_hydration_rejects_malformed_payload_envelopes(
     """COMPONENT-GROUP-PAYLOAD-P2: Serialized group envelopes fail before dynamic dispatch."""
     with pytest.raises(exception_type, match=message):
         ComponentGroup.create_from_dict(payload, {})
+
+
+@pytest.mark.condition("COMPONENT-GROUP-STYLES-MAPPING-P2")
+@pytest.mark.parametrize("styles", [object(), ["style-name"], "style-name", b"style-name", {"style-name"}])
+def test_component_group_hydration_rejects_malformed_style_caches(styles: object) -> None:
+    """COMPONENT-GROUP-STYLES-MAPPING-P2: Style caches must be mutable mappings."""
+    style = _style()
+    group = ComponentGroup("parts")
+    group.add_component(StandardDrawingComponent((1.0, 2.0), (3.0, 4.0), style))
+
+    with pytest.raises(TypeError, match="styles must be a mutable mapping or None"):
+        ComponentGroup.create_from_dict(group.parameters, styles)  # type: ignore[arg-type]
+
+
+@pytest.mark.condition("COMPONENT-GROUP-STYLES-MAPPING-P2")
+def test_component_group_hydration_reuses_valid_style_cache_entries() -> None:
+    """COMPONENT-GROUP-STYLES-MAPPING-P2: Valid style cache entries remain live."""
+    style = _style()
+    group = ComponentGroup("parts")
+    group.add_component(StandardDrawingComponent((1.0, 2.0), (3.0, 4.0), style))
+
+    clone = ComponentGroup.create_from_dict(group.parameters, {style.name: style})
+
+    assert next(clone.components()).style is style
+
+
+@pytest.mark.condition("COMPONENT-GROUP-STYLES-MAPPING-P2")
+def test_component_group_hydration_rejects_wrong_kind_style_overrides() -> None:
+    """COMPONENT-GROUP-STYLES-MAPPING-P2: Style cache overrides must match payload style kind."""
+    text_style = TextStyle(f"component_group_contract_text_{uuid4().hex}", Font())
+    payload = {
+        "ComponentGroup": {
+            "group_label": "parts",
+            "components": [
+                {
+                    "StandardDrawingComponent": {
+                        "point_1": (1.0, 2.0),
+                        "point_2": (3.0, 4.0),
+                        "style": {
+                            "DrawingStyle": {
+                                "name": text_style.name,
+                                "stroke": "#000000",
+                                "stroke_width": 0.2,
+                                "fill": "none",
+                                "stroke_opacity": 1.0,
+                                "fill_opacity": 1.0,
+                            }
+                        },
+                    }
+                }
+            ],
+        }
+    }
+
+    with pytest.raises(TypeError, match=f"style override for {text_style.name!r} must be a DrawingStyle"):
+        ComponentGroup.create_from_dict(payload, {text_style.name: text_style})
 
 
 @pytest.mark.condition("COMPONENT-GROUP-PAYLOAD-P2")

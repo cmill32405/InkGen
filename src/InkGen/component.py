@@ -5,7 +5,7 @@
 import itertools
 import math
 import sys
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Iterator, Mapping, MutableMapping, Sequence
 from copy import deepcopy
 
 import numpy as np
@@ -2195,6 +2195,14 @@ def _component_group_style_payload(payload: object) -> tuple[str, Mapping[str, o
     return style_class_name, style_data
 
 
+def _component_group_style_cache(styles: object) -> MutableMapping[str, object]:
+    if styles is None:
+        return {}
+    if not isinstance(styles, MutableMapping):
+        raise TypeError("styles must be a mutable mapping or None")
+    return styles
+
+
 def _component_group_class(class_name: str) -> type:
     try:
         candidate = getattr(sys.modules[__name__], class_name)
@@ -2236,8 +2244,7 @@ class ComponentGroup:
         """
         payload = _component_group_payload(data)
         group = cls(_component_group_required_field(payload, "group_label"))
-        if styles is None:
-            styles = {}
+        styles = _component_group_style_cache(styles)
 
         for c in _component_group_sequence(payload, "components"):
             if not isinstance(c, Mapping):
@@ -2254,12 +2261,14 @@ class ComponentGroup:
             if 'style' in component_payload:
                 style_payload = component_payload['style']
                 style_class_name, style_data = _component_group_style_payload(style_payload)
+                style_class = _component_group_class(style_class_name)
                 if style_data["name"] not in list(styles.keys()):
-                    style_class = _component_group_class(style_class_name)
                     style = style_class.create_from_dict(style_payload)
                     styles[style_data["name"]] = style
                 else:
                     style = styles[style_data["name"]]
+                    if not isinstance(style, style_class):
+                        raise TypeError(f"style override for {style_data['name']!r} must be a {style_class.__name__}")
             component_class = _component_group_class(component_class_name)
             if not issubclass(component_class, Component):
                 raise ValueError(f"Unsupported component group payload type: {component_class_name}")

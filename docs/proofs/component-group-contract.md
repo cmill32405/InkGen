@@ -1,9 +1,10 @@
 # Component Group Contract Proof Obligations
 
-This note applies the InkGen Definition of Done to the COMPONENT-GROUP-P1 and
-COMPONENT-GROUP-PAYLOAD-P2 base component group slices. It covers the shared
-`ComponentGroup` boundary used by document layers, SVG/PDF renderers, CAD
-helpers, truth records, and serialized recipes.
+This note applies the InkGen Definition of Done to the COMPONENT-GROUP-P1,
+COMPONENT-GROUP-PAYLOAD-P2, and COMPONENT-GROUP-STYLES-MAPPING-P2 base
+component group slices. It covers the shared `ComponentGroup` boundary used by
+document layers, SVG/PDF renderers, CAD helpers, truth records, and serialized
+recipes.
 
 ## Scope
 
@@ -24,10 +25,11 @@ The slice covers:
 
 Affected surface:
 
-- `src/InkGen/component.py`: base component-group storage typing and
-  fail-fast add boundary.
-- `tests/test_component_group_contract.py`: COMPONENT-GROUP-P1 behavioral,
-  failure-mode, geometry, and serialization tests.
+- `src/InkGen/component.py`: base component-group storage typing, fail-fast add
+  boundary, serialized payload validation, and style-cache validation.
+- `tests/test_component_group_contract.py`: COMPONENT-GROUP-P1,
+  COMPONENT-GROUP-PAYLOAD-P2, and COMPONENT-GROUP-STYLES-MAPPING-P2
+  behavioral, failure-mode, geometry, and serialization tests.
 - `tests/mutation/component_group_cosmic_ray.toml`: scoped mutation gate.
 - `tests/mutation/filter_component_group_work_items.py`: proof-critical
   mutation filter.
@@ -54,6 +56,8 @@ Outgoing dependencies:
 - Geometry aggregation depends on Shapely `MultiPoint` and `get_coordinates`.
 - Serialization hydration depends on concrete component `create_from_dict()`
   implementations and optional style cache reuse.
+- Style-cache reuse depends on mutable mappings keyed by style name and style
+  values matching the serialized style class.
 - No third-party dependency was added.
 
 Before/after edge changes:
@@ -64,11 +68,18 @@ Before/after edge changes:
   component envelopes, style envelopes, and unsupported dynamic type names
   could fail through incidental subscription, `AttributeError`, or dynamic
   dispatch errors.
+- Before COMPONENT-GROUP-STYLES-MAPPING-P2, direct component-group hydration
+  accepted malformed style-cache containers until incidental `.keys()` or item
+  assignment failures, and cached style entries were reused without checking
+  that they matched the serialized style kind.
 - After this slice, invalid add attempts raise `TypeError` and leave existing
   group contents unchanged.
 - After COMPONENT-GROUP-PAYLOAD-P2, group hydration validates the serialized
   root, component collection, component envelopes, style envelopes, and dynamic
   class names before constructing components.
+- After COMPONENT-GROUP-STYLES-MAPPING-P2, group hydration accepts only mutable
+  style-cache mappings or `None` and rejects wrong-kind cached style overrides
+  before constructing style-bearing components.
 - Valid components, insertion order, lookup/removal exceptions, geometry
   aggregation, and serialization round trips are preserved.
 
@@ -101,6 +112,9 @@ ADR/rule impact:
   string component type and whose value is a mapping payload.
 - Serialized style envelopes, when present, must be single-key mappings with a
   string style type and a mapping entry containing a string `name`.
+- Direct style-cache arguments must be mutable mappings or `None`.
+- Existing style-cache entries reused during hydration must be instances of the
+  serialized style class.
 - Dynamic component type names must resolve to classes in the `Component`
   hierarchy.
 - Empty-group geometry behavior is outside this slice; this slice preserves
@@ -116,6 +130,10 @@ ADR/rule impact:
   `ComponentGroup.create_from_dict()`.
 - Preserved valid base `Component` hydration by calling its one-argument
   factory without a style argument.
+- Added explicit `styles` cache validation for direct
+  `ComponentGroup.create_from_dict()` calls.
+- Added wrong-kind cached style override rejection before component factory
+  dispatch.
 
 ## Comprehensiveness Matrix
 
@@ -128,6 +146,7 @@ ADR/rule impact:
 | Serialization | Preserve label, component order, and style cache reuse on round trip | PO-CGROUP-005 | `test_component_group_round_trip_preserves_label_order_and_styles` | existing behavior |
 | Serialized group payload envelopes | Reject malformed roots, collections, component entries, style envelopes, and unsupported type names before dynamic dispatch | PO-CGROUP-006 | `test_component_group_hydration_rejects_malformed_payload_envelopes`, `test_component_group_hydration_rejects_malformed_style_envelopes` | killed/equivalent |
 | Base component payloads | Hydrate valid style-free base `Component` entries | PO-CGROUP-007 | `test_component_group_round_trip_preserves_base_components` | killed/equivalent |
+| Style-cache mapping boundary | Reject non-mutable style caches and wrong-kind cached style overrides before component construction | PO-CGROUP-008 | `test_component_group_hydration_rejects_malformed_style_caches`, `test_component_group_hydration_reuses_valid_style_cache_entries`, `test_component_group_hydration_rejects_wrong_kind_style_overrides` | pending |
 
 ## Test Applicability Matrix
 
@@ -146,6 +165,7 @@ ADR/rule impact:
 | Golden artifact/visual | no | No renderer output syntax changed. | Not applicable |
 | Regression | yes | Prevents invalid components from disappearing silently. | Invalid add test |
 | Serialized payload adversarial input | yes | Malformed group hydration payloads must fail before incidental dynamic dispatch errors. | COMPONENT-GROUP-PAYLOAD-P2 tests |
+| Style-cache adversarial input | yes | Direct hydration style caches are externally supplied mutable state and must fail before incidental mapping or downstream component-constructor errors. | COMPONENT-GROUP-STYLES-MAPPING-P2 tests |
 
 ## Mutation Testing Gate
 
@@ -164,6 +184,9 @@ Current result:
 - Cosmic Ray 8.4.6, scoped to COMPONENT-GROUP-PAYLOAD-P2 payload validation
   and dispatch rows: 57 work items, 56 killed, and 1 documented equivalent
   survivor.
+- Cosmic Ray 8.4.6, scoped to COMPONENT-GROUP-STYLES-MAPPING-P2 style-cache
+  normalization and cached override type-guard rows: 7 work items, 7 killed,
+  and 0 survivors.
 - Equivalent survivor:
   - `create_from_dict`: `component_class is Component` changed to
     `component_class == Component`.
@@ -326,3 +349,33 @@ style-aware path. The focused test round trips a group containing a base
 
 Proven for the stated domain after focused tests and mutation pass with one
 documented equivalent survivor.
+
+## PO-CGROUP-008: Style Cache Boundaries Fail Explicitly
+
+### Claim
+
+`ComponentGroup.create_from_dict()` rejects malformed direct style-cache
+containers and rejects cached style overrides whose value type does not match
+the serialized style envelope.
+
+### Domain
+
+Public component-group hydration calls using
+`ComponentGroup.create_from_dict(data, styles=...)` with `styles` as `None`,
+mutable mappings, or malformed non-mapping/non-mutable containers.
+
+### Proof Method
+
+`_component_group_style_cache()` normalizes `None` to a fresh mutable mapping
+and rejects non-`MutableMapping` inputs before hydration loops touch the cache.
+During style-envelope hydration, the serialized style class is resolved before
+cache reuse, and any existing cached style with the serialized name must be an
+instance of that resolved class. Focused tests cover malformed style-cache
+containers, identity-preserving valid cache reuse, and wrong-kind cached style
+override rejection.
+
+### Conclusion
+
+Proven for the stated domain after focused behavioral tests and scoped mutation
+testing. Full repository coverage, lint, docs, and diff hygiene remain
+release-gate checks for the slice.
