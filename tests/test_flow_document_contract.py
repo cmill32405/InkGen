@@ -57,6 +57,32 @@ class _NonStringSvgDrawingPrimitive:
         return _NonStringSvgComponent()
 
 
+class _PointSurfaceComponent(Component):
+    def __init__(self, points: object) -> None:
+        """Store a test-controlled materialized points surface."""
+        super().__init__()
+        self._points = points
+
+    @property
+    def points(self) -> object:
+        """Return the configured points surface."""
+        return self._points
+
+    def generate_svg(self) -> str:
+        """Return a minimal SVG fragment for document-output tests."""
+        return "<path/>"
+
+
+class _PointSurfaceDrawingPrimitive:
+    def __init__(self, points: object) -> None:
+        """Store a test-controlled materialized points surface."""
+        self._points = points
+
+    def to_component(self, output_format: OutputFormat | str) -> Component:
+        """Return a component whose points surface is controlled by the test."""
+        return _PointSurfaceComponent(self._points)
+
+
 def _text_style() -> TextStyle:
     return TextStyle(f"flow_text_{uuid4().hex}", Font(size=11.0))
 
@@ -705,6 +731,56 @@ def test_flow_document_rejects_materializations_without_render_fragments() -> No
     group.components.append(_NonStringSvgDrawingPrimitive())  # type: ignore[arg-type]
     with pytest.raises(TypeError, match=r"generate_svg\(\) must return a string"):
         document.to_html()
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-DRAWING-POINTS-P2")
+def test_flow_document_accepts_valid_materialized_drawing_points() -> None:
+    """FLOW-DOCUMENT-DRAWING-POINTS-P2: Valid materialized point surfaces drive HTML and DOCX bounds."""
+    document = FlowDocument()
+    group = DrawingComponentGroup("valid-points")
+    group.components.append(_PointSurfaceDrawingPrimitive([(2.0, 3.0), (6.0, 8.0)]))  # type: ignore[arg-type]
+    document.add_drawing_group(group)
+
+    html = document.to_html()
+    with zipfile.ZipFile(BytesIO(document.to_docx_bytes())) as package:
+        document_xml = package.read("word/document.xml").decode("utf-8")
+
+    assert 'viewBox="2 3 4 5"' in html
+    assert 'coordsize="4 5"' in document_xml
+    assert '<v:polyline points="0,0 4,5"/>' in document_xml
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-DRAWING-POINTS-P2")
+@pytest.mark.parametrize(
+    ("points", "exception_type", "message"),
+    [
+        (object(), TypeError, "materialized drawing points must be a sequence"),
+        ("0,0", TypeError, "materialized drawing points must be a sequence"),
+        (b"0,0", TypeError, "materialized drawing points must be a sequence"),
+        ([object()], ValueError, "materialized drawing points must contain two coordinates"),
+        ([(1.0,)], ValueError, "materialized drawing points must contain two coordinates"),
+        ([(1.0, 2.0, 3.0)], ValueError, "materialized drawing points must contain two coordinates"),
+        ([(float("nan"), 0.0)], ValueError, "materialized drawing point coordinates must be finite numbers"),
+        ([(float("inf"), 0.0)], ValueError, "materialized drawing point coordinates must be finite numbers"),
+        ([(True, 0.0)], ValueError, "materialized drawing point coordinates must be finite numbers"),
+        ([("1.0", 0.0)], ValueError, "materialized drawing point coordinates must be finite numbers"),
+    ],
+)
+def test_flow_document_rejects_malformed_materialized_drawing_points(
+    points: object,
+    exception_type: type[Exception],
+    message: str,
+) -> None:
+    """FLOW-DOCUMENT-DRAWING-POINTS-P2: Materialized drawing points must be finite coordinate pairs."""
+    document = FlowDocument()
+    group = DrawingComponentGroup("bad-points")
+    group.components.append(_PointSurfaceDrawingPrimitive(points))  # type: ignore[arg-type]
+    document.add_drawing_group(group)
+
+    with pytest.raises(exception_type, match=message):
+        document.to_html()
+    with pytest.raises(exception_type, match=message):
+        document.to_docx_bytes()
 
 
 @pytest.mark.condition("FLOW-DOCUMENT-P1")

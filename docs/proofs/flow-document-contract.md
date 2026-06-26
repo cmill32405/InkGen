@@ -86,6 +86,10 @@ Before/after edge changes:
 - Before the filepath hardening update, malformed file-writer paths could fail
   through incidental `os.path` or `open()` errors, and path-like objects were
   not part of the documented writer contract.
+- Before the materialized-points hardening update, custom or post-construction
+  mutated drawing primitives whose concrete materialization exposed malformed
+  `points` could fail through incidental numeric formatting errors before the
+  document-output boundary named the bad point surface.
 - After this slice, DOCX ZIP parts use a fixed timestamp and drawing
   materialization must return an InkGen `Component`.
 - After the drawing-label hardening update, drawing block hydration passes
@@ -119,6 +123,9 @@ Before/after edge changes:
 - After the RTF Unicode hardening update, `FlowDocument.to_rtf()` emits
   non-ASCII title and paragraph text as RTF `\uN?` escapes instead of raw
   Unicode text in an `\ansi` document.
+- After the materialized-points hardening update, HTML/DOCX drawing bounds and
+  DOCX VML output validate materialized point surfaces as finite coordinate
+  pairs before generated document artifacts consume them.
 - No new dependency edge or third-party dependency was introduced.
 
 Cycle/layer/coupling/redundancy result:
@@ -203,6 +210,8 @@ ADR/rule impact:
   payloads can become public neutral drawing state.
 - `_normalize_output_filepath()` validates all flow-document file-writer output
   paths before text or byte writes.
+- `_materialized_points()` validates concrete drawing materialization `points`
+  surfaces before HTML bounds or DOCX VML output consume them.
 
 ## Comprehensiveness Matrix
 
@@ -224,6 +233,7 @@ ADR/rule impact:
 | Serialized radial drawing geometry | Reject malformed `CircleDrawing` and `RegularPolygonDrawing` geometry payloads by dispatching through the neutral constructors | PO-FDOC-020 | `test_flow_document_hydration_rejects_malformed_radial_geometry_payloads` | mutation target in radial slice |
 | Serialized polygonal drawing geometry | Reject malformed `PolygonalDrawing` point payloads by dispatching through the neutral constructor | PO-FDOC-021 | `test_flow_document_hydration_rejects_malformed_polygonal_geometry_payloads` | mutation target in polygonal slice |
 | File writer path boundary | Accept string/path-like output paths and reject malformed output path values before writing | PO-FDOC-013 | `test_flow_document_file_writers_accept_pathlike_outputs`, `test_flow_document_file_writers_reject_malformed_paths`, `test_flow_document_file_writers_fail_on_missing_directory` | killed |
+| Materialized drawing point surface | Accept finite coordinate pairs and reject malformed/non-finite materialized point surfaces before HTML/DOCX artifacts consume them | PO-FDOC-022 | `test_flow_document_accepts_valid_materialized_drawing_points`, `test_flow_document_rejects_malformed_materialized_drawing_points` | killed |
 | Malformed serialized drawing label | Reject through the neutral group label contract | PO-FDOC-006 | `test_flow_document_drawing_group_hydration_rejects_malformed_label` | behavioral evidence |
 | Invalid drawing materialization | Reject before silent omission | PO-FDOC-004 | `test_flow_document_rejects_invalid_drawing_materialization` | killed |
 | Invalid drawing render fragments | Reject SVG materializations without string `generate_svg()` fragments and DOCX/PDF materializations without points | PO-FDOC-014 | `test_flow_document_rejects_materializations_without_render_fragments` | killed |
@@ -237,7 +247,7 @@ ADR/rule impact:
 |---|---|---|---|
 | Unit | yes | Helpers are deterministic. | FLOW-DOCUMENT-P1 tests |
 | Behavioral/condition | yes | The slice defines document-output behavior. | Tests are marked `@pytest.mark.condition("FLOW-DOCUMENT-P1")`, `@pytest.mark.condition("FLOW-DOCUMENT-SVG-MATERIALIZATION-P2")`, and `@pytest.mark.condition("FLOW-DOCUMENT-STYLES-MAPPING-P2")`. |
-| Failure-mode | yes | Invalid content, malformed root payloads, malformed serialized block envelopes, malformed drawing payloads, malformed drawing component envelopes, malformed drawing style envelopes, malformed style override maps, malformed path command envelopes, malformed serialized drawing labels, malformed materialization fragments, malformed output paths, and invalid output paths must fail loudly. | Invalid hydration, invalid materialization, render-fragment, style-map, and writer tests |
+| Failure-mode | yes | Invalid content, malformed root payloads, malformed serialized block envelopes, malformed drawing payloads, malformed drawing component envelopes, malformed drawing style envelopes, malformed style override maps, malformed path command envelopes, malformed serialized drawing labels, malformed materialization fragments, malformed materialized point surfaces, malformed output paths, and invalid output paths must fail loudly. | Invalid hydration, invalid materialization, render-fragment, point-surface, style-map, and writer tests |
 | Integration/live-path | yes | DOCX ZIP, HTML, RTF, text, table, and drawing paths cross module boundaries. | Focused and existing document-output tests |
 | Contract/API compatibility | yes | Parameters and public add methods must preserve existing behavior. | Round-trip and existing rejection tests |
 | Property/fuzz | no | This slice proves finite output and dispatch contracts. | Not applicable |
@@ -277,6 +287,8 @@ Proof-critical mutation targets:
   path-command tests.
 - Weakening file-writer path normalization should fail malformed-path or
   path-like output tests.
+- Weakening materialized drawing point validation should fail point-surface
+  failure-mode tests or exact bounds/VML assertions.
 
 Current result:
 
@@ -310,6 +322,8 @@ Current result:
   materialization hardening update: 7 work items, 7 killed, and 0 survived.
 - Cosmic Ray 8.4.6, scoped to style override map validation after the
   style-mapping hardening update: 4 work items, 4 killed, and 0 survived.
+- Cosmic Ray 8.4.6, scoped to materialized drawing point validation after the
+  point-surface hardening update: 18 work items, 18 killed, and 0 survived.
 
 ## PO-FDOC-001: DOCX Bytes Are Deterministic
 
@@ -768,6 +782,44 @@ outside the public `create_from_dict()` contract.
 ### Conclusion
 
 Proven after focused tests, mutation, and the full DoD gate pass.
+
+## PO-FDOC-022: Materialized Drawing Points Are Finite Coordinate Pairs
+
+### Claim
+
+Flow-document HTML and DOCX drawing exports reject malformed concrete
+materialization `points` surfaces before generated document artifacts consume
+them.
+
+### Domain
+
+`FlowDocument.to_html()` and `FlowDocument.to_docx_bytes()` calls on documents
+containing `DrawingComponentGroup` blocks whose neutral drawing primitives
+materialize to InkGen `Component` instances exposing `points`.
+
+### Proof Method
+
+`_drawing_bounds()` and `_component_vml()` both route concrete materialization
+points through `_materialized_points()`. The helper treats a missing points
+surface as empty only for bounds discovery, preserves the existing DOCX VML
+requirement that renderable non-special-case primitives expose points, rejects
+non-sequence point collections, rejects malformed point shapes, and rejects
+boolean, string, non-numeric, or non-finite coordinates. Focused tests cover a
+valid custom point surface through both HTML bounds and DOCX VML output, plus
+malformed point containers, malformed point shapes, `nan`, `inf`, booleans, and
+string coordinates.
+
+### Counterexamples And Exclusions
+
+SVG fragment semantic validation remains delegated to SVG renderer tests.
+Private mutation of concrete renderer internals after materialization is outside
+the public `FlowDocument` export call.
+
+### Conclusion
+
+Proven for the stated domain after focused tests and mutation pass. Full
+coverage, lint, docs, and diff hygiene remain release-gate checks for the
+slice.
 
 ## Current Slice Decision
 

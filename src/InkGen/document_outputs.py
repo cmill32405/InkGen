@@ -8,6 +8,7 @@ from collections.abc import Mapping, Sequence
 from enum import Enum
 from html import escape as html_escape
 from io import BytesIO
+from math import isfinite
 from xml.sax.saxutils import escape as xml_escape
 
 from InkGen.component import Component, PathCommand
@@ -494,7 +495,7 @@ def _drawing_bounds(group: DrawingComponentGroup) -> tuple[float, float, float, 
             points.extend([(x - radius, y - radius), (x + radius, y + radius)])
             continue
         concrete = _materialize_drawing_component(component, OutputFormat.PDF)
-        points.extend(getattr(concrete, "points", []))
+        points.extend(_materialized_points(concrete, allow_missing=True))
     if not points:
         return 0.0, 0.0, 1.0, 1.0
     xs = [float(point[0]) for point in points]
@@ -520,13 +521,43 @@ def _component_vml(component: object, min_x: float, min_y: float) -> str:
             "</w:txbxContent></v:textbox></v:shape>"
         )
     concrete = _materialize_drawing_component(component, OutputFormat.PDF)
-    points = getattr(concrete, "points", None)
-    if points is None:
-        raise TypeError("PDF materialization must expose points for DOCX drawing output")
+    points = _materialized_points(concrete, allow_missing=False)
     if not points:
         return ""
     point_text = " ".join(f"{_vml_number(point[0] - min_x)},{_vml_number(point[1] - min_y)}" for point in points)
     return f'<v:polyline points="{point_text}"/>'
+
+
+def _materialized_points(component: object, *, allow_missing: bool) -> list[tuple[float, float]]:
+    points = getattr(component, "points", None)
+    if points is None:
+        if allow_missing:
+            return []
+        raise TypeError("PDF materialization must expose points for DOCX drawing output")
+    if isinstance(points, (str, bytes)) or not isinstance(points, Sequence):
+        raise TypeError("materialized drawing points must be a sequence")
+    return [_materialized_point(point) for point in points]
+
+
+def _materialized_point(point: object) -> tuple[float, float]:
+    if isinstance(point, (str, bytes)) or not isinstance(point, Sequence) or len(point) != 2:
+        raise ValueError("materialized drawing points must contain two coordinates")
+    return (
+        _materialized_coordinate(point[0]),
+        _materialized_coordinate(point[1]),
+    )
+
+
+def _materialized_coordinate(value: object) -> float:
+    if isinstance(value, (bool, str, bytes)):
+        raise ValueError("materialized drawing point coordinates must be finite numbers")
+    try:
+        coordinate = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("materialized drawing point coordinates must be finite numbers") from exc
+    if not isfinite(coordinate):
+        raise ValueError("materialized drawing point coordinates must be finite numbers")
+    return coordinate
 
 
 def _drawing_parameters(group: DrawingComponentGroup) -> dict[str, object]:
