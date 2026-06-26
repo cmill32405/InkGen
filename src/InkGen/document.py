@@ -5,7 +5,6 @@ the layers they contain.
 from __future__ import annotations
 
 import itertools
-import sys
 from collections.abc import Mapping, MutableMapping, Sequence
 
 import yaml
@@ -523,31 +522,6 @@ class Document:
             yaml.safe_dump(self.parameters, file, allow_unicode=True, default_flow_style=False)
 
     @classmethod
-    def _iterdict(cls, dictionary: dict) -> dict | None:
-        """Recursively extract style dictionaries from a nested structure.
-
-        Args:
-            dictionary: Nested dictionary potentially containing style definitions.
-
-        Returns:
-            Dictionary mapping style names to style data, or None if no styles found.
-        """
-        new_style = {}
-        for k, v in dictionary.items():
-            if isinstance(v, dict):
-                styles = cls._iterdict(v)
-                if styles:
-                    return styles
-                return None
-
-            if k == "style":
-                style_type = list(v.keys())[0]
-                name = v[style_type]["name"]
-                new_style[name] = v
-                return new_style
-            return None
-
-    @classmethod
     def load(cls, filepath: str, styles: dict | None = None):
         """Creates a Document object from a saved YAML file.
 
@@ -563,14 +537,6 @@ class Document:
             document_data = yaml.safe_load(file)
 
         styles = _style_cache(styles)
-        dict_styles = Document._iterdict(document_data)
-        if dict_styles:
-            for k, v in dict_styles.items():
-                exists = styles.get(k, None)
-                if not exists:
-                    component_class = getattr(sys.modules[__name__], list(v.keys())[0])
-                    styles[k] = component_class.create_from_dict(v)
-
         document = Document.create_from_dict(document_data, styles)
 
         return document, styles

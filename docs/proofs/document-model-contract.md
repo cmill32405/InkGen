@@ -1,10 +1,12 @@
 # Document Model Contract Proof Obligations
 
-This note applies the InkGen Definition of Done to the DOCUMENT-MODEL-P1 and
-DOCUMENT-MODEL-PAYLOAD-P2 document model slices. It focuses on one-based page
-indexing, page insertion and removal boundaries, page canvas compatibility,
-serialized page hydration, serialized payload envelope validation, style-cache
-validation, and live use through PDF rendering.
+This note applies the InkGen Definition of Done to the DOCUMENT-MODEL-P1,
+DOCUMENT-MODEL-PAYLOAD-P2, DOCUMENT-MODEL-STYLES-MAPPING-P2, and
+DOCUMENT-LOAD-STYLE-PREPASS-P2 document model slices. It focuses on one-based
+page indexing, page insertion and removal boundaries, page canvas
+compatibility, serialized page hydration, serialized payload envelope
+validation, style-cache validation, YAML load delegation, and live use through
+PDF rendering.
 
 ## Scope
 
@@ -35,6 +37,8 @@ Affected surface:
   filter.
 - `tests/mutation/filter_document_model_payload_work_items.py`:
   DOCUMENT-MODEL-PAYLOAD-P2 mutation filter.
+- `tests/mutation/filter_document_load_style_prepass_work_items.py`:
+  DOCUMENT-LOAD-STYLE-PREPASS-P2 mutation filter.
 
 Incoming dependencies:
 
@@ -80,6 +84,16 @@ Before/after edge changes:
   `Layers.create_from_dict()`, `Document.create_from_dict()`, and
   `Document.load()` require the style cache to be a mutable mapping or `None`
   before component-group hydration can mutate it.
+- Before DOCUMENT-LOAD-STYLE-PREPASS-P2, `Document.load()` ran a legacy
+  `_iterdict()` style prepass before `Document.create_from_dict()`. The prepass
+  raw-indexed nested style envelopes, missed valid saved-document style
+  payloads, and attempted dynamic module dispatch outside the existing
+  hardened component/style factory path.
+- After DOCUMENT-LOAD-STYLE-PREPASS-P2, `Document.load()` reads YAML, validates
+  the optional caller style cache, and delegates the loaded object directly to
+  `Document.create_from_dict()`, so malformed YAML roots fail at the documented
+  document factory boundary and valid nested style hydration remains owned by
+  `ComponentGroup.create_from_dict()` and style factories.
 
 Cycle/layer/coupling/redundancy result:
 
@@ -131,6 +145,8 @@ ADR/rule impact:
   and a layer collision-setting completeness check.
 - For DOCUMENT-MODEL-STYLES-MAPPING-P2, added `_style_cache()` to validate
   mutable style caches at every document-model hydration entry point.
+- For DOCUMENT-LOAD-STYLE-PREPASS-P2, removed the legacy `_iterdict()` style
+  prepass and dynamic dispatch from `Document.load()`.
 
 ## Comprehensiveness Matrix
 
@@ -144,14 +160,15 @@ ADR/rule impact:
 | PDF live path | Render through one-based document page contract | PO-DOCM-006 | `test_document_page_contract_remains_live_through_pdf_render_path` | behavioral evidence |
 | Serialized document/layer payload envelopes | Reject malformed roots and collection fields before downstream hydration | PO-DOCM-007 | `test_document_model_hydration_rejects_malformed_payload_envelopes`, `test_layer_hydration_requires_collision_settings_for_each_group` | killed |
 | Style cache boundary | Reject non-mutable `styles` caches before component-group hydration | PO-DOCM-008 | `test_document_model_hydration_rejects_malformed_style_caches`, `test_document_load_rejects_malformed_style_cache` | killed |
+| YAML load style prepass | Delegate YAML payloads directly to hardened document hydration and avoid dynamic style prepass dispatch | PO-DOCM-009 | `test_document_load_populates_styles_through_validated_hydration`, `test_document_load_delegates_malformed_yaml_to_document_factory` | mutation target |
 
 ## Test Applicability Matrix
 
 | Test class | Applicable? | Reason | Evidence |
 |---|---|---|---|
 | Unit | yes | Page validation and canvas compatibility are deterministic. | DOCUMENT-MODEL-P1 tests |
-| Behavioral/condition | yes | DOCUMENT-MODEL-P1 defines public document model behavior. | Tests are marked `@pytest.mark.condition("DOCUMENT-MODEL-P1")`, `@pytest.mark.condition("DOCUMENT-MODEL-PAYLOAD-P2")`, and `@pytest.mark.condition("DOCUMENT-MODEL-STYLES-MAPPING-P2")`. |
-| Failure-mode | yes | Bad page numbers, incompatible pages, malformed payloads, and malformed style caches must fail before mutation/rendering/hydration. | Invalid position, incompatible canvas, payload, and style-cache tests |
+| Behavioral/condition | yes | DOCUMENT-MODEL-P1 defines public document model behavior. | Tests are marked `@pytest.mark.condition("DOCUMENT-MODEL-P1")`, `@pytest.mark.condition("DOCUMENT-MODEL-PAYLOAD-P2")`, `@pytest.mark.condition("DOCUMENT-MODEL-STYLES-MAPPING-P2")`, and `@pytest.mark.condition("DOCUMENT-LOAD-STYLE-PREPASS-P2")`. |
+| Failure-mode | yes | Bad page numbers, incompatible pages, malformed payloads, malformed YAML roots, and malformed style caches must fail before mutation/rendering/hydration. | Invalid position, incompatible canvas, payload, load-delegation, and style-cache tests |
 | Integration/live-path | yes | `DocumentPDF` consumes the base document page contract. | PDF live-path test |
 | Contract/API compatibility | yes | Existing document, SVG, and PDF tests must continue passing. | Focused gate includes existing tests |
 | Property/fuzz | no | This slice covers finite page-index partitions directly. | Not applicable |
@@ -163,6 +180,7 @@ ADR/rule impact:
 | Regression | yes | This closes page-zero corruption and serialized ghost-layer behavior. | DOCUMENT-MODEL-P1 tests |
 | Serialized payload adversarial input | yes | Malformed public hydration payloads must fail before incidental downstream errors. | DOCUMENT-MODEL-PAYLOAD-P2 tests |
 | Style-cache adversarial input | yes | Non-mutable style caches must fail before incidental downstream `.keys()` or item-assignment errors. | DOCUMENT-MODEL-STYLES-MAPPING-P2 tests |
+| YAML load adversarial input | yes | `Document.load()` must not run a separate raw-indexing style prepass before the hardened document factory. | DOCUMENT-LOAD-STYLE-PREPASS-P2 tests |
 
 ## Mutation Testing Gate
 
@@ -209,6 +227,15 @@ DOCUMENT-MODEL-STYLES-MAPPING-P2 current result:
 - Mutation: `4` proof-critical work items, `4 killed`, `0 survivors`.
 - Full coverage gate: `822 passed`, total coverage `94%`.
 - Ruff lint and format passed for touched Python files.
+
+DOCUMENT-LOAD-STYLE-PREPASS-P2 current result:
+
+- Focused tests before full gate: `48 passed`.
+- Mutation: `4` proof-critical work items, `4 killed`, `0 survivors`.
+- Full coverage gate: `1424 passed`, total coverage `95%`.
+- Mutation config: `tests/mutation/document_load_style_prepass_cosmic_ray.toml`.
+- Mutation filter:
+  `tests/mutation/filter_document_load_style_prepass_work_items.py`.
 
 ## PO-DOCM-001: Valid Page Insertions Preserve One-Based Order
 
@@ -394,3 +421,39 @@ validation is outside the public hydration boundary.
 
 Supported by focused document-model and renderer-path tests, scoped mutation
 testing, and the full coverage gate for the stated style-cache boundary.
+
+## PO-DOCM-009: Document Load Delegates To Hardened Hydration
+
+### Claim
+
+`Document.load()` does not run a separate raw-indexing or dynamic-dispatch style
+prepass before document hydration. Loaded YAML payloads are delegated to
+`Document.create_from_dict()` after style-cache validation.
+
+### Domain
+
+Public `Document.load(filepath, styles=...)` calls for YAML files that parse to
+valid saved InkGen documents, malformed non-mapping roots, and mapping roots
+that are not `Document` payloads.
+
+### Proof Method
+
+`Document.load()` reads the YAML file, calls `_style_cache()` on the optional
+style cache, and then calls `Document.create_from_dict(document_data, styles)`.
+The removed `_iterdict()` prepass no longer performs raw nested style-envelope
+indexing or dynamic `getattr()` dispatch. Focused condition tests prove valid
+documents still round-trip and populate styles through nested component-group
+hydration, while malformed YAML roots now fail with the same explicit
+document-factory errors as direct `Document.create_from_dict()` calls.
+
+### Counterexamples And Exclusions
+
+YAML parser syntax errors, file-not-found errors, and private mutation of the
+returned style cache are outside this load-delegation slice. Individual nested
+style payload validation remains owned by component-group and style factory
+contracts.
+
+### Conclusion
+
+Supported by focused load-delegation tests, scoped mutation evidence, and the
+full coverage gate for the stated load-delegation domain.

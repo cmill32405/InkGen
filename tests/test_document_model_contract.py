@@ -11,7 +11,7 @@ from InkGen.component import ComponentGroup, WidthHeightDrawingComponent
 from InkGen.document import Document, Layer, Layers
 from InkGen.errors import IncompatibleCanvas
 from InkGen.pdf_generator import ComponentGroupPDF, DocumentPDF, RectanglePDF
-from InkGen.style import DrawingStyle
+from InkGen.style import DrawingStyle, Style
 
 
 def _canvas() -> Canvas:
@@ -229,6 +229,46 @@ def test_document_load_rejects_malformed_style_cache(tmp_path) -> None:
 
     with pytest.raises(TypeError, match="styles must be a mutable mapping or None"):
         Document.load(str(recipe_path), styles=["style-name"])  # type: ignore[arg-type]
+
+
+@pytest.mark.condition("DOCUMENT-LOAD-STYLE-PREPASS-P2")
+def test_document_load_populates_styles_through_validated_hydration(tmp_path) -> None:
+    """DOCUMENT-LOAD-STYLE-PREPASS-P2: Document.load style cache comes from nested hydration."""
+    _, _, document = _document_with_styled_group()
+    style_name = document.parameters["Document"]["pages"][0]["Layers"]["layers"]["base"]["Layer"]["component_groups"][0]["ComponentGroup"][
+        "components"
+    ][0]["WidthHeightDrawingComponent"]["style"]["DrawingStyle"]["name"]
+    recipe_path = tmp_path / "document.yaml"
+    document.save(str(recipe_path))
+    if style_name in Style.style_names:
+        Style.style_names.remove(style_name)
+
+    loaded_document, styles = Document.load(str(recipe_path))
+
+    assert loaded_document.parameters == document.parameters
+    assert styles
+
+
+@pytest.mark.condition("DOCUMENT-LOAD-STYLE-PREPASS-P2")
+@pytest.mark.parametrize(
+    ("yaml_text", "error_type", "message"),
+    [
+        ("- bad\n", TypeError, "Document data must be a mapping"),
+        ("style: broken\n", ValueError, "Document data must include Document"),
+    ],
+)
+def test_document_load_delegates_malformed_yaml_to_document_factory(
+    tmp_path,
+    yaml_text: str,
+    error_type: type[Exception],
+    message: str,
+) -> None:
+    """DOCUMENT-LOAD-STYLE-PREPASS-P2: Malformed YAML fails at the document boundary."""
+    recipe_path = tmp_path / "document.yaml"
+    recipe_path.write_text(yaml_text, encoding="utf-8")
+
+    with pytest.raises(error_type, match=message):
+        Document.load(str(recipe_path))
 
 
 @pytest.mark.condition("DOCUMENT-MODEL-P1")
