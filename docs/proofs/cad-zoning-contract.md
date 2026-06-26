@@ -1,10 +1,11 @@
 # CAD Zoning Contract Proof Obligations
 
 This note applies the InkGen Definition of Done to the CAD-ZONING-P1 legacy
-zoning slice and CAD-ZONING-FINITE-P2 boundary slice. It focuses on documenting
-and proving the intentional SVG-specific `cad_component_groups.Zoning` path,
-including CSS-like parameter specificity, finite numeric boundaries, and
-serialization.
+zoning slice, CAD-ZONING-FINITE-P2 boundary slice, and
+CAD-ZONING-FACTORY-PAYLOAD-P2 serialized factory slice. It focuses on
+documenting and proving the intentional SVG-specific
+`cad_component_groups.Zoning` path, including CSS-like parameter specificity,
+finite numeric boundaries, and serialization.
 
 ## Scope
 
@@ -51,6 +52,13 @@ Before/after edge changes:
   legacy zoning numeric validation and reach SVG geometry generation.
 - After CAD-ZONING-FINITE-P2, margin, width, and radius overrides must be
   non-boolean finite nonnegative numbers before geometry generation.
+- Before CAD-ZONING-FACTORY-PAYLOAD-P2, `Zoning.create_from_dict()` raw-indexed
+  root, style, canvas, and parameter envelopes, so malformed serialized payloads
+  failed through incidental `KeyError`/`TypeError` paths or style-constructor
+  side effects.
+- After CAD-ZONING-FACTORY-PAYLOAD-P2, root payloads, style envelopes, style
+  registries, canvas presence, and parameter mappings are validated explicitly
+  before legacy zoning construction.
 - No dependency edge or third-party dependency was introduced.
 
 Cycle/layer/coupling/redundancy result:
@@ -95,6 +103,8 @@ ADR/rule impact:
 - `_set_zoning_widths()` now treats `0.0` as a supplied value.
 - `Zoning.__init__()` now rejects boolean and non-finite margin, width, and
   radius overrides before geometry generation.
+- `Zoning.create_from_dict()` now validates serialized root, style, canvas, and
+  parameter envelopes before resolving style overrides or constructing zoning.
 
 ## Comprehensiveness Matrix
 
@@ -104,6 +114,8 @@ ADR/rule impact:
 | Explicit zero margin/width | Preserve as supplied most-specific values | PO-CADZ-002 | `test_legacy_zoning_honors_zero_specific_margins_and_widths` | killed |
 | Invalid parameter types/ranges/names | Reject before geometry generation | PO-CADZ-003 | `test_legacy_zoning_rejects_invalid_boundary_parameters` | behavioral evidence |
 | Boolean and non-finite positive-real overrides | Reject before SVG geometry generation | PO-CADZ-006 | `test_legacy_zoning_rejects_bool_and_nonfinite_parameters`, `test_legacy_zoning_accepts_finite_boundary_parameters` | mutation target |
+| Serialized factory roots and required fields | Reject malformed roots and missing/malformed fields before incidental indexing | PO-CADZ-007 | `test_legacy_zoning_factory_rejects_malformed_root_payloads`, `test_legacy_zoning_factory_rejects_missing_and_malformed_payload_fields` | killed |
+| Serialized factory style envelopes and registries | Reject malformed style envelopes and wrong-kind style overrides before construction side effects | PO-CADZ-008 | `test_legacy_zoning_factory_rejects_malformed_style_envelopes`, `test_legacy_zoning_factory_rejects_malformed_style_registry` | killed |
 | Serialization with style registry | Preserve parameters and generated component geometry | PO-CADZ-004 | `test_legacy_zoning_round_trips_parameters_with_style_registry` | behavioral evidence |
 | Default zone width calculation | Use widest A/W/Y text outline plus padding | PO-CADZ-005 | `test_legacy_zoning_default_width_tracks_text_outline` | killed |
 | Multi-format zoning | Excluded from legacy helper | Explicit exclusion | `ZoningDrawing` tests | Out of scope |
@@ -117,6 +129,7 @@ ADR/rule impact:
 | Failure-mode | yes | Invalid, boolean, and non-finite parameters must fail before component generation. | Invalid-boundary and finite-boundary tests |
 | Integration/live-path | yes | `Zoning.component_group` is consumed by SVG/component-group paths and compared to `ZoningDrawing`. | Focused and existing tests |
 | Contract/API compatibility | yes | Existing legacy parameters and round trip must remain compatible. | Existing legacy tests |
+| Serialization payload validation | yes | `Zoning.create_from_dict()` consumes saved recipes and must reject malformed envelopes explicitly. | CAD-ZONING-FACTORY-PAYLOAD-P2 tests |
 | Property/fuzz | no | This slice proves finite parameter partitions. | Not applicable |
 | Mutation | yes | The changed specificity logic is proof-critical. | Mutation result recorded below |
 | Security/adversarial | no | The slice adds no file path, network, subprocess, auth, secrets, SQL, template, deserialization, or active-content surface. | Not applicable |
@@ -150,6 +163,14 @@ CAD-ZONING-FINITE-P2 current result:
   remains a legacy broad-format exception and was not reformatted in this
   narrow behavior slice.
 - Full coverage gate: `866 passed`, total coverage `94%`.
+
+CAD-ZONING-FACTORY-PAYLOAD-P2 current result:
+
+- Focused tests: `56 passed`.
+- Mutation: `23` proof-critical work items, `23 killed`, `0 survivors`.
+- Mutation config: `tests/mutation/cad_zoning_factory_payload_cosmic_ray.toml`.
+- Mutation filter:
+  `tests/mutation/filter_cad_zoning_factory_payload_work_items.py`.
 
 ## PO-CADZ-001: Legacy Zoning Emits SVG Components
 
@@ -283,6 +304,64 @@ geometry tests.
 
 Supported by focused CAD zoning tests, scoped mutation testing, and the full
 coverage gate for the stated positive-real finite boundary.
+
+## PO-CADZ-007: Factory Payload Envelopes Fail Explicitly
+
+### Claim
+
+`Zoning.create_from_dict()` rejects malformed serialized root payloads, missing
+required fields, and non-mapping required fields before raw nested indexing or
+style construction can occur.
+
+### Domain
+
+Serialized legacy `Zoning` factory input through `create_from_dict()`, including
+the root `Zoning` envelope, `line_style`, `text_style`, `canvas`, and
+`parameters` fields.
+
+### Proof Method
+
+`create_from_dict()` first calls `_zoning_payload()`,
+`_zoning_required_field()`, and `_zoning_required_mapping()` before style
+resolution or constructor delegation. These helpers accept only mappings with
+the required keys and raise explicit `TypeError` or `ValueError` for malformed
+partitions. Focused condition tests cover root type, missing root, malformed
+payload, missing required fields, and non-mapping required fields. Scoped
+mutation testing killed all proof-critical helper and call-order mutants.
+
+### Conclusion
+
+Supported by focused CAD zoning factory tests and scoped mutation evidence for
+the stated serialized factory envelope domain.
+
+## PO-CADZ-008: Factory Style Contracts Fail Explicitly
+
+### Claim
+
+`Zoning.create_from_dict()` rejects malformed style envelopes and wrong-kind
+style registry overrides before constructing a legacy zoning object.
+
+### Domain
+
+Serialized `line_style` and `text_style` envelopes and the optional `styles`
+registry argument supplied to `Zoning.create_from_dict()`.
+
+### Proof Method
+
+`_zoning_style_name()` accepts only the expected style class key, mapping style
+payload, and string style name. `create_from_dict()` accepts `styles` only when
+it is a mapping or `None`, resolves overrides by serialized style name, and
+checks that overrides are `DrawingStyle` for line styles and `TextStyle` for
+text styles. Focused condition tests cover malformed style envelopes,
+non-string style names, malformed style registries, wrong-kind overrides, valid
+override reuse, and constructor validation delegation for serialized parameters.
+Scoped mutation testing killed all proof-critical style-envelope and override
+type-check mutants.
+
+### Conclusion
+
+Supported by focused CAD zoning factory tests and scoped mutation evidence for
+the stated style envelope and style registry domain.
 
 ## Current Slice Decision
 
