@@ -72,6 +72,12 @@ Before/after edge changes:
 - After `TEXT-DRAWING-TEXT-P2`, `TextDrawing` normalizes accepted scalar text to
   strings at construction and rejects non-scalar values before materialization
   or flow-document hydration can expose malformed state.
+- The `TEXT-DRAWING-POSITION-P2` continuation found that `TextDrawing` accepted
+  malformed or non-finite neutral anchors until SVG/PDF materialization, DOCX
+  VML output, DXF export, or FlowDocument hydration consumed the bad state.
+- After `TEXT-DRAWING-POSITION-P2`, `TextDrawing` routes its neutral anchor
+  through the same finite point-pair boundary used by other neutral drawing
+  primitives before any public state is exposed.
 - Text remains allowed at negative coordinates; this preserves existing text
   placement semantics and differs from the shared drawing-line boundary.
 - No new dependency edge or third-party dependency was introduced.
@@ -116,6 +122,9 @@ ADR/rule impact:
 - Non-scalar `TextDrawing.text` values such as arbitrary objects, lists,
   mappings, and `None` are invalid and must fail at the neutral recipe
   boundary.
+- `TextDrawing.position` must be a two-value numeric, finite, non-boolean point
+  pair.
+- Negative `TextDrawing.position` coordinates remain valid text placement.
 - SVG output must XML-escape text content.
 - PDF output must escape literal-string controls.
 - DXF output is a `TEXT` entity and normalizes embedded newlines to spaces.
@@ -132,6 +141,9 @@ ADR/rule impact:
 - `TextDrawing.__post_init__()` now stores normalized scalar text strings and
   rejects non-scalar payloads before direct materialization or
   `FlowDocument.create_from_dict()` can hold malformed neutral text state.
+- `TextDrawing.__post_init__()` now normalizes finite text anchors and rejects
+  malformed, boolean, or non-finite anchors before materialization or
+  `FlowDocument.create_from_dict()` can expose malformed neutral geometry.
 
 ## Comprehensiveness Matrix
 
@@ -147,6 +159,7 @@ ADR/rule impact:
 | Neutral materialization | Materialize to `TextSVG`/`TextPDF` | PO-TEXT-006 | `test_text_drawing_materializes_svg_and_pdf_components` | killed/equivalent |
 | Neutral scalar text payloads | Normalize to strings before public state is exposed | PO-TEXT-008 | `test_text_drawing_normalizes_scalar_text_before_materialization` | killed |
 | Non-scalar neutral text payloads | Reject at `TextDrawing` construction and FlowDocument hydration | PO-TEXT-008 | `test_text_drawing_rejects_non_scalar_text_payloads`, `test_flow_document_hydration_rejects_malformed_text_drawing_payloads` | killed |
+| Neutral text anchors | Normalize finite pairs and reject malformed anchors before public state is exposed | PO-TEXT-009 | `test_text_drawing_normalizes_valid_position_before_materialization`, `test_text_drawing_rejects_malformed_positions_before_materialization`, `test_flow_document_hydration_rejects_malformed_text_drawing_positions` | killed/equivalent |
 | DXF output | Emit `TEXT` entity with transformed anchor | PO-TEXT-007 | `test_dxf_text_drawing_exports_text_entity_with_canvas_transform` | killed/equivalent |
 | Multiline text layout, rich text runs, and font embedding | Excluded from proven domain | Explicit exclusion | Not applicable | Out of scope |
 
@@ -180,6 +193,9 @@ Proof-critical mutation targets:
 - Redirecting `TextDrawing.to_component()` should fail materialization tests.
 - Weakening `TextDrawing` text coercion or non-scalar rejection should fail
   direct neutral text and FlowDocument hydration tests.
+- Weakening `TextDrawing` position normalization, boolean rejection, finite
+  checks, or hydration boundaries should fail direct neutral text-anchor and
+  FlowDocument hydration tests.
 - Changing DXF entity type, layer, anchor codes, z coordinate, text height, text
   value, or Y inversion should fail live DXF tests.
 
@@ -200,6 +216,14 @@ Current result:
 - `TEXT-DRAWING-TEXT-P2` continuation: Cosmic Ray 8.4.6 scoped to
   `_coerce_text_value()` and `TextDrawing.__post_init__()` produced
   1 proof-critical work item. Result: 1 killed, 0 survived.
+- `TEXT-DRAWING-POSITION-P2` continuation: Cosmic Ray 8.4.6 scoped to
+  `_coerce_point_pair()` and `TextDrawing.__post_init__()` produced
+  33 proof-critical work items. Result: 32 killed and 1 survived.
+- Equivalent survivor:
+  - `_coerce_point_pair(value: object, *, name: str)` changed to
+    `_coerce_point_pair(value: object, /, name: str)`. All production callers
+    pass `value` positionally and `name` by keyword, so this does not change the
+    reachable public API behavior under the current helper-private contract.
 
 ## PO-TEXT-001: Valid Text Geometry Is Preserved
 
@@ -389,6 +413,47 @@ public contract. Rich text runs and structured text spans remain out of scope.
 Proven for the stated public construction and FlowDocument hydration domain
 after focused tests and mutation pass.
 
+## PO-TEXT-009: Neutral Text Anchors Are Normalized Or Rejected
+
+### Claim
+
+`TextDrawing` cannot expose malformed text-anchor geometry through direct
+construction, materialization, serialization, or `FlowDocument` hydration.
+
+### Domain
+
+All `TextDrawing` instances created directly and all serialized
+`TextDrawing.position` payloads hydrated through
+`FlowDocument.create_from_dict()`.
+
+### Assumptions
+
+Neutral `TextDrawing.position` should use the same finite two-coordinate point
+pair domain as renderer-neutral rectangles, arcs, and Bezier primitives, while
+preserving the existing text-placement allowance for negative coordinates.
+
+### Proof Method
+
+`TextDrawing.__post_init__()` routes every construction path, including
+FlowDocument drawing hydration, through `_coerce_point_pair()` before storing
+the frozen dataclass field. The helper rejects strings, bytes, non-sequences,
+wrong-length sequences, boolean coordinates, nonnumeric coordinates, and
+non-finite coordinates. Direct condition tests cover malformed partitions and
+valid negative-anchor normalization. The FlowDocument hydration test mutates a
+serialized drawing payload and proves the dependent document path fails before
+returning malformed public block state.
+
+### Counterexamples And Exclusions
+
+Private mutation of `TextDrawing.__dict__` after construction is outside the
+public contract. Changing the policy to forbid negative text coordinates would
+be a new semantic decision and is outside this slice.
+
+### Conclusion
+
+Proven for the stated public construction and FlowDocument hydration domain
+after focused tests and mutation pass.
+
 ## Current Slice Decision
 
 The slice chooses fail-fast validation for non-finite text anchors while
@@ -400,3 +465,7 @@ The `TEXT-DRAWING-TEXT-P2` continuation preserves the existing scalar
 text-to-string compatibility while making malformed neutral text states
 impossible through the public constructor and FlowDocument drawing hydration
 paths.
+
+The `TEXT-DRAWING-POSITION-P2` continuation preserves valid negative text
+placement while making malformed neutral text-anchor geometry impossible
+through the public constructor and FlowDocument drawing hydration paths.

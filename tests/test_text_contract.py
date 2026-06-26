@@ -7,6 +7,7 @@ import uuid
 import pytest
 
 from InkGen.component import TextComponent
+from InkGen.document_outputs import FlowDocument
 from InkGen.drawing_components import DrawingComponentGroup, OutputFormat, TextDrawing
 from InkGen.dxf_generator import DXFDocument
 from InkGen.pdf_generator import TextPDF
@@ -156,6 +157,44 @@ def test_text_drawing_materializes_svg_and_pdf_components(text_style: TextStyle)
         drawing.to_component("dxf")
 
 
+@pytest.mark.condition("TEXT-DRAWING-POSITION-P2")
+@pytest.mark.parametrize(
+    ("position", "exception_type", "message"),
+    [
+        ("12", ValueError, "TextDrawing position must contain two numeric values"),
+        (b"12", ValueError, "TextDrawing position must contain two numeric values"),
+        (object(), ValueError, "TextDrawing position must contain two numeric values"),
+        ((1.0,), ValueError, "TextDrawing position must contain two numeric values"),
+        ((1.0, 2.0, 3.0), ValueError, "TextDrawing position must contain two numeric values"),
+        (("x", 1.0), ValueError, "TextDrawing position must contain two numeric values"),
+        ((object(), 1.0), ValueError, "TextDrawing position must contain two numeric values"),
+        ((True, 1.0), TypeError, "TextDrawing position coordinates must be numeric values"),
+        ((1.0, False), TypeError, "TextDrawing position coordinates must be numeric values"),
+        ((float("nan"), 1.0), ValueError, "TextDrawing position coordinates must be finite"),
+        ((float("inf"), 1.0), ValueError, "TextDrawing position coordinates must be finite"),
+    ],
+)
+def test_text_drawing_rejects_malformed_positions_before_materialization(
+    text_style: TextStyle,
+    position: object,
+    exception_type: type[Exception],
+    message: str,
+) -> None:
+    """TEXT-DRAWING-POSITION-P2: Neutral text anchors fail at construction."""
+    with pytest.raises(exception_type, match=message):
+        TextDrawing("Seed", position, text_style)  # type: ignore[arg-type]
+
+
+@pytest.mark.condition("TEXT-DRAWING-POSITION-P2")
+def test_text_drawing_normalizes_valid_position_before_materialization(text_style: TextStyle) -> None:
+    """TEXT-DRAWING-POSITION-P2: Valid neutral text anchors are normalized once."""
+    drawing = TextDrawing("Seed", [-2.5, 7], text_style)  # type: ignore[arg-type]
+
+    assert drawing.position == (-2.5, 7.0)
+    assert drawing.to_component(OutputFormat.SVG).position == (-2.5, 7.0)
+    assert drawing.to_component(OutputFormat.PDF).position == (-2.5, 7.0)
+
+
 @pytest.mark.condition("TEXT-DRAWING-TEXT-P2")
 @pytest.mark.parametrize("text", [123, 1.5, 1 + 2j, True])
 def test_text_drawing_normalizes_scalar_text_before_materialization(text_style: TextStyle, text: object) -> None:
@@ -173,6 +212,30 @@ def test_text_drawing_rejects_non_scalar_text_payloads(text_style: TextStyle, te
     """TEXT-DRAWING-TEXT-P2: Neutral text recipes reject malformed text at construction."""
     with pytest.raises(TypeError, match="TextDrawing text must be a string"):
         TextDrawing(text, (12.5, 7.5), text_style)  # type: ignore[arg-type]
+
+
+@pytest.mark.condition("TEXT-DRAWING-POSITION-P2")
+def test_flow_document_hydration_rejects_malformed_text_drawing_positions(text_style: TextStyle) -> None:
+    """TEXT-DRAWING-POSITION-P2: Serialized text drawings cannot hold bad anchors."""
+    group = DrawingComponentGroup("text-flow-drawing")
+    group.add_component(TextDrawing("NOTE", (2.0, 3.0), text_style))
+    document = FlowDocument(title="Bad Text Position")
+    document.add_drawing_group(group)
+    payload = document.parameters
+    flow_payload = payload["FlowDocument"]
+    assert isinstance(flow_payload, dict)
+    blocks = flow_payload["blocks"]
+    assert isinstance(blocks, list)
+    block_payload = blocks[0]["payload"]
+    assert isinstance(block_payload, dict)
+    components = block_payload["components"]
+    assert isinstance(components, list)
+    component_payload = components[0]["payload"]
+    assert isinstance(component_payload, dict)
+    component_payload["position"] = (float("nan"), 3.0)
+
+    with pytest.raises(ValueError, match="TextDrawing position coordinates must be finite"):
+        FlowDocument.create_from_dict(payload, {text_style.name: text_style})
 
 
 @pytest.mark.condition("TEXT-P1")

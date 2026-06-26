@@ -195,7 +195,9 @@ class TextDrawing:
 
     def __post_init__(self) -> None:
         """Validate the neutral text payload and style boundary."""
+        position = _coerce_point_pair(self.position, name="TextDrawing position")
         object.__setattr__(self, "text", _coerce_text_value(self.text))
+        object.__setattr__(self, "position", position)
         _require_text_style(self.style, "TextDrawing")
 
     def to_component(self, output_format: OutputFormat | str) -> Component:
