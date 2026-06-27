@@ -15,8 +15,16 @@ FILTER_SQL = """
   )
   OR (
     module_path = 'src/InkGen/drawing_components.py'
-    AND definition_name = '__post_init__'
-    AND start_pos_row BETWEEN 395 AND 399
+    AND (
+      (
+        definition_name = '__post_init__'
+        AND start_pos_row BETWEEN 409 AND 412
+      )
+      OR (
+        definition_name = 'to_component'
+        AND start_pos_row = 417
+      )
+    )
   )
 )
 AND operator_name NOT LIKE 'core/ReplaceBinaryOperator_BitOr_%'

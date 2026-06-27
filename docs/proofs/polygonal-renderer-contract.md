@@ -78,6 +78,12 @@ Before/after edge changes:
 - After the neutral slice, direct neutral construction and `FlowDocument`
   hydration reject malformed polygon payloads before public neutral drawing
   state is exposed.
+- Before `POLYGONAL-DRAWING-LIVE-POINTS-P2`, callers could mutate the public
+  `PolygonalDrawing.points` list after construction and bypass the constructor
+  polygon validator before SVG/PDF materialization.
+- After `POLYGONAL-DRAWING-LIVE-POINTS-P2`, `PolygonalDrawing.to_component()`
+  revalidates the current public points list through the shared polygon
+  component contract before constructing `PolygonalSVG` or `PolygonalPDF`.
 - No new dependency edge or third-party dependency was introduced.
 
 Cycle/layer/coupling/redundancy result:
@@ -120,6 +126,9 @@ ADR/rule impact:
   duplicate.
 - Neutral `PolygonalDrawing` mirrors the concrete component domain and stores
   the normalized point list returned by `PolygonalDrawingComponent`.
+- If callers mutate the public `PolygonalDrawing.points` list after
+  construction, materialization revalidates the current list through the same
+  concrete polygon boundary.
 - Serialized neutral polygon payloads hydrated through `FlowDocument` must
   satisfy the same polygon boundary.
 - SVG and PDF outputs are closed paths.
@@ -135,6 +144,8 @@ ADR/rule impact:
 - `PolygonalDrawing.__post_init__()` now validates through
   `PolygonalDrawingComponent` and stores normalized points before
   materialization.
+- `PolygonalDrawing.to_component()` now revalidates the live public `points`
+  list through `PolygonalDrawingComponent` before SVG/PDF materialization.
 - Added direct neutral and `FlowDocument` hydration tests for malformed
   polygon payloads.
 
@@ -154,6 +165,7 @@ ADR/rule impact:
 | DXF output | Emit closed `LWPOLYLINE` vertices | PO-POLYGON-007 | `test_dxf_polygonal_drawing_exports_closed_polyline` | Must be killed or proven equivalent |
 | Neutral polygon construction | Normalize valid point payloads and reject malformed polygon payloads before materialization | PO-POLYGON-008 | `test_polygonal_drawing_normalizes_geometry_before_materialization`; `test_polygonal_drawing_rejects_malformed_geometry_payloads` | mutation target |
 | Serialized neutral polygon hydration | Reject malformed serialized polygon payloads before flow-document public state is exposed | PO-POLYGON-009 | `test_flow_document_hydration_rejects_malformed_polygonal_geometry_payloads` | mutation target |
+| Live mutated `PolygonalDrawing.points` list | Reject malformed public point-list mutations before SVG/PDF materialization | PO-POLYGON-010 | `test_polygonal_drawing_revalidates_mutated_points_before_materialization`; `test_polygonal_group_materialization_revalidates_mutated_points` | mutation gate plus static path proof |
 | Polygon repair, holes, multipolygons, winding normalization, and fill-rule semantics | Excluded from proven domain | Explicit exclusion | Not applicable | Out of scope |
 
 ## Test Applicability Matrix
@@ -161,10 +173,11 @@ ADR/rule impact:
 | Test class | Applicable? | Reason | Evidence |
 |---|---|---|---|
 | Unit | yes | Validation and geometry access are deterministic. | POLYGON-P1 tests named above |
-| Behavioral/condition | yes | POLYGON-P1 defines polygon behavior across validation and renderers. | Tests are marked `@pytest.mark.condition("POLYGON-P1")`. |
-| Failure-mode | yes | Invalid polygons must fail before rendering. | `test_polygonal_component_rejects_invalid_inputs` |
+| Behavioral/condition | yes | POLYGON-P1 defines polygon behavior across validation and renderers. POLYGONAL-DRAWING-LIVE-POINTS-P2 defines the live neutral point-list boundary. | Tests are marked `@pytest.mark.condition("POLYGON-P1")`, `@pytest.mark.condition("POLYGONAL-DRAWING-GEOMETRY-P2")`, or `@pytest.mark.condition("POLYGONAL-DRAWING-LIVE-POINTS-P2")`. |
+| Failure-mode | yes | Invalid polygons and mutated neutral polygon point lists must fail before rendering. | `test_polygonal_component_rejects_invalid_inputs`; `test_polygonal_drawing_revalidates_mutated_points_before_materialization` |
 | Integration/live-path | yes | DXF proof must exercise `DXFDocument.add_group()`. | `test_dxf_polygonal_drawing_exports_closed_polyline` |
 | Integration/live-path | yes | Flow-document drawing hydration dispatches to the neutral polygon constructor. | `test_flow_document_hydration_rejects_malformed_polygonal_geometry_payloads` |
+| Integration/live-path | yes | Mutated neutral polygon points must fail through `DrawingComponentGroup.to_group()`, not only direct helper calls. | `test_polygonal_group_materialization_revalidates_mutated_points` |
 | Contract/API compatibility | yes | Valid polygons preserve point order and serialization. | Geometry and round-trip tests |
 | Property/fuzz | limited | This slice proves representative polygon partitions rather than arbitrary computational geometry. | Edge matrix above |
 | Mutation | yes | Validation, output paths, materialization, and DXF closure are proof-critical. | Mutation result recorded below |
@@ -185,6 +198,8 @@ Invariants:
 - `bbox` reflects the stored Shapely polygon bounds.
 - SVG, PDF, and DXF outputs are closed.
 - Neutral polygon materialization preserves the point list.
+- Neutral polygon materialization revalidates the current public point list
+  before concrete renderer construction.
 
 Preconditions:
 
@@ -201,6 +216,8 @@ Postconditions:
 - `PolygonalPDF.generate_pdf()` emits deterministic closed PDF path operators.
 - `PolygonalDrawing.to_component(OutputFormat.SVG)` returns `PolygonalSVG`.
 - `PolygonalDrawing.to_component(OutputFormat.PDF)` returns `PolygonalPDF`.
+- `PolygonalDrawing.to_component()` raises `InvalidPolygonError` for mutated
+  public point lists that no longer satisfy the polygon boundary.
 - `DXFDocument.add_group()` emits a closed `LWPOLYLINE` for each neutral
   `PolygonalDrawing`.
 
@@ -215,6 +232,8 @@ Proof-critical mutation targets:
   tests.
 - Redirecting `PolygonalDrawing.to_component()` should fail materialization
   tests.
+- Weakening the shared polygon validator should fail direct construction,
+  hydration, and live-point materialization tests.
 - Changing DXF closure flags or vertices should fail live DXF tests.
 
 Current result:
@@ -243,6 +262,17 @@ Current result:
   `polygon.area == 0.0` predicate already classified above; Shapely polygon
   area is nonnegative in the declared domain, so both predicates reject
   zero-area polygons and accept positive-area polygons.
+- `POLYGONAL-DRAWING-LIVE-POINTS-P2` refreshed result: after the path-command
+  slices shifted `drawing_components.py` line numbers, the neutral polygon
+  mutation filter was refreshed and rerun with the live-point tests included.
+  Cosmic Ray generated 4,708 raw component/drawing mutants and the refreshed
+  filter retained 46 proof-critical work items. Result: 45 killed, 1 survived.
+  The survivor is the same equivalent `polygon.area <= 0.0` to
+  `polygon.area == 0.0` predicate. Cosmic Ray did not emit a separate
+  function-call-removal mutant for the `PolygonalDrawing.to_component()`
+  revalidation assignment, so the live wiring claim is covered by static path
+  proof plus direct/dependent behavioral tests while the shared validator
+  remains mutation-covered.
 
 ## PO-POLYGON-001: Valid Geometry Is Preserved
 
@@ -363,9 +393,10 @@ All `PolygonalDrawing` instances with supported output formats `SVG` and `PDF`.
 
 ### Proof Method
 
-`PolygonalDrawing.to_component()` normalizes the requested format. SVG returns
-`PolygonalSVG(self.points, self.style)`. PDF returns
-`PolygonalPDF(self.points, self.style)`.
+`PolygonalDrawing.to_component()` normalizes the requested format and
+revalidates the current public point list. SVG returns
+`PolygonalSVG(points, self.style)`. PDF returns
+`PolygonalPDF(points, self.style)` using the normalized point list.
 
 ### Conclusion
 
@@ -449,6 +480,50 @@ Focused tests mutate serialized payload fields and assert hydration raises.
 
 Proven for the stated flow-document hydration domain after focused tests and
 mutation pass, with only the equivalent Shapely area survivor.
+
+## PO-POLYGON-010: PolygonalDrawing Revalidates Live Points
+
+### Claim
+
+`PolygonalDrawing.to_component()` rejects malformed values in the current
+public `points` list before constructing `PolygonalSVG` or `PolygonalPDF`.
+
+### Domain
+
+All public `PolygonalDrawing` instances at materialization time, including
+instances whose accepted post-construction `points` list was mutated to contain
+non-point objects, too few points, wrong arity, non-finite values, boolean
+coordinates, collinear points, or self-intersecting geometry.
+
+### Proof Method
+
+`PolygonalDrawing.to_component()` calls `_normalize_polygonal_drawing_points()`
+on the current `self.points` value before renderer dispatch. The helper
+constructs a `PolygonalDrawingComponent`, which is the shared polygon
+validation source of truth, and returns that component's normalized public
+point list. Therefore the same point-count, point-shape, finite-coordinate,
+boolean-coordinate, Shapely-validity, and positive-area checks used by
+construction run again before concrete renderer construction. Focused tests
+mutate the public point list and prove both direct
+`to_component(OutputFormat.SVG)` and dependent `DrawingComponentGroup.to_group()`
+calls raise `InvalidPolygonError`. Mutation testing over the shared polygon
+validator killed all non-equivalent proof-critical mutants; Cosmic Ray did not
+emit a function-call-removal mutant for the revalidation assignment, so the live
+call wiring is established by static path proof plus behavioral live-path
+tests.
+
+### Counterexamples And Exclusions
+
+Private mutation of inherited polygon internals, hostile monkey-patching of
+renderer classes, holes, multipolygons, and automatic polygon repair remain
+outside this public neutral point-list contract. The public `points` list
+remains mutable for compatibility; the guarantee is fail-fast materialization,
+not immutable state.
+
+### Conclusion
+
+Proven for the stated domain after focused tests, static path proof, and the
+shared validator mutation gate, with only the equivalent Shapely area survivor.
 
 ## Current Slice Decision
 

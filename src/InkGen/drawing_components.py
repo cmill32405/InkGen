@@ -136,6 +136,12 @@ def _normalize_path_drawing_commands(commands: object) -> list[PathCommand] | No
     return normalized
 
 
+def _normalize_polygonal_drawing_points(points: object, style: DrawingStyle) -> list[tuple[float, float]]:
+    """Normalize PolygonalDrawing points through the shared polygon component contract."""
+    concrete = PolygonalDrawingComponent(points, style)  # type: ignore[arg-type]
+    return concrete.points
+
+
 @dataclass(frozen=True)
 class RectangleDrawing:
     """Renderer-neutral rectangle primitive."""
@@ -403,19 +409,19 @@ class PolygonalDrawing:
     def __post_init__(self) -> None:
         """Validate the neutral polygon geometry and style boundary."""
         _require_drawing_style(self.style, "PolygonalDrawing")
-        concrete = PolygonalDrawingComponent(self.points, self.style)
-        object.__setattr__(self, "points", concrete.points)
+        object.__setattr__(self, "points", _normalize_polygonal_drawing_points(self.points, self.style))
 
     def to_component(self, output_format: OutputFormat | str) -> Component:
         """Create an irregular polygon component for the requested backend."""
         target = normalize_output_format(output_format)
+        points = _normalize_polygonal_drawing_points(self.points, self.style)
         if target is OutputFormat.SVG:
             from InkGen.svg_generator import PolygonalSVG
 
-            return PolygonalSVG(self.points, self.style)
+            return PolygonalSVG(points, self.style)
         from InkGen.pdf_generator import PolygonalPDF
 
-        return PolygonalPDF(self.points, self.style)
+        return PolygonalPDF(points, self.style)
 
 
 @dataclass(frozen=True)

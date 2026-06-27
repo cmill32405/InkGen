@@ -194,6 +194,27 @@ def test_polygonal_drawing_normalizes_geometry_before_materialization(drawing_st
     assert drawing.to_component(OutputFormat.PDF).points == drawing.points
 
 
+@pytest.mark.condition("POLYGONAL-DRAWING-LIVE-POINTS-P2")
+def test_polygonal_drawing_revalidates_mutated_points_before_materialization(drawing_style: DrawingStyle) -> None:
+    """POLYGONAL-DRAWING-LIVE-POINTS-P2: Mutable point lists are checked at render time."""
+    drawing = PolygonalDrawing([(1.0, 1.0), (5.0, 1.0), (4.0, 3.0), (2.0, 4.0)], drawing_style)
+    drawing.points.append(object())  # type: ignore[arg-type]
+
+    with pytest.raises(InvalidPolygonError):
+        drawing.to_component(OutputFormat.SVG)
+
+
+@pytest.mark.condition("POLYGONAL-DRAWING-LIVE-POINTS-P2")
+def test_polygonal_group_materialization_revalidates_mutated_points(drawing_style: DrawingStyle) -> None:
+    """POLYGONAL-DRAWING-LIVE-POINTS-P2: Group materialization consumes the live polygon boundary."""
+    drawing = PolygonalDrawing([(1.0, 1.0), (5.0, 1.0), (4.0, 3.0), (2.0, 4.0)], drawing_style)
+    group = DrawingComponentGroup("mutated-polygon", [drawing])
+    drawing.points[:] = [(0.0, 0.0), (1.0, 1.0)]
+
+    with pytest.raises(InvalidPolygonError):
+        group.to_group(OutputFormat.PDF)
+
+
 @pytest.mark.condition("POLYGONAL-DRAWING-GEOMETRY-P2")
 @pytest.mark.parametrize(
     "points",
