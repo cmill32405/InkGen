@@ -361,6 +361,27 @@ def test_path_drawing_accepts_command_sequences_before_materialization() -> None
     assert pdf_component.commands == list(commands)
 
 
+@pytest.mark.condition("PATH-DRAWING-LIVE-COMMANDS-P2")
+def test_path_drawing_revalidates_mutated_commands_before_materialization() -> None:
+    """PATH-DRAWING-LIVE-COMMANDS-P2: Mutable command lists are checked at render time."""
+    drawing = PathDrawing(_style(), [PathCommand("M", [(0.0, 0.0)])])
+    drawing.commands.append(object())  # type: ignore[union-attr]
+
+    with pytest.raises(TypeError, match="PathDrawing commands must contain only PathCommand objects"):
+        drawing.to_component(OutputFormat.SVG)
+
+
+@pytest.mark.condition("PATH-DRAWING-LIVE-COMMANDS-P2")
+def test_path_group_materialization_revalidates_mutated_path_commands() -> None:
+    """PATH-DRAWING-LIVE-COMMANDS-P2: Group materialization consumes the live path boundary."""
+    drawing = PathDrawing(_style(), [PathCommand("M", [(0.0, 0.0)])])
+    group = DrawingComponentGroup("mutated-path", [drawing])
+    drawing.commands.append(object())  # type: ignore[union-attr]
+
+    with pytest.raises(TypeError, match="PathDrawing commands must contain only PathCommand objects"):
+        group.to_group(OutputFormat.PDF)
+
+
 @pytest.mark.condition("PATH-DRAWING-COMMANDS-P2")
 @pytest.mark.parametrize(
     "commands",

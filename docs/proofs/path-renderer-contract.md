@@ -90,6 +90,12 @@ Before/after edge changes:
 - After `PATH-DRAWING-COMMANDS-P2`, `PathDrawing` accepts only `None` or a
   non-string sequence of `PathCommand` objects and normalizes accepted
   sequences to a list.
+- Before `PATH-DRAWING-LIVE-COMMANDS-P2`, callers could mutate the public
+  `PathDrawing.commands` list after construction and bypass the constructor
+  command-type guard before SVG/PDF materialization.
+- After `PATH-DRAWING-LIVE-COMMANDS-P2`, `PathDrawing.to_component()` reuses
+  the same command-list validator used by construction, so mutated public
+  command lists fail at the neutral path boundary.
 - Before `SVG-PATH-COMMAND-PAYLOAD-P2`, `PathSVG.create_from_dict()` accepted
   raw indexing/subscription paths for malformed command containers and command
   envelopes.
@@ -156,6 +162,9 @@ ADR/rule impact:
   `PathCommand` objects. Direct dictionary command payloads are outside this
   constructor contract; flow-document hydration converts serialized mappings to
   `PathCommand` before constructing `PathDrawing`.
+- If callers mutate the public `PathDrawing.commands` list after construction,
+  materialization revalidates the current list before SVG/PDF renderer
+  construction.
 - `DXFDocument` represents neutral paths as `LWPOLYLINE` entities using the
   neutral point list and a closed flag when the last command is `Z`.
 
@@ -169,6 +178,8 @@ ADR/rule impact:
   without an endpoint instead of silently omitting the command.
 - `PathDrawing.__post_init__()` now rejects malformed command collections at
   the renderer-neutral boundary before SVG/PDF materialization.
+- `PathDrawing.to_component()` now revalidates the live public `commands` list
+  before constructing `PathSVG` or `PathPDF`.
 - `PathSVG.create_from_dict()` now rejects malformed roots, malformed command
   collections, non-mapping command entries, missing command types, and
   non-string command types before incidental hydration errors.
@@ -192,6 +203,7 @@ ADR/rule impact:
 | Neutral path materialization | Materialize to `PathSVG` or `PathPDF` with matching commands | PO-PATH-007 | `test_path_drawing_materializes_svg_and_pdf_components` | Must be killed or proven equivalent |
 | DXF path output | Emit `LWPOLYLINE` vertices and closure flag through live document path | PO-PATH-008 | `test_dxf_path_drawing_reuses_pdf_points_and_closure_flag` | Must be killed or proven equivalent |
 | Neutral path command collection boundary | Accept `None` or non-string sequences of `PathCommand`; reject raw strings, bytes, non-sequences, and non-command members before renderer materialization | PO-PATH-009 | `test_path_drawing_accepts_command_sequences_before_materialization`; `test_path_drawing_rejects_malformed_command_collections` | 7 validation mutants killed; 0 validation survivors |
+| Live mutated `PathDrawing.commands` list | Reject non-command values before SVG/PDF materialization | PO-PATH-012 | `test_path_drawing_revalidates_mutated_commands_before_materialization`; `test_path_group_materialization_revalidates_mutated_path_commands` | mutation target |
 | SVG path command payload boundary | Preserve valid serialized command payloads and flags; reject malformed roots, command collections, command entries, missing command types, and non-string command types | PO-PATH-010 | `test_path_svg_factory_preserves_valid_command_payloads_and_flags`; `test_path_svg_factory_rejects_malformed_payload_roots`; `test_path_svg_factory_rejects_malformed_command_payloads` | 14 validation mutants killed; 0 survivors |
 | Neutral path command payload boundary | Preserve valid dictionary-sourced commands; reject malformed serialized command collections, command entries, missing command types, and non-string command types | PO-PATH-011 | `test_path_preserves_valid_command_dictionary_payloads`; `test_path_factory_rejects_malformed_command_payloads`; `test_path_add_command_rejects_malformed_command_dictionaries` | 7 validation mutants killed; 0 survivors |
 | Full SVG arc geometry, smooth-control reflection, fill-rule semantics, and Bézier-to-DXF curve fidelity | Excluded from proven domain | Explicit exclusions in PO-PATH-003 through PO-PATH-008 | existing tests only | Out of scope |
@@ -201,9 +213,9 @@ ADR/rule impact:
 | Test class | Applicable? | Reason | Evidence |
 |---|---|---|---|
 | Unit | yes | Command validation and PDF operator generation are deterministic. | PATH-P1 tests named above |
-| Behavioral/condition | yes | PATH-P1 defines expected path behavior across command, SVG, PDF, and DXF paths. PATH-DRAWING-COMMANDS-P2 defines the neutral path command collection boundary. SVG-PATH-COMMAND-PAYLOAD-P2 defines the concrete SVG command hydration boundary. PATH-COMMAND-PAYLOAD-P2 defines the neutral `Path` command dictionary/hydration boundary. | Tests are marked `@pytest.mark.condition("PATH-P1")`, `@pytest.mark.condition("PATH-DRAWING-COMMANDS-P2")`, `@pytest.mark.condition("SVG-PATH-COMMAND-PAYLOAD-P2")`, or `@pytest.mark.condition("PATH-COMMAND-PAYLOAD-P2")`. |
-| Failure-mode | yes | Unsupported smooth commands, incomplete curve groups, malformed direct `PathDrawing` command collections, malformed `PathSVG` command payloads, and malformed neutral `Path` command payloads must fail loudly. | `test_path_pdf_rejects_commands_it_cannot_render`; `test_path_pdf_rejects_incomplete_curve_segments`; `test_path_drawing_rejects_malformed_command_collections`; `test_path_svg_factory_rejects_malformed_payload_roots`; `test_path_svg_factory_rejects_malformed_command_payloads`; `test_path_factory_rejects_malformed_command_payloads`; `test_path_add_command_rejects_malformed_command_dictionaries` |
-| Integration/live-path | yes | DXF must exercise the public neutral group path, not just `_lwpolyline_entity()`. | `test_dxf_path_drawing_reuses_pdf_points_and_closure_flag` calls `DXFDocument.add_group()`. |
+| Behavioral/condition | yes | PATH-P1 defines expected path behavior across command, SVG, PDF, and DXF paths. PATH-DRAWING-COMMANDS-P2 defines the neutral path command collection boundary. PATH-DRAWING-LIVE-COMMANDS-P2 defines the live mutated command-list boundary. SVG-PATH-COMMAND-PAYLOAD-P2 defines the concrete SVG command hydration boundary. PATH-COMMAND-PAYLOAD-P2 defines the neutral `Path` command dictionary/hydration boundary. | Tests are marked `@pytest.mark.condition("PATH-P1")`, `@pytest.mark.condition("PATH-DRAWING-COMMANDS-P2")`, `@pytest.mark.condition("PATH-DRAWING-LIVE-COMMANDS-P2")`, `@pytest.mark.condition("SVG-PATH-COMMAND-PAYLOAD-P2")`, or `@pytest.mark.condition("PATH-COMMAND-PAYLOAD-P2")`. |
+| Failure-mode | yes | Unsupported smooth commands, incomplete curve groups, malformed direct `PathDrawing` command collections, mutated live `PathDrawing.commands`, malformed `PathSVG` command payloads, and malformed neutral `Path` command payloads must fail loudly. | `test_path_pdf_rejects_commands_it_cannot_render`; `test_path_pdf_rejects_incomplete_curve_segments`; `test_path_drawing_rejects_malformed_command_collections`; `test_path_drawing_revalidates_mutated_commands_before_materialization`; `test_path_svg_factory_rejects_malformed_payload_roots`; `test_path_svg_factory_rejects_malformed_command_payloads`; `test_path_factory_rejects_malformed_command_payloads`; `test_path_add_command_rejects_malformed_command_dictionaries` |
+| Integration/live-path | yes | DXF must exercise the public neutral group path, not just `_lwpolyline_entity()`. Mutated neutral path commands must also fail through `DrawingComponentGroup.to_group()`, not only direct helper calls. | `test_dxf_path_drawing_reuses_pdf_points_and_closure_flag` calls `DXFDocument.add_group()`; `test_path_group_materialization_revalidates_mutated_path_commands` calls `DrawingComponentGroup.to_group()`. |
 | Contract/API compatibility | yes | SVG keeps smooth commands while PDF rejects commands it cannot faithfully render. | `test_path_svg_preserves_smooth_commands_that_pdf_rejects`; `test_path_pdf_rejects_commands_it_cannot_render` |
 | Property/fuzz | limited | This slice proves representative command classes rather than arbitrary SVG path grammar. | Exact operator and failure tests over declared command partitions. |
 | Mutation | yes | Validation, failure branches, operator output, materialization, and DXF closure are proof-critical. | Mutation run result recorded below. |
@@ -231,6 +243,8 @@ Invariants:
   payloads with string command types.
 - `PathDrawing.commands` is `None` or a list of `PathCommand` objects after
   construction.
+- `PathDrawing.to_component()` revalidates the current public `commands` value
+  before constructing a concrete renderer component.
 - DXF path export sets group code `70` to `1` only when the last command is
   `Z`.
 
@@ -265,6 +279,9 @@ Postconditions:
   incidental subscription errors.
 - `PathDrawing.__post_init__()` rejects malformed command collections before
   concrete renderer materialization.
+- `PathDrawing.to_component()` raises `TypeError` for mutated public command
+  lists containing non-`PathCommand` objects before concrete renderer
+  materialization.
 - `PathDrawing.to_component(OutputFormat.SVG)` returns `PathSVG`.
 - `PathDrawing.to_component(OutputFormat.PDF)` returns `PathPDF`.
 - `DXFDocument.add_group()` emits one `LWPOLYLINE` entity for each neutral
@@ -282,6 +299,8 @@ Proof-critical mutation targets:
   failure-mode tests.
 - Weakening `PathDrawing` command collection validation should fail direct
   constructor failure-mode tests.
+- Weakening live `PathDrawing.commands` revalidation should fail direct
+  materialization and group materialization tests.
 - Weakening `PathSVG.create_from_dict()` root, command collection, command
   entry, command type, or flag-preservation validation should fail SVG payload
   hydration tests.
@@ -425,6 +444,23 @@ Additional `PATH-DRAWING-COMMANDS-P2` mutation result:
 - Validation guard result: 7 killed, 0 survived.
 - Gate result: passed for the declared `PATH-DRAWING-COMMANDS-P2` domain. The
   mutation report has no surviving non-equivalent proof-critical mutants.
+
+Additional `PATH-DRAWING-LIVE-COMMANDS-P2` mutation result:
+
+- Tool and version: Cosmic Ray 8.4.6 in WSL.
+- Mutated source path: `src/InkGen/drawing_components.py`.
+- Config: `tests/mutation/path_drawing_live_commands_cosmic_ray.toml`.
+- Filter: `tests/mutation/filter_path_drawing_live_commands_work_items.py`.
+- Test selection: `python -m pytest -x tests/test_path_contract.py` through
+  the mutation venv interpreter.
+- Proof-critical work items after filtering: 7.
+- Mutants killed: 7.
+- Mutants survived: 0.
+- The first run with the broader legacy path config produced only
+  `INCOMPETENT` outcomes because WSL no longer exposed a `python` executable on
+  PATH. The slice-specific config uses the known mutation venv interpreter.
+- Gate result: passed for the declared `PATH-DRAWING-LIVE-COMMANDS-P2`
+  runtime-validation domain.
 
 ## PO-PATH-001: Command Validation
 
@@ -656,6 +692,43 @@ cannot reach `PathSVG` or `PathPDF` through `PathDrawing.to_component()`.
 ### Conclusion
 
 Proven for the stated domain.
+
+## PO-PATH-012: PathDrawing Revalidates Live Command Lists
+
+### Claim
+
+`PathDrawing.to_component()` rejects malformed values in the current public
+`commands` list before constructing `PathSVG` or `PathPDF`.
+
+### Domain
+
+All public `PathDrawing` instances at materialization time, including instances
+whose accepted post-construction `commands` list was mutated to include a
+non-`PathCommand` object.
+
+### Proof Method
+
+`PathDrawing.to_component()` calls `_normalize_path_drawing_commands()` on the
+current `self.commands` value before renderer dispatch. The helper returns
+`None` for the empty-command sentinel, rejects raw strings, bytes, and
+non-sequence values, copies accepted sequences, and raises `TypeError` unless
+every current member is a `PathCommand`. The focused direct test mutates
+`drawing.commands` and proves `to_component(OutputFormat.SVG)` fails at the
+neutral boundary. The dependent-path test inserts the same mutated path drawing
+inside `DrawingComponentGroup` and proves `group.to_group(OutputFormat.PDF)`
+consumes the same guard. Mutation testing over the runtime validator and
+materialization call killed all proof-critical mutants.
+
+### Counterexamples And Exclusions
+
+Private mutation of `PathCommand` internals and hostile monkey-patching of
+renderer classes are outside this public command-list boundary. The public
+`commands` list remains mutable for compatibility; the guarantee is fail-fast
+materialization, not immutable state.
+
+### Conclusion
+
+Proven for the stated domain after focused tests and mutation pass.
 
 ## Current Slice Decision
 

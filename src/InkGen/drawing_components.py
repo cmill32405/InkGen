@@ -124,6 +124,18 @@ def _coerce_regular_polygon_sides(value: object) -> int:
     return value
 
 
+def _normalize_path_drawing_commands(commands: object) -> list[PathCommand] | None:
+    """Normalize a PathDrawing command collection before renderer materialization."""
+    if commands is None:
+        return None
+    if isinstance(commands, (str, bytes)) or not isinstance(commands, Sequence):
+        raise TypeError("PathDrawing commands must be a sequence of PathCommand objects")
+    normalized = list(commands)
+    if not all(isinstance(command, PathCommand) for command in normalized):
+        raise TypeError("PathDrawing commands must contain only PathCommand objects")
+    return normalized
+
+
 @dataclass(frozen=True)
 class RectangleDrawing:
     """Renderer-neutral rectangle primitive."""
@@ -327,25 +339,19 @@ class PathDrawing:
     def __post_init__(self) -> None:
         """Validate the public path command collection boundary."""
         _require_drawing_style(self.style, "PathDrawing")
-        if self.commands is None:
-            return
-        if isinstance(self.commands, (str, bytes)) or not isinstance(self.commands, Sequence):
-            raise TypeError("PathDrawing commands must be a sequence of PathCommand objects")
-        commands = list(self.commands)
-        if not all(isinstance(command, PathCommand) for command in commands):
-            raise TypeError("PathDrawing commands must contain only PathCommand objects")
-        object.__setattr__(self, "commands", commands)
+        object.__setattr__(self, "commands", _normalize_path_drawing_commands(self.commands))
 
     def to_component(self, output_format: OutputFormat | str) -> Component:
         """Create a path component for the requested backend."""
         target = normalize_output_format(output_format)
+        commands = _normalize_path_drawing_commands(self.commands)
         if target is OutputFormat.SVG:
             from InkGen.svg_generator import PathSVG
 
-            return PathSVG(self.style, commands=self.commands)
+            return PathSVG(self.style, commands=commands)
         from InkGen.pdf_generator import PathPDF
 
-        return PathPDF(self.style, commands=self.commands)
+        return PathPDF(self.style, commands=commands)
 
 
 @dataclass(frozen=True)
