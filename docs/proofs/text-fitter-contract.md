@@ -10,6 +10,7 @@ the binary search that selects the largest valid font size.
 The slice covers:
 
 - `FittingResult.text_bounding_box`
+- `FitterShape.__post_init__()`
 - `TextFitter._calculate_inner_boundary()`
 - `TextFitter._adaptive_word_wrap()`
 - `TextFitter._check_fit()`
@@ -61,6 +62,13 @@ Before/after edge changes:
   jitter containment math.
 - After TEXT-FITTER-JITTER-MARGIN-P2, jitter margins must be finite non-boolean
   numeric values; negative finite margins remain clamped to zero.
+- Before TEXT-FITTER-SHAPE-P2, public `FitterShape` instances accepted
+  malformed polygons, line-thickness ranges, and padding values until Shapely
+  or fitting math failed downstream.
+- After TEXT-FITTER-SHAPE-P2, public `FitterShape` instances reject non-polygon,
+  empty, or invalid polygons; unordered, malformed, negative, or
+  non-finite line-thickness ranges; and negative, non-finite, boolean, string,
+  bytes, or arbitrary-object padding values at construction.
 
 Cycle/layer/coupling/redundancy result:
 
@@ -91,6 +99,10 @@ ADR/rule impact:
 - Jitter safety margins are finite numeric values. Negative finite margins are
   accepted and clamped to zero; booleans, strings, bytes, arbitrary objects,
   `nan`, and infinity are invalid.
+- A `FitterShape` requires a non-empty valid Shapely polygon.
+- A `FitterShape` line-thickness range is exactly two ordered finite
+  non-negative numeric values.
+- A `FitterShape` padding value is a finite non-negative numeric scalar.
 - Missing glyph outlines fall back to conservative line boxes.
 - `component_to_fitter_shape()` derives fitting polygons from convex hulls or
   radius-based circular buffers.
@@ -115,6 +127,7 @@ ADR/rule impact:
 | Outline fallback | Use line boxes when glyph outlines are unavailable | PO-TFITTER-003 | `test_text_fitter_uses_rectangle_fallback_when_outlines_are_unavailable` | killed |
 | Jitter containment | Accept contained offsets and reject escaping offsets | PO-TFITTER-004 | `test_text_fitter_jitter_accepts_contained_offsets_and_rejects_escape` | killed |
 | Jitter margin boundary | Clamp finite negative margins and reject malformed/non-finite public values | PO-TFITTER-009 | `test_text_fitter_jitter_margin_is_clamped_before_offset_calculation`, `test_text_fitter_rejects_malformed_jitter_margins` | killed |
+| Fitter shape boundary | Reject malformed polygons, ranges, padding, and adapter inputs before fitting math consumes them | PO-TFITTER-010 | `test_fitter_shape_normalizes_public_boundary_values`, malformed shape tests, `test_component_to_fitter_shape_reuses_public_shape_validation` | killed |
 | Binary search | Select the largest valid font size and enforce minimum threshold | PO-TFITTER-005 | Binary-search and threshold tests | killed |
 | Word wrapping | Use horizontal bounds, center lines, and allow exact-width fits | PO-TFITTER-006 | `test_text_fitter_word_wrap_uses_shape_width_and_centers_lines` | one equivalent survivor |
 | Final outline correction | Replace line-box geometry with final outline geometry when outlines are available | PO-TFITTER-007 | `test_text_fitter_replaces_line_boxes_with_final_outline_geometry` | killed |
@@ -136,6 +149,7 @@ ADR/rule impact:
 | Concurrency/race | no | No shared mutable state or background behavior is introduced. | Not applicable |
 | Golden artifact/visual | no | This slice verifies geometry and metadata rather than rendered artifact pixels. | Not applicable |
 | Regression | yes | This closes skipped font sizes in binary search and unmarked text fitter behavior. | TEXT-FITTER-P1 tests |
+| Defensive/API boundary | yes | `FitterShape` is a public dataclass consumed by fitting math and component adapters. | TEXT-FITTER-SHAPE-P2 tests |
 
 ## Mutation Testing Gate
 
@@ -157,6 +171,8 @@ Current result:
   `line_w` and `available_width` are separately computed float objects; object
   identity does not hold in normal measurements. Exact-width numeric behavior
   is tested and killed the `>=` and `==` variants.
+- Cosmic Ray 8.4.6, scoped to TEXT-FITTER-SHAPE-P2 boundary rows: 50 work
+  items, 50 killed, and 0 survived.
 
 ## PO-TFITTER-001: Successful Fits Stay Contained
 
@@ -360,4 +376,47 @@ protects the public safety-margin scalar boundary.
 ### Conclusion
 
 Focused tests cover the malformed public partitions. Mutation, full coverage,
+lint, docs, and diff hygiene remain release-gate checks for the slice.
+
+## PO-TFITTER-010: Fitter Shapes Fail Fast At The Boundary
+
+### Claim
+
+`FitterShape` accepts only valid geometry and finite ordered numeric fitting
+parameters before downstream fitting math consumes them.
+
+### Domain
+
+Public `FitterShape(...)` construction and `component_to_fitter_shape(...)`
+adapter calls.
+
+### Dependencies
+
+- `FitterShape.__post_init__()`
+- `_normalize_fitter_polygon()`
+- `_normalize_finite_range()`
+- `_normalize_non_negative_float()`
+- `_normalize_finite_float()`
+- `component_to_fitter_shape()`
+
+### Proof Method
+
+`FitterShape.__post_init__()` normalizes every public construction path. It
+requires a non-empty valid Shapely polygon, a two-value ordered finite
+non-negative line-thickness range, and a finite non-negative padding value. The
+focused tests partition valid normalization, non-polygon objects,
+empty/degenerate polygons, invalid polygons with positive area, malformed range
+arity, boolean/string/bytes coercion hazards, non-finite values, negative
+values, reversed ranges, and the component adapter path.
+
+### Counterexamples And Exclusions
+
+This proof does not classify arbitrary Shapely geometry types as fit targets;
+the current contract is specifically `Polygon`. It also does not alter text
+fitting, wrapping, jitter, or outline behavior after a valid `FitterShape` is
+constructed.
+
+### Conclusion
+
+Focused tests and mutation cover the public boundary partitions. Full coverage,
 lint, docs, and diff hygiene remain release-gate checks for the slice.

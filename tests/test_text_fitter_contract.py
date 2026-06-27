@@ -8,6 +8,7 @@ import matplotlib.font_manager as fm
 import pytest
 from shapely.affinity import translate as shapely_translate
 from shapely.geometry import Point
+from shapely.geometry import Polygon as ShapelyPolygon
 from shapely.geometry import box as shapely_box
 
 from InkGen.style import DrawingStyle
@@ -190,6 +191,124 @@ def test_text_fitter_rejects_malformed_jitter_margins(
 
     with pytest.raises((TypeError, ValueError), match="jitter_margin must be a finite number"):
         fitter.fit(text_block, shape, jitter_x=True, jitter_margin=jitter_margin)
+
+
+@pytest.mark.condition("TEXT-FITTER-SHAPE-P2")
+def test_fitter_shape_normalizes_public_boundary_values() -> None:
+    """TEXT-FITTER-SHAPE-P2: Valid public shape fields are normalized at construction."""
+    shape = FitterShape(
+        polygon=shapely_box(0.0, 0.0, 20.0, 10.0),
+        line_thickness_range=(1, 2),
+        padding=0,
+    )
+
+    assert shape.line_thickness_range == (1.0, 2.0)
+    assert shape.padding == 0.0
+    assert shape.polygon.area == pytest.approx(200.0)
+
+    tiny_shape = FitterShape(
+        polygon=ShapelyPolygon([(0.0, 0.0), (0.5, 0.0), (0.5, 0.5), (0.0, 0.5)]),
+        line_thickness_range=(0.0, 0.0),
+        padding=0.0,
+    )
+    assert tiny_shape.polygon.area == pytest.approx(0.25)
+
+
+@pytest.mark.condition("TEXT-FITTER-SHAPE-P2")
+@pytest.mark.parametrize(
+    ("polygon", "error_type", "message"),
+    [
+        (object(), TypeError, "polygon must be a Shapely Polygon"),
+        (ShapelyPolygon(), ValueError, "polygon must be a non-empty valid Shapely Polygon"),
+        (ShapelyPolygon([(0.0, 0.0), (1.0, 1.0), (2.0, 2.0)]), ValueError, "polygon must be a non-empty valid Shapely Polygon"),
+        (
+            ShapelyPolygon(
+                [(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)],
+                holes=[[(5.0, 5.0), (6.0, 5.0), (6.0, 6.0), (5.0, 6.0)]],
+            ),
+            ValueError,
+            "polygon must be a non-empty valid Shapely Polygon",
+        ),
+    ],
+)
+def test_fitter_shape_rejects_malformed_polygons(
+    polygon: object,
+    error_type: type[Exception],
+    message: str,
+) -> None:
+    """TEXT-FITTER-SHAPE-P2: Fitter shapes reject non-geometric or degenerate polygons."""
+    with pytest.raises(error_type, match=message):
+        FitterShape(polygon=polygon)  # type: ignore[arg-type]
+
+
+@pytest.mark.condition("TEXT-FITTER-SHAPE-P2")
+@pytest.mark.parametrize(
+    ("line_thickness_range", "error_type", "message"),
+    [
+        ("1,2", TypeError, "line_thickness_range must be a two-value numeric range"),
+        (b"1,2", TypeError, "line_thickness_range must be a two-value numeric range"),
+        (True, TypeError, "line_thickness_range must be a two-value numeric range"),
+        ((1.0,), ValueError, "line_thickness_range must contain exactly two values"),
+        ((1.0, 2.0, 3.0), ValueError, "line_thickness_range must contain exactly two values"),
+        ((True, 1.0), TypeError, "line_thickness_range must be a finite number"),
+        ((1.0, "2.0"), TypeError, "line_thickness_range must be a finite number"),
+        ((float("nan"), 1.0), ValueError, "line_thickness_range must be a finite number"),
+        ((1.0, float("inf")), ValueError, "line_thickness_range must be a finite number"),
+        ((-0.1, 1.0), ValueError, "line_thickness_range values must be at least 0.0"),
+        ((1.0, -0.1), ValueError, "line_thickness_range values must be at least 0.0"),
+        ((2.0, 1.0), ValueError, "line_thickness_range lower bound must not exceed upper bound"),
+    ],
+)
+def test_fitter_shape_rejects_malformed_line_thickness_ranges(
+    line_thickness_range: object,
+    error_type: type[Exception],
+    message: str,
+) -> None:
+    """TEXT-FITTER-SHAPE-P2: Line thickness ranges must be ordered finite non-negative numbers."""
+    with pytest.raises(error_type, match=message):
+        FitterShape(
+            polygon=shapely_box(0.0, 0.0, 20.0, 10.0),
+            line_thickness_range=line_thickness_range,  # type: ignore[arg-type]
+        )
+
+
+@pytest.mark.condition("TEXT-FITTER-SHAPE-P2")
+@pytest.mark.parametrize(
+    ("padding", "error_type", "message"),
+    [
+        (True, TypeError, "padding must be a finite number"),
+        ("1.0", TypeError, "padding must be a finite number"),
+        (b"1.0", TypeError, "padding must be a finite number"),
+        (object(), TypeError, "padding must be a finite number"),
+        (float("nan"), ValueError, "padding must be a finite number"),
+        (float("inf"), ValueError, "padding must be a finite number"),
+        (-0.1, ValueError, "padding must be non-negative"),
+    ],
+)
+def test_fitter_shape_rejects_malformed_padding(
+    padding: object,
+    error_type: type[Exception],
+    message: str,
+) -> None:
+    """TEXT-FITTER-SHAPE-P2: Padding must be a finite non-negative scalar."""
+    with pytest.raises(error_type, match=message):
+        FitterShape(
+            polygon=shapely_box(0.0, 0.0, 20.0, 10.0),
+            padding=padding,  # type: ignore[arg-type]
+        )
+
+
+@pytest.mark.condition("TEXT-FITTER-SHAPE-P2")
+def test_component_to_fitter_shape_reuses_public_shape_validation() -> None:
+    """TEXT-FITTER-SHAPE-P2: Component adapters fail through the same shape boundary."""
+    style = DrawingStyle("text_fitter_shape_contract_polygon")
+    polygon_component = RegularPolygonSVG(position=(50.0, 50.0), sides=6, radius=20.0, style=style)
+
+    with pytest.raises(ValueError, match="line_thickness_range lower bound must not exceed upper bound"):
+        component_to_fitter_shape(polygon_component, thickness_range=(2.0, 1.0))
+
+    with pytest.raises(TypeError, match="padding must be a finite number"):
+        component_to_fitter_shape(polygon_component, padding="bad")  # type: ignore[arg-type]
 
 
 @pytest.mark.condition("TEXT-FITTER-P1")

@@ -47,6 +47,16 @@ class FitterShape:
     line_thickness_range: tuple[float, float] = (1.0, 3.0)
     padding: float = 1.0
 
+    def __post_init__(self) -> None:
+        """Validate the public shape boundary before fitting math consumes it."""
+        self.polygon = _normalize_fitter_polygon(self.polygon)
+        self.line_thickness_range = _normalize_finite_range(
+            self.line_thickness_range,
+            name="line_thickness_range",
+            minimum=0.0,
+        )
+        self.padding = _normalize_non_negative_float(self.padding, name="padding")
+
 
 @dataclass
 class TextBlock:
@@ -85,6 +95,58 @@ def _normalize_jitter_margin(value: object) -> float:
     if not isfinite(margin):
         raise ValueError("jitter_margin must be a finite number")
     return max(0.0, margin)
+
+
+def _normalize_fitter_polygon(value: object) -> ShapelyPolygon:
+    """Normalize the public fitter polygon before Shapely operations run."""
+    if not isinstance(value, ShapelyPolygon):
+        raise TypeError("polygon must be a Shapely Polygon")
+    if value.is_empty or not value.is_valid:
+        raise ValueError("polygon must be a non-empty valid Shapely Polygon")
+    return value
+
+
+def _normalize_finite_range(
+    value: object,
+    *,
+    name: str,
+    minimum: float | None = None,
+) -> tuple[float, float]:
+    """Normalize a public two-value numeric range."""
+    if isinstance(value, bool | str | bytes):
+        raise TypeError(f"{name} must be a two-value numeric range")
+    try:
+        lower, upper = value
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must contain exactly two values") from exc
+    lower_value = _normalize_finite_float(lower, name=name)
+    upper_value = _normalize_finite_float(upper, name=name)
+    if minimum is not None and (lower_value < minimum or upper_value < minimum):
+        raise ValueError(f"{name} values must be at least {minimum}")
+    if lower_value > upper_value:
+        raise ValueError(f"{name} lower bound must not exceed upper bound")
+    return lower_value, upper_value
+
+
+def _normalize_non_negative_float(value: object, *, name: str) -> float:
+    """Normalize a public non-negative finite scalar."""
+    number = _normalize_finite_float(value, name=name)
+    if number < 0.0:
+        raise ValueError(f"{name} must be non-negative")
+    return number
+
+
+def _normalize_finite_float(value: object, *, name: str) -> float:
+    """Normalize a public finite scalar without string or bool coercion."""
+    if isinstance(value, bool | str | bytes):
+        raise TypeError(f"{name} must be a finite number")
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise TypeError(f"{name} must be a finite number") from exc
+    if not isfinite(number):
+        raise ValueError(f"{name} must be a finite number")
+    return number
 
 
 def plot_polygon(ax, poly, color, label):
