@@ -1,9 +1,9 @@
 # Layer Group Contract Proof Obligations
 
-This note applies the InkGen Definition of Done to the LAYER-GROUP-P2 layer
-group containment slice. It closes the shared contract gap exposed by SVG and
-PDF duplicate-label rendering: `Layer.component_groups` is a label lookup, not
-a complete traversal API.
+This note applies the InkGen Definition of Done to the LAYER-GROUP-P2 and
+LAYER-GROUP-LOOKUP-P2 layer group containment slices. It closes the shared
+contract gap exposed by SVG and PDF duplicate-label rendering:
+`Layer.component_groups` is a label lookup, not a complete traversal API.
 
 ## Scope
 
@@ -54,11 +54,17 @@ Before/after edge changes:
   labels.
 - Before this slice, removing one group with a repeated label deleted the label
   lookup even when another group with that label remained.
+- Before the lookup hardening update, `Layer.component_groups` returned the
+  live internal label map, so external callers could mutate layer lookup state
+  without using `add_component_group()` or `remove_component_group()`.
 - After this slice, `Layer.groups()` returns every stored group in insertion
   order, including repeated labels.
 - After this slice, removing a repeated label restores lookup to the latest
   remaining group with that label, or removes the label only when no group
   remains.
+- After the lookup hardening update, `Layer.component_groups` returns a
+  snapshot of the label-to-id lookup; external mutation of the returned
+  dictionary cannot corrupt layer removal or group lookup state.
 - SVG and PDF traversal no longer depend on private `Layer` storage.
 
 Cycle/layer/coupling/redundancy result:
@@ -80,6 +86,8 @@ ADR/rule impact:
   `group_label`.
 - `Layer.component_groups` remains a backwards-compatible label-to-id lookup and
   maps a repeated label to the latest group with that label.
+- `Layer.component_groups` returns a snapshot lookup, not the live internal
+  storage dictionary.
 - `Layer.groups()` is the complete traversal API and preserves insertion order.
 - `Layer.remove_component_group(id)` removes the addressed group only.
 - `Layer.remove_component_group(label)` removes the current lookup target for
@@ -95,6 +103,7 @@ ADR/rule impact:
 | Removal by id with repeated labels | Remove only addressed group and keep remaining lookup live | PO-LAYER-002 | `test_layer_remove_by_id_keeps_duplicate_label_lookup_live` | mutation gate |
 | Removal by label with repeated labels | Remove current lookup target and restore previous duplicate | PO-LAYER-003 | `test_layer_remove_by_label_restores_previous_duplicate_lookup` | mutation gate |
 | Removing the final label group | Clear lookup and reject stale labels | PO-LAYER-004 | `test_layer_remove_last_duplicate_deletes_label_lookup` | mutation gate |
+| Label lookup snapshot | Preserve lookup values while preventing external mutation of layer state | PO-LAYER-007 | `test_layer_component_groups_returns_lookup_snapshot` | killed |
 | Serialization round trip | Preserve repeated-label groups as distinct entries | PO-LAYER-005 | `test_layer_serialization_preserves_repeated_label_groups` | mutation gate |
 | Renderer dependency path | SVG/PDF consume public traversal | PO-LAYER-006 | `test_document_renderers_use_public_layer_group_contract` | mutation gate |
 
@@ -103,8 +112,8 @@ ADR/rule impact:
 | Test class | Applicable? | Reason | Evidence |
 |---|---|---|---|
 | Unit | yes | Layer group lookup/removal/traversal are deterministic. | LAYER-GROUP-P2 tests |
-| Behavioral/condition | yes | The slice defines public layer behavior. | Tests are marked `@pytest.mark.condition("LAYER-GROUP-P2")`. |
-| Failure-mode | yes | Stale label removal must fail after the final duplicate is removed. | stale-label assertion |
+| Behavioral/condition | yes | The slice defines public layer behavior. | Tests are marked `@pytest.mark.condition("LAYER-GROUP-P2")` and `@pytest.mark.condition("LAYER-GROUP-LOOKUP-P2")`. |
+| Failure-mode | yes | Stale label removal must fail after the final duplicate is removed, and externally mutated lookup snapshots must not alter stored groups. | stale-label and lookup-snapshot assertions |
 | Integration/live-path | yes | SVG and PDF renderers depend on layer traversal. | renderer helper contract test plus existing SVG/PDF document tests |
 | Contract/API compatibility | yes | `component_groups` remains a label lookup while `groups()` adds complete traversal. | lookup and traversal assertions |
 | Property/fuzz | no | The duplicate-label partitions are finite and directly tested. | Not applicable |
@@ -124,6 +133,8 @@ Proof-critical mutation targets:
 - Removal by label must restore lookup to a remaining duplicate when one
   exists.
 - Removing the final duplicate must clear lookup and collision settings.
+- `Layer.component_groups` must return a snapshot instead of the mutable live
+  lookup map.
 - Serialization/hydration must preserve repeated-label entries.
 - SVG/PDF traversal helpers must call the public `Layer.groups()` contract.
 
@@ -135,6 +146,11 @@ Current result:
 - Proof-critical work items after filter: 16.
 - Killed mutants: 16.
 - Surviving mutants: 0.
+- LAYER-GROUP-LOOKUP-P2 continuation: Cosmic Ray 8.4.6 generated one
+  proof-critical property-boundary mutant for `Layer.component_groups`.
+  Result: 1 killed, 0 survived. Cosmic Ray did not emit a value-level mutant for
+  `dict(self._group_names)`, so the snapshot-copy behavior is proven by the
+  focused failure-mode test and the available property-boundary mutation.
 
 ## PO-LAYER-001: Complete Traversal Preserves Repeated Labels
 
@@ -268,3 +284,28 @@ the helpers return the same complete tuple as the public layer contract.
 ### Conclusion
 
 Proven for the stated domain after tests and mutation pass.
+
+## PO-LAYER-007: Label Lookup Is A Snapshot
+
+### Claim
+
+`Layer.component_groups` preserves the label-to-id lookup contract without
+exposing mutable internal layer state.
+
+### Domain
+
+Public `Layer.component_groups` reads for layers populated through
+`add_component_group()`, including layers later modified through
+`remove_component_group()`.
+
+### Proof Method
+
+The property returns `dict(self._group_names)`, preserving the same
+label-to-current-id contents while severing write access to the internal lookup
+map. The focused test mutates the returned dictionary by clearing it and adding
+an injected label, then verifies the stored lookup, complete traversal,
+`group(id)`, and later `remove_component_group(label)` behavior remain correct.
+
+### Conclusion
+
+Proven for the stated public lookup domain after tests and mutation pass.

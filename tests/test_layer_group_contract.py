@@ -127,6 +127,28 @@ def test_layer_remove_rejects_invalid_integer_id_without_mutating_groups() -> No
     assert layer.component_groups == {"Known": group.group_id}
 
 
+@pytest.mark.condition("LAYER-GROUP-LOOKUP-P2")
+def test_layer_component_groups_returns_lookup_snapshot() -> None:
+    """LAYER-GROUP-LOOKUP-P2: Returned label lookups cannot mutate layer state."""
+    layer = Layer("base", Canvas(100.0, 80.0))
+    first = _group("Known", 10.0)
+    second = _group("Other", 30.0)
+    layer.add_component_group(first)
+    layer.add_component_group(second)
+
+    lookup = layer.component_groups
+    lookup.clear()
+    lookup["Injected"] = first.group_id + 999
+
+    assert layer.component_groups == {"Known": first.group_id, "Other": second.group_id}
+    assert layer.groups() == (first, second)
+    assert layer.group(first.group_id) is first
+
+    layer.remove_component_group("Known")
+    assert layer.component_groups == {"Other": second.group_id}
+    assert layer.groups() == (second,)
+
+
 @pytest.mark.condition("LAYER-GROUP-P2")
 def test_layer_serialization_preserves_repeated_label_groups() -> None:
     """LAYER-GROUP-P2: Layer parameters round trip repeated label groups as distinct entries."""

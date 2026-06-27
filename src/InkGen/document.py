@@ -220,7 +220,7 @@ class Layer:
         Returns:
             Dict[str, int]: Dictionary with each component group name and id.
         """
-        return self._group_names
+        return dict(self._group_names)
 
     def groups(self) -> tuple[ComponentGroup, ...]:
         """Return all component groups in insertion order, including repeated labels."""
