@@ -2213,6 +2213,13 @@ def _component_group_class(class_name: str) -> type:
     return candidate
 
 
+def _component_group_style_class(class_name: str) -> type[DrawingStyle] | type[TextStyle]:
+    candidate = _component_group_class(class_name)
+    if candidate not in (DrawingStyle, TextStyle):
+        raise ValueError(f"Unsupported component group style type: {class_name}")
+    return candidate
+
+
 class ComponentGroup:
     """
         A collection of components that makes up a labelled object in a document.
@@ -2261,7 +2268,7 @@ class ComponentGroup:
             if 'style' in component_payload:
                 style_payload = component_payload['style']
                 style_class_name, style_data = _component_group_style_payload(style_payload)
-                style_class = _component_group_class(style_class_name)
+                style_class = _component_group_style_class(style_class_name)
                 if style_data["name"] not in list(styles.keys()):
                     style = style_class.create_from_dict(style_payload)
                     styles[style_data["name"]] = style

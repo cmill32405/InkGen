@@ -379,3 +379,45 @@ override rejection.
 Proven for the stated domain after focused behavioral tests and scoped mutation
 testing. Full repository coverage, lint, docs, and diff hygiene remain
 release-gate checks for the slice.
+
+## PO-CGROUP-009: Style Payload Types Are Style Classes
+
+### Claim
+
+`ComponentGroup.create_from_dict()` accepts only `DrawingStyle` and `TextStyle`
+style envelopes before hydrating component-group children.
+
+### Domain
+
+Public component-group hydration calls whose serialized component payloads
+include a `style` envelope.
+
+### Dependencies
+
+- `_component_group_style_payload()`
+- `_component_group_class()`
+- `_component_group_style_class()`
+- `DrawingStyle`
+- `TextStyle`
+- `ComponentGroup.create_from_dict()`
+
+### Proof Method
+
+`_component_group_style_payload()` validates the style envelope shape and style
+name. `_component_group_style_class()` then resolves the style discriminator and
+rejects any resolvable non-style class before the style cache or component
+factory can consume it. Focused tests provide style envelopes using resolvable
+non-style component classes (`Component` and `StandardDrawingComponent`) and
+prove hydration fails with a style-type error rather than later constructor
+type errors.
+
+### Counterexamples And Exclusions
+
+Malformed style envelope shapes and wrong-kind style-cache overrides remain
+covered by `PO-CGROUP-006` and `PO-CGROUP-008`. Adding a new style class would
+require adding it to the explicit style-class resolver and its hydration tests.
+
+### Conclusion
+
+Proven for the stated style-envelope domain after focused tests and mutation
+pass.

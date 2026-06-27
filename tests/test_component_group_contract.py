@@ -282,3 +282,27 @@ def test_component_group_hydration_rejects_malformed_style_envelopes(
 
     with pytest.raises(exception_type, match=message):
         ComponentGroup.create_from_dict(payload, {})
+
+
+@pytest.mark.condition("COMPONENT-GROUP-STYLE-TYPE-P2")
+@pytest.mark.parametrize("style_type", ["Component", "StandardDrawingComponent"])
+def test_component_group_hydration_rejects_resolvable_non_style_payload_types(style_type: str) -> None:
+    """COMPONENT-GROUP-STYLE-TYPE-P2: Style envelopes accept only style classes."""
+    style = _style()
+    payload = {
+        "ComponentGroup": {
+            "group_label": "parts",
+            "components": [
+                {
+                    "StandardDrawingComponent": {
+                        "point_1": (1.0, 2.0),
+                        "point_2": (3.0, 4.0),
+                        "style": {style_type: {"name": style.name}},
+                    }
+                }
+            ],
+        }
+    }
+
+    with pytest.raises(ValueError, match=f"Unsupported component group style type: {style_type}"):
+        ComponentGroup.create_from_dict(payload, {})
