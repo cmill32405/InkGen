@@ -240,6 +240,25 @@ def test_grammar_truth_rejects_invalid_optional_fields() -> None:
         GrammarTruthAnnotation("B1", "cue", instance_id=object())
 
 
+@pytest.mark.condition("GRAMMAR-TRUTH-VALUE-JSON-P2")
+@pytest.mark.parametrize(
+    "value",
+    [object(), {object(): "bad"}, {"bad": object()}, float("nan"), float("inf")],
+)
+def test_grammar_truth_rejects_non_json_serializable_values(value: object) -> None:
+    """GRAMMAR-TRUTH-VALUE-JSON-P2: Values fail before JSON export can break."""
+    target = _TargetWithBBox(None)
+
+    with pytest.raises(TypeError, match="grammar truth value must be JSON serializable"):
+        annotate_grammar_truth(target, "B1", "cue", value=value)
+
+    with pytest.raises(TypeError, match="grammar truth value must be JSON serializable"):
+        GrammarTruthAnnotation("B1", "cue", value=value)
+
+    with pytest.raises(TypeError, match="grammar truth value must be JSON serializable"):
+        GrammarTruthRecord("B1", "cue", 1, None, value, None, "body", None)
+
+
 @pytest.mark.condition("TRUTH-ANNOTATION-PAYLOAD-P2")
 @pytest.mark.parametrize(
     ("payload", "exception_type", "message"),
@@ -259,6 +278,11 @@ def test_grammar_truth_rejects_invalid_optional_fields() -> None:
             {"condition_id": "B1", "kind": "cue", "instance_id": object()},
             TypeError,
             "instance_id must be a string or None",
+        ),
+        (
+            {"condition_id": "B1", "kind": "cue", "value": object()},
+            TypeError,
+            "grammar truth value must be JSON serializable",
         ),
     ],
 )

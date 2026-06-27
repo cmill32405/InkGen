@@ -5,7 +5,8 @@ slice. It separates the extraction-truth schema, PDF coordinate theorem,
 deterministic serialization, parameter round trip, and rendered-byte
 noninterference proof obligations. It also covers serialized annotation
 payload validation at restore boundaries and finite/non-boolean bbox coordinate
-normalization.
+normalization. Grammar-truth obligations that share this truth-emitter layer
+are recorded here when no separate grammar-truth proof note exists.
 
 ## Scope
 
@@ -30,6 +31,8 @@ Affected surface:
 
 - `src/InkGen/extraction_truth.py`: annotation validation and truth-record
   helpers.
+- `src/InkGen/grammar_truth.py`: grammar annotation validation, deterministic
+  value sorting, and grammar truth JSON helpers.
 - `src/InkGen/pdf_generator.py`: existing live-path extraction-truth emission
   and parameter round trip.
 - `tests/test_extraction_truth.py`: PDF-P2 condition tests for direct helper
@@ -69,6 +72,11 @@ Before/after edge changes:
   and could pass `nan` or infinity into parser-facing PDF coordinates.
 - After TRUTH-BBOX-FINITE-P2, bbox coordinate candidates must be non-boolean
   finite integers or floats before they can contribute to an emitted bbox.
+- Before GRAMMAR-TRUTH-VALUE-JSON-P2, grammar truth accepted arbitrary Python
+  objects as values, sorted them through fallback stringification, then failed
+  later during JSON export.
+- After GRAMMAR-TRUTH-VALUE-JSON-P2, grammar truth values must be deterministic
+  standard JSON values before annotations or records can be constructed.
 
 Cycle/layer/coupling/redundancy result:
 
@@ -100,6 +108,8 @@ ADR/rule impact:
   normalizable bbox and `None` otherwise.
 - An extraction annotation is body-sourced when
   `source_channel == BODY_SOURCE_CHANNEL`.
+- A valid grammar truth value is `None` or a standard JSON value accepted by
+  `json.dumps(..., sort_keys=True, allow_nan=False)`.
 
 ## Comprehensiveness Matrix
 
@@ -113,6 +123,7 @@ ADR/rule impact:
 | Invalid schema fields | Fail near annotation boundary | Constructor invariant | `test_extraction_truth_rejects_empty_required_fields`, `test_extraction_truth_rejects_invalid_optional_fields` | one equivalent survivor |
 | Malformed bbox shapes | Ignore malformed entries or return `None` without partial coercion | Defensive invariant | `test_extraction_truth_bbox_normalization_rejects_malformed_shapes` | killed |
 | Boolean or non-finite bbox coordinates | Ignore malformed point entries or suppress malformed rectangular bboxes before PDF conversion | PO-ET-006 | `test_extraction_truth_bbox_normalization_rejects_bool_and_nonfinite_coordinates` | killed |
+| Grammar truth JSON value domain | Reject arbitrary objects, non-serializable nested values, and `nan`/infinity before sort/export | PO-GT-001 | `test_grammar_truth_rejects_non_json_serializable_values`, `test_grammar_truth_from_dict_rejects_malformed_serialized_fields` | killed |
 | Unannotated legacy PDF parameters | Preserve prior parameter shape | Compatibility invariant | `test_unannotated_pdf_parameters_do_not_gain_extraction_truth_keys` | killed |
 | Extraction annotations only | Do not affect rendered PDF bytes | PO-ET-004 | `test_extraction_truth_annotations_do_not_change_pdf_bytes` | killed |
 | Sorting and JSON serialization | Emit deterministic order and compact sorted-key JSON | Determinism invariant | sorting and JSON tests | killed |
@@ -375,3 +386,47 @@ bbox. It only proves the numeric domain accepted by the truth emitter.
 
 Supported by focused extraction/grammar/PDF tests, scoped mutation testing, and
 the full coverage gate for the stated finite bbox boundary.
+
+## PO-GT-001: Grammar Truth Values Are Deterministic JSON
+
+### Claim
+
+Grammar truth annotations and emitted records reject values that cannot be
+serialized into deterministic standard JSON.
+
+### Domain
+
+Public `GrammarTruthAnnotation(...)`, `annotate_grammar_truth(..., value=...)`,
+`GrammarTruthAnnotation.from_dict(...)`, and `GrammarTruthRecord(...)` calls.
+
+### Dependencies
+
+- `GrammarTruthAnnotation.__post_init__()`
+- `GrammarTruthRecord.__post_init__()`
+- `_stable_value()`
+- `_require_json_serializable_value()`
+- `sort_grammar_truth_records()`
+- `grammar_truth_json()`
+
+### Proof Method
+
+`GrammarTruthAnnotation.__post_init__()` and
+`GrammarTruthRecord.__post_init__()` both route `value` through
+`_require_json_serializable_value()`. The helper calls `json.dumps()` with
+sorted keys, compact separators, and `allow_nan=False`, so arbitrary objects,
+non-serializable nested values, and non-standard floating values fail before
+truth records can enter the sort/export path. `_stable_value()` uses the same
+helper, so deterministic sorting and JSON export share the same value domain.
+
+### Counterexamples And Exclusions
+
+Semantically validating the meaning of a JSON value is outside this proof; the
+proof only establishes that accepted values have a deterministic JSON artifact
+representation. Raw dictionaries passed directly to `grammar_truth_json()` are
+outside annotation construction and remain ordinary JSON serialization inputs.
+
+### Conclusion
+
+Focused tests cover direct annotation, public helper, from-dict, emitted record,
+and nested invalid value paths. Full coverage, mutation, lint, docs, and diff
+hygiene remain release-gate checks for the slice.

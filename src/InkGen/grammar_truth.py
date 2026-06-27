@@ -30,6 +30,7 @@ class GrammarTruthAnnotation:
         if self.kind not in GRAMMAR_TRUTH_KINDS:
             valid = ", ".join(sorted(GRAMMAR_TRUTH_KINDS))
             raise ValueError(f"kind must be one of: {valid}.")
+        _require_json_serializable_value(self.value)
         if not isinstance(self.source_channel, str) or not self.source_channel:
             raise ValueError("source_channel must be a non-empty string.")
         if self.links_to is not None and not isinstance(self.links_to, str):
@@ -77,6 +78,10 @@ class GrammarTruthRecord:
     source_channel: str
     instance_id: str | None
     coordinate_frame: str = COORDINATE_FRAME_PDF
+
+    def __post_init__(self) -> None:
+        """Validate emitted grammar truth values before JSON serialization."""
+        _require_json_serializable_value(self.value)
 
     @classmethod
     def from_annotation(
@@ -249,4 +254,12 @@ def _optional_string_or_none(value: object, name: str) -> str | None:
 
 
 def _stable_value(value: object | None) -> str:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
+    return _require_json_serializable_value(value)
+
+
+def _require_json_serializable_value(value: object | None) -> str:
+    """Return a deterministic JSON key for valid grammar truth values."""
+    try:
+        return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    except (TypeError, ValueError) as exc:
+        raise TypeError("grammar truth value must be JSON serializable") from exc
