@@ -480,3 +480,51 @@ inside the current dependency-free renderer boundary.
 The `RECTANGLE-DRAWING-GEOMETRY-P2` continuation keeps that renderer behavior
 unchanged while moving malformed neutral rectangle geometry rejection to the
 renderer-neutral recipe boundary.
+
+## RECTANGLE-DRAWING-LIVE-CORNER-RADII-P2
+
+### Claim
+
+`RectangleDrawing` does not retain caller-owned mutable corner-radii payloads,
+and renderer materialization dispatches normalized current radii into SVG and
+PDF components.
+
+### Domain
+
+All `RectangleDrawing` instances created through the public constructor with
+corner radii accepted by `normalize_rectangle_corner_radii()`, including list
+payloads tolerated by the shared rectangle-radius helper.
+
+### Dependencies
+
+- `normalize_rectangle_corner_radii()`
+- `RectangleDrawing.__post_init__()`
+- `RectangleDrawing.to_component()`
+- `DrawingComponentGroup.to_group()`
+- `RectangleSVG`
+- `RectanglePDF`
+
+### Proof Method
+
+`RectangleDrawing.__post_init__()` normalizes corner radii against the normalized
+width and height, then stores either a scalar float for scalar inputs or a tuple
+for pair inputs. This detaches caller-owned list payloads without changing the
+legacy scalar public shape. `RectangleDrawing.to_component()` normalizes the
+current stored radii again immediately before backend dispatch, so direct
+materialization and `DrawingComponentGroup.to_group()` both pass normalized
+radii to concrete renderers. Focused condition tests mutate the original list
+after construction and prove the neutral recipe and SVG/PDF materialized
+components keep the original tuple. A scalar-shape test proves legacy scalar
+radii still serialize as scalars. A group materialization test forces a current
+list payload and proves SVG/PDF dispatch receives normalized tuples.
+
+### Counterexamples And Exclusions
+
+Arbitrary private mutation through `object.__setattr__()` remains outside the
+public immutability contract. The group materialization test uses that technique
+only to isolate the live dispatch normalization path.
+
+### Conclusion
+
+Proven for public construction aliasing and live SVG/PDF materialization after
+focused tests and scoped mutation pass.

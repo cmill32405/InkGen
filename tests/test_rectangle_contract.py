@@ -177,6 +177,52 @@ def test_rectangle_drawing_materializes_svg_and_pdf_components(drawing_style: Dr
     assert pdf.corner_radii == (5.0, 3.0)
 
 
+@pytest.mark.condition("RECTANGLE-DRAWING-LIVE-CORNER-RADII-P2")
+def test_rectangle_drawing_detaches_list_corner_radii_before_materialization(drawing_style: DrawingStyle) -> None:
+    """RECTANGLE-DRAWING-LIVE-CORNER-RADII-P2: Public list radii cannot mutate a recipe after construction."""
+    corner_radii = [5.0, 3.0]
+    drawing = RectangleDrawing((10.0, 20.0), 40.0, 30.0, corner_radii, drawing_style)  # type: ignore[arg-type]
+
+    corner_radii[0] = 99.0
+    corner_radii[1] = 99.0
+    svg = drawing.to_component(OutputFormat.SVG)
+    pdf = drawing.to_component(OutputFormat.PDF)
+
+    assert drawing.corner_radii == (5.0, 3.0)
+    assert svg.corner_radii == (5.0, 3.0)
+    assert pdf.corner_radii == (5.0, 3.0)
+
+
+@pytest.mark.condition("RECTANGLE-DRAWING-LIVE-CORNER-RADII-P2")
+def test_rectangle_drawing_preserves_scalar_corner_radii_shape(drawing_style: DrawingStyle) -> None:
+    """RECTANGLE-DRAWING-LIVE-CORNER-RADII-P2: Scalar radii keep the legacy public shape."""
+    drawing = RectangleDrawing((10.0, 20.0), 40.0, 30.0, 0, drawing_style)  # type: ignore[arg-type]
+    svg = drawing.to_component(OutputFormat.SVG)
+    pdf = drawing.to_component(OutputFormat.PDF)
+
+    assert drawing.corner_radii == 0.0
+    assert svg.corner_radii == 0.0
+    assert pdf.corner_radii == 0.0
+
+
+@pytest.mark.condition("RECTANGLE-DRAWING-LIVE-CORNER-RADII-P2")
+def test_rectangle_group_materialization_normalizes_current_corner_radii(drawing_style: DrawingStyle) -> None:
+    """RECTANGLE-DRAWING-LIVE-CORNER-RADII-P2: Group materialization dispatches normalized rectangle radii."""
+    drawing = RectangleDrawing((10.0, 20.0), 40.0, 30.0, 0.0, drawing_style)
+    object.__setattr__(drawing, "corner_radii", [4.0, 2.0])
+    group = DrawingComponentGroup("rectangles", [drawing])
+
+    svg_group = group.to_group(OutputFormat.SVG)
+    pdf_group = group.to_group(OutputFormat.PDF)
+    svg = next(svg_group.components())
+    pdf = next(pdf_group.components())
+
+    assert isinstance(svg, RectangleSVG)
+    assert isinstance(pdf, RectanglePDF)
+    assert svg.corner_radii == (4.0, 2.0)
+    assert pdf.corner_radii == (4.0, 2.0)
+
+
 @pytest.mark.condition("RECTANGLE-DRAWING-GEOMETRY-P2")
 def test_rectangle_drawing_normalizes_geometry_before_materialization(drawing_style: DrawingStyle) -> None:
     """RECTANGLE-DRAWING-GEOMETRY-P2: Neutral rectangle geometry is normalized at construction."""

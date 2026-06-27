@@ -142,6 +142,14 @@ def _normalize_polygonal_drawing_points(points: object, style: DrawingStyle) -> 
     return concrete.points
 
 
+def _normalize_rectangle_drawing_corner_radii(corner_radii: object, width: float, height: float) -> float | tuple[float, float]:
+    """Normalize RectangleDrawing radii without changing scalar public shape."""
+    rx, ry = normalize_rectangle_corner_radii(corner_radii, width, height)  # type: ignore[arg-type]
+    if isinstance(corner_radii, (float, int)) and not isinstance(corner_radii, bool):
+        return rx
+    return rx, ry
+
+
 @dataclass(frozen=True)
 class RectangleDrawing:
     """Renderer-neutral rectangle primitive."""
@@ -157,22 +165,24 @@ class RectangleDrawing:
         position = _coerce_point_pair(self.position, name="RectangleDrawing position")
         width = _coerce_finite_non_negative_float(self.width, name="RectangleDrawing width")
         height = _coerce_finite_non_negative_float(self.height, name="RectangleDrawing height")
-        normalize_rectangle_corner_radii(self.corner_radii, width, height)
+        corner_radii = _normalize_rectangle_drawing_corner_radii(self.corner_radii, width, height)
         object.__setattr__(self, "position", position)
         object.__setattr__(self, "width", width)
         object.__setattr__(self, "height", height)
+        object.__setattr__(self, "corner_radii", corner_radii)
         _require_drawing_style(self.style, "RectangleDrawing")
 
     def to_component(self, output_format: OutputFormat | str) -> Component:
         """Create a rectangle component for the requested backend."""
         target = normalize_output_format(output_format)
+        corner_radii = _normalize_rectangle_drawing_corner_radii(self.corner_radii, self.width, self.height)
         if target is OutputFormat.SVG:
             from InkGen.svg_generator import RectangleSVG
 
-            return RectangleSVG(self.position, self.width, self.height, self.corner_radii, self.style)
+            return RectangleSVG(self.position, self.width, self.height, corner_radii, self.style)
         from InkGen.pdf_generator import RectanglePDF
 
-        return RectanglePDF(self.position, self.width, self.height, self.corner_radii, self.style)
+        return RectanglePDF(self.position, self.width, self.height, corner_radii, self.style)
 
 
 @dataclass(frozen=True)
