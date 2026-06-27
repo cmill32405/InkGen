@@ -94,6 +94,10 @@ Before/after edge changes:
   silently summarized malformed post-construction drawing-group mutations and
   `parameters` could fail through incidental `AttributeError` while reading
   `component.__dict__`.
+- Before the VML-number hardening update, special-case live `CircleDrawing`
+  DOCX/HTML bounds and DOCX VML output could consume malformed position/radius
+  values through raw arithmetic and `float()` formatting. DOCX twip conversion
+  also used direct `float()` coercion for final artifact numbers.
 - After this slice, DOCX ZIP parts use a fixed timestamp and drawing
   materialization must return an InkGen `Component`.
 - After the drawing-label hardening update, drawing block hydration passes
@@ -134,6 +138,10 @@ Before/after edge changes:
   summaries revalidate public mutable drawing component lists before using
   class names, and serialized flow-document drawing parameters reject malformed
   or unsupported drawing primitives before reading component internals.
+- After the VML-number hardening update, special-case circle bounds/VML and
+  DOCX twip conversion reject booleans, strings, bytes, arbitrary objects,
+  non-finite values, and non-positive circle radii before document artifacts are
+  emitted.
 - No new dependency edge or third-party dependency was introduced.
 
 Cycle/layer/coupling/redundancy result:
@@ -225,6 +233,9 @@ ADR/rule impact:
 - `_drawing_component_parameters()` validates each live drawing component and
   requires a supported serializable neutral primitive type before reading
   component internals for `FlowDocument.parameters`.
+- `_artifact_number()`, `_artifact_point_pair()`, and
+  `_positive_artifact_number()` validate final document artifact numeric
+  boundaries used by circle VML/bounds and DOCX twip conversion.
 
 ## Comprehensiveness Matrix
 
@@ -248,6 +259,7 @@ ADR/rule impact:
 | File writer path boundary | Accept string/path-like output paths and reject malformed output path values before writing | PO-FDOC-013 | `test_flow_document_file_writers_accept_pathlike_outputs`, `test_flow_document_file_writers_reject_malformed_paths`, `test_flow_document_file_writers_fail_on_missing_directory` | killed |
 | Materialized drawing point surface | Accept finite coordinate pairs and reject malformed/non-finite materialized point surfaces before HTML/DOCX artifacts consume them | PO-FDOC-022 | `test_flow_document_accepts_valid_materialized_drawing_points`, `test_flow_document_rejects_malformed_materialized_drawing_points` | killed |
 | Live drawing components in text/parameter paths | Reject malformed public drawing-group mutations before plain-text summaries or serialized parameters consume them | PO-FDOC-023 | `test_flow_document_plain_text_revalidates_mutated_drawing_components`, `test_flow_document_parameters_revalidate_mutated_drawing_components`, `test_flow_document_parameters_preserve_path_drawing_commands` | killed |
+| Document artifact numbers | Reject malformed live circle VML numbers and malformed DOCX twip numbers before artifact serialization | PO-FDOC-026 | `test_flow_document_formats_valid_circle_vml_and_twips`, `test_flow_document_rejects_malformed_circle_vml_numbers`, `test_flow_document_rejects_malformed_docx_twip_numbers` | pending |
 | Malformed serialized drawing label | Reject through the neutral group label contract | PO-FDOC-006 | `test_flow_document_drawing_group_hydration_rejects_malformed_label` | behavioral evidence |
 | Invalid drawing materialization | Reject before silent omission | PO-FDOC-004 | `test_flow_document_rejects_invalid_drawing_materialization` | killed |
 | Invalid drawing render fragments | Reject SVG materializations without string `generate_svg()` fragments and DOCX/PDF materializations without points | PO-FDOC-014 | `test_flow_document_rejects_materializations_without_render_fragments` | killed |
@@ -305,6 +317,8 @@ Proof-critical mutation targets:
   failure-mode tests or exact bounds/VML assertions.
 - Weakening live drawing component validation before plain-text summaries or
   serialized parameters should fail live-component mutation tests.
+- Weakening final artifact-number validation should fail malformed circle VML,
+  malformed twip, or exact circle VML/twip formatting tests.
 
 Current result:
 
@@ -344,6 +358,9 @@ Current result:
   scoped to `_drawing_plain_text()`, `_drawing_component_parameters()`, and
   `_validate_drawing_component_boundary()` produced 8 proof-critical work
   items. Result: 8 killed, 0 survived.
+- `FLOW-DOCUMENT-VML-NUMBER-P2` scoped to circle bounds/VML, artifact-number
+  helpers, and DOCX twip conversion produced 32 proof-critical work items.
+  Result: 32 killed, 0 survived.
 
 ## PO-FDOC-001: DOCX Bytes Are Deterministic
 
@@ -930,6 +947,55 @@ neutral primitives.
 
 Proven for the stated flow-document drawing serialization domain after focused
 tests and mutation pass.
+
+## PO-FDOC-026: Document Artifact Numbers Are Finite
+
+### Claim
+
+Final document artifact numeric serialization rejects malformed, non-finite, or
+contract-breaking live values before DOCX/HTML markup is emitted.
+
+### Domain
+
+`FlowDocument.to_html()` and `FlowDocument.to_docx_bytes()` calls on documents
+containing drawing groups with live `CircleDrawing` values, plus DOCX paragraph
+twip conversion.
+
+### Dependencies
+
+- `_drawing_bounds()`
+- `_component_vml()`
+- `_vml_number()`
+- `_artifact_point_pair()`
+- `_artifact_number()`
+- `_positive_artifact_number()`
+- `_mm_to_twips()`
+
+### Proof Method
+
+Special-case `CircleDrawing` bounds and VML output now normalize live position
+coordinates through `_artifact_point_pair()` and live radius values through
+`_positive_artifact_number()` before arithmetic or string formatting. VML
+number formatting and DOCX twip conversion use `_artifact_number()` so booleans,
+strings, bytes, arbitrary objects, `nan`, and infinity fail before artifact
+text is emitted. Focused tests pin valid circle VML and twip formatting, then
+mutate live circle and paragraph state to cover malformed point shape, boolean
+coordinates, non-finite coordinates, malformed radius values, non-positive
+radii, and malformed twip values.
+
+### Counterexamples And Exclusions
+
+Normal public `CircleDrawing` and `Paragraph` setters already validate these
+values. This proof covers the final document-output boundary against corrupted
+live state and special-case renderer paths. It does not broaden the document
+backend into a full geometry validator for every renderer; non-circle drawing
+geometry remains delegated to materialized component point-surface checks.
+
+### Conclusion
+
+Focused tests and mutation cover the public output paths and corrupted
+live-state partitions. Full coverage, lint, docs, and diff hygiene remain
+release-gate checks for the slice.
 
 ## Current Slice Decision
 

@@ -9,7 +9,7 @@ from uuid import uuid4
 import pytest
 
 from InkGen.component import Component, PathCommand
-from InkGen.document_outputs import DOCX_FIXED_TIMESTAMP, FlowDocument
+from InkGen.document_outputs import DOCX_FIXED_TIMESTAMP, FlowDocument, _vml_number
 from InkGen.drawing_components import (
     ArcDrawing,
     CircleDrawing,
@@ -98,6 +98,12 @@ class _SerializableDrawingLookalike:
 
 
 _SerializableDrawingLookalike.__name__ = "RectangleDrawing"
+
+
+class _ValueErrorFloat:
+    def __float__(self) -> float:
+        """Raise ValueError from float conversion for boundary tests."""
+        raise ValueError("bad float")
 
 
 def _text_style() -> TextStyle:
@@ -870,6 +876,111 @@ def test_flow_document_rejects_malformed_materialized_drawing_points(
 
     with pytest.raises(exception_type, match=message):
         document.to_html()
+    with pytest.raises(exception_type, match=message):
+        document.to_docx_bytes()
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-VML-NUMBER-P2")
+def test_flow_document_formats_valid_circle_vml_and_twips() -> None:
+    """FLOW-DOCUMENT-VML-NUMBER-P2: Valid artifact numbers are formatted deterministically."""
+    paragraph = _paragraph("Spacing")
+    paragraph.space_before = 1.0
+    document = FlowDocument()
+    document.add_paragraph(paragraph)
+    group = DrawingComponentGroup("circle-vml")
+    group.add_component(CircleDrawing((4.0, 4.0), 2.0, _drawing_style()))
+    document.add_drawing_group(group)
+
+    with zipfile.ZipFile(BytesIO(document.to_docx_bytes())) as package:
+        document_xml = package.read("word/document.xml").decode("utf-8")
+
+    assert 'w:before="57"' in document_xml
+    assert 'coordsize="4 4"' in document_xml
+    assert "left:0mm;top:0mm;width:4mm;height:4mm" in document_xml
+
+    small_document = FlowDocument()
+    small_group = DrawingComponentGroup("small-circle-vml")
+    small_group.add_component(CircleDrawing((1.0, 1.0), 0.5, _drawing_style()))
+    small_document.add_drawing_group(small_group)
+    with zipfile.ZipFile(BytesIO(small_document.to_docx_bytes())) as package:
+        small_document_xml = package.read("word/document.xml").decode("utf-8")
+
+    assert 'coordsize="1 1"' in small_document_xml
+    assert "width:1mm;height:1mm" in small_document_xml
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-VML-NUMBER-P2")
+def test_flow_document_vml_number_formats_fractional_and_near_integer_values() -> None:
+    """FLOW-DOCUMENT-VML-NUMBER-P2: VML numbers preserve fractions and snap near integers."""
+    assert _vml_number(1.25) == "1.25"
+    assert _vml_number(2.0000000005) == "2"
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-VML-NUMBER-P2")
+@pytest.mark.parametrize(
+    ("position", "radius", "exception_type", "message"),
+    [
+        ((True, 2.0), 1.0, TypeError, "CircleDrawing position x must be a finite number"),
+        ((2.0, True), 1.0, TypeError, "CircleDrawing position y must be a finite number"),
+        ("2,2", 1.0, ValueError, "CircleDrawing position must contain two finite numbers"),
+        ("12", 1.0, ValueError, "CircleDrawing position must contain two finite numbers"),
+        ((2.0,), 1.0, ValueError, "CircleDrawing position must contain two finite numbers"),
+        ((2.0, 2.0, 2.0), 1.0, ValueError, "CircleDrawing position must contain two finite numbers"),
+        ((float("nan"), 2.0), 1.0, ValueError, "CircleDrawing position x must be a finite number"),
+        ((2.0, float("nan")), 1.0, ValueError, "CircleDrawing position y must be a finite number"),
+        ((float("inf"), 2.0), 1.0, ValueError, "CircleDrawing position x must be a finite number"),
+        ((2.0, 2.0), True, TypeError, "CircleDrawing radius must be a finite number"),
+        ((2.0, 2.0), "1.0", TypeError, "CircleDrawing radius must be a finite number"),
+        ((2.0, 2.0), object(), TypeError, "CircleDrawing radius must be a finite number"),
+        ((2.0, 2.0), _ValueErrorFloat(), TypeError, "CircleDrawing radius must be a finite number"),
+        ((2.0, 2.0), float("nan"), ValueError, "CircleDrawing radius must be a finite number"),
+        ((2.0, 2.0), float("inf"), ValueError, "CircleDrawing radius must be a finite number"),
+        ((2.0, 2.0), 0.0, ValueError, "CircleDrawing radius must be positive"),
+        ((2.0, 2.0), -1.0, ValueError, "CircleDrawing radius must be positive"),
+    ],
+)
+def test_flow_document_rejects_malformed_circle_vml_numbers(
+    position: object,
+    radius: object,
+    exception_type: type[Exception],
+    message: str,
+) -> None:
+    """FLOW-DOCUMENT-VML-NUMBER-P2: Circle VML numbers must preserve geometry contracts."""
+    circle = CircleDrawing((2.0, 2.0), 1.0, _drawing_style())
+    object.__setattr__(circle, "position", position)
+    object.__setattr__(circle, "radius", radius)
+    document = FlowDocument()
+    group = DrawingComponentGroup("bad-circle-vml")
+    group.add_component(circle)
+    document.add_drawing_group(group)
+
+    with pytest.raises(exception_type, match=message):
+        document.to_html()
+    with pytest.raises(exception_type, match=message):
+        document.to_docx_bytes()
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-VML-NUMBER-P2")
+@pytest.mark.parametrize(
+    ("space_before", "exception_type", "message"),
+    [
+        (True, TypeError, "twip value must be a finite number"),
+        ("1.0", TypeError, "twip value must be a finite number"),
+        (float("nan"), ValueError, "twip value must be a finite number"),
+        (float("inf"), ValueError, "twip value must be a finite number"),
+    ],
+)
+def test_flow_document_rejects_malformed_docx_twip_numbers(
+    space_before: object,
+    exception_type: type[Exception],
+    message: str,
+) -> None:
+    """FLOW-DOCUMENT-VML-NUMBER-P2: DOCX twip values reject malformed live state."""
+    paragraph = _paragraph("Bad spacing")
+    paragraph._space_before = space_before  # type: ignore[assignment]
+    document = FlowDocument()
+    document.add_paragraph(paragraph)
+
     with pytest.raises(exception_type, match=message):
         document.to_docx_bytes()
 

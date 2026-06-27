@@ -496,8 +496,8 @@ def _drawing_bounds(group: DrawingComponentGroup) -> tuple[float, float, float, 
     points: list[tuple[float, float]] = []
     for component in group.components:
         if isinstance(component, CircleDrawing):
-            x, y = component.position
-            radius = component.radius
+            x, y = _artifact_point_pair(component.position, name="CircleDrawing position")
+            radius = _positive_artifact_number(component.radius, name="CircleDrawing radius")
             points.extend([(x - radius, y - radius), (x + radius, y + radius)])
             continue
         concrete = _materialize_drawing_component(component, OutputFormat.PDF)
@@ -511,16 +511,19 @@ def _drawing_bounds(group: DrawingComponentGroup) -> tuple[float, float, float, 
 
 def _component_vml(component: object, min_x: float, min_y: float) -> str:
     if isinstance(component, CircleDrawing):
-        x = component.position[0] - component.radius - min_x
-        y = component.position[1] - component.radius - min_y
-        diameter = component.radius * 2.0
+        center_x, center_y = _artifact_point_pair(component.position, name="CircleDrawing position")
+        radius = _positive_artifact_number(component.radius, name="CircleDrawing radius")
+        x = center_x - radius - min_x
+        y = center_y - radius - min_y
+        diameter = radius * 2.0
         return (
             f'<v:oval style="position:absolute;left:{_vml_number(x)}mm;top:{_vml_number(y)}mm;'
             f'width:{_vml_number(diameter)}mm;height:{_vml_number(diameter)}mm"/>'
         )
     if isinstance(component, TextDrawing):
-        x = component.position[0] - min_x
-        y = component.position[1] - min_y
+        position_x, position_y = _artifact_point_pair(component.position, name="TextDrawing position")
+        x = position_x - min_x
+        y = position_y - min_y
         return (
             f'<v:shape style="position:absolute;left:{_vml_number(x)}mm;top:{_vml_number(y)}mm;'
             f'width:80mm;height:10mm"><v:textbox><w:txbxContent><w:p><w:r><w:t>{xml_escape(component.text)}</w:t></w:r></w:p>'
@@ -669,10 +672,36 @@ def _style_from_payload(payload: object, styles: dict[str, object] | None, *, te
 
 
 def _vml_number(value: float) -> str:
-    numeric = float(value)
-    if abs(numeric - round(numeric)) < 1e-9:
-        return str(int(round(numeric)))
+    numeric = _artifact_number(value, name="VML number")
     return f"{numeric:.3f}".rstrip("0").rstrip(".")
+
+
+def _artifact_point_pair(value: object, *, name: str) -> tuple[float, float]:
+    if isinstance(value, (str, bytes)) or not isinstance(value, Sequence) or len(value) != 2:
+        raise ValueError(f"{name} must contain two finite numbers")
+    return (
+        _artifact_number(value[0], name=f"{name} x"),
+        _artifact_number(value[1], name=f"{name} y"),
+    )
+
+
+def _artifact_number(value: object, *, name: str) -> float:
+    if isinstance(value, (bool, str, bytes)):
+        raise TypeError(f"{name} must be a finite number")
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise TypeError(f"{name} must be a finite number") from exc
+    if not isfinite(numeric):
+        raise ValueError(f"{name} must be a finite number")
+    return numeric
+
+
+def _positive_artifact_number(value: object, *, name: str) -> float:
+    numeric = _artifact_number(value, name=name)
+    if numeric <= 0.0:
+        raise ValueError(f"{name} must be positive")
+    return numeric
 
 
 def _svg_fragment(component: object) -> str:
@@ -704,7 +733,7 @@ def _write_docx_part(package: zipfile.ZipFile, name: str, payload: str) -> None:
 
 
 def _mm_to_twips(value: float) -> int:
-    return int(round(float(value) * 1440.0 / 25.4))
+    return int(round(_artifact_number(value, name="twip value") * 1440.0 / 25.4))
 
 
 def _rtf_escape(value: str) -> str:
