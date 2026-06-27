@@ -884,6 +884,53 @@ Proven for the stated public text and parameter domains after focused tests and
 mutation pass. Full coverage, lint, docs, and diff hygiene remain release-gate
 checks for the slice.
 
+## PO-FDOC-024: Serializable Drawing Types Are Authentic
+
+### Claim
+
+Flow-document drawing serialization accepts only the actual supported neutral
+drawing primitive classes, not arbitrary objects whose class name matches a
+supported discriminator.
+
+### Domain
+
+`FlowDocument.parameters` calls on documents containing `DrawingComponentGroup`
+blocks whose public `components` list contains objects with a callable
+`to_component()` method.
+
+### Dependencies
+
+- `DRAWING_COMPONENT_CONSTRUCTORS`
+- `DRAWING_COMPONENT_TYPE_NAMES`
+- `PathDrawing`
+- `_drawing_component_parameters()`
+- `FlowDocument.create_from_dict()`
+
+### Proof Method
+
+`_drawing_component_parameters()` resolves the serialized discriminator from an
+exact `type(component)` lookup in `DRAWING_COMPONENT_TYPE_NAMES`. The registry
+contains the same concrete neutral drawing classes that
+`FlowDocument.create_from_dict()` can hydrate, with `PathDrawing` handled as the
+special command-preserving case. The focused test appends a lookalike object
+whose class name is deliberately changed to `RectangleDrawing` and whose
+`to_component()` method can produce a valid rectangle materialization. The
+object still fails serialization because its actual type is not one of the
+registered neutral primitive classes.
+
+### Counterexamples And Exclusions
+
+Subclass serialization is intentionally excluded unless the subclass is added
+to the explicit registry and hydration map. Custom drawing primitives may still
+participate in live HTML/DOCX materialization when they satisfy the renderer
+contract, but `FlowDocument.parameters` remains limited to hydrateable InkGen
+neutral primitives.
+
+### Conclusion
+
+Proven for the stated flow-document drawing serialization domain after focused
+tests and mutation pass.
+
 ## Current Slice Decision
 
 The slice keeps `FlowDocument` dependency-free and minimal. It fixes byte

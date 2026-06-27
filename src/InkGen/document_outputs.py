@@ -43,6 +43,10 @@ DRAWING_COMPONENT_CONSTRUCTORS = {
     "TextDrawing": TextDrawing,
 }
 DRAWING_COMPONENT_TYPES = frozenset((*DRAWING_COMPONENT_CONSTRUCTORS, "PathDrawing"))
+DRAWING_COMPONENT_TYPE_NAMES = {
+    **{component_class: component_name for component_name, component_class in DRAWING_COMPONENT_CONSTRUCTORS.items()},
+    PathDrawing: "PathDrawing",
+}
 TEXT_DRAWING_COMPONENT_TYPES = frozenset({"TextDrawing"})
 
 
@@ -585,7 +589,8 @@ def _drawing_from_parameters(data: object, styles: dict[str, object] | None) -> 
 
 def _drawing_component_parameters(component: object) -> dict[str, object]:
     _validate_drawing_component_boundary(component)
-    if component.__class__.__name__ not in DRAWING_COMPONENT_TYPES:
+    component_type = DRAWING_COMPONENT_TYPE_NAMES.get(type(component))
+    if component_type is None:
         raise TypeError("flow document drawing components must be supported serializable drawing primitives")
     payload = dict(component.__dict__)
     style = payload.pop("style", None)
@@ -593,7 +598,7 @@ def _drawing_component_parameters(component: object) -> dict[str, object]:
         payload["style"] = style.parameters
     if isinstance(component, PathDrawing):
         payload["commands"] = [command.parameters for command in component.commands or []]
-    return {"type": component.__class__.__name__, "payload": payload}
+    return {"type": component_type, "payload": payload}
 
 
 def _validate_drawing_component_boundary(component: object) -> None:

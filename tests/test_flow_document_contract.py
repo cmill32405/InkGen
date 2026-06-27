@@ -83,6 +83,23 @@ class _PointSurfaceDrawingPrimitive:
         return _PointSurfaceComponent(self._points)
 
 
+class _SerializableDrawingLookalike:
+    def __init__(self) -> None:
+        """Expose rectangle-like fields without being a RectangleDrawing."""
+        self.position = (1.0, 2.0)
+        self.width = 3.0
+        self.height = 4.0
+        self.corner_radii = 0.0
+        self.style = _drawing_style()
+
+    def to_component(self, output_format: OutputFormat | str) -> Component:
+        """Return a valid component so the serialization type check is isolated."""
+        return RectangleDrawing(self.position, self.width, self.height, self.corner_radii, self.style).to_component(output_format)
+
+
+_SerializableDrawingLookalike.__name__ = "RectangleDrawing"
+
+
 def _text_style() -> TextStyle:
     return TextStyle(f"flow_text_{uuid4().hex}", Font(size=11.0))
 
@@ -739,6 +756,18 @@ def test_flow_document_parameters_revalidate_mutated_drawing_components() -> Non
 
     group.components.clear()
     group.components.append(_InvalidDrawingPrimitive())  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="supported serializable drawing primitives"):
+        _ = document.parameters
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-DRAWING-SERIALIZABLE-TYPES-P2")
+def test_flow_document_parameters_rejects_supported_name_lookalike_components() -> None:
+    """FLOW-DOCUMENT-DRAWING-SERIALIZABLE-TYPES-P2: Serialization requires actual neutral drawing classes."""
+    document = FlowDocument()
+    group = DrawingComponentGroup("lookalike-parameters")
+    group.components.append(_SerializableDrawingLookalike())  # type: ignore[arg-type]
+    document.add_drawing_group(group)
+
     with pytest.raises(TypeError, match="supported serializable drawing primitives"):
         _ = document.parameters
 
