@@ -5,6 +5,7 @@ import logging
 import os
 import random
 from dataclasses import dataclass
+from math import isfinite
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -71,6 +72,19 @@ class FittingResult:
     def text_bounding_box(self) -> ShapelyPolygon:
         """Convex hull for backward compatibility with legacy bounding box usage."""
         return self.text_convex_hull
+
+
+def _normalize_jitter_margin(value: object) -> float:
+    """Normalize the public jitter margin without string or truthiness coercion."""
+    if isinstance(value, bool | str | bytes):
+        raise TypeError("jitter_margin must be a finite number")
+    try:
+        margin = float(value)
+    except (TypeError, ValueError) as exc:
+        raise TypeError("jitter_margin must be a finite number") from exc
+    if not isfinite(margin):
+        raise ValueError("jitter_margin must be a finite number")
+    return max(0.0, margin)
 
 
 def plot_polygon(ax, poly, color, label):
@@ -583,7 +597,7 @@ class TextFitter:
         original_hull = text_convex_hull
 
         if jitter_x or jitter_y:
-            safety_margin = max(0.0, float(jitter_margin))
+            safety_margin = _normalize_jitter_margin(jitter_margin)
             jitter_dx, jitter_dy, jittered_geometry = self._compute_jitter_offsets(
                 inner_boundary,
                 shape.polygon,

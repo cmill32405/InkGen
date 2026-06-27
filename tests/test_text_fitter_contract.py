@@ -169,6 +169,29 @@ def test_text_fitter_jitter_margin_is_clamped_before_offset_calculation(monkeypa
     assert observed_margins == [0.0, 0.25]
 
 
+@pytest.mark.condition("TEXT-FITTER-JITTER-MARGIN-P2")
+@pytest.mark.parametrize("jitter_margin", [True, False, "0.25", b"0.25", object(), float("nan"), float("inf")])
+def test_text_fitter_rejects_malformed_jitter_margins(
+    monkeypatch: pytest.MonkeyPatch,
+    jitter_margin: object,
+) -> None:
+    """TEXT-FITTER-JITTER-MARGIN-P2: Jitter margins reject malformed public values."""
+    fitter = TextFitter(rng=random.Random(19))
+    shape = FitterShape(polygon=shapely_box(0.0, 0.0, 80.0, 40.0), line_thickness_range=(1.0, 1.0), padding=1.0)
+    text_block = TextBlock(text="jitter margin", font_path=FONT_PATH, font_size_range=(8, 8), min_font_size_px=8)
+    geometry = shapely_box(10.0, 10.0, 20.0, 20.0)
+
+    monkeypatch.setattr(
+        fitter,
+        "_check_fit",
+        lambda *_args, **_kwargs: ([("jitter margin", 10.0, 10.0, 10.0)], geometry),
+    )
+    monkeypatch.setattr(fitter, "_create_line_outline", lambda *_args, **_kwargs: geometry)
+
+    with pytest.raises((TypeError, ValueError), match="jitter_margin must be a finite number"):
+        fitter.fit(text_block, shape, jitter_x=True, jitter_margin=jitter_margin)
+
+
 @pytest.mark.condition("TEXT-FITTER-P1")
 def test_text_fitter_binary_search_selects_largest_valid_font_size(monkeypatch: pytest.MonkeyPatch) -> None:
     """TEXT-FITTER-P1: Fit uses binary search to return the largest valid font size."""

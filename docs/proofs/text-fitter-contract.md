@@ -56,6 +56,11 @@ Before/after edge changes:
   wrapping, asymmetric polygon bounds, binary-search font selection, minimum
   font thresholds, outline fallback, jitter acceptance/rejection, and final
   outline replacement.
+- Before TEXT-FITTER-JITTER-MARGIN-P2, `fit(..., jitter_margin=...)` accepted
+  booleans, strings, and non-finite values through `float()` coercion before
+  jitter containment math.
+- After TEXT-FITTER-JITTER-MARGIN-P2, jitter margins must be finite non-boolean
+  numeric values; negative finite margins remain clamped to zero.
 
 Cycle/layer/coupling/redundancy result:
 
@@ -83,6 +88,9 @@ ADR/rule impact:
   configured minimum threshold.
 - Jitter may change positions only when the candidate geometry remains
   contained.
+- Jitter safety margins are finite numeric values. Negative finite margins are
+  accepted and clamped to zero; booleans, strings, bytes, arbitrary objects,
+  `nan`, and infinity are invalid.
 - Missing glyph outlines fall back to conservative line boxes.
 - `component_to_fitter_shape()` derives fitting polygons from convex hulls or
   radius-based circular buffers.
@@ -106,6 +114,7 @@ ADR/rule impact:
 | Fail-closed impossible fit | Return `None` for excessive inset or impossible width | PO-TFITTER-002 | `test_text_fitter_returns_none_for_impossible_or_unsafe_fits` | killed |
 | Outline fallback | Use line boxes when glyph outlines are unavailable | PO-TFITTER-003 | `test_text_fitter_uses_rectangle_fallback_when_outlines_are_unavailable` | killed |
 | Jitter containment | Accept contained offsets and reject escaping offsets | PO-TFITTER-004 | `test_text_fitter_jitter_accepts_contained_offsets_and_rejects_escape` | killed |
+| Jitter margin boundary | Clamp finite negative margins and reject malformed/non-finite public values | PO-TFITTER-009 | `test_text_fitter_jitter_margin_is_clamped_before_offset_calculation`, `test_text_fitter_rejects_malformed_jitter_margins` | killed |
 | Binary search | Select the largest valid font size and enforce minimum threshold | PO-TFITTER-005 | Binary-search and threshold tests | killed |
 | Word wrapping | Use horizontal bounds, center lines, and allow exact-width fits | PO-TFITTER-006 | `test_text_fitter_word_wrap_uses_shape_width_and_centers_lines` | one equivalent survivor |
 | Final outline correction | Replace line-box geometry with final outline geometry when outlines are available | PO-TFITTER-007 | `test_text_fitter_replaces_line_boxes_with_final_outline_geometry` | killed |
@@ -315,3 +324,40 @@ settings, center coverage for radius buffers, and unsupported-object fallback.
 ### Conclusion
 
 Proven for the stated domain after tests and mutation pass.
+
+## PO-TFITTER-009: Jitter Margins Are Finite Numeric Values
+
+### Claim
+
+`TextFitter.fit(..., jitter_margin=...)` accepts only finite non-boolean numeric
+values before jitter containment math runs.
+
+### Domain
+
+Public `TextFitter.fit()` calls with `jitter_x=True` or `jitter_y=True`.
+
+### Dependencies
+
+- `_normalize_jitter_margin()`
+- `TextFitter.fit()`
+- `TextFitter._compute_jitter_offsets()`
+
+### Proof Method
+
+`TextFitter.fit()` normalizes `jitter_margin` through
+`_normalize_jitter_margin()` before calling `_compute_jitter_offsets()`. The
+helper rejects booleans, strings, bytes, arbitrary nonnumeric objects, `nan`,
+and infinity, while preserving the existing behavior that clamps finite
+negative margins to zero. Focused tests force the public `fit()` path to reach
+jitter handling and assert both the valid clamp behavior and malformed-value
+rejection.
+
+### Counterexamples And Exclusions
+
+This proof does not change jitter sampling or containment semantics. It only
+protects the public safety-margin scalar boundary.
+
+### Conclusion
+
+Focused tests cover the malformed public partitions. Mutation, full coverage,
+lint, docs, and diff hygiene remain release-gate checks for the slice.
