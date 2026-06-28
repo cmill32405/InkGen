@@ -295,6 +295,61 @@ def test_document_load_populates_styles_through_validated_hydration(tmp_path) ->
     assert styles
 
 
+@pytest.mark.condition("DOCUMENT-MODEL-FILEPATH-P2")
+def test_document_yaml_save_and_load_accept_pathlike_paths(tmp_path) -> None:
+    """DOCUMENT-MODEL-FILEPATH-P2: YAML save/load accepts path-like recipe paths."""
+    _, _, document = _document_with_styled_group()
+    style_name = document.parameters["Document"]["pages"][0]["Layers"]["layers"]["base"]["Layer"]["component_groups"][0]["ComponentGroup"][
+        "components"
+    ][0]["WidthHeightDrawingComponent"]["style"]["DrawingStyle"]["name"]
+    recipe_path = tmp_path / "document.yaml"
+
+    document.save(recipe_path)
+    if style_name in Style.style_names:
+        Style.style_names.remove(style_name)
+    loaded_document, styles = Document.load(recipe_path)
+
+    assert loaded_document.parameters == document.parameters
+    assert styles
+
+
+@pytest.mark.condition("DOCUMENT-MODEL-FILEPATH-P2")
+@pytest.mark.parametrize(
+    ("filepath", "error_type", "message"),
+    [
+        (object(), TypeError, "file path must be a string or path-like object"),
+        (123, TypeError, "file path must be a string or path-like object"),
+        (b"document.yaml", TypeError, "file path must be a string or path-like object"),
+        ("", ValueError, "file path must not be empty"),
+    ],
+)
+def test_document_yaml_save_and_load_reject_malformed_file_paths(
+    filepath: object,
+    error_type: type[Exception],
+    message: str,
+) -> None:
+    """DOCUMENT-MODEL-FILEPATH-P2: YAML paths fail before incidental OS errors."""
+    _, _, document = _document_with_styled_group()
+
+    with pytest.raises(error_type, match=message):
+        document.save(filepath)  # type: ignore[arg-type]
+    with pytest.raises(error_type, match=message):
+        Document.load(filepath)  # type: ignore[arg-type]
+
+
+@pytest.mark.condition("DOCUMENT-MODEL-FILEPATH-P2")
+def test_document_yaml_save_and_load_reject_missing_file_path_boundaries(tmp_path) -> None:
+    """DOCUMENT-MODEL-FILEPATH-P2: YAML paths require an existing directory or file."""
+    _, _, document = _document_with_styled_group()
+
+    with pytest.raises(ValueError, match="The file path does not exist"):
+        document.save(tmp_path / "missing" / "document.yaml")
+    with pytest.raises(ValueError, match="The file path does not exist"):
+        Document.load(tmp_path / "missing.yaml")
+    with pytest.raises(ValueError, match="The file path does not exist"):
+        Document.load(tmp_path)
+
+
 @pytest.mark.condition("DOCUMENT-LOAD-STYLE-PREPASS-P2")
 @pytest.mark.parametrize(
     ("yaml_text", "error_type", "message"),

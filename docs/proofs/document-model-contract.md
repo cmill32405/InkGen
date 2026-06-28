@@ -2,11 +2,12 @@
 
 This note applies the InkGen Definition of Done to the DOCUMENT-MODEL-P1,
 DOCUMENT-MODEL-PAYLOAD-P2, DOCUMENT-MODEL-STYLES-MAPPING-P2, and
-DOCUMENT-LOAD-STYLE-PREPASS-P2 document model slices. It focuses on one-based
-page indexing, page insertion and removal boundaries, page canvas
-compatibility, serialized page hydration, serialized payload envelope
+DOCUMENT-LOAD-STYLE-PREPASS-P2 document model slices. It also records
+DOCUMENT-MODEL-IDENTIFIER-P2 and DOCUMENT-MODEL-FILEPATH-P2 hardening. It
+focuses on one-based page indexing, page insertion and removal boundaries, page
+canvas compatibility, serialized page hydration, serialized payload envelope
 validation, style-cache validation, YAML load delegation, identifier lookup
-boundaries, and live use through PDF rendering.
+boundaries, YAML file path boundaries, and live use through PDF rendering.
 
 ## Scope
 
@@ -18,12 +19,15 @@ The slice covers:
 - `Document.add_page()`
 - `Document.remove_page()`
 - `Document.page()`
+- `Document.save()`
+- `Document.load()`
 - `Document._validate_insert_position()`
 - `Document._validate_existing_position()`
 - `Document._page_canvas_compatibility()`
 - `Layer.remove_component_group()`
 - `Layer.group()`
 - `Layers._layer_identification_lookup()`
+- `_normalize_document_filepath()`
 
 ## Architecture Impact
 
@@ -42,6 +46,8 @@ Affected surface:
   DOCUMENT-MODEL-PAYLOAD-P2 mutation filter.
 - `tests/mutation/filter_document_load_style_prepass_work_items.py`:
   DOCUMENT-LOAD-STYLE-PREPASS-P2 mutation filter.
+- `tests/mutation/filter_document_model_filepath_work_items.py`:
+  DOCUMENT-MODEL-FILEPATH-P2 mutation filter.
 
 Incoming dependencies:
 
@@ -95,6 +101,10 @@ Before/after edge changes:
 - Before DOCUMENT-MODEL-IDENTIFIER-P2, layer and component-group lookup/removal
   identifiers used Python `int` checks that accepted booleans, so `True` could
   alias integer id `1`.
+- Before DOCUMENT-MODEL-FILEPATH-P2, `Document.save()` and `Document.load()`
+  passed YAML recipe paths directly to `open()`, so malformed paths and missing
+  boundaries failed through incidental OS errors and path-like inputs were not
+  part of the documented contract.
 - After DOCUMENT-LOAD-STYLE-PREPASS-P2, `Document.load()` reads YAML, validates
   the optional caller style cache, and delegates the loaded object directly to
   `Document.create_from_dict()`, so malformed YAML roots fail at the documented
@@ -102,6 +112,9 @@ Before/after edge changes:
   `ComponentGroup.create_from_dict()` and style factories.
 - After DOCUMENT-MODEL-IDENTIFIER-P2, public layer and component-group
   identifier paths reject booleans before integer-id lookup or removal.
+- After DOCUMENT-MODEL-FILEPATH-P2, YAML recipe save/load accepts string and
+  path-like paths, rejects bytes, non-path, and empty values, requires an
+  existing save directory, and requires an existing load file before reading.
 
 Cycle/layer/coupling/redundancy result:
 
@@ -127,6 +140,10 @@ ADR/rule impact:
   where `1 <= n <= pages`.
 - Booleans are not page numbers.
 - Booleans are not layer ids or component-group ids.
+- YAML recipe file paths must be strings or path-like objects returning strings.
+- YAML recipe file paths must not be empty.
+- YAML save paths require an existing parent directory.
+- YAML load paths require an existing file, not just an existing directory.
 - Inserted `Layers` pages must have the same canvas height, width, and units as
   the document.
 - Serialized layers hydrate exactly the layers in the payload.
@@ -159,6 +176,8 @@ ADR/rule impact:
 - For DOCUMENT-MODEL-IDENTIFIER-P2, added explicit boolean rejection to layer
   and component-group identifier lookups before Python integer aliasing can
   select or remove the wrong object.
+- For DOCUMENT-MODEL-FILEPATH-P2, added `_normalize_document_filepath()` and
+  routed `Document.save()` and `Document.load()` through it before YAML I/O.
 
 ## Comprehensiveness Matrix
 
@@ -174,19 +193,20 @@ ADR/rule impact:
 | Style cache boundary | Reject non-mutable `styles` caches before component-group hydration | PO-DOCM-008 | `test_document_model_hydration_rejects_malformed_style_caches`, `test_document_load_rejects_malformed_style_cache` | killed |
 | YAML load style prepass | Delegate YAML payloads directly to hardened document hydration and avoid dynamic style prepass dispatch | PO-DOCM-009 | `test_document_load_populates_styles_through_validated_hydration`, `test_document_load_delegates_malformed_yaml_to_document_factory` | mutation target |
 | Layer and group identifier boundaries | Reject boolean ids before Python integer aliasing can select or remove layers/groups | PO-DOCM-010 | `test_layer_rejects_boolean_component_group_identifiers_before_integer_aliasing`, `test_layer_rejects_malformed_component_group_lookup_identifiers`, `test_layers_rejects_boolean_layer_identifiers_before_integer_aliasing` | killed |
+| YAML file path boundaries | Accept string/path-like recipe paths and reject malformed or missing boundaries before incidental OS errors | PO-DOCM-011 | `test_document_yaml_save_and_load_accept_pathlike_paths`, `test_document_yaml_save_and_load_reject_malformed_file_paths`, `test_document_yaml_save_and_load_reject_missing_file_path_boundaries` | mutation target |
 
 ## Test Applicability Matrix
 
 | Test class | Applicable? | Reason | Evidence |
 |---|---|---|---|
 | Unit | yes | Page validation and canvas compatibility are deterministic. | DOCUMENT-MODEL-P1 tests |
-| Behavioral/condition | yes | DOCUMENT-MODEL-P1 defines public document model behavior. | Tests are marked `@pytest.mark.condition("DOCUMENT-MODEL-P1")`, `@pytest.mark.condition("DOCUMENT-MODEL-PAYLOAD-P2")`, `@pytest.mark.condition("DOCUMENT-MODEL-STYLES-MAPPING-P2")`, and `@pytest.mark.condition("DOCUMENT-LOAD-STYLE-PREPASS-P2")`. |
-| Failure-mode | yes | Bad page numbers, incompatible pages, malformed payloads, malformed YAML roots, and malformed style caches must fail before mutation/rendering/hydration. | Invalid position, incompatible canvas, payload, load-delegation, and style-cache tests |
+| Behavioral/condition | yes | DOCUMENT-MODEL-P1 defines public document model behavior. | Tests are marked `@pytest.mark.condition("DOCUMENT-MODEL-P1")`, `@pytest.mark.condition("DOCUMENT-MODEL-PAYLOAD-P2")`, `@pytest.mark.condition("DOCUMENT-MODEL-STYLES-MAPPING-P2")`, `@pytest.mark.condition("DOCUMENT-LOAD-STYLE-PREPASS-P2")`, and `@pytest.mark.condition("DOCUMENT-MODEL-FILEPATH-P2")`. |
+| Failure-mode | yes | Bad page numbers, incompatible pages, malformed payloads, malformed YAML roots, malformed style caches, and malformed file paths must fail before mutation/rendering/hydration/I/O. | Invalid position, incompatible canvas, payload, load-delegation, style-cache, and filepath tests |
 | Integration/live-path | yes | `DocumentPDF` consumes the base document page contract. | PDF live-path test |
 | Contract/API compatibility | yes | Existing document, SVG, and PDF tests must continue passing. | Focused gate includes existing tests |
 | Property/fuzz | no | This slice covers finite page-index partitions directly. | Not applicable |
 | Mutation | yes | Page guards, shifting, hydration, and canvas checks are proof-critical. | Mutation result recorded below |
-| Security/adversarial | no | No new file path, network, subprocess, auth, SQL, template, or active-content surface is added. | Not applicable |
+| Security/adversarial | yes | YAML save/load is a file path boundary and must reject malformed path objects before I/O. | DOCUMENT-MODEL-FILEPATH-P2 tests |
 | Performance/resource | no | Page shifting is linear in page count and unchanged in complexity. | Code inspection |
 | Concurrency/race | no | No shared state, background workers, locks, or temp files are added. | Not applicable |
 | Golden artifact/visual | yes | PDF rendering must still emit a valid page from the one-based path. | PDF byte prefix and page-object assertion |
@@ -195,6 +215,7 @@ ADR/rule impact:
 | Style-cache adversarial input | yes | Non-mutable style caches must fail before incidental downstream `.keys()` or item-assignment errors. | DOCUMENT-MODEL-STYLES-MAPPING-P2 tests |
 | YAML load adversarial input | yes | `Document.load()` must not run a separate raw-indexing style prepass before the hardened document factory. | DOCUMENT-LOAD-STYLE-PREPASS-P2 tests |
 | Identifier adversarial input | yes | Python booleans are integers and can alias ids without explicit rejection. | DOCUMENT-MODEL-IDENTIFIER-P2 tests |
+| File path adversarial input | yes | Bytes, non-path objects, empty paths, missing directories, missing files, and directory load paths must fail at the document boundary. | DOCUMENT-MODEL-FILEPATH-P2 tests |
 
 ## Mutation Testing Gate
 
@@ -208,6 +229,8 @@ Proof-critical mutation targets:
   round-trip tests.
 - Weakening layer or component-group boolean identifier rejection must fail
   identifier-boundary tests.
+- Weakening YAML recipe file path type, emptiness, save-directory, or load-file
+  checks must fail filepath-boundary tests.
 
 Current result:
 
@@ -257,6 +280,20 @@ DOCUMENT-MODEL-IDENTIFIER-P2 current result:
 
 - Cosmic Ray 8.4.6, scoped to layer and component-group boolean identifier
   guards: 5 work items, 5 killed, 0 survivors.
+
+DOCUMENT-MODEL-FILEPATH-P2 current result:
+
+- Cosmic Ray 8.4.6, scoped to executable DOCUMENT-MODEL-FILEPATH-P2 rows:
+  12 work items, 12 killed, 0 survivors.
+- Focused document-model tests: `36 passed`.
+- Focused dependent-path tests:
+  `python -m pytest -q tests\test_document_model_contract.py tests\test_document.py tests\test_pdf_generator.py tests\test_svg_generator.py`
+  returned `114 passed`.
+- Full coverage gate:
+  `python -m pytest --cov=src/InkGen --cov-branch --cov-report=term -q`
+  returned `1539 passed` with `95%` total coverage.
+- Ruff lint and scoped format checks passed for touched Python files.
+- MkDocs strict build and `git diff --check` passed.
 
 ## PO-DOCM-001: Valid Page Insertions Preserve One-Based Order
 
@@ -520,5 +557,53 @@ PO-DOCM-003.
 ### Conclusion
 
 Focused tests and mutation cover the boolean aliasing partitions. Full
+coverage, lint, docs, and diff hygiene remain release-gate checks for the
+slice.
+
+## PO-DOCM-011: Document YAML File Paths Fail At The Boundary
+
+### Claim
+
+`Document.save()` and `Document.load()` validate YAML recipe file paths before
+opening files, so malformed path inputs and missing filesystem boundaries fail
+with deterministic document-model errors.
+
+### Domain
+
+Public `Document.save(filepath)` and `Document.load(filepath, styles=...)`
+calls using string paths, path-like string paths, non-path objects, bytes paths,
+empty paths, missing save directories, missing load files, and directory paths
+passed to load.
+
+### Dependencies
+
+- `Document.save()`
+- `Document.load()`
+- `_normalize_document_filepath()`
+- Python `os.fspath()`, `os.path.abspath()`, `os.path.isdir()`, and
+  `os.path.isfile()`
+- YAML serialization/deserialization through `yaml.safe_dump()` and
+  `yaml.safe_load()`
+
+### Proof Method
+
+`Document.save()` and `Document.load()` both call
+`_normalize_document_filepath()` before YAML I/O. The helper accepts only
+string path values returned by `os.fspath()`, rejects empty strings, checks the
+save parent directory with `os.path.isdir()`, and checks the load target with
+`os.path.isfile()`. Focused condition tests prove path-like paths round-trip,
+malformed path inputs fail before I/O, save requires an existing directory, and
+load requires an existing file rather than a directory.
+
+### Counterexamples And Exclusions
+
+This proof does not claim permission errors, concurrent deletion, disk-full
+errors, invalid YAML syntax, or malformed document payloads are normalized as
+file path errors. Those remain owned by the operating system, YAML parser, or
+document hydration contracts.
+
+### Conclusion
+
+Focused tests cover the declared path partitions. Scoped mutation, full
 coverage, lint, docs, and diff hygiene remain release-gate checks for the
 slice.

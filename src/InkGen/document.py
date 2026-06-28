@@ -5,6 +5,7 @@ the layers they contain.
 from __future__ import annotations
 
 import itertools
+import os
 from collections.abc import Mapping, MutableMapping, Sequence
 
 import yaml
@@ -518,17 +519,18 @@ class Document:
         parameter_dict = {"Document": {"canvas": self._canvas.parameters, "pages": pages}}
         return parameter_dict
 
-    def save(self, filepath: str) -> None:
+    def save(self, filepath: str | os.PathLike[str]) -> None:
         """Saves all parameters of the Document object as YAML file.
 
         Args:
             filepath (str): File to save with Document information.
         """
-        with open(filepath, "w+", encoding="UTF-8") as file:
+        path = _normalize_document_filepath(filepath, must_exist=False)
+        with open(path, "w+", encoding="UTF-8") as file:
             yaml.safe_dump(self.parameters, file, allow_unicode=True, default_flow_style=False)
 
     @classmethod
-    def load(cls, filepath: str, styles: dict | None = None):
+    def load(cls, filepath: str | os.PathLike[str], styles: dict | None = None):
         """Creates a Document object from a saved YAML file.
 
         Args:
@@ -539,7 +541,8 @@ class Document:
             Dict[str, Style]: Dictionary of all the styles in the Document.
         """
         document_data = {}
-        with open(filepath, encoding="UTF-8") as file:
+        path = _normalize_document_filepath(filepath, must_exist=True)
+        with open(path, encoding="UTF-8") as file:
             document_data = yaml.safe_load(file)
 
         styles = _style_cache(styles)
@@ -680,3 +683,26 @@ def _style_cache(styles: object) -> MutableMapping[str, object]:
     if not isinstance(styles, MutableMapping):
         raise TypeError("styles must be a mutable mapping or None")
     return styles
+
+
+def _normalize_document_filepath(filepath: object, *, must_exist: bool) -> str:
+    """Normalize a document recipe path before YAML read or write."""
+    try:
+        path_value = os.fspath(filepath)
+    except TypeError as exc:
+        raise TypeError("file path must be a string or path-like object") from exc
+    if not isinstance(path_value, str):
+        raise TypeError("file path must be a string or path-like object")
+    if not path_value:
+        raise ValueError("file path must not be empty")
+
+    path = os.path.abspath(path_value)
+    if must_exist:
+        if not os.path.isfile(path):
+            raise ValueError("The file path does not exist.")
+        return path
+
+    directory = os.path.dirname(path)
+    if directory and not os.path.isdir(directory):
+        raise ValueError("The file path does not exist.")
+    return path
