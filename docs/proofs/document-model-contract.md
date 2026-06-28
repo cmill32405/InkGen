@@ -5,8 +5,8 @@ DOCUMENT-MODEL-PAYLOAD-P2, DOCUMENT-MODEL-STYLES-MAPPING-P2, and
 DOCUMENT-LOAD-STYLE-PREPASS-P2 document model slices. It focuses on one-based
 page indexing, page insertion and removal boundaries, page canvas
 compatibility, serialized page hydration, serialized payload envelope
-validation, style-cache validation, YAML load delegation, and live use through
-PDF rendering.
+validation, style-cache validation, YAML load delegation, identifier lookup
+boundaries, and live use through PDF rendering.
 
 ## Scope
 
@@ -21,6 +21,9 @@ The slice covers:
 - `Document._validate_insert_position()`
 - `Document._validate_existing_position()`
 - `Document._page_canvas_compatibility()`
+- `Layer.remove_component_group()`
+- `Layer.group()`
+- `Layers._layer_identification_lookup()`
 
 ## Architecture Impact
 
@@ -89,11 +92,16 @@ Before/after edge changes:
   raw-indexed nested style envelopes, missed valid saved-document style
   payloads, and attempted dynamic module dispatch outside the existing
   hardened component/style factory path.
+- Before DOCUMENT-MODEL-IDENTIFIER-P2, layer and component-group lookup/removal
+  identifiers used Python `int` checks that accepted booleans, so `True` could
+  alias integer id `1`.
 - After DOCUMENT-LOAD-STYLE-PREPASS-P2, `Document.load()` reads YAML, validates
   the optional caller style cache, and delegates the loaded object directly to
   `Document.create_from_dict()`, so malformed YAML roots fail at the documented
   document factory boundary and valid nested style hydration remains owned by
   `ComponentGroup.create_from_dict()` and style factories.
+- After DOCUMENT-MODEL-IDENTIFIER-P2, public layer and component-group
+  identifier paths reject booleans before integer-id lookup or removal.
 
 Cycle/layer/coupling/redundancy result:
 
@@ -118,6 +126,7 @@ ADR/rule impact:
 - `Document.remove_page(n)` and `Document.page(n)` require an existing page
   where `1 <= n <= pages`.
 - Booleans are not page numbers.
+- Booleans are not layer ids or component-group ids.
 - Inserted `Layers` pages must have the same canvas height, width, and units as
   the document.
 - Serialized layers hydrate exactly the layers in the payload.
@@ -147,6 +156,9 @@ ADR/rule impact:
   mutable style caches at every document-model hydration entry point.
 - For DOCUMENT-LOAD-STYLE-PREPASS-P2, removed the legacy `_iterdict()` style
   prepass and dynamic dispatch from `Document.load()`.
+- For DOCUMENT-MODEL-IDENTIFIER-P2, added explicit boolean rejection to layer
+  and component-group identifier lookups before Python integer aliasing can
+  select or remove the wrong object.
 
 ## Comprehensiveness Matrix
 
@@ -161,6 +173,7 @@ ADR/rule impact:
 | Serialized document/layer payload envelopes | Reject malformed roots and collection fields before downstream hydration | PO-DOCM-007 | `test_document_model_hydration_rejects_malformed_payload_envelopes`, `test_layer_hydration_requires_collision_settings_for_each_group` | killed |
 | Style cache boundary | Reject non-mutable `styles` caches before component-group hydration | PO-DOCM-008 | `test_document_model_hydration_rejects_malformed_style_caches`, `test_document_load_rejects_malformed_style_cache` | killed |
 | YAML load style prepass | Delegate YAML payloads directly to hardened document hydration and avoid dynamic style prepass dispatch | PO-DOCM-009 | `test_document_load_populates_styles_through_validated_hydration`, `test_document_load_delegates_malformed_yaml_to_document_factory` | mutation target |
+| Layer and group identifier boundaries | Reject boolean ids before Python integer aliasing can select or remove layers/groups | PO-DOCM-010 | `test_layer_rejects_boolean_component_group_identifiers_before_integer_aliasing`, `test_layer_rejects_malformed_component_group_lookup_identifiers`, `test_layers_rejects_boolean_layer_identifiers_before_integer_aliasing` | killed |
 
 ## Test Applicability Matrix
 
@@ -181,6 +194,7 @@ ADR/rule impact:
 | Serialized payload adversarial input | yes | Malformed public hydration payloads must fail before incidental downstream errors. | DOCUMENT-MODEL-PAYLOAD-P2 tests |
 | Style-cache adversarial input | yes | Non-mutable style caches must fail before incidental downstream `.keys()` or item-assignment errors. | DOCUMENT-MODEL-STYLES-MAPPING-P2 tests |
 | YAML load adversarial input | yes | `Document.load()` must not run a separate raw-indexing style prepass before the hardened document factory. | DOCUMENT-LOAD-STYLE-PREPASS-P2 tests |
+| Identifier adversarial input | yes | Python booleans are integers and can alias ids without explicit rejection. | DOCUMENT-MODEL-IDENTIFIER-P2 tests |
 
 ## Mutation Testing Gate
 
@@ -192,6 +206,8 @@ Proof-critical mutation targets:
 - Weakening page canvas compatibility must fail mismatch tests.
 - Keeping the constructor-created base during hydration must fail serialized
   round-trip tests.
+- Weakening layer or component-group boolean identifier rejection must fail
+  identifier-boundary tests.
 
 Current result:
 
@@ -236,6 +252,11 @@ DOCUMENT-LOAD-STYLE-PREPASS-P2 current result:
 - Mutation config: `tests/mutation/document_load_style_prepass_cosmic_ray.toml`.
 - Mutation filter:
   `tests/mutation/filter_document_load_style_prepass_work_items.py`.
+
+DOCUMENT-MODEL-IDENTIFIER-P2 current result:
+
+- Cosmic Ray 8.4.6, scoped to layer and component-group boolean identifier
+  guards: 5 work items, 5 killed, 0 survivors.
 
 ## PO-DOCM-001: Valid Page Insertions Preserve One-Based Order
 
@@ -457,3 +478,47 @@ contracts.
 
 Supported by focused load-delegation tests, scoped mutation evidence, and the
 full coverage gate for the stated load-delegation domain.
+
+## PO-DOCM-010: Layer And Group Identifiers Reject Boolean Aliases
+
+### Claim
+
+Layer and component-group identifier APIs reject booleans before Python's
+`bool`-is-`int` relationship can select or remove an object by integer id.
+
+### Domain
+
+Public `Layer.group(group_id)`, `Layer.remove_component_group(group_id)`,
+`Layers.layer(identifier)`, and `Layers.remove_layer(identifier)` calls.
+
+### Dependencies
+
+- `Layer.remove_component_group()`
+- `Layer.group()`
+- `Layers._layer_identification_lookup()`
+- `Layers.layer()`
+- `Layers.remove_layer()`
+
+### Proof Method
+
+`Layer.group()` rejects values that are not non-boolean integers before reading
+`_component_groups`. `Layer.remove_component_group()` rejects boolean values
+before string-label resolution or integer-id removal. `Layers` centralizes
+lookup for `layer()` and `remove_layer()` through
+`_layer_identification_lookup()`, which now rejects booleans before name/id
+matching. Focused tests prove booleans fail without removing existing objects,
+malformed group lookup identifiers fail before dictionary lookup, and valid
+integer/name identifiers continue to work.
+
+### Counterexamples And Exclusions
+
+This proof does not change the public contract that component-group labels and
+layer names are strings. Missing integer ids still raise the existing invalid-id
+errors. Document page positions are covered separately by PO-DOCM-001 through
+PO-DOCM-003.
+
+### Conclusion
+
+Focused tests and mutation cover the boolean aliasing partitions. Full
+coverage, lint, docs, and diff hygiene remain release-gate checks for the
+slice.

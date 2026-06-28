@@ -199,6 +199,8 @@ class Layer:
             InvalidComponentGroupID: Raised if group_id is not an integer or does
             not exist in the layer's collection of ComponentGroups
         """
+        if isinstance(group_id, bool):
+            raise TypeError("group_id must be an integer id or string label")
         if isinstance(group_id, str):
             if group_id not in self._group_names:
                 raise InvalidComponentGroupID("That group_id does not exist")
@@ -248,6 +250,8 @@ class Layer:
         Returns:
             ComponentGroup: Group of components.
         """
+        if isinstance(group_id, bool) or not isinstance(group_id, int):
+            raise TypeError("group_id must be an integer id")
         if group_id in self._component_groups:
             return self._component_groups[group_id]
 
@@ -366,6 +370,8 @@ class Layers:
         Returns:
             Tuple[str, int]: tuple with name and layer_id.
         """
+        if isinstance(identifier, bool):
+            raise TypeError("Invalid identifier, must be either the name or the layer_id.")
         if isinstance(identifier, str) and identifier in self._layer_name_to_id_map:
             layer_id = self._layer_name_to_id_map[identifier]
             layer_name = identifier

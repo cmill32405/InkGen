@@ -9,7 +9,7 @@ import pytest
 from InkGen.boundary import Canvas
 from InkGen.component import ComponentGroup, WidthHeightDrawingComponent
 from InkGen.document import Document, Layer, Layers
-from InkGen.errors import IncompatibleCanvas
+from InkGen.errors import IncompatibleCanvas, InvalidComponentGroupID
 from InkGen.pdf_generator import ComponentGroupPDF, DocumentPDF, RectanglePDF
 from InkGen.style import DrawingStyle, Style
 
@@ -100,6 +100,52 @@ def test_document_page_remove_and_lookup_reject_invalid_positions() -> None:
     document.remove_page(1)
     assert document.pages == 1
     assert document.page(1).layers == ["second"]
+
+
+@pytest.mark.condition("DOCUMENT-MODEL-IDENTIFIER-P2")
+def test_layer_rejects_boolean_component_group_identifiers_before_integer_aliasing() -> None:
+    """DOCUMENT-MODEL-IDENTIFIER-P2: Component group identifiers reject boolean aliases."""
+    layer = Layer("base", _canvas())
+    group = _group()
+    layer.add_component_group(group)
+
+    with pytest.raises(TypeError, match="group_id must be an integer id"):
+        layer.group(True)  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="group_id must be an integer id or string label"):
+        layer.remove_component_group(True)
+
+    assert layer.group(group.group_id) is group
+    assert layer.component_groups[group.group_label] == group.group_id
+
+
+@pytest.mark.condition("DOCUMENT-MODEL-IDENTIFIER-P2")
+def test_layer_rejects_malformed_component_group_lookup_identifiers() -> None:
+    """DOCUMENT-MODEL-IDENTIFIER-P2: Component group lookup accepts only integer ids."""
+    layer = Layer("base", _canvas())
+
+    for group_id in ("missing", 1.25, object()):
+        with pytest.raises(TypeError, match="group_id must be an integer id"):
+            layer.group(group_id)  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError, match="Invalid component group id"):
+        layer.group(123_456)
+
+    with pytest.raises(InvalidComponentGroupID, match="group_id must a valid group_id"):
+        layer.remove_component_group(123_456)
+
+
+@pytest.mark.condition("DOCUMENT-MODEL-IDENTIFIER-P2")
+def test_layers_rejects_boolean_layer_identifiers_before_integer_aliasing() -> None:
+    """DOCUMENT-MODEL-IDENTIFIER-P2: Layer identifiers reject boolean aliases."""
+    layers = Layers(_canvas(), "base")
+
+    with pytest.raises(TypeError, match="Invalid identifier"):
+        layers.layer(True)  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="Invalid identifier"):
+        layers.remove_layer(True)  # type: ignore[arg-type]
+
+    assert layers.layer("base").layer_name == "base"
+    assert layers.layers == ["base"]
 
 
 @pytest.mark.condition("DOCUMENT-MODEL-P1")
