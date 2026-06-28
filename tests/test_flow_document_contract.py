@@ -144,6 +144,13 @@ def _drawing_group() -> DrawingComponentGroup:
     return group
 
 
+def _flow_document_with_paragraph() -> FlowDocument:
+    """Return a minimal flow document for writer-boundary tests."""
+    document = FlowDocument(title="Writer Boundary")
+    document.add_paragraph(_paragraph("Export me"))
+    return document
+
+
 def _all_supported_drawing_group() -> DrawingComponentGroup:
     drawing_style = _drawing_style()
     text_style = _text_style()
@@ -265,6 +272,25 @@ def test_flow_document_hydrates_direct_payload_mapping() -> None:
 
     assert clone.parameters == document.parameters
     assert clone.to_plain_text() == "Direct payload"
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-FILEPATH-DIRECTORY-P2")
+def test_flow_document_file_writers_reject_file_parent_paths(tmp_path) -> None:
+    """FLOW-DOCUMENT-FILEPATH-DIRECTORY-P2: Writer paths require a directory parent."""
+    document = _flow_document_with_paragraph()
+    file_parent = tmp_path / "not-a-directory"
+    file_parent.write_text("occupied", encoding="utf-8")
+
+    for writer, suffix in (
+        (document.create_docx, "document.docx"),
+        (document.create_html, "document.html"),
+        (document.create_rtf, "document.rtf"),
+        (document.create_text, "document.txt"),
+    ):
+        with pytest.raises(ValueError, match="file path does not exist"):
+            writer(file_parent / suffix)
+
+    assert file_parent.read_text(encoding="utf-8") == "occupied"
 
 
 @pytest.mark.condition("FLOW-DOCUMENT-P1")

@@ -11,15 +11,15 @@ module_path = 'src/InkGen/document_outputs.py'
 AND (
   (
     definition_name = '_normalize_output_filepath'
-    AND start_pos_row BETWEEN 670 AND 683
+    AND start_pos_row BETWEEN 759 AND 772
   )
   OR (
     definition_name = '_write_text'
-    AND start_pos_row BETWEEN 686 AND 689
+    AND start_pos_row BETWEEN 775 AND 778
   )
   OR (
     definition_name = '_write_bytes'
-    AND start_pos_row BETWEEN 692 AND 695
+    AND start_pos_row BETWEEN 781 AND 784
   )
 )
 AND operator_name NOT LIKE 'core/ReplaceBinaryOperator_BitOr_%'

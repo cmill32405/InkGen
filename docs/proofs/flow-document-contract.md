@@ -86,6 +86,9 @@ Before/after edge changes:
 - Before the filepath hardening update, malformed file-writer paths could fail
   through incidental `os.path` or `open()` errors, and path-like objects were
   not part of the documented writer contract.
+- Before the file-parent hardening update, output paths whose parent segment
+  existed as a file could still pass the existence check and then fail through
+  incidental `open()` errors.
 - Before the materialized-points hardening update, custom or post-construction
   mutated drawing primitives whose concrete materialization exposed malformed
   `points` could fail through incidental numeric formatting errors before the
@@ -128,6 +131,9 @@ Before/after edge changes:
 - After the filepath hardening update, file writers normalize string and
   path-like output paths through one boundary helper and reject non-string,
   bytes, and empty paths before writing.
+- After the file-parent hardening update, file writers require the output
+  parent path to be an existing directory, not merely an existing filesystem
+  path.
 - After the RTF Unicode hardening update, `FlowDocument.to_rtf()` emits
   non-ASCII title and paragraph text as RTF `\uN?` escapes instead of raw
   Unicode text in an `\ansi` document.
@@ -226,6 +232,8 @@ ADR/rule impact:
   payloads can become public neutral drawing state.
 - `_normalize_output_filepath()` validates all flow-document file-writer output
   paths before text or byte writes.
+- `_normalize_output_filepath()` now requires file-writer parent paths to be
+  directories, closing the existing-file-as-parent boundary.
 - `_materialized_points()` validates concrete drawing materialization `points`
   surfaces before HTML bounds or DOCX VML output consume them.
 - `_drawing_plain_text()` validates each live drawing component before
@@ -256,7 +264,7 @@ ADR/rule impact:
 | Serialized Bezier drawing geometry | Reject malformed `QuadraticBezierDrawing` and `CubicBezierDrawing` point payloads by dispatching through the neutral constructors | PO-FDOC-019 | `test_flow_document_hydration_rejects_malformed_bezier_geometry_payloads` | mutation target in Bezier slice |
 | Serialized radial drawing geometry | Reject malformed `CircleDrawing` and `RegularPolygonDrawing` geometry payloads by dispatching through the neutral constructors | PO-FDOC-020 | `test_flow_document_hydration_rejects_malformed_radial_geometry_payloads` | mutation target in radial slice |
 | Serialized polygonal drawing geometry | Reject malformed `PolygonalDrawing` point payloads by dispatching through the neutral constructor | PO-FDOC-021 | `test_flow_document_hydration_rejects_malformed_polygonal_geometry_payloads` | mutation target in polygonal slice |
-| File writer path boundary | Accept string/path-like output paths and reject malformed output path values before writing | PO-FDOC-013 | `test_flow_document_file_writers_accept_pathlike_outputs`, `test_flow_document_file_writers_reject_malformed_paths`, `test_flow_document_file_writers_fail_on_missing_directory` | killed |
+| File writer path boundary | Accept string/path-like output paths and reject malformed output path values or non-directory parents before writing | PO-FDOC-013 | `test_flow_document_file_writers_accept_pathlike_outputs`, `test_flow_document_file_writers_reject_malformed_paths`, `test_flow_document_file_writers_fail_on_missing_directory`, `test_flow_document_file_writers_reject_file_parent_paths` | killed |
 | Materialized drawing point surface | Accept finite coordinate pairs and reject malformed/non-finite materialized point surfaces before HTML/DOCX artifacts consume them | PO-FDOC-022 | `test_flow_document_accepts_valid_materialized_drawing_points`, `test_flow_document_rejects_malformed_materialized_drawing_points` | killed |
 | Live drawing components in text/parameter paths | Reject malformed public drawing-group mutations before plain-text summaries or serialized parameters consume them | PO-FDOC-023 | `test_flow_document_plain_text_revalidates_mutated_drawing_components`, `test_flow_document_parameters_revalidate_mutated_drawing_components`, `test_flow_document_parameters_preserve_path_drawing_commands` | killed |
 | Document artifact numbers | Reject malformed live circle VML numbers and malformed DOCX twip numbers before artifact serialization | PO-FDOC-026 | `test_flow_document_formats_valid_circle_vml_and_twips`, `test_flow_document_rejects_malformed_circle_vml_numbers`, `test_flow_document_rejects_malformed_docx_twip_numbers` | pending |
@@ -272,13 +280,13 @@ ADR/rule impact:
 | Test class | Applicable? | Reason | Evidence |
 |---|---|---|---|
 | Unit | yes | Helpers are deterministic. | FLOW-DOCUMENT-P1 tests |
-| Behavioral/condition | yes | The slice defines document-output behavior. | Tests are marked `@pytest.mark.condition("FLOW-DOCUMENT-P1")`, `@pytest.mark.condition("FLOW-DOCUMENT-SVG-MATERIALIZATION-P2")`, `@pytest.mark.condition("FLOW-DOCUMENT-STYLES-MAPPING-P2")`, and `@pytest.mark.condition("FLOW-DOCUMENT-DRAWING-LIVE-COMPONENTS-P2")`. |
+| Behavioral/condition | yes | The slice defines document-output behavior. | Tests are marked `@pytest.mark.condition("FLOW-DOCUMENT-P1")`, `@pytest.mark.condition("FLOW-DOCUMENT-SVG-MATERIALIZATION-P2")`, `@pytest.mark.condition("FLOW-DOCUMENT-STYLES-MAPPING-P2")`, `@pytest.mark.condition("FLOW-DOCUMENT-DRAWING-LIVE-COMPONENTS-P2")`, and `@pytest.mark.condition("FLOW-DOCUMENT-FILEPATH-DIRECTORY-P2")`. |
 | Failure-mode | yes | Invalid content, malformed root payloads, malformed serialized block envelopes, malformed drawing payloads, malformed drawing component envelopes, malformed drawing style envelopes, malformed style override maps, malformed path command envelopes, malformed serialized drawing labels, malformed materialization fragments, malformed materialized point surfaces, malformed live drawing components, malformed output paths, and invalid output paths must fail loudly. | Invalid hydration, invalid materialization, render-fragment, point-surface, live-component, style-map, and writer tests |
 | Integration/live-path | yes | DOCX ZIP, HTML, RTF, text, table, and drawing paths cross module boundaries. | Focused and existing document-output tests |
 | Contract/API compatibility | yes | Parameters and public add methods must preserve existing behavior. | Round-trip and existing rejection tests |
 | Property/fuzz | no | This slice proves finite output and dispatch contracts. | Not applicable |
 | Mutation | yes | Deterministic package writing and materialization guards are proof-critical. | Mutation result recorded below |
-| Security/adversarial | limited | File writers touch local paths; existing tests cover missing-directory failures. | `test_flow_document_file_writers_fail_on_missing_directory` |
+| Security/adversarial | limited | File writers touch local paths; tests cover malformed, missing-directory, and file-as-parent failures. | `test_flow_document_file_writers_fail_on_missing_directory`, `test_flow_document_file_writers_reject_file_parent_paths` |
 | Performance/resource | no | The slice adds constant-time checks and fixed metadata. | Code inspection |
 | Concurrency/race | no | No shared state, workers, locks, or temp files are added. | Not applicable |
 | Golden artifact/visual | yes | DOCX XML/VML output must be stable. | ZIP/XML/VML assertions |
@@ -311,8 +319,8 @@ Proof-critical mutation targets:
 - Weakening style override map validation should fail malformed-style-map tests.
 - Weakening serialized path command envelope validation should fail malformed
   path-command tests.
-- Weakening file-writer path normalization should fail malformed-path or
-  path-like output tests.
+- Weakening file-writer path normalization should fail malformed-path,
+  path-like output, missing-directory, or file-parent output tests.
 - Weakening materialized drawing point validation should fail point-surface
   failure-mode tests or exact bounds/VML assertions.
 - Weakening live drawing component validation before plain-text summaries or
@@ -347,7 +355,8 @@ Current result:
 - Cosmic Ray 8.4.6, scoped to path command envelope validation rows after the
   path-command hardening update: 19 work items, 19 killed, and 0 survived.
 - Cosmic Ray 8.4.6, scoped to file-writer path normalization rows after the
-  filepath hardening update: 7 work items, 7 killed, and 0 survived.
+  filepath and file-parent hardening updates: 7 work items, 7 killed, and 0
+  survived.
 - Cosmic Ray 8.4.6, scoped to render-fragment guards after the SVG
   materialization hardening update: 7 work items, 7 killed, and 0 survived.
 - Cosmic Ray 8.4.6, scoped to style override map validation after the
@@ -361,6 +370,10 @@ Current result:
 - `FLOW-DOCUMENT-VML-NUMBER-P2` scoped to circle bounds/VML, artifact-number
   helpers, and DOCX twip conversion produced 32 proof-critical work items.
   Result: 32 killed, 0 survived.
+- `FLOW-DOCUMENT-FILEPATH-DIRECTORY-P2` refreshed the file-writer path
+  boundary and mutation filter. Focused flow-document tests returned
+  `121 passed`; compatibility tests returned `178 passed`; the full coverage
+  gate returned `1540 passed` with `95%` total coverage.
 
 ## PO-FDOC-001: DOCX Bytes Are Deterministic
 
@@ -727,7 +740,8 @@ gate pass.
 ### Claim
 
 Flow-document file writers accept string and path-like output paths, reject
-malformed path values at the InkGen boundary, and preserve generated payloads.
+malformed path values at the InkGen boundary, require parent paths to be
+directories, and preserve generated payloads.
 
 ### Domain
 
@@ -739,10 +753,10 @@ malformed path values at the InkGen boundary, and preserve generated payloads.
 All four writer methods delegate to `_normalize_output_filepath()` through
 `_write_text()` or `_write_bytes()`. The helper uses `os.fspath()` to accept
 string and path-like values, rejects bytes and non-path objects, rejects empty
-paths, and preserves the existing missing-directory `ValueError`. Focused tests
+paths, and requires the parent path to pass `os.path.isdir()`. Focused tests
 cover successful `pathlib.Path` writes for every writer, malformed object,
-integer, bytes, and empty-string paths, plus the existing missing-directory
-failure and payload equality checks.
+integer, bytes, empty-string paths, missing directories, existing-file parent
+paths, and payload equality checks.
 
 ### Counterexamples And Exclusions
 

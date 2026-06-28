@@ -767,7 +767,7 @@ def _normalize_output_filepath(filepath: object) -> str:
         raise ValueError("file path must not be empty")
     path = os.path.abspath(path_value)
     directory = os.path.dirname(path)
-    if directory and not os.path.exists(directory):
+    if directory and not os.path.isdir(directory):
         raise ValueError("The file path does not exist.")
     return path
 
