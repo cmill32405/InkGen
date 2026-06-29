@@ -236,6 +236,70 @@ def test_zoning_drawing_hydration_rejects_invalid_dimensions() -> None:
         ZoningDrawing.create_from_dict(payload, {line_style.name: line_style, text_style.name: text_style})
 
 
+@pytest.mark.condition("ZONING-DRAWING-LAYOUT-P2")
+@pytest.mark.parametrize(
+    ("canvas", "kwargs", "message"),
+    [
+        (Canvas(20.0, 20.0, "mm"), {}, "inner drawing area must be positive"),
+        (Canvas(40.0, 60.0, "mm"), {"left_margin": 25.0, "right_margin": 20.0}, "outer drawing area must be positive"),
+        (Canvas(40.0, 60.0, "mm"), {"left_margin": 20.0, "right_margin": 20.0}, "outer drawing area must be positive"),
+        (Canvas(80.0, 40.0, "mm"), {"top_margin": 25.0, "bottom_margin": 20.0}, "outer drawing area must be positive"),
+        (Canvas(60.0, 40.0, "mm"), {"top_margin": 20.0, "bottom_margin": 20.0}, "outer drawing area must be positive"),
+        (
+            Canvas(80.0, 80.0, "mm"),
+            {"margins": 5.0, "left_zone_width": 40.0, "right_zone_width": 40.0},
+            "inner drawing area must be positive",
+        ),
+        (
+            Canvas(80.0, 80.0, "mm"),
+            {"margins": 5.0, "left_zone_width": 35.0, "right_zone_width": 35.0},
+            "inner drawing area must be positive",
+        ),
+        (
+            Canvas(80.0, 80.0, "mm"),
+            {"margins": 5.0, "top_zone_width": 35.0, "bottom_zone_width": 35.0},
+            "inner drawing area must be positive",
+        ),
+        (
+            Canvas(80.0, 80.0, "mm"),
+            {"margins": 5.0, "top_zone_width": 45.0, "bottom_zone_width": 30.0},
+            "inner drawing area must be positive",
+        ),
+    ],
+)
+def test_zoning_drawing_rejects_impossible_layouts_before_primitive_construction(
+    canvas: Canvas,
+    kwargs: dict[str, object],
+    message: str,
+) -> None:
+    """ZONING-DRAWING-LAYOUT-P2: Impossible layouts fail at the zoning boundary."""
+    line_style, text_style = _styles()
+
+    with pytest.raises(ValueError, match=message):
+        ZoningDrawing(canvas, line_style, text_style, **kwargs)
+
+
+@pytest.mark.condition("ZONING-DRAWING-LAYOUT-P2")
+def test_zoning_drawing_hydration_rejects_impossible_layouts_before_primitive_construction() -> None:
+    """ZONING-DRAWING-LAYOUT-P2: Serialized impossible layouts use the same boundary."""
+    canvas = Canvas(210.0, 297.0, "mm")
+    line_style, text_style = _styles()
+    zoning = ZoningDrawing(
+        canvas,
+        line_style,
+        text_style,
+        margins=5.0,
+        horizontal_zones=10,
+        vertical_zones=8,
+        first_horizontal_char=48,
+    )
+    payload = deepcopy(zoning.parameters)
+    payload["ZoningDrawing"]["canvas"] = Canvas(20.0, 20.0, "mm").parameters
+
+    with pytest.raises(ValueError, match="inner drawing area must be positive"):
+        ZoningDrawing.create_from_dict(payload, {line_style.name: line_style, text_style.name: text_style})
+
+
 @pytest.mark.condition("ZONING-DRAWING-LABEL-RANGE-P2")
 @pytest.mark.parametrize(
     ("parameters", "valid"),

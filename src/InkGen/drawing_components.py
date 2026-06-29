@@ -718,14 +718,17 @@ class ZoningDrawing:
     def _create_zoning(self) -> None:
         left, top, right, bottom = self._margins
         left_width, top_width, right_width, bottom_width = self._widths
+        outer_width = self._canvas.width - right - left
+        outer_height = self._canvas.height - top - bottom
         inner_width = self._canvas.width - left - left_width - right - right_width
         inner_height = self._canvas.height - top - top_width - bottom - bottom_width
+        _validate_zoning_layout(outer_width, outer_height, inner_width, inner_height)
 
         self._group.add_component(
             RectangleDrawing(
                 (left, top),
-                self._canvas.width - right - left,
-                self._canvas.height - top - bottom,
+                outer_width,
+                outer_height,
                 self._parameters["outer_radius"],
                 self._line_style,
             )
@@ -872,6 +875,14 @@ def _zone_label_sequence_fits(first_code: int, zone_count: int) -> bool:
         if lower <= first_code <= upper:
             return first_code + zone_count - 1 <= upper
     return False
+
+
+def _validate_zoning_layout(outer_width: float, outer_height: float, inner_width: float, inner_height: float) -> None:
+    """Reject impossible zoning layouts before primitive construction."""
+    if outer_width <= 0.0 or outer_height <= 0.0:
+        raise ValueError("ZoningDrawing outer drawing area must be positive")
+    if inner_width <= 0.0 or inner_height <= 0.0:
+        raise ValueError("ZoningDrawing inner drawing area must be positive")
 
 
 def _coerce_finite_non_negative_float(value: object, *, name: str) -> float:
