@@ -43,6 +43,7 @@ nav:
       - Rectangle Renderer Contract: proofs/rectangle-renderer-contract.md
       - Polygonal Renderer Contract: proofs/polygonal-renderer-contract.md
       - Text Renderer Contract: proofs/text-renderer-contract.md
+      - Raster Image Contract: proofs/raster-image-contract.md
       - Text Outline Contract: proofs/text-outline-contract.md
       - Text Fitter Contract: proofs/text-fitter-contract.md
       - SVG Utilities Contract: proofs/svg-utils-contract.md

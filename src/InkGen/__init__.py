@@ -10,6 +10,7 @@ from .drawing_components import (
     CircleDrawing,
     CubicBezierDrawing,
     DrawingComponentGroup,
+    ImageDrawing,
     LineDrawing,
     OutputFormat,
     PathDrawing,
@@ -43,6 +44,7 @@ from .grammar_truth import (
     annotate_grammar_truth,
     grammar_truth_json,
 )
+from .image_assets import RasterImageAsset, RasterImageComponent
 from .paragraph import LineSpacingRule, Paragraph, ParagraphAlignment, ParagraphLine, TabStop
 from .pdf_generator import (
     ArcPDF,
@@ -50,6 +52,7 @@ from .pdf_generator import (
     ComponentGroupPDF,
     CubicBezierPDF,
     DocumentPDF,
+    ImagePDF,
     LinePDF,
     PathPDF,
     PDFGeneratorInterface,
@@ -67,6 +70,7 @@ from .svg_generator import (
     ComponentGroupSVG,
     CubicBezierSVG,
     DocumentSVG,
+    ImageSVG,
     IncludeLayer,
     LineSVG,
     PathSVG,
@@ -131,6 +135,9 @@ __all__ = [
     "GrammarTruthAnnotation",
     "GrammarTruthRecord",
     "IncludeLayer",
+    "ImageDrawing",
+    "ImagePDF",
+    "ImageSVG",
     "IllegalArgumentError",
     "IncompatibleCanvas",
     "InvalidComponentGroupID",
@@ -158,6 +165,8 @@ __all__ = [
     "QuadraticBezierSVG",
     "QuadraticBezierDrawing",
     "QuadraticBezierPDF",
+    "RasterImageAsset",
+    "RasterImageComponent",
     "RectangleSVG",
     "RectangleDrawing",
     "RectanglePDF",

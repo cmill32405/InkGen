@@ -22,6 +22,7 @@ from InkGen.component import (
     TextComponent,
     normalize_rectangle_corner_radii,
 )
+from InkGen.image_assets import RasterImageAsset
 from InkGen.style import DrawingStyle, TextStyle
 
 
@@ -238,6 +239,38 @@ class TextDrawing:
         from InkGen.pdf_generator import TextPDF
 
         return TextPDF(self.text, self.position, self.style)
+
+
+@dataclass(frozen=True)
+class ImageDrawing:
+    """Renderer-neutral raster image primitive."""
+
+    image: RasterImageAsset
+    position: tuple[float, float]
+    width: float | None = None
+    height: float | None = None
+
+    def __post_init__(self) -> None:
+        """Validate the neutral image payload and geometry boundary."""
+        if not isinstance(self.image, RasterImageAsset):
+            raise TypeError("ImageDrawing image must be a RasterImageAsset")
+        position = _coerce_point_pair(self.position, name="ImageDrawing position")
+        width = _coerce_finite_positive_float(self.width if self.width is not None else self.image.width, name="ImageDrawing width")
+        height = _coerce_finite_positive_float(self.height if self.height is not None else self.image.height, name="ImageDrawing height")
+        object.__setattr__(self, "position", position)
+        object.__setattr__(self, "width", width)
+        object.__setattr__(self, "height", height)
+
+    def to_component(self, output_format: OutputFormat | str) -> Component:
+        """Create a raster image component for the requested backend."""
+        target = normalize_output_format(output_format)
+        if target is OutputFormat.SVG:
+            from InkGen.svg_generator import ImageSVG
+
+            return ImageSVG(self.image, self.position, self.width, self.height)
+        from InkGen.pdf_generator import ImagePDF
+
+        return ImagePDF(self.image, self.position, self.width, self.height)
 
 
 @dataclass(frozen=True)

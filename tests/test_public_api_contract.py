@@ -15,20 +15,30 @@ from InkGen import (
     ExtractionTruthRecord,
     FlowDocument,
     GrammarTruthRecord,
+    ImageDrawing,
+    ImagePDF,
+    ImageSVG,
+    RasterImageAsset,
+    RasterImageComponent,
     RectanglePDF,
     Table,
     ZoningDrawing,
 )
 from InkGen.document_outputs import DocumentOutputFormat as ModuleDocumentOutputFormat
 from InkGen.document_outputs import FlowDocument as ModuleFlowDocument
+from InkGen.drawing_components import ImageDrawing as ModuleImageDrawing
 from InkGen.dxf_generator import DXFDocument as ModuleDXFDocument
 from InkGen.dxf_generator import DXFRenderContext as ModuleDXFRenderContext
 from InkGen.extraction_truth import ExtractionTruthRecord as ModuleExtractionTruthRecord
 from InkGen.grammar_truth import GrammarTruthRecord as ModuleGrammarTruthRecord
+from InkGen.image_assets import RasterImageAsset as ModuleRasterImageAsset
+from InkGen.image_assets import RasterImageComponent as ModuleRasterImageComponent
 from InkGen.pdf_generator import ComponentGroupPDF as ModuleComponentGroupPDF
 from InkGen.pdf_generator import DocumentPDF as ModuleDocumentPDF
+from InkGen.pdf_generator import ImagePDF as ModuleImagePDF
 from InkGen.pdf_generator import RectanglePDF as ModuleRectanglePDF
 from InkGen.style import DrawingStyle
+from InkGen.svg_generator import ImageSVG as ModuleImageSVG
 from InkGen.table import Table as ModuleTable
 
 DOCUMENTED_PUBLIC_SYMBOLS = {
@@ -55,7 +65,12 @@ DOCUMENTED_PUBLIC_SYMBOLS = {
     "FlowDocument",
     "GrammarTruthAnnotation",
     "GrammarTruthRecord",
+    "ImageDrawing",
+    "ImagePDF",
+    "ImageSVG",
     "ZoningDrawing",
+    "RasterImageAsset",
+    "RasterImageComponent",
     "annotate_extraction_truth",
     "annotate_grammar_truth",
     "extraction_truth_json",
@@ -97,6 +112,11 @@ def test_root_exports_match_submodule_identities() -> None:
     assert DXFDocument is ModuleDXFDocument
     assert DXFRenderContext is ModuleDXFRenderContext
     assert Table is ModuleTable
+    assert RasterImageAsset is ModuleRasterImageAsset
+    assert RasterImageComponent is ModuleRasterImageComponent
+    assert ImageDrawing is ModuleImageDrawing
+    assert ImageSVG is ModuleImageSVG
+    assert ImagePDF is ModuleImagePDF
 
 
 @pytest.mark.condition("PUBLIC-API-P1")

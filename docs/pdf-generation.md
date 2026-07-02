@@ -8,6 +8,7 @@ The PDF backend lives in `InkGen.pdf_generator` and provides:
 - `PDFGeneratorInterface`
 - `RectanglePDF`, `LinePDF`, `ArcPDF`, `QuadraticBezierPDF`, `CubicBezierPDF`
 - `PathPDF`, `RegularPolygonPDF`, `PolygonalPDF`, `CirclePDF`, `TextPDF`
+- `ImagePDF`
 - `ComponentGroupPDF`
 - `DocumentPDF`
 
@@ -23,9 +24,16 @@ families map to deterministic PDF font resources, including bold and
 italic/oblique variants. Custom TrueType/OpenType font embedding and subsetting
 are not implemented in the dependency-free PDF backend.
 
+PDF raster images use `RasterImageAsset` and `ImagePDF`. InkGen accepts
+Pillow-decodable raster inputs at the asset boundary, decodes them to RGB image
+XObjects, and emits an alpha soft mask (`/SMask`) when the source image contains
+transparency. Alpha is not flattened against white or any other background
+color. SVG output uses the same `RasterImageAsset` through `ImageSVG`, normalized
+to an embedded PNG data URI.
+
 The PDF render path is intentionally closed. `DocumentPDF` renders exact
 `ComponentGroupPDF` groups, and `ComponentGroupPDF` accepts/renders only the
-built-in PDF primitive component classes listed above. Custom dynamic
+built-in PDF primitive/image component classes listed above. Custom dynamic
 `generate_pdf()` components and custom `ComponentGroupPDF` subclasses are
 outside the supported and proven PDF renderer contract. This constraint keeps
 rendered bytes deterministic and supports the grammar-truth noninterference

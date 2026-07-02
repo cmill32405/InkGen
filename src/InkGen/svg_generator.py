@@ -41,6 +41,7 @@ from InkGen.component import CubicBezier as CubicBezierComponent
 from InkGen.component import Path as PathComponent
 from InkGen.component import QuadraticBezier as QuadraticBezierComponent
 from InkGen.document import Document, Layer, Layers
+from InkGen.image_assets import RasterImageAsset, RasterImageComponent
 from InkGen.style import DrawingStyle, Font, TextStyle
 from InkGen.svg_utils import flatten_svg
 from InkGen.table import AutoFitRule, Table
@@ -1198,6 +1199,53 @@ class TextSVG(TextComponent, DrawingGeneratorInterface):
                 y="{self.position[1]}">{text_content}</tspan></text>"""
 
 
+class ImageSVG(RasterImageComponent, DrawingGeneratorInterface):
+    """SVG raster image component using a normalized PNG data URI."""
+
+    def __init__(
+        self,
+        image: RasterImageAsset,
+        position: tuple[float, float],
+        width: float | int | None = None,
+        height: float | int | None = None,
+    ) -> None:
+        """Create an SVG raster image component."""
+        super().__init__(image, position, width, height)
+
+    @classmethod
+    def create_from_dict(cls, data: object, style: object | None = None) -> ImageSVG:
+        """Recreate an ImageSVG from serialized parameters."""
+        del style
+        payload = _svg_payload(data, "ImageSVG")
+        return cls(
+            RasterImageAsset.create_from_dict(_svg_required_field(payload, "image", "ImageSVG")),
+            _svg_required_field(payload, "position", "ImageSVG"),
+            _svg_required_field(payload, "width", "ImageSVG"),
+            _svg_required_field(payload, "height", "ImageSVG"),
+        )
+
+    @property
+    def parameters(self) -> dict[str, dict[str, object]]:
+        """Return serialized image geometry and data."""
+        return {
+            "ImageSVG": {
+                "image": self.image.parameters,
+                "position": self.position,
+                "width": self.width,
+                "height": self.height,
+            }
+        }
+
+    def generate_svg(self) -> str:
+        """Generate an SVG image element with preserved PNG alpha."""
+        return f"""<image
+            x="{self.position[0]}"
+            y="{self.position[1]}"
+            width="{self.width}"
+            height="{self.height}"
+            preserveAspectRatio="none"
+            href="{self.image.png_data_uri()}"
+            id="image{self.id}" />"""
 
 
 class SVGComponent(Component, DrawingGeneratorInterface):
@@ -1386,6 +1434,7 @@ SVG_RENDER_COMPONENT_TYPES = (
     PolygonalSVG,
     CircleSVG,
     TextSVG,
+    ImageSVG,
 )
 
 

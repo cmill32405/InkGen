@@ -19,6 +19,7 @@ flowchart TD
     RenderContracts["Render contracts\npdf_render_contract.py"]
     Truth["Truth annotations\nextraction_truth.py\ngrammar_truth.py"]
     Model["Document model\ndocument.py"]
+    Images["Raster image assets\nimage_assets.py"]
     Components["Component model\ncomponent.py"]
     Core["Core primitives\nboundary.py\nstyle.py\nerrors.py"]
     Text["Text shaping/layout\ntext_outline.py\ntext_fitter.py\nsvg_utils.py"]
@@ -39,10 +40,12 @@ flowchart TD
     Renderers --> Core
     Renderers --> Truth
     Renderers --> RenderContracts
+    Renderers --> Images
     RenderContracts --> Components
     Truth --> Components
     Model --> Components
     Model --> Core
+    Images --> Components
     Components --> Core
     Components --> Text
     Text --> Core
@@ -58,6 +61,7 @@ flowchart TD
 |---|---|---|
 | Core primitives | Canvas bounds, styles, project exceptions | Renderer behavior or generated file formats |
 | Component model | Geometry, points, bboxes, convex hulls, text components, component groups | File writing, PDF/SVG/DXF syntax, document-flow policy |
+| Raster image assets | Pillow-decodable raster bytes, dimensions, format metadata, shared image geometry | SVG/PDF/DOCX serialization policy or document-flow ownership |
 | Document model | Pages, layers, group containment, collision checks, YAML recipes | Renderer-specific classes or truth schema rules |
 | Renderer-neutral authoring | Drawing recipes that can materialize to supported drawing outputs | Persistent renderer state or generated file bytes |
 | Concrete renderers | SVG, PDF, and DXF serialization for drawing artifacts | Mutating component semantics or changing authoring contracts |
@@ -73,18 +77,20 @@ Use these default rules unless an ADR says otherwise.
 1. Core primitives may depend on external libraries, but not on InkGen renderers
    or authoring layers.
 2. Components may depend on core primitives and text helpers.
-3. Documents may depend on components and core primitives.
-4. Renderers may depend on documents, components, core primitives, and truth
+3. Raster image assets may depend on components and Pillow, but not on concrete
+   renderers or document outputs.
+4. Documents may depend on components and core primitives.
+5. Renderers may depend on documents, components, core primitives, image assets, and truth
    emitters.
-5. Render contracts may depend on component abstractions and simple runtime
+6. Render contracts may depend on component abstractions and simple runtime
    type/domain checks. They should stay small enough to mutation-test directly.
-6. Renderer-neutral drawing recipes may materialize into concrete renderers, but
+7. Renderer-neutral drawing recipes may materialize into concrete renderers, but
    should not store concrete renderer instances as their own state.
-7. Flow document outputs may consume paragraphs, tables, and renderer-neutral
+8. Flow document outputs may consume paragraphs, tables, and renderer-neutral
    drawing recipes.
-8. Truth emitters may read annotation attributes and geometry from any target,
+9. Truth emitters may read annotation attributes and geometry from any target,
    but must not alter rendered output.
-9. `__init__.py` re-exports public APIs. It should not introduce behavior.
+10. `__init__.py` re-exports public APIs. It should not introduce behavior.
 
 ## Known Cross-Layer Edges
 
@@ -99,6 +105,7 @@ tests and, where appropriate, recording an ADR.
 | `pdf_generator.py -> extraction_truth.py/grammar_truth.py` | PDF documents emit parser-facing truth records in PDF coordinates. | Truth schema changes can break downstream parser fixtures. |
 | `pdf_generator.py -> pdf_render_contract.py` | The PDF render path delegates proof-critical closed-domain checks to a small mutation-tested contract module. | Bypassing the helper weakens PO-GT-004 and can hide custom render paths. |
 | `DocumentPDF -> ComponentGroupPDF -> built-in PDF components` | The PDF render path is intentionally closed so noninterference properties can be proven. | Arbitrary custom PDF render components are outside the proven contract. |
+| `pdf_generator.py -> image_assets.py` | PDF image rendering consumes decoded image assets and emits image XObjects plus optional alpha soft masks. | Moving image encoding into document outputs would couple drawing rendering to DOCX/HTML policy. |
 | `grammar_truth.py -> extraction_truth.py` | Grammar truth reuses source channel and PDF coordinate conversion constants. | Extraction truth changes can accidentally change grammar truth records. |
 | `cad_component_groups.py -> svg_generator.py` | Legacy CAD helpers still build SVG-specific component groups. | This path is not renderer-neutral and should not be copied into new drawing recipes. |
 
@@ -114,6 +121,7 @@ These contracts are more important than individual implementation details.
 | PDF coordinate frame `pdf_points_bottom_left` | DocInt parser validation and ground truth comparisons | Parser scores compare against the wrong coordinate system |
 | Deterministic artifact bytes/records | Regression tests and fixture generation | Tests become flaky or fixtures churn |
 | Closed PDF renderer component set | PDF noninterference proofs and deterministic rendering | Custom dynamic `generate_pdf()` paths can break proof obligations |
+| Raster image alpha preservation | SVG/PDF fixtures and colored-background drawings | Transparent pixels are flattened or compared against the wrong background |
 | `pdf_render_contract.py` guard semantics | PO-GT-004 mutation gate and PDF render-path failures | Unsupported groups/components render instead of failing at the boundary |
 | `Layer.groups()` complete traversal | SVG/PDF renderers, truth emitters, and duplicate-label model layers | Reverting to `component_groups` collapses repeated labels |
 | Dependency-free PDF/DXF/DOCX emitters | Project dependency policy | New package dependency appears without approval |

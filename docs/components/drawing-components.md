@@ -57,6 +57,27 @@ Text components require a `TextStyle` and are covered in detail in [Text & Layou
 
 Table composition is provided by classes in `src/InkGen/table.py`. Tables are converted to SVG with `TableSVG`.
 
+### Raster Images
+
+Raster images use a renderer-neutral asset and drawing primitive. The asset
+accepts any Pillow-decodable raster bytes, while concrete renderers decide how
+to serialize the decoded pixels.
+
+```python
+from InkGen.drawing_components import ImageDrawing, OutputFormat
+from InkGen.image_assets import RasterImageAsset
+
+asset = RasterImageAsset.from_file("examples/input/logo.png")
+image = ImageDrawing(asset, position=(10, 10), width=40, height=20)
+
+svg_component = image.to_component(OutputFormat.SVG)
+pdf_component = image.to_component(OutputFormat.PDF)
+```
+
+SVG images are embedded as PNG data URIs. PDF images are emitted as image
+XObjects and preserve transparency with a soft mask. DXF raster image export is
+not supported until referenced-image semantics are designed.
+
 ## Circles and Arcs
 
 ```python

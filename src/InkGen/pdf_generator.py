@@ -8,8 +8,10 @@ standard library so InkGen does not gain another PDF dependency.
 from __future__ import annotations
 
 import abc
+import hashlib
 import math
 import os
+import zlib
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
@@ -49,6 +51,7 @@ from InkGen.grammar_truth import (
 from InkGen.grammar_truth import (
     records_for_annotated_target as grammar_records_for_annotated_target,
 )
+from InkGen.image_assets import RasterImageAsset, RasterImageComponent
 from InkGen.pdf_render_contract import ensure_builtin_pdf_component, ensure_pdf_group
 from InkGen.style import DrawingStyle, TextStyle
 from InkGen.svg_generator import LabelGenerator, SegmentGenerator
@@ -76,12 +79,19 @@ class PDFRenderContext:
 
     canvas_height: float
     font_registry: _PDFFontRegistry | None = None
+    image_registry: _PDFImageRegistry | None = None
 
     def font_resource_name(self, style: TextStyle) -> str:
         """Return the PDF font resource name for a text style."""
         if self.font_registry is None:
             return "F1"
         return self.font_registry.resource_name_for_style(style)
+
+    def image_resource_name(self, image: RasterImageAsset) -> str:
+        """Return the PDF image XObject resource name for an image asset."""
+        if self.image_registry is None:
+            return "Im1"
+        return self.image_registry.resource_name_for_asset(image)
 
 
 class _PDFFontRegistry:
@@ -103,6 +113,27 @@ class _PDFFontRegistry:
     def resources(self) -> tuple[tuple[str, str], ...]:
         """Return resource-name/base-font pairs in deterministic insertion order."""
         return tuple((resource_name, base_font) for base_font, resource_name in self._resource_by_base_font.items())
+
+
+class _PDFImageRegistry:
+    """Deterministic registry for PDF image XObject resources."""
+
+    def __init__(self) -> None:
+        self._resource_by_digest: dict[str, str] = {}
+        self._asset_by_resource: dict[str, RasterImageAsset] = {}
+
+    def resource_name_for_asset(self, asset: RasterImageAsset) -> str:
+        """Return a stable resource name for an image asset."""
+        digest = hashlib.sha256(asset.data).hexdigest()
+        if digest not in self._resource_by_digest:
+            resource_name = f"Im{len(self._resource_by_digest) + 1}"
+            self._resource_by_digest[digest] = resource_name
+            self._asset_by_resource[resource_name] = asset
+        return self._resource_by_digest[digest]
+
+    def resources(self) -> tuple[tuple[str, RasterImageAsset], ...]:
+        """Return resource-name/image-asset pairs in deterministic insertion order."""
+        return tuple(self._asset_by_resource.items())
 
 
 class _PDFObjectWriter:
@@ -165,6 +196,37 @@ def _color_components(color: str) -> tuple[float, float, float] | None:
         int(hex_color[2:4], 16) / 255.0,
         int(hex_color[4:6], 16) / 255.0,
     )
+
+
+def _pdf_image_samples(asset: RasterImageAsset) -> tuple[bytes, bytes | None]:
+    """Return RGB image samples and optional alpha samples for a PDF image."""
+    with asset.image() as image:
+        rgba = image.convert("RGBA")
+        color = rgba.convert("RGB").tobytes()
+        alpha = rgba.getchannel("A").tobytes()
+    if all(value == 255 for value in alpha):
+        return color, None
+    return color, alpha
+
+
+def _pdf_image_xobject(
+    *,
+    width: int,
+    height: int,
+    color_space: str,
+    samples: bytes,
+    smask_object_id: int | None = None,
+) -> bytes:
+    """Build a compressed PDF image XObject stream."""
+    compressed = zlib.compress(samples)
+    dictionary = (
+        f"<< /Type /XObject /Subtype /Image /Width {width} /Height {height} "
+        f"/ColorSpace /{color_space} /BitsPerComponent 8 /Filter /FlateDecode /Length {len(compressed)}"
+    )
+    if smask_object_id is not None:
+        dictionary += f" /SMask {smask_object_id} 0 R"
+    dictionary += " >>"
+    return dictionary.encode("ascii") + b"\nstream\n" + compressed + b"\nendstream"
 
 
 def _pdf_base_font_for_style(style: TextStyle) -> str:
@@ -891,6 +953,57 @@ class TextPDF(TextComponent, PDFGeneratorInterface):
         )
 
 
+class ImagePDF(RasterImageComponent, PDFGeneratorInterface):
+    """PDF raster image component using an image XObject resource."""
+
+    def __init__(
+        self,
+        image: RasterImageAsset,
+        position: tuple[float, float],
+        width: float | int | None = None,
+        height: float | int | None = None,
+    ) -> None:
+        """Create a PDF raster image component."""
+        super().__init__(image, position, width, height)
+
+    @classmethod
+    def create_from_dict(cls, data: object, style: object | None = None) -> ImagePDF:
+        """Recreate an ImagePDF from serialized parameters."""
+        del style
+        payload = _pdf_payload(data, "ImagePDF")
+        return cls(
+            RasterImageAsset.create_from_dict(_pdf_required_field(payload, "image", "ImagePDF")),
+            _pdf_required_field(payload, "position", "ImagePDF"),
+            _pdf_required_field(payload, "width", "ImagePDF"),
+            _pdf_required_field(payload, "height", "ImagePDF"),
+        )
+
+    @property
+    def parameters(self) -> dict[str, dict[str, object]]:
+        """Return serialized image geometry and data."""
+        return {
+            "ImagePDF": {
+                "image": self.image.parameters,
+                "position": self.position,
+                "width": self.width,
+                "height": self.height,
+            }
+        }
+
+    def generate_pdf(self, context: PDFRenderContext | None = None) -> str:
+        """Generate PDF operators that draw this image resource upright."""
+        resource = context.image_resource_name(self.image) if context is not None else "Im1"
+        x, y = self.position
+        return "\n".join(
+            [
+                "q",
+                f"{_number(self.width)} 0 0 -{_number(self.height)} {_number(x)} {_number(y + self.height)} cm",
+                f"/{resource} Do",
+                "Q",
+            ]
+        )
+
+
 PDF_RENDER_COMPONENT_TYPES = (
     RectanglePDF,
     LinePDF,
@@ -902,6 +1015,7 @@ PDF_RENDER_COMPONENT_TYPES = (
     PolygonalPDF,
     CirclePDF,
     TextPDF,
+    ImagePDF,
 )
 
 
@@ -1024,6 +1138,7 @@ class DocumentPDF(Document):
         page_ids: list[int] = []
         object_id = 4
         font_registry = _PDFFontRegistry()
+        image_registry = _PDFImageRegistry()
         rendered_pages: list[tuple[Layers, str]] = []
 
         writer.set_object(
@@ -1036,7 +1151,7 @@ class DocumentPDF(Document):
 
         for page_number in range(1, self.pages + 1):
             page = self.page(page_number)
-            content = self._render_page_content(page, font_registry)
+            content = self._render_page_content(page, font_registry, image_registry)
             rendered_pages.append((page, content))
 
         font_object_ids: dict[str, int] = {}
@@ -1048,8 +1163,43 @@ class DocumentPDF(Document):
             )
             object_id += 1
 
-        font_entries = " ".join(f"/{resource_name} {font_object_ids[resource_name]} 0 R" for resource_name in font_object_ids)
-        resources = f"<< /Font << {font_entries} >> >>" if font_entries else "<< >>"
+        image_object_ids: dict[str, int] = {}
+        for resource_name, asset in image_registry.resources():
+            color_samples, alpha_samples = _pdf_image_samples(asset)
+            smask_object_id = None
+            if alpha_samples is not None:
+                smask_object_id = object_id
+                writer.set_object(
+                    smask_object_id,
+                    _pdf_image_xobject(
+                        width=asset.width,
+                        height=asset.height,
+                        color_space="DeviceGray",
+                        samples=alpha_samples,
+                    ),
+                )
+                object_id += 1
+            image_object_ids[resource_name] = object_id
+            writer.set_object(
+                object_id,
+                _pdf_image_xobject(
+                    width=asset.width,
+                    height=asset.height,
+                    color_space="DeviceRGB",
+                    samples=color_samples,
+                    smask_object_id=smask_object_id,
+                ),
+            )
+            object_id += 1
+
+        resource_sections: list[str] = []
+        if font_object_ids:
+            font_entries = " ".join(f"/{resource_name} {font_object_ids[resource_name]} 0 R" for resource_name in font_object_ids)
+            resource_sections.append(f"/Font << {font_entries} >>")
+        if image_object_ids:
+            image_entries = " ".join(f"/{resource_name} {image_object_ids[resource_name]} 0 R" for resource_name in image_object_ids)
+            resource_sections.append(f"/XObject << {image_entries} >>")
+        resources = f"<< {' '.join(resource_sections)} >>" if resource_sections else "<< >>"
 
         for page, content in rendered_pages:
             content_bytes = content.encode("latin-1")
@@ -1075,8 +1225,13 @@ class DocumentPDF(Document):
         writer.set_object(catalog_id, f"<< /Type /Catalog /Pages {pages_id} 0 R >>")
         return writer.build(root_id=catalog_id, info_id=info_id)
 
-    def _render_page_content(self, page: Layers, font_registry: _PDFFontRegistry | None = None) -> str:
-        context = PDFRenderContext(canvas_height=page._canvas.height, font_registry=font_registry)
+    def _render_page_content(
+        self,
+        page: Layers,
+        font_registry: _PDFFontRegistry | None = None,
+        image_registry: _PDFImageRegistry | None = None,
+    ) -> str:
+        context = PDFRenderContext(canvas_height=page._canvas.height, font_registry=font_registry, image_registry=image_registry)
         operators = ["q", f"1 0 0 -1 0 {_number(page._canvas.height)} cm"]
         for layer_name in page.layers:
             layer = page.layer(layer_name)
