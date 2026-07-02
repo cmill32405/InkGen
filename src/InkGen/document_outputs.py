@@ -5,7 +5,9 @@ from __future__ import annotations
 import os
 import zipfile
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from enum import Enum
+from hashlib import sha256
 from html import escape as html_escape
 from io import BytesIO
 from math import isfinite
@@ -17,6 +19,7 @@ from InkGen.drawing_components import (
     CircleDrawing,
     CubicBezierDrawing,
     DrawingComponentGroup,
+    ImageDrawing,
     LineDrawing,
     OutputFormat,
     PathDrawing,
@@ -26,6 +29,7 @@ from InkGen.drawing_components import (
     RegularPolygonDrawing,
     TextDrawing,
 )
+from InkGen.image_assets import RasterImageAsset
 from InkGen.paragraph import LineSpacingRule, Paragraph, ParagraphAlignment
 from InkGen.style import DrawingStyle, TextStyle
 from InkGen.table import Table
@@ -41,6 +45,7 @@ DRAWING_COMPONENT_CONSTRUCTORS = {
     "RectangleDrawing": RectangleDrawing,
     "RegularPolygonDrawing": RegularPolygonDrawing,
     "TextDrawing": TextDrawing,
+    "ImageDrawing": ImageDrawing,
 }
 DRAWING_COMPONENT_TYPES = frozenset((*DRAWING_COMPONENT_CONSTRUCTORS, "PathDrawing"))
 DRAWING_COMPONENT_TYPE_NAMES = {
@@ -48,6 +53,53 @@ DRAWING_COMPONENT_TYPE_NAMES = {
     PathDrawing: "PathDrawing",
 }
 TEXT_DRAWING_COMPONENT_TYPES = frozenset({"TextDrawing"})
+DOCX_IMAGE_RELATIONSHIP_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+DOCX_PICTURE_URI = "http://schemas.openxmlformats.org/drawingml/2006/picture"
+EMU_PER_MM = 36000
+
+
+@dataclass(frozen=True)
+class _DocxMediaPart:
+    """Image media part registered for a DOCX package."""
+
+    relationship_id: str
+    target: str
+    package_name: str
+    data: bytes
+    content_type: str
+
+
+class _DocxMediaRegistry:
+    """Deterministic registry for native DOCX media parts."""
+
+    def __init__(self) -> None:
+        self._part_by_digest: dict[str, _DocxMediaPart] = {}
+        self._drawing_id = 0
+
+    def register_png(self, image: RasterImageAsset) -> _DocxMediaPart:
+        """Register an EXIF-normalized PNG media part and return its relationship."""
+        data = image.png_bytes()
+        digest = sha256(data).hexdigest()
+        if digest not in self._part_by_digest:
+            index = len(self._part_by_digest) + 1
+            target = f"media/image{index}.png"
+            self._part_by_digest[digest] = _DocxMediaPart(
+                relationship_id=f"rId{index}",
+                target=target,
+                package_name=f"word/{target}",
+                data=data,
+                content_type="image/png",
+            )
+        return self._part_by_digest[digest]
+
+    def parts(self) -> tuple[_DocxMediaPart, ...]:
+        """Return registered media parts in deterministic insertion order."""
+        return tuple(self._part_by_digest.values())
+
+    def next_drawing_id(self) -> int:
+        """Return a unique DrawingML object id for the package."""
+        self._drawing_id += 1
+        return self._drawing_id
 
 
 class DocumentOutputFormat(str, Enum):
@@ -146,11 +198,12 @@ class FlowDocument:
 
     def to_docx_bytes(self) -> bytes:
         """Serialize the document as a minimal DOCX package."""
-        document_xml = self._docx_document_xml()
+        media_registry = _DocxMediaRegistry()
+        document_xml = self._docx_document_xml(media_registry)
         styles_xml = self._docx_styles_xml()
-        content_types = self._docx_content_types_xml()
+        content_types = self._docx_content_types_xml(media_registry)
         package_relationships = self._docx_package_relationships_xml()
-        document_relationships = self._docx_document_relationships_xml()
+        document_relationships = self._docx_document_relationships_xml(media_registry)
 
         buffer = BytesIO()
         with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as package:
@@ -159,6 +212,8 @@ class FlowDocument:
             _write_docx_part(package, "word/document.xml", document_xml)
             _write_docx_part(package, "word/styles.xml", styles_xml)
             _write_docx_part(package, "word/_rels/document.xml.rels", document_relationships)
+            for part in media_registry.parts():
+                _write_docx_binary_part(package, part.package_name, part.data)
         return buffer.getvalue()
 
     def create_docx(self, filepath: str | os.PathLike[str]) -> None:
@@ -177,11 +232,15 @@ class FlowDocument:
         """Write a plain-text file."""
         _write_text(filepath, self.to_plain_text())
 
-    def _docx_document_xml(self) -> str:
-        blocks = "\n".join(self._block_docx(block) for block in self._blocks)
+    def _docx_document_xml(self, media_registry: _DocxMediaRegistry) -> str:
+        blocks = "\n".join(self._block_docx(block, media_registry) for block in self._blocks)
         return (
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
             '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+            'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
+            'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" '
+            'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
+            'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" '
             'xmlns:v="urn:schemas-microsoft-com:vml">\n'
             "<w:body>\n"
             f"{blocks}\n"
@@ -190,12 +249,12 @@ class FlowDocument:
             "</w:document>\n"
         )
 
-    def _block_docx(self, block: Paragraph | Table | DrawingComponentGroup) -> str:
+    def _block_docx(self, block: Paragraph | Table | DrawingComponentGroup, media_registry: _DocxMediaRegistry) -> str:
         if isinstance(block, Paragraph):
             return self._paragraph_docx(block)
         if isinstance(block, Table):
             return self._table_docx(block)
-        return self._drawing_docx(block)
+        return self._drawing_docx(block, media_registry)
 
     def _block_html(self, block: Paragraph | Table | DrawingComponentGroup) -> str:
         if isinstance(block, Paragraph):
@@ -234,18 +293,28 @@ class FlowDocument:
             rows.append("<w:tr>" + "".join(cells) + "</w:tr>")
         return '<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/></w:tblPr>' + "".join(rows) + "</w:tbl>"
 
-    def _drawing_docx(self, group: DrawingComponentGroup) -> str:
+    def _drawing_docx(self, group: DrawingComponentGroup, media_registry: _DocxMediaRegistry) -> str:
         min_x, min_y, max_x, max_y = _drawing_bounds(group)
         width = max(max_x - min_x, 1.0)
         height = max(max_y - min_y, 1.0)
         shapes = []
+        image_paragraphs = []
         for component in group.components:
-            shapes.append(_component_vml(component, min_x, min_y))
-        return (
-            "<w:p><w:r><w:pict>"
-            f'<v:group coordorigin="0 0" coordsize="{_vml_number(width)} {_vml_number(height)}" '
-            f'style="width:{_vml_number(width)}mm;height:{_vml_number(height)}mm">' + "".join(shapes) + "</v:group></w:pict></w:r></w:p>"
-        )
+            if isinstance(component, ImageDrawing):
+                image_paragraphs.append(_image_drawing_docx(component, media_registry))
+            else:
+                shapes.append(_component_vml(component, min_x, min_y))
+        drawing_parts = []
+        if shapes:
+            drawing_parts.append(
+                "<w:p><w:r><w:pict>"
+                f'<v:group coordorigin="0 0" coordsize="{_vml_number(width)} {_vml_number(height)}" '
+                f'style="width:{_vml_number(width)}mm;height:{_vml_number(height)}mm">'
+                + "".join(shapes)
+                + "</v:group></w:pict></w:r></w:p>"
+            )
+        drawing_parts.extend(image_paragraphs)
+        return "".join(drawing_parts)
 
     def _paragraph_properties_docx(self, paragraph: Paragraph) -> str:
         alignment = "both" if paragraph.alignment is ParagraphAlignment.JUSTIFY else paragraph.alignment.value
@@ -328,12 +397,16 @@ class FlowDocument:
         return " ".join(attrs) + " " + _rtf_escape(paragraph.text).replace("\n", r"\line ") + r"\par"
 
     @staticmethod
-    def _docx_content_types_xml() -> str:
+    def _docx_content_types_xml(media_registry: _DocxMediaRegistry) -> str:
+        media_defaults = ""
+        if any(part.content_type == "image/png" for part in media_registry.parts()):
+            media_defaults = '<Default Extension="png" ContentType="image/png"/>\n'
         return (
             '<?xml version="1.0" encoding="UTF-8"?>\n'
             '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\n'
             '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>\n'
             '<Default Extension="xml" ContentType="application/xml"/>\n'
+            f"{media_defaults}"
             '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>\n'
             '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>\n'
             "</Types>\n"
@@ -349,10 +422,15 @@ class FlowDocument:
         )
 
     @staticmethod
-    def _docx_document_relationships_xml() -> str:
+    def _docx_document_relationships_xml(media_registry: _DocxMediaRegistry) -> str:
+        relationships = "".join(
+            f'<Relationship Id="{part.relationship_id}" Type="{DOCX_IMAGE_RELATIONSHIP_TYPE}" Target="{part.target}"/>\n'
+            for part in media_registry.parts()
+        )
         return (
             '<?xml version="1.0" encoding="UTF-8"?>\n'
             '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n'
+            f"{relationships}"
             "</Relationships>\n"
         )
 
@@ -537,6 +615,41 @@ def _component_vml(component: object, min_x: float, min_y: float) -> str:
     return f'<v:polyline points="{point_text}"/>'
 
 
+def _image_drawing_docx(component: ImageDrawing, media_registry: _DocxMediaRegistry) -> str:
+    """Return native DrawingML for a DOCX image drawing."""
+    part = media_registry.register_png(component.image)
+    width = _positive_artifact_number(component.width, name="ImageDrawing width")
+    height = _positive_artifact_number(component.height, name="ImageDrawing height")
+    width_emu = _mm_to_emu(width)
+    height_emu = _mm_to_emu(height)
+    doc_id = media_registry.next_drawing_id()
+    name = xml_escape(f"Picture {doc_id}")
+    return (
+        "<w:p><w:r><w:drawing>"
+        '<wp:inline distT="0" distB="0" distL="0" distR="0">'
+        f'<wp:extent cx="{width_emu}" cy="{height_emu}"/>'
+        f'<wp:docPr id="{doc_id}" name="{name}"/>'
+        '<wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>'
+        "<a:graphic>"
+        f'<a:graphicData uri="{DOCX_PICTURE_URI}">'
+        "<pic:pic>"
+        "<pic:nvPicPr>"
+        f'<pic:cNvPr id="{doc_id}" name="{name}"/>'
+        "<pic:cNvPicPr/>"
+        "</pic:nvPicPr>"
+        f'<pic:blipFill><a:blip r:embed="{part.relationship_id}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'
+        "<pic:spPr>"
+        f'<a:xfrm><a:off x="0" y="0"/><a:ext cx="{width_emu}" cy="{height_emu}"/></a:xfrm>'
+        '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>'
+        "</pic:spPr>"
+        "</pic:pic>"
+        "</a:graphicData>"
+        "</a:graphic>"
+        "</wp:inline>"
+        "</w:drawing></w:r></w:p>"
+    )
+
+
 def _materialized_points(component: object, *, allow_missing: bool) -> list[tuple[float, float]]:
     points = getattr(component, "points", None)
     if points is None:
@@ -601,6 +714,8 @@ def _drawing_component_parameters(component: object) -> dict[str, object]:
         payload["style"] = style.parameters
     if isinstance(component, PathDrawing):
         payload["commands"] = [command.parameters for command in component.commands or []]
+    if isinstance(component, ImageDrawing):
+        payload["image"] = component.image.parameters
     return {"type": component_type, "payload": payload}
 
 
@@ -622,6 +737,11 @@ def _drawing_component_from_parameters(data: object, styles: dict[str, object] |
     if not isinstance(data["payload"], Mapping):
         raise TypeError("flow document drawing component payload must be a mapping")
     payload = dict(data["payload"])
+    if component_type == "ImageDrawing":
+        if "image" not in payload:
+            raise ValueError("flow document image drawing payload must include image")
+        image = RasterImageAsset.create_from_dict(payload.pop("image"))
+        return ImageDrawing(image=image, **payload)
     if "style" not in payload:
         raise ValueError("flow document drawing component payload must include style")
     style = _style_from_payload(payload.pop("style"), styles, text=component_type in TEXT_DRAWING_COMPONENT_TYPES)
@@ -732,8 +852,18 @@ def _write_docx_part(package: zipfile.ZipFile, name: str, payload: str) -> None:
     package.writestr(info, payload)
 
 
+def _write_docx_binary_part(package: zipfile.ZipFile, name: str, payload: bytes) -> None:
+    info = zipfile.ZipInfo(name, date_time=DOCX_FIXED_TIMESTAMP)
+    info.compress_type = zipfile.ZIP_DEFLATED
+    package.writestr(info, payload)
+
+
 def _mm_to_twips(value: float) -> int:
     return int(round(_artifact_number(value, name="twip value") * 1440.0 / 25.4))
+
+
+def _mm_to_emu(value: float) -> int:
+    return int(round(_artifact_number(value, name="EMU value") * EMU_PER_MM))
 
 
 def _rtf_escape(value: str) -> str:

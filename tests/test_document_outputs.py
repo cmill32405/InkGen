@@ -7,17 +7,20 @@ from io import BytesIO
 from uuid import uuid4
 
 import pytest
+from PIL import Image
 
 from InkGen.component import PathCommand
 from InkGen.document_outputs import FlowDocument
 from InkGen.drawing_components import (
     CircleDrawing,
     DrawingComponentGroup,
+    ImageDrawing,
     LineDrawing,
     PathDrawing,
     RectangleDrawing,
     TextDrawing,
 )
+from InkGen.image_assets import RasterImageAsset
 from InkGen.paragraph import LineSpacingRule, Paragraph
 from InkGen.style import DrawingStyle, Font, TextStyle
 from InkGen.table import Table
@@ -63,6 +66,14 @@ def _drawing_group() -> DrawingComponentGroup:
     group.add_component(PathDrawing(drawing_style, [PathCommand("M", [(2.0, 2.0)]), PathCommand("L", [(6.0, 2.0)])]))
     group.add_component(TextDrawing("DETAIL A", (2.0, 8.0), text_style))
     return group
+
+
+def _image_asset(color: tuple[int, int, int, int] = (255, 0, 0, 128)) -> RasterImageAsset:
+    image = Image.new("RGBA", (2, 1), color)
+    image.putpixel((0, 0), (255, 0, 0, 0))
+    output = BytesIO()
+    image.save(output, format="PNG")
+    return RasterImageAsset.from_bytes(output.getvalue())
 
 
 @pytest.mark.condition("PDF-P3")
@@ -149,6 +160,169 @@ def test_flow_document_exports_tables_and_drawing_primitives() -> None:
     assert "<w:pict>" in document_xml
     assert "<v:group" in document_xml
     assert clone.to_plain_text() == text
+
+
+@pytest.mark.condition("RASTER-IMAGE-P2")
+def test_flow_document_docx_embeds_image_drawings_as_native_media_parts() -> None:
+    """RASTER-IMAGE-P2: DOCX image drawings use package media parts and DrawingML."""
+    asset = _image_asset()
+    group = DrawingComponentGroup("image-docx")
+    group.add_component(ImageDrawing(asset, (1.0, 2.0), 30.0, 15.0))
+    document = FlowDocument(title="Images")
+    document.add_drawing_group(group)
+
+    with zipfile.ZipFile(BytesIO(document.to_docx_bytes())) as package:
+        names = set(package.namelist())
+        document_xml = package.read("word/document.xml").decode("utf-8")
+        rels_xml = package.read("word/_rels/document.xml.rels").decode("utf-8")
+        content_types = package.read("[Content_Types].xml").decode("utf-8")
+        media = package.read("word/media/image1.png")
+
+    with Image.open(BytesIO(media)) as image:
+        image.load()
+        assert image.mode == "RGBA"
+        assert image.getpixel((0, 0))[3] == 0
+
+    assert "word/media/image1.png" in names
+    assert '<Default Extension="png" ContentType="image/png"/>' in content_types
+    assert 'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"' in rels_xml
+    assert 'Target="media/image1.png"' in rels_xml
+    assert "<w:drawing>" in document_xml
+    assert 'r:embed="rId1"' in document_xml
+    assert 'cx="1080000" cy="540000"' in document_xml
+    assert "data:image" not in document_xml
+
+
+@pytest.mark.condition("RASTER-IMAGE-P2")
+def test_flow_document_docx_assigns_distinct_relationships_to_distinct_images() -> None:
+    """RASTER-IMAGE-P2: DOCX media registry assigns deterministic image parts."""
+    group = DrawingComponentGroup("two-images")
+    group.add_component(ImageDrawing(_image_asset((255, 0, 0, 128)), (1.0, 2.0), 3.0, 4.0))
+    group.add_component(ImageDrawing(_image_asset((0, 0, 255, 128)), (5.0, 6.0), 7.0, 8.0))
+    document = FlowDocument(title="Two Images")
+    document.add_drawing_group(group)
+
+    with zipfile.ZipFile(BytesIO(document.to_docx_bytes())) as package:
+        names = package.namelist()
+        document_xml = package.read("word/document.xml").decode("utf-8")
+        rels_xml = package.read("word/_rels/document.xml.rels").decode("utf-8")
+
+    assert "word/media/image1.png" in names
+    assert "word/media/image2.png" in names
+    assert 'r:embed="rId1"' in document_xml
+    assert 'r:embed="rId2"' in document_xml
+    assert 'Target="media/image1.png"' in rels_xml
+    assert 'Target="media/image2.png"' in rels_xml
+
+
+@pytest.mark.condition("RASTER-IMAGE-P2")
+def test_flow_document_docx_keeps_vector_bounds_when_images_share_drawing_group() -> None:
+    """RASTER-IMAGE-P2: Native images do not distort DOCX VML vector bounds."""
+    group = DrawingComponentGroup("mixed-image-vector")
+    group.add_component(RectangleDrawing((1.0, 2.0), 10.0, 5.0, 0.0, DrawingStyle(f"mixed_{uuid4().hex}")))
+    group.add_component(ImageDrawing(_image_asset(), (20.0, 30.0), 3.0, 4.0))
+    document = FlowDocument(title="Mixed Image")
+    document.add_drawing_group(group)
+
+    with zipfile.ZipFile(BytesIO(document.to_docx_bytes())) as package:
+        document_xml = package.read("word/document.xml").decode("utf-8")
+
+    assert 'coordsize="22 32"' in document_xml
+    assert "word/media/image" not in document_xml
+    assert "<w:drawing>" in document_xml
+
+
+@pytest.mark.condition("RASTER-IMAGE-P2")
+def test_flow_document_image_drawing_parameters_round_trip_without_style() -> None:
+    """RASTER-IMAGE-P2: FlowDocument serializes image drawings without style payloads."""
+    group = DrawingComponentGroup("image-round-trip")
+    group.add_component(ImageDrawing(_image_asset(), (1.0, 2.0), 3.0, 4.0))
+    document = FlowDocument(title="Image Round Trip")
+    document.add_drawing_group(group)
+
+    clone = FlowDocument.create_from_dict(document.parameters)
+
+    assert clone.parameters == document.parameters
+    assert clone.to_plain_text() == "[Drawing: image-round-trip; ImageDrawing]"
+
+
+@pytest.mark.condition("RASTER-IMAGE-P2")
+def test_flow_document_image_and_path_hydration_dispatch_dynamic_type_strings() -> None:
+    """RASTER-IMAGE-P2: Image and path drawing hydration uses string equality."""
+    style = DrawingStyle(f"path_{uuid4().hex}", stroke="#000000", fill="none")
+    group = DrawingComponentGroup("dynamic-types")
+    group.add_component(ImageDrawing(_image_asset(), (1.0, 2.0), 3.0, 4.0))
+    group.add_component(PathDrawing(style, [PathCommand("M", [(1.0, 2.0)]), PathCommand("L", [(3.0, 4.0)])]))
+    document = FlowDocument(title="Dynamic Types")
+    document.add_drawing_group(group)
+    payload = document.parameters
+    flow_payload = payload["FlowDocument"]
+    assert isinstance(flow_payload, dict)
+    blocks = flow_payload["blocks"]
+    assert isinstance(blocks, list)
+    components = blocks[0]["payload"]["components"]
+    assert isinstance(components, list)
+    path_payload = components[1]["payload"]
+    assert isinstance(path_payload, dict)
+    assert path_payload["commands"] == [
+        {"type": "M", "points": [(1.0, 2.0)]},
+        {"type": "L", "points": [(3.0, 4.0)]},
+    ]
+    for component_payload in components:
+        component_type = component_payload["type"]
+        assert isinstance(component_type, str)
+        component_payload["type"] = "".join([component_type[:-1], component_type[-1:]])
+
+    clone = FlowDocument.create_from_dict(payload, {style.name: style})
+
+    assert clone.parameters == document.parameters
+
+
+@pytest.mark.condition("RASTER-IMAGE-P2")
+@pytest.mark.parametrize("component_payload", [{"payload": {}}, {"type": "ImageDrawing"}])
+def test_flow_document_image_drawing_hydration_rejects_partial_component_envelopes(component_payload: object) -> None:
+    """RASTER-IMAGE-P2: Image component hydration requires full type/payload envelope."""
+    payload = {
+        "FlowDocument": {
+            "title": "Bad Envelope",
+            "blocks": [
+                {
+                    "type": "drawing",
+                    "payload": {
+                        "group_label": "bad-envelope",
+                        "components": [component_payload],
+                    },
+                }
+            ],
+        }
+    }
+
+    with pytest.raises(ValueError, match="component must include type and payload"):
+        FlowDocument.create_from_dict(payload)
+
+
+@pytest.mark.condition("RASTER-IMAGE-P2")
+def test_flow_document_image_drawing_hydration_rejects_missing_image_payload() -> None:
+    """RASTER-IMAGE-P2: Image drawing hydration requires serialized image bytes."""
+    group = DrawingComponentGroup("bad-image")
+    group.add_component(ImageDrawing(_image_asset(), (1.0, 2.0), 3.0, 4.0))
+    document = FlowDocument(title="Bad Image")
+    document.add_drawing_group(group)
+    payload = document.parameters
+    flow_payload = payload["FlowDocument"]
+    assert isinstance(flow_payload, dict)
+    blocks = flow_payload["blocks"]
+    assert isinstance(blocks, list)
+    block_payload = blocks[0]["payload"]
+    assert isinstance(block_payload, dict)
+    components = block_payload["components"]
+    assert isinstance(components, list)
+    image_payload = components[0]["payload"]
+    assert isinstance(image_payload, dict)
+    image_payload.pop("image")
+
+    with pytest.raises(ValueError, match="image drawing payload must include image"):
+        FlowDocument.create_from_dict(payload)
 
 
 @pytest.mark.condition("PDF-P3")

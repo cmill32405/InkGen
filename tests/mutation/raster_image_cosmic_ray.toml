@@ -4,10 +4,11 @@ module-path = [
   "src/InkGen/drawing_components.py",
   "src/InkGen/svg_generator.py",
   "src/InkGen/pdf_generator.py",
+  "src/InkGen/document_outputs.py",
 ]
 timeout = 20.0
 excluded-modules = []
-test-command = "python -m pytest -x tests/test_raster_image_contract.py tests/test_public_api_contract.py"
+test-command = "python -m pytest -x tests/test_raster_image_contract.py tests/test_document_outputs.py tests/test_public_api_contract.py"
 
 [cosmic-ray.distributor]
 name = "local"

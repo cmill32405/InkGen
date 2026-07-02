@@ -10,6 +10,7 @@ import zlib
 import pytest
 from PIL import Image
 
+from InkGen import image_assets
 from InkGen.boundary import Canvas
 from InkGen.drawing_components import DrawingComponentGroup, ImageDrawing, OutputFormat
 from InkGen.image_assets import RasterImageAsset
@@ -25,6 +26,26 @@ def _image_bytes(format_name: str = "PNG", *, mode: str = "RGBA") -> bytes:
         image.putpixel((1, 0), (0, 0, 255, 128))
     output = io.BytesIO()
     image.save(output, format=format_name)
+    return output.getvalue()
+
+
+def _jpeg_bytes(*, orientation: int = 1, size: tuple[int, int] = (2, 3)) -> bytes:
+    image = Image.new("RGB", size, (255, 0, 0))
+    image.putpixel((0, 0), (0, 255, 0))
+    output = io.BytesIO()
+    if orientation == 1:
+        image.save(output, format="JPEG")
+    else:
+        exif = Image.Exif()
+        exif[274] = orientation
+        image.save(output, format="JPEG", exif=exif)
+    return output.getvalue()
+
+
+def _cmyk_jpeg_bytes() -> bytes:
+    image = Image.new("CMYK", (2, 1), (0, 255, 255, 0))
+    output = io.BytesIO()
+    image.save(output, format="JPEG")
     return output.getvalue()
 
 
@@ -76,6 +97,54 @@ def test_raster_image_asset_detects_palette_transparency() -> None:
     assert asset.has_alpha is True
     assert opaque.mode == "P"
     assert opaque.has_alpha is False
+
+
+@pytest.mark.condition("RASTER-IMAGE-P2")
+def test_raster_image_asset_applies_exif_orientation_to_decoded_surface() -> None:
+    """RASTER-IMAGE-P2: EXIF orientation changes decoded geometry, not source bytes."""
+    raw = _jpeg_bytes(orientation=6, size=(2, 3))
+
+    asset = RasterImageAsset.from_bytes(raw)
+
+    assert asset.format == "JPEG"
+    assert asset.orientation == 6
+    assert (asset.width, asset.height) == (3, 2)
+    assert asset.can_passthrough_jpeg is False
+    with asset.image() as image:
+        assert image.size == (3, 2)
+
+
+@pytest.mark.condition("RASTER-IMAGE-P2")
+def test_raster_image_asset_allows_identity_rgb_jpeg_passthrough() -> None:
+    """RASTER-IMAGE-P2: RGB JPEG pass-through is allowed only when orientation is identity."""
+    asset = RasterImageAsset.from_bytes(_jpeg_bytes())
+
+    assert asset.orientation == 1
+    assert asset.mode == "RGB"
+    assert asset.has_alpha is False
+    assert asset.can_passthrough_jpeg is True
+
+
+@pytest.mark.condition("RASTER-IMAGE-P2")
+def test_raster_image_asset_rejects_non_rgb_jpegs_for_passthrough() -> None:
+    """RASTER-IMAGE-P2: Non-RGB JPEGs are decoded instead of passed through."""
+    asset = RasterImageAsset.from_bytes(_cmyk_jpeg_bytes())
+
+    assert asset.format == "JPEG"
+    assert asset.mode == "CMYK"
+    assert asset.can_passthrough_jpeg is False
+
+
+@pytest.mark.condition("RASTER-IMAGE-P2")
+def test_raster_image_asset_exif_orientation_falls_back_for_malformed_metadata() -> None:
+    """RASTER-IMAGE-P2: Malformed EXIF orientation metadata falls back to identity."""
+
+    class BadExifImage:
+        def getexif(self) -> object:
+            """Return malformed EXIF metadata for the private boundary helper."""
+            raise TypeError("bad exif")
+
+    assert image_assets._exif_orientation(BadExifImage()) == 1  # noqa: SLF001
 
 
 @pytest.mark.condition("RASTER-IMAGE-P1")
@@ -253,6 +322,42 @@ def test_image_pdf_opaque_images_do_not_emit_soft_masks() -> None:
     assert b"/Subtype /Image" in payload
     assert b"/SMask" not in payload
     assert b"/ColorSpace /DeviceRGB" in payload
+
+
+@pytest.mark.condition("RASTER-IMAGE-P2")
+def test_document_pdf_passes_identity_rgb_jpegs_through_as_dct_streams() -> None:
+    """RASTER-IMAGE-P2: PDF embeds identity RGB JPEG bytes without recompression."""
+    jpeg = _jpeg_bytes()
+    asset = RasterImageAsset.from_bytes(jpeg)
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    group = ComponentGroupPDF(f"image_{uuid.uuid4().hex}")
+    group.add_component(ImagePDF(asset, (1.0, 2.0), 3.0, 4.0))
+    document.page(1).layer("base").add_component_group(group)
+
+    payload = document.to_pdf_bytes()
+
+    assert b"/Filter /DCTDecode" in payload
+    assert b"/SMask" not in payload
+    assert jpeg in payload
+
+
+@pytest.mark.condition("RASTER-IMAGE-P2")
+def test_document_pdf_decodes_oriented_jpegs_before_embedding() -> None:
+    """RASTER-IMAGE-P2: PDF does not pass through JPEG bytes requiring EXIF rotation."""
+    jpeg = _jpeg_bytes(orientation=6, size=(2, 3))
+    asset = RasterImageAsset.from_bytes(jpeg)
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    group = ComponentGroupPDF(f"image_{uuid.uuid4().hex}")
+    group.add_component(ImagePDF(asset, (1.0, 2.0)))
+    document.page(1).layer("base").add_component_group(group)
+
+    payload = document.to_pdf_bytes()
+
+    assert b"/Filter /DCTDecode" not in payload
+    assert b"/Filter /FlateDecode" in payload
+    assert b"/Width 3 /Height 2" in payload
 
 
 @pytest.mark.condition("RASTER-IMAGE-P1")

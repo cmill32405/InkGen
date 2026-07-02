@@ -25,11 +25,14 @@ italic/oblique variants. Custom TrueType/OpenType font embedding and subsetting
 are not implemented in the dependency-free PDF backend.
 
 PDF raster images use `RasterImageAsset` and `ImagePDF`. InkGen accepts
-Pillow-decodable raster inputs at the asset boundary, decodes them to RGB image
-XObjects, and emits an alpha soft mask (`/SMask`) when the source image contains
-transparency. Alpha is not flattened against white or any other background
-color. SVG output uses the same `RasterImageAsset` through `ImageSVG`, normalized
-to an embedded PNG data URI.
+Pillow-decodable raster inputs at the asset boundary, applies EXIF orientation
+before exposing decoded pixels, decodes them to RGB image XObjects, and emits an
+alpha soft mask (`/SMask`) when the source image contains transparency. Alpha is
+not flattened against white or any other background color. Identity-orientation
+RGB JPEG sources are passed through as `/DCTDecode` streams so the PDF can reuse
+the original encoded bytes; JPEGs that require EXIF rotation or unsupported color
+modes fall back to normalized RGB samples. SVG output uses the same
+`RasterImageAsset` through `ImageSVG`, normalized to an embedded PNG data URI.
 
 The PDF render path is intentionally closed. `DocumentPDF` renders exact
 `ComponentGroupPDF` groups, and `ComponentGroupPDF` accepts/renders only the

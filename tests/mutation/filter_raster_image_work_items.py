@@ -9,7 +9,7 @@ from pathlib import Path
 FILTER_SQL = """
 (
 (
-  module_path = 'src/InkGen/image_assets.py'
+  module_path LIKE '%image_assets.py'
   AND (
     definition_name IN (
       '_coerce_image_bytes',
@@ -22,37 +22,39 @@ FILTER_SQL = """
       'mime_type',
       'has_alpha',
       'parameters',
+      'can_passthrough_jpeg',
       'image',
       'png_bytes',
       'png_data_uri',
       '__init__',
       'points',
       'bbox',
-      'convex_hull'
+      'convex_hull',
+      '_exif_orientation'
     )
-    AND start_pos_row BETWEEN 27 AND 248
+    AND start_pos_row BETWEEN 27 AND 266
   )
 )
 OR (
-  module_path = 'src/InkGen/drawing_components.py'
+  module_path LIKE '%drawing_components.py'
   AND definition_name IN ('__post_init__', 'to_component')
   AND start_pos_row BETWEEN 253 AND 273
 )
 OR (
-  module_path = 'src/InkGen/svg_generator.py'
+  module_path LIKE '%svg_generator.py'
   AND definition_name IN ('create_from_dict', 'parameters', 'generate_svg')
   AND start_pos_row BETWEEN 1216 AND 1248
 )
 OR (
-  module_path = 'src/InkGen/pdf_generator.py'
+  module_path LIKE '%pdf_generator.py'
   AND (
     (
       definition_name IN ('image_resource_name', 'resource_name_for_asset', 'resources')
       AND start_pos_row BETWEEN 90 AND 135
     )
     OR (
-      definition_name IN ('_pdf_image_samples', '_pdf_image_xobject')
-      AND start_pos_row BETWEEN 201 AND 229
+      definition_name IN ('_pdf_image_payload', '_pdf_image_xobject')
+      AND start_pos_row BETWEEN 201 AND 232
     )
     OR (
       definition_name IN ('create_from_dict', 'parameters', 'generate_pdf')
@@ -61,6 +63,23 @@ OR (
     OR (
       definition_name IN ('to_pdf_bytes', '_render_page_content')
       AND start_pos_row BETWEEN 1141 AND 1234
+    )
+  )
+)
+OR (
+  module_path LIKE '%document_outputs.py'
+  AND (
+    (
+      definition_name IN ('_DocxMediaPart', '_DocxMediaRegistry', 'register_png', 'parts', 'next_drawing_id')
+      AND start_pos_row BETWEEN 62 AND 103
+    )
+    OR (
+      definition_name IN ('to_docx_bytes', '_docx_document_xml', '_block_docx', '_drawing_docx', '_docx_content_types_xml', '_docx_document_relationships_xml')
+      AND start_pos_row BETWEEN 199 AND 413
+    )
+    OR (
+      definition_name IN ('_image_drawing_docx', '_drawing_component_parameters', '_drawing_component_from_parameters', '_write_docx_binary_part', '_mm_to_emu')
+      AND start_pos_row BETWEEN 618 AND 867
     )
   )
 )

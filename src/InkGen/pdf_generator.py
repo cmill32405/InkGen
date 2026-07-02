@@ -198,15 +198,17 @@ def _color_components(color: str) -> tuple[float, float, float] | None:
     )
 
 
-def _pdf_image_samples(asset: RasterImageAsset) -> tuple[bytes, bytes | None]:
-    """Return RGB image samples and optional alpha samples for a PDF image."""
+def _pdf_image_payload(asset: RasterImageAsset) -> tuple[bytes, bytes | None, str]:
+    """Return color samples, optional alpha samples, and the PDF color filter."""
+    if asset.can_passthrough_jpeg:
+        return asset.data, None, "DCTDecode"
     with asset.image() as image:
         rgba = image.convert("RGBA")
         color = rgba.convert("RGB").tobytes()
         alpha = rgba.getchannel("A").tobytes()
     if all(value == 255 for value in alpha):
-        return color, None
-    return color, alpha
+        return color, None, "FlateDecode"
+    return color, alpha, "FlateDecode"
 
 
 def _pdf_image_xobject(
@@ -216,17 +218,18 @@ def _pdf_image_xobject(
     color_space: str,
     samples: bytes,
     smask_object_id: int | None = None,
+    filter_name: str = "FlateDecode",
 ) -> bytes:
-    """Build a compressed PDF image XObject stream."""
-    compressed = zlib.compress(samples)
+    """Build a PDF image XObject stream."""
+    payload = zlib.compress(samples) if filter_name == "FlateDecode" else samples
     dictionary = (
         f"<< /Type /XObject /Subtype /Image /Width {width} /Height {height} "
-        f"/ColorSpace /{color_space} /BitsPerComponent 8 /Filter /FlateDecode /Length {len(compressed)}"
+        f"/ColorSpace /{color_space} /BitsPerComponent 8 /Filter /{filter_name} /Length {len(payload)}"
     )
     if smask_object_id is not None:
         dictionary += f" /SMask {smask_object_id} 0 R"
     dictionary += " >>"
-    return dictionary.encode("ascii") + b"\nstream\n" + compressed + b"\nendstream"
+    return dictionary.encode("ascii") + b"\nstream\n" + payload + b"\nendstream"
 
 
 def _pdf_base_font_for_style(style: TextStyle) -> str:
@@ -1165,7 +1168,7 @@ class DocumentPDF(Document):
 
         image_object_ids: dict[str, int] = {}
         for resource_name, asset in image_registry.resources():
-            color_samples, alpha_samples = _pdf_image_samples(asset)
+            color_samples, alpha_samples, color_filter = _pdf_image_payload(asset)
             smask_object_id = None
             if alpha_samples is not None:
                 smask_object_id = object_id
@@ -1188,6 +1191,7 @@ class DocumentPDF(Document):
                     color_space="DeviceRGB",
                     samples=color_samples,
                     smask_object_id=smask_object_id,
+                    filter_name=color_filter,
                 ),
             )
             object_id += 1

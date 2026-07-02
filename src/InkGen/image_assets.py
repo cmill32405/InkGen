@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
 
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from InkGen.component import PRECISION, Component
 
@@ -75,6 +75,7 @@ class RasterImageAsset:
     height: int
     mode: str
     source: str | None = None
+    orientation: int = 1
 
     _ALPHA_MODES: ClassVar[set[str]] = {"RGBA", "LA"}
 
@@ -84,15 +85,17 @@ class RasterImageAsset:
         image_bytes = _coerce_image_bytes(data)
         try:
             with Image.open(io.BytesIO(image_bytes)) as image:
-                image.load()
+                orientation = _exif_orientation(image)
+                normalized = ImageOps.exif_transpose(image)
+                normalized.load()
                 image_format = (image.format or "PNG").upper()
-                width, height = image.size
-                mode = image.mode
+                width, height = normalized.size
+                mode = normalized.mode
         except (UnidentifiedImageError, OSError) as exc:
             raise ValueError("image data must be a Pillow-decodable raster image") from exc
         if width <= 0 or height <= 0:
             raise ValueError("image dimensions must be positive")
-        return cls(image_bytes, image_format, int(width), int(height), mode, source)
+        return cls(image_bytes, image_format, int(width), int(height), mode, source, orientation)
 
     @classmethod
     def from_file(cls, path: str | Path) -> RasterImageAsset:
@@ -146,14 +149,21 @@ class RasterImageAsset:
                 "height": self.height,
                 "mode": self.mode,
                 "source": self.source,
+                "orientation": self.orientation,
             }
         }
 
+    @property
+    def can_passthrough_jpeg(self) -> bool:
+        """Return whether the original JPEG bytes already match displayed pixels."""
+        return self.format in {"JPEG", "JPG"} and self.orientation == 1 and self.mode == "RGB" and not self.has_alpha
+
     def image(self) -> Image.Image:
-        """Return a loaded Pillow image copy for renderer-specific conversion."""
+        """Return a loaded EXIF-normalized Pillow image copy for renderer conversion."""
         with Image.open(io.BytesIO(self.data)) as image:
-            image.load()
-            return image.copy()
+            normalized = ImageOps.exif_transpose(image)
+            normalized.load()
+            return normalized.copy()
 
     def png_bytes(self) -> bytes:
         """Return the image normalized to PNG bytes, preserving alpha."""
@@ -246,3 +256,12 @@ class RasterImageComponent(Component):
                 "height": self.height,
             }
         }
+
+
+def _exif_orientation(image: Image.Image) -> int:
+    """Return the EXIF orientation tag value when it is well-formed."""
+    try:
+        orientation = int(image.getexif().get(274, 1))
+    except (AttributeError, TypeError, ValueError):
+        return 1
+    return orientation if 1 <= orientation <= 8 else 1
