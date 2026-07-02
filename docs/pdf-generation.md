@@ -17,6 +17,12 @@ the page content-stream level, and text rendering counter-flips glyphs so text
 stays upright. PDF metadata dates and object ordering are fixed so repeated
 renders of the same document produce deterministic bytes.
 
+PDF text uses the built-in PDF Standard font families from `TextStyle.font`
+where possible. Helvetica/sans-serif, Times/serif, and Courier/monospace
+families map to deterministic PDF font resources, including bold and
+italic/oblique variants. Custom TrueType/OpenType font embedding and subsetting
+are not implemented in the dependency-free PDF backend.
+
 The PDF render path is intentionally closed. `DocumentPDF` renders exact
 `ComponentGroupPDF` groups, and `ComponentGroupPDF` accepts/renders only the
 built-in PDF primitive component classes listed above. Custom dynamic

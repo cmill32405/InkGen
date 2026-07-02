@@ -75,6 +75,34 @@ class PDFRenderContext:
     """Rendering settings shared by PDF components on a page."""
 
     canvas_height: float
+    font_registry: _PDFFontRegistry | None = None
+
+    def font_resource_name(self, style: TextStyle) -> str:
+        """Return the PDF font resource name for a text style."""
+        if self.font_registry is None:
+            return "F1"
+        return self.font_registry.resource_name_for_style(style)
+
+
+class _PDFFontRegistry:
+    """Deterministic registry for built-in PDF Standard 14 font resources."""
+
+    def __init__(self) -> None:
+        self._resource_by_base_font: dict[str, str] = {}
+
+    def resource_name_for_style(self, style: TextStyle) -> str:
+        """Return a stable resource name for the style's built-in PDF font."""
+        return self.resource_name_for_base_font(_pdf_base_font_for_style(style))
+
+    def resource_name_for_base_font(self, base_font: str) -> str:
+        """Return a stable resource name for a PDF Standard 14 base font."""
+        if base_font not in self._resource_by_base_font:
+            self._resource_by_base_font[base_font] = f"F{len(self._resource_by_base_font) + 1}"
+        return self._resource_by_base_font[base_font]
+
+    def resources(self) -> tuple[tuple[str, str], ...]:
+        """Return resource-name/base-font pairs in deterministic insertion order."""
+        return tuple((resource_name, base_font) for base_font, resource_name in self._resource_by_base_font.items())
 
 
 class _PDFObjectWriter:
@@ -137,6 +165,43 @@ def _color_components(color: str) -> tuple[float, float, float] | None:
         int(hex_color[2:4], 16) / 255.0,
         int(hex_color[4:6], 16) / 255.0,
     )
+
+
+def _pdf_base_font_for_style(style: TextStyle) -> str:
+    """Map an InkGen text style to a built-in PDF Standard 14 base font."""
+    font = getattr(style, "font", None)
+    family = str(getattr(font, "family", "Helvetica")).lower()
+    font_style = str(getattr(font, "style", "normal")).lower()
+    font_weight = getattr(font, "weight", "normal")
+    weight_text = str(font_weight).lower()
+    is_bold = weight_text in {"bold", "heavy", "black", "demibold", "semibold", "extra bold"} or (
+        isinstance(font_weight, int) and not isinstance(font_weight, bool) and font_weight >= 600
+    )
+    is_italic = font_style in {"italic", "oblique"}
+
+    if "courier" in family or "mono" in family:
+        if is_bold and is_italic:
+            return "Courier-BoldOblique"
+        if is_bold:
+            return "Courier-Bold"
+        if is_italic:
+            return "Courier-Oblique"
+        return "Courier"
+    if "times" in family or "serif" in family:
+        if is_bold and is_italic:
+            return "Times-BoldItalic"
+        if is_bold:
+            return "Times-Bold"
+        if is_italic:
+            return "Times-Italic"
+        return "Times-Roman"
+    if is_bold and is_italic:
+        return "Helvetica-BoldOblique"
+    if is_bold:
+        return "Helvetica-Bold"
+    if is_italic:
+        return "Helvetica-Oblique"
+    return "Helvetica"
 
 
 def _style_operators(style: DrawingStyle, *, fill: bool = True, stroke: bool = True) -> list[str]:
@@ -811,12 +876,13 @@ class TextPDF(TextComponent, PDFGeneratorInterface):
         size = float(getattr(self.style.font, "size", 10.0))
         x, y = self.position
         escaped = _escape_pdf_string(self.text)
+        font_resource = context.font_resource_name(self.style) if context is not None else "F1"
         return "\n".join(
             [
                 "q",
                 f"{_number(color[0])} {_number(color[1])} {_number(color[2])} rg",
                 "BT",
-                f"/F1 {_number(size)} Tf",
+                f"/{font_resource} {_number(size)} Tf",
                 f"1 0 0 -1 {_number(x)} {_number(y)} Tm",
                 f"({escaped}) Tj",
                 "ET",
@@ -954,12 +1020,12 @@ class DocumentPDF(Document):
         writer = _PDFObjectWriter()
         catalog_id = 1
         pages_id = 2
-        font_id = 3
-        info_id = 4
+        info_id = 3
         page_ids: list[int] = []
-        object_id = 5
+        object_id = 4
+        font_registry = _PDFFontRegistry()
+        rendered_pages: list[tuple[Layers, str]] = []
 
-        writer.set_object(font_id, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>")
         writer.set_object(
             info_id,
             (
@@ -970,7 +1036,22 @@ class DocumentPDF(Document):
 
         for page_number in range(1, self.pages + 1):
             page = self.page(page_number)
-            content = self._render_page_content(page)
+            content = self._render_page_content(page, font_registry)
+            rendered_pages.append((page, content))
+
+        font_object_ids: dict[str, int] = {}
+        for resource_name, base_font in font_registry.resources():
+            font_object_ids[resource_name] = object_id
+            writer.set_object(
+                object_id,
+                f"<< /Type /Font /Subtype /Type1 /BaseFont /{base_font} /Encoding /WinAnsiEncoding >>",
+            )
+            object_id += 1
+
+        font_entries = " ".join(f"/{resource_name} {font_object_ids[resource_name]} 0 R" for resource_name in font_object_ids)
+        resources = f"<< /Font << {font_entries} >> >>" if font_entries else "<< >>"
+
+        for page, content in rendered_pages:
             content_bytes = content.encode("latin-1")
             content_id = object_id
             page_id = object_id + 1
@@ -984,7 +1065,7 @@ class DocumentPDF(Document):
                 (
                     f"<< /Type /Page /Parent {pages_id} 0 R "
                     f"/MediaBox [0 0 {_number(page._canvas.width)} {_number(page._canvas.height)}] "
-                    f"/Resources << /Font << /F1 {font_id} 0 R >> >> "
+                    f"/Resources {resources} "
                     f"/Contents {content_id} 0 R >>"
                 ),
             )
@@ -994,8 +1075,8 @@ class DocumentPDF(Document):
         writer.set_object(catalog_id, f"<< /Type /Catalog /Pages {pages_id} 0 R >>")
         return writer.build(root_id=catalog_id, info_id=info_id)
 
-    def _render_page_content(self, page: Layers) -> str:
-        context = PDFRenderContext(canvas_height=page._canvas.height)
+    def _render_page_content(self, page: Layers, font_registry: _PDFFontRegistry | None = None) -> str:
+        context = PDFRenderContext(canvas_height=page._canvas.height, font_registry=font_registry)
         operators = ["q", f"1 0 0 -1 0 {_number(page._canvas.height)} cm"]
         for layer_name in page.layers:
             layer = page.layer(layer_name)

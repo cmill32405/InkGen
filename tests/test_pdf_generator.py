@@ -50,6 +50,16 @@ def _stream(pdf_bytes: bytes) -> str:
     return match.group("content").decode("latin-1")
 
 
+def _pdf_bytes_for_single_text_style(style: TextStyle) -> bytes:
+    canvas = Canvas(100.0, 80.0)
+    document = DocumentPDF(canvas)
+    document.add_page()
+    group = ComponentGroupPDF("font")
+    group.add_component(TextPDF("Font", (10.0, 20.0), style))
+    document.page(1).layer("base").add_component_group(group)
+    return document.to_pdf_bytes()
+
+
 def _quadratic_point(
     start: tuple[float, float],
     control: tuple[float, float],
@@ -224,6 +234,89 @@ def test_document_pdf_is_deterministic_and_flips_page_coordinates_once(drawing_s
     assert content.count("1 0 0 -1 0 80 cm") == 1
     assert "10 20 30 40 re" in content
     assert "1 0 0 -1 15 25 Tm" in content
+
+
+@pytest.mark.condition("PDF-FONT-STANDARD-P2")
+def test_document_pdf_maps_text_styles_to_standard_font_resources() -> None:
+    """PDF-FONT-STANDARD-P2: PDF text uses built-in font resources from TextStyle."""
+    canvas = Canvas(100.0, 80.0)
+    document = DocumentPDF(canvas)
+    document.add_page()
+    times_style = TextStyle(f"times_{uuid.uuid4().hex}", Font(family="serif", style="italic", weight="bold", size=11.0))
+    courier_style = TextStyle(f"mono_{uuid.uuid4().hex}", Font(family="monospace", size=9.0))
+    group = ComponentGroupPDF("fonts")
+    group.add_component(TextPDF("Times", (10.0, 20.0), times_style))
+    group.add_component(TextPDF("Mono", (10.0, 35.0), courier_style))
+    document.page(1).layer("base").add_component_group(group)
+
+    payload = document.to_pdf_bytes()
+    content = _stream(payload)
+
+    assert b"/BaseFont /Times-BoldItalic" in payload
+    assert b"/BaseFont /Courier" in payload
+    assert "/F1 11 Tf" in content
+    assert "/F2 9 Tf" in content
+
+
+@pytest.mark.condition("PDF-FONT-STANDARD-P2")
+@pytest.mark.parametrize(
+    ("family", "font_style", "weight", "base_font"),
+    [
+        ("monospace", "normal", "normal", "Courier"),
+        ("monospace", "normal", "bold", "Courier-Bold"),
+        ("monospace", "oblique", "normal", "Courier-Oblique"),
+        ("monospace", "italic", "bold", "Courier-BoldOblique"),
+        ("serif", "normal", "normal", "Times-Roman"),
+        ("serif", "normal", "semibold", "Times-Bold"),
+        ("serif", "italic", "normal", "Times-Italic"),
+        ("serif", "italic", "bold", "Times-BoldItalic"),
+        ("sans-serif", "normal", 600, "Helvetica-Bold"),
+        ("sans-serif", "normal", 700, "Helvetica-Bold"),
+        ("sans-serif", "oblique", "normal", "Helvetica-Oblique"),
+        ("Calibri", "italic", "bold", "Helvetica-BoldOblique"),
+    ],
+)
+def test_document_pdf_maps_standard_font_variants(
+    family: str,
+    font_style: str,
+    weight: str | int,
+    base_font: str,
+) -> None:
+    """PDF-FONT-STANDARD-P2: Standard font mapping covers family/style/weight variants."""
+    style = TextStyle(
+        f"variant_{uuid.uuid4().hex}",
+        Font(family=family, style=font_style, weight=weight, size=10.0),
+    )
+
+    payload = _pdf_bytes_for_single_text_style(style)
+
+    assert f"/BaseFont /{base_font}".encode("latin-1") in payload
+    assert "/F1 10 Tf" in _stream(payload)
+
+
+@pytest.mark.condition("PDF-FONT-STANDARD-P2")
+def test_document_pdf_numeric_weight_threshold_keeps_599_regular() -> None:
+    """PDF-FONT-STANDARD-P2: Numeric weights below 600 stay regular."""
+    style = TextStyle(
+        f"regular_{uuid.uuid4().hex}",
+        Font(family="sans-serif", weight=599, size=10.0),
+    )
+
+    payload = _pdf_bytes_for_single_text_style(style)
+
+    assert b"/BaseFont /Helvetica /Encoding" in payload
+    assert b"/BaseFont /Helvetica-Bold" not in payload
+
+
+@pytest.mark.condition("PDF-FONT-STANDARD-P2")
+def test_document_pdf_empty_page_has_no_font_resource_dictionary() -> None:
+    """PDF-FONT-STANDARD-P2: Empty pages do not emit unused font resources."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+
+    payload = document.to_pdf_bytes()
+
+    assert b"/Font <<" not in payload
 
 
 @pytest.mark.condition("PDF-P1")

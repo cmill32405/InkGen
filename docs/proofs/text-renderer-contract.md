@@ -23,6 +23,8 @@ The public behavior under review is:
 - `TextComponent.convex_hull`
 - `TextSVG.generate_svg()`
 - `TextPDF.generate_pdf()`
+- `PDFRenderContext.font_resource_name()`
+- `DocumentPDF.to_pdf_bytes()`
 - `TextDrawing.__post_init__()`
 - `TextDrawing.to_component(OutputFormat.SVG/PDF)`
 - `DXFDocument.add_group()` for `TextDrawing`
@@ -55,6 +57,8 @@ Outgoing dependencies:
 - SVG output depends on XML escaping and shared text-style serialization.
 - PDF output depends on PDF string escaping, `_number()`, and color component
   parsing.
+- PDF document output depends on `_PDFFontRegistry` to assign deterministic
+  built-in font resources after page text content is rendered.
 - DXF output depends on `DXFRenderContext.point()` and `_text_entity()`.
 - Neutral materialization depends on `normalize_output_format()` and lazy
   concrete renderer imports.
@@ -136,6 +140,11 @@ ADR/rule impact:
 - The position setter uses the same validation path as construction.
 - `TextPDF.generate_pdf()` is proven for exact escaped output and its defensive
   black/10-point fallback constants.
+- `TextPDF.generate_pdf()` now asks `PDFRenderContext` for its font resource
+  when rendered inside `DocumentPDF`.
+- `DocumentPDF.to_pdf_bytes()` now emits built-in PDF Standard font resources
+  for Helvetica, Times, and Courier family classes, including bold and italic
+  variants, instead of always binding `/F1` to Helvetica.
 - DXF text export is proven to emit a `0/TEXT` entity pair and apply optional
   canvas-height Y inversion.
 - `TextDrawing.__post_init__()` now stores normalized scalar text strings and
@@ -155,13 +164,14 @@ ADR/rule impact:
 | SVG output | Emit exact escaped text element | PO-TEXT-003 | `test_text_svg_emits_exact_escaped_text` | killed/equivalent |
 | PDF output | Emit exact escaped text object | PO-TEXT-004 | `test_text_pdf_emits_exact_text_object_and_escapes_string` | killed/equivalent |
 | PDF defensive defaults | Use black and 10-point defaults for incomplete internals | PO-TEXT-004 | `test_text_pdf_uses_black_and_ten_point_defensive_defaults` | killed |
+| PDF Standard font resources | Map built-in family/style/weight classes to deterministic page resources | PO-TEXT-010 | `test_document_pdf_maps_text_styles_to_standard_font_resources`, `test_document_pdf_maps_standard_font_variants`, `test_document_pdf_numeric_weight_threshold_keeps_599_regular`, `test_document_pdf_empty_page_has_no_font_resource_dictionary` | killed |
 | Serialization | Preserve parameters round trip | PO-TEXT-005 | `test_text_primitives_round_trip_parameters` | killed/equivalent |
 | Neutral materialization | Materialize to `TextSVG`/`TextPDF` | PO-TEXT-006 | `test_text_drawing_materializes_svg_and_pdf_components` | killed/equivalent |
 | Neutral scalar text payloads | Normalize to strings before public state is exposed | PO-TEXT-008 | `test_text_drawing_normalizes_scalar_text_before_materialization` | killed |
 | Non-scalar neutral text payloads | Reject at `TextDrawing` construction and FlowDocument hydration | PO-TEXT-008 | `test_text_drawing_rejects_non_scalar_text_payloads`, `test_flow_document_hydration_rejects_malformed_text_drawing_payloads` | killed |
 | Neutral text anchors | Normalize finite pairs and reject malformed anchors before public state is exposed | PO-TEXT-009 | `test_text_drawing_normalizes_valid_position_before_materialization`, `test_text_drawing_rejects_malformed_positions_before_materialization`, `test_flow_document_hydration_rejects_malformed_text_drawing_positions` | killed/equivalent |
 | DXF output | Emit `TEXT` entity with transformed anchor | PO-TEXT-007 | `test_dxf_text_drawing_exports_text_entity_with_canvas_transform` | killed/equivalent |
-| Multiline text layout, rich text runs, and font embedding | Excluded from proven domain | Explicit exclusion | Not applicable | Out of scope |
+| Multiline text layout, rich text runs, and custom font embedding/subsetting | Excluded from proven domain | Explicit exclusion | Not applicable | Out of scope |
 
 ## Test Applicability Matrix
 
@@ -188,8 +198,8 @@ Proof-critical mutation targets:
   invalid-input tests.
 - Changing SVG escaping, style, anchor, or emitted text should fail exact output
   tests.
-- Changing PDF color, font-size, matrix, escaping, or text operators should fail
-  exact output tests.
+- Changing PDF color, font-size, matrix, escaping, font resource selection, or
+  text operators should fail exact output tests.
 - Redirecting `TextDrawing.to_component()` should fail materialization tests.
 - Weakening `TextDrawing` text coercion or non-scalar rejection should fail
   direct neutral text and FlowDocument hydration tests.
@@ -205,6 +215,10 @@ Current result:
   materialization, and DXF export: 113 work items, 111 killed, and 2 survived.
 - The mutation run exposed and the tests closed real gaps for defensive PDF
   fallback constants.
+- PDF Standard font resource mutation slice:
+  `tests/mutation/pdf_standard_font_cosmic_ray.toml`, filtered by
+  `tests/mutation/filter_pdf_standard_font_work_items.py`: 37 work items, 37
+  killed, and 0 survived.
 - Equivalent survivors:
   - `target is OutputFormat.SVG` changed to `target == OutputFormat.SVG`.
     `normalize_output_format()` returns an `OutputFormat` member, so identity
@@ -310,6 +324,39 @@ internals are incomplete.
 ### Conclusion
 
 Proven for the stated domain after tests and mutation pass.
+
+## PO-TEXT-010: PDF Uses Standard Font Resources From TextStyle
+
+### Claim
+
+`DocumentPDF.to_pdf_bytes()` maps `TextStyle.font` family, style, and weight to
+deterministic built-in PDF Standard font resources instead of binding every
+text object to Helvetica.
+
+### Domain
+
+Text rendered through `DocumentPDF` with font families that resolve to
+Helvetica/sans-serif, Times/serif, or Courier/monospace classes, including bold
+and italic/oblique variants.
+
+### Proof Method
+
+`TextPDF.generate_pdf()` receives a `PDFRenderContext` during document
+rendering and asks that context for the font resource name. The context delegates
+to `_PDFFontRegistry`, which maps the style to a PDF Standard base font and
+assigns deterministic `/F<n>` resource names. The focused test renders one
+document with serif bold-italic text and monospace text, then asserts both the
+content stream resource names and the emitted `/BaseFont` resources.
+
+### Counterexamples And Exclusions
+
+Custom TrueType/OpenType embedding, font subsetting, glyph encoding beyond
+WinAnsi, rich text runs, and multiline layout are not part of this obligation.
+
+### Conclusion
+
+Proven for built-in PDF Standard font resource selection after focused tests
+and scoped mutation pass. Full quality gates remain part of the slice closeout.
 
 ## PO-TEXT-005: Serialization Preserves Text Parameters
 
