@@ -41,7 +41,8 @@ backend, not a full Acrobat replacement. The current backend is useful for
 parser-facing technical drawings because it supports pages, vector primitives,
 closed renderer domains, deterministic bytes, extraction/grammar truth, raster
 images with alpha, JPEG pass-through, ICC profile emission, Standard 14 fonts,
-and named TrueType/OpenType font embedding.
+named TrueType/OpenType font embedding, and stroke/fill opacity through PDF
+ExtGState resources.
 
 The remaining gaps that keep the backend from being a fully featured PDF
 creation system are:
@@ -50,7 +51,7 @@ creation system are:
 |---|---|---|
 | Text encoding | WinAnsi literal strings, installed-font embedding, and printable WinAnsi `/ToUnicode` CMaps | Unicode/CID fonts, glyph subsetting, and full complex-script text extraction maps |
 | Text layout | Single positioned text components | Multi-line wrapping, alignment, tabs, columns, kerning, and complex-script shaping |
-| Graphics state | Basic stroke/fill primitives | Clipping paths, dash arrays, line caps/joins, miter limits, opacity groups, blend modes, gradients, and patterns |
+| Graphics state | Basic stroke/fill primitives and stroke/fill alpha ExtGState resources | Clipping paths, dash arrays, line caps/joins, miter limits, opacity groups, blend modes, gradients, and patterns |
 | Document structure | Pages and deterministic metadata | Outlines/bookmarks, links, annotations, tagged PDF structure, page labels, and additional page boxes |
 | Color/profile support | Device RGB/CMYK and JPEG ICC profile objects | Broader calibrated color spaces and selectable PDF/A-style archival constraints |
 | Import/conversion | SVG input remains SVG-only | Arbitrary SVG-to-PDF conversion and external PDF embedding are out of scope until explicitly approved |

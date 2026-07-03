@@ -36,8 +36,8 @@ Incoming dependencies:
   polygonal, path, curve, and circle authoring.
 - SVG renderers consume `stroke`, `stroke_width`, `fill`, `stroke_opacity`, and
   `fill_opacity` through style strings.
-- PDF renderers consume drawing colors and stroke width through graphics-state
-  operators.
+- PDF renderers consume drawing colors, stroke width, and opacity through
+  graphics-state operators and ExtGState resources.
 - DXF materialization carries drawing recipes through neutral component paths,
   although DXF output does not currently emit style-specific color or width.
 - Saved component payloads hydrate drawing styles through
@@ -100,6 +100,8 @@ ADR/rule impact:
   contract and `_get_hex_color()` only normalizes already-valid colors.
 - Added condition-marked contract tests for valid defaults, malformed colors,
   scalar failure modes, hydration, and SVG/PDF live paths.
+- Added deterministic PDF ExtGState resources for non-opaque stroke/fill
+  opacity when drawing styles render through `DocumentPDF`.
 
 ## Comprehensiveness Matrix
 
@@ -111,6 +113,7 @@ ADR/rule impact:
 | Invalid opacity | Reject booleans, out-of-range, non-finite, and non-numeric values at construction and setter boundaries | PO-DSTYLE-004 | `test_drawing_style_rejects_invalid_stroke_width_and_opacity_boundaries` | killed |
 | Hydrated payloads | Route serialized values through the public constructor validation | PO-DSTYLE-005 | `test_drawing_style_hydration_uses_public_validation_boundaries` | killed |
 | SVG/PDF live paths | Emit validated style values into SVG style strings and PDF graphics operators | PO-DSTYLE-006 | `test_drawing_style_contract_remains_live_in_svg_and_pdf_output` | behavioral evidence |
+| PDF stroke/fill opacity | Emit non-opaque drawing style alpha through deterministic ExtGState resources | PO-DSTYLE-007 | `test_document_pdf_emits_extgstate_for_drawing_opacity`, `test_document_pdf_reuses_opacity_extgstate_resources`, `test_document_pdf_separates_stroke_and_fill_opacity_domains`, `test_document_pdf_omits_extgstate_for_opaque_drawings`, `test_pdf_opacity_helpers_validate_boundaries_and_reuse_resources` | 111 killed; 24 equivalent survivors |
 
 ## Test Applicability Matrix
 
@@ -142,11 +145,28 @@ Proof-critical mutation targets:
 - Bypassing public constructor validation during hydration must fail payload
   tests.
 - Changing SVG/PDF consumption of validated values must fail live-path tests.
+- Removing PDF ExtGState resource registration, reuse, or `gs` operator
+  emission should fail opacity live-path tests.
 
 Current result:
 
 - Cosmic Ray 8.4.6, scoped to executable STYLE-DRAWING-P1 rows: 64 work items,
   64 killed, and 0 survived.
+- PDF graphics-state continuation:
+  `tests/mutation/pdf_graphics_state_cosmic_ray.toml`, filtered by
+  `tests/mutation/filter_pdf_graphics_state_work_items.py`: 135 work items,
+  111 killed, and 24 documented equivalent survivors. Equivalent survivor
+  classes:
+  - Keyword-only `*` separator and default-argument mutations on
+    `graphics_state_resource_name()`, `resource_name_for_opacity()`,
+    `_style_operators()`, and `_drawing_pdf()` do not affect the proven live
+    path because InkGen callers pass explicit keyword arguments.
+  - `_style_operators()` fallback opacity and stroke-width default mutations
+    are equivalent for the proven `DrawingStyle` domain because constructed
+    drawing styles always expose validated `stroke_opacity`, `fill_opacity`,
+    and `stroke_width` attributes.
+  - `resource_name_for_opacity()` mutating `== 1.0` to `>= 1.0` is equivalent
+    because opacity values are validated into the closed interval `[0.0, 1.0]`.
 
 ## PO-DSTYLE-001: Valid Drawing Styles Normalize Deterministically
 
@@ -278,3 +298,40 @@ the emitted SVG style tokens and PDF graphics operators.
 ### Conclusion
 
 Supported by behavioral evidence for the stated domain.
+
+## PO-DSTYLE-007: PDF Emits Drawing Opacity ExtGState
+
+### Claim
+
+`DocumentPDF.to_pdf_bytes()` emits deterministic PDF ExtGState resources for
+non-opaque `DrawingStyle.stroke_opacity` and `DrawingStyle.fill_opacity`, then
+applies the matching `gs` operator before painting drawing primitives.
+
+### Domain
+
+Built-in PDF drawing primitives rendered through `DocumentPDF` with valid
+`DrawingStyle` opacity values in `[0.0, 1.0]`.
+
+### Proof Method
+
+`DocumentPDF.to_pdf_bytes()` creates one `_PDFGraphicsStateRegistry` for the
+render, passes it through `PDFRenderContext`, writes one ExtGState object for
+each distinct stroke/fill opacity tuple, and adds those objects to page
+`/Resources`. `_style_operators()` requests a graphics-state resource from the
+context only when a relevant stroke or fill opacity is non-opaque, then emits
+`/<resource> gs` before color and path-painting operators. Focused tests assert
+the ExtGState dictionary, resource section, content-stream operator placement,
+resource reuse, and absence of ExtGState resources for fully opaque drawings.
+
+### Counterexamples And Exclusions
+
+Direct primitive `generate_pdf()` calls without a document context still emit
+dependency-free standalone operators and do not create page-level ExtGState
+resources. Clipping paths, dash arrays, line caps/joins, blend modes, gradients,
+patterns, and transparency groups remain separate roadmap items.
+
+### Conclusion
+
+Behavioral tests and scoped mutation prove the PDF document live path for
+stroke/fill alpha. Remaining mutation survivors are equivalent for the stated
+valid `DrawingStyle` domain.

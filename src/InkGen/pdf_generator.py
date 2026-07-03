@@ -85,6 +85,7 @@ class PDFRenderContext:
     canvas_height: float
     font_registry: _PDFFontRegistry | None = None
     image_registry: _PDFImageRegistry | None = None
+    graphics_state_registry: _PDFGraphicsStateRegistry | None = None
 
     def font_resource_name(self, style: TextStyle) -> str:
         """Return the PDF font resource name for a text style."""
@@ -97,6 +98,12 @@ class PDFRenderContext:
         if self.image_registry is None:
             return "Im1"
         return self.image_registry.resource_name_for_asset(image)
+
+    def graphics_state_resource_name(self, *, stroke_opacity: float = 1.0, fill_opacity: float = 1.0) -> str | None:
+        """Return a PDF ExtGState resource name for non-opaque drawing opacity."""
+        if self.graphics_state_registry is None:
+            return None
+        return self.graphics_state_registry.resource_name_for_opacity(stroke_opacity=stroke_opacity, fill_opacity=fill_opacity)
 
 
 @dataclass(frozen=True)
@@ -199,6 +206,29 @@ class _PDFImageRegistry:
         return tuple(self._asset_by_resource.items())
 
 
+class _PDFGraphicsStateRegistry:
+    """Deterministic registry for PDF external graphics-state resources."""
+
+    def __init__(self) -> None:
+        self._resource_by_opacity: dict[tuple[float, float], str] = {}
+
+    def resource_name_for_opacity(self, *, stroke_opacity: float = 1.0, fill_opacity: float = 1.0) -> str | None:
+        """Return a resource name for non-default stroke/fill opacity values."""
+        stroke_alpha = _opacity_value(stroke_opacity, "stroke_opacity")
+        fill_alpha = _opacity_value(fill_opacity, "fill_opacity")
+        if stroke_alpha == 1.0 and fill_alpha == 1.0:
+            return None
+        key = (stroke_alpha, fill_alpha)
+        if key not in self._resource_by_opacity:
+            self._resource_by_opacity[key] = f"GS{len(self._resource_by_opacity) + 1}"
+        return self._resource_by_opacity[key]
+
+    def resources(self) -> tuple[tuple[str, float, float], ...]:
+        """Return graphics-state resource definitions in deterministic order."""
+        by_name = {name: key for key, name in self._resource_by_opacity.items()}
+        return tuple((name, by_name[name][0], by_name[name][1]) for name in sorted(by_name, key=lambda value: int(value[2:])))
+
+
 class _PDFObjectWriter:
     """Small deterministic PDF object writer."""
 
@@ -259,6 +289,21 @@ def _color_components(color: str) -> tuple[float, float, float] | None:
         int(hex_color[2:4], 16) / 255.0,
         int(hex_color[4:6], 16) / 255.0,
     )
+
+
+def _opacity_value(value: float | int, name: str) -> float:
+    """Return a validated PDF opacity value."""
+    opacity = float(value)
+    if math.isfinite(opacity) and not isinstance(value, bool) and 0.0 <= opacity <= 1.0:
+        return opacity
+    raise ValueError(f"{name} must be a finite number between 0.0 and 1.0")
+
+
+def _pdf_extgstate_object(*, stroke_opacity: float, fill_opacity: float) -> str:
+    """Build a PDF ExtGState dictionary for stroke and fill opacity."""
+    stroke_alpha = _opacity_value(stroke_opacity, "stroke_opacity")
+    fill_alpha = _opacity_value(fill_opacity, "fill_opacity")
+    return f"<< /Type /ExtGState /CA {_number(stroke_alpha)} /ca {_number(fill_alpha)} >>"
 
 
 def _pdf_image_payload(asset: RasterImageAsset) -> _PDFImagePayload:
@@ -501,9 +546,22 @@ def _pdf_base_font_for_style(style: TextStyle) -> str:
     return "Helvetica"
 
 
-def _style_operators(style: DrawingStyle, *, fill: bool = True, stroke: bool = True) -> list[str]:
+def _style_operators(
+    style: DrawingStyle,
+    *,
+    fill: bool = True,
+    stroke: bool = True,
+    context: PDFRenderContext | None = None,
+) -> list[str]:
     """Emit PDF graphics-state operators for an InkGen drawing style."""
     operators: list[str] = []
+    if context is not None:
+        graphics_state = context.graphics_state_resource_name(
+            stroke_opacity=getattr(style, "stroke_opacity", 1.0) if stroke else 1.0,
+            fill_opacity=getattr(style, "fill_opacity", 1.0) if fill else 1.0,
+        )
+        if graphics_state is not None:
+            operators.append(f"/{graphics_state} gs")
     if stroke:
         stroke_color = _color_components(getattr(style, "stroke", "none"))
         if stroke_color is not None:
@@ -576,10 +634,17 @@ def _quadratic_to_cubic(
     return c1, c2
 
 
-def _drawing_pdf(style: DrawingStyle, path_operators: list[str], *, fill: bool = True, stroke: bool = True) -> str:
+def _drawing_pdf(
+    style: DrawingStyle,
+    path_operators: list[str],
+    *,
+    fill: bool = True,
+    stroke: bool = True,
+    context: PDFRenderContext | None = None,
+) -> str:
     """Wrap a path with style and paint operators."""
     operators = ["q"]
-    operators.extend(_style_operators(style, fill=fill, stroke=stroke))
+    operators.extend(_style_operators(style, fill=fill, stroke=stroke, context=context))
     operators.extend(path_operators)
     operators.append(_paint_operator(style, fill=fill, stroke=stroke))
     operators.append("Q")
@@ -734,7 +799,7 @@ class RectanglePDF(WidthHeightDrawingComponent, PDFGeneratorInterface):
         """Generate PDF operators for this rectangle."""
         rx, ry = normalize_rectangle_corner_radii(self.corner_radii, self.width, self.height)
         path = _rounded_rectangle_path(self.position[0], self.position[1], self.width, self.height, rx, ry)
-        return _drawing_pdf(self.style, path)
+        return _drawing_pdf(self.style, path, context=context)
 
 
 class LinePDF(StandardDrawingComponent, PDFGeneratorInterface):
@@ -767,7 +832,7 @@ class LinePDF(StandardDrawingComponent, PDFGeneratorInterface):
             f"{_number(self.point_1[0])} {_number(self.point_1[1])} m",
             f"{_number(self.point_2[0])} {_number(self.point_2[1])} l",
         ]
-        return _drawing_pdf(self.style, path, fill=False)
+        return _drawing_pdf(self.style, path, fill=False, context=context)
 
 
 class ArcPDF(ArcComponent, PDFGeneratorInterface):
@@ -828,7 +893,7 @@ class ArcPDF(ArcComponent, PDFGeneratorInterface):
 
     def generate_pdf(self, context: PDFRenderContext | None = None) -> str:
         """Generate PDF operators for this arc using InkGen's sampled points."""
-        return _drawing_pdf(self.style, _path_from_points(list(self.points), close=False), fill=False)
+        return _drawing_pdf(self.style, _path_from_points(list(self.points), close=False), fill=False, context=context)
 
 
 class QuadraticBezierPDF(QuadraticBezierComponent, PDFGeneratorInterface):
@@ -873,7 +938,7 @@ class QuadraticBezierPDF(QuadraticBezierComponent, PDFGeneratorInterface):
             f"{_number(self.start_point[0])} {_number(self.start_point[1])} m",
             f"{_number(c1[0])} {_number(c1[1])} {_number(c2[0])} {_number(c2[1])} {_number(self.end_point[0])} {_number(self.end_point[1])} c",
         ]
-        return _drawing_pdf(self.style, path, fill=False)
+        return _drawing_pdf(self.style, path, fill=False, context=context)
 
 
 class CubicBezierPDF(CubicBezierComponent, PDFGeneratorInterface):
@@ -930,7 +995,7 @@ class CubicBezierPDF(CubicBezierComponent, PDFGeneratorInterface):
                 f"{_number(self.end_point[0])} {_number(self.end_point[1])} c"
             ),
         ]
-        return _drawing_pdf(self.style, path, fill=False)
+        return _drawing_pdf(self.style, path, fill=False, context=context)
 
 
 class PathPDF(PathComponent, PDFGeneratorInterface):
@@ -1016,7 +1081,7 @@ class PathPDF(PathComponent, PDFGeneratorInterface):
 
     def generate_pdf(self, context: PDFRenderContext | None = None) -> str:
         """Generate PDF operators for this path."""
-        return _drawing_pdf(self.style, self._command_operators())
+        return _drawing_pdf(self.style, self._command_operators(), context=context)
 
 
 class RegularPolygonPDF(RegularPolygonDrawingComponent, PDFGeneratorInterface):
@@ -1066,7 +1131,7 @@ class RegularPolygonPDF(RegularPolygonDrawingComponent, PDFGeneratorInterface):
 
     def generate_pdf(self, context: PDFRenderContext | None = None) -> str:
         """Generate PDF operators for this regular polygon."""
-        return _drawing_pdf(self.style, _path_from_points(self._get_points(), close=True))
+        return _drawing_pdf(self.style, _path_from_points(self._get_points(), close=True), context=context)
 
 
 class PolygonalPDF(PolygonalDrawingComponent, PDFGeneratorInterface):
@@ -1091,7 +1156,7 @@ class PolygonalPDF(PolygonalDrawingComponent, PDFGeneratorInterface):
 
     def generate_pdf(self, context: PDFRenderContext | None = None) -> str:
         """Generate PDF operators for this polygon."""
-        return _drawing_pdf(self.style, _path_from_points(list(self.points), close=True))
+        return _drawing_pdf(self.style, _path_from_points(list(self.points), close=True), context=context)
 
 
 class CirclePDF(SingleDimensionDrawingComponent, PDFGeneratorInterface):
@@ -1144,7 +1209,7 @@ class CirclePDF(SingleDimensionDrawingComponent, PDFGeneratorInterface):
             f"{_number(x + control)} {_number(y - radius)} {_number(x + radius)} {_number(y - control)} {_number(x + radius)} {_number(y)} c",
             "h",
         ]
-        return _drawing_pdf(self.style, path)
+        return _drawing_pdf(self.style, path, context=context)
 
 
 class TextPDF(TextComponent, PDFGeneratorInterface):
@@ -1374,6 +1439,7 @@ class DocumentPDF(Document):
         object_id = 4
         font_registry = _PDFFontRegistry()
         image_registry = _PDFImageRegistry()
+        graphics_state_registry = _PDFGraphicsStateRegistry()
         rendered_pages: list[tuple[Layers, str]] = []
 
         writer.set_object(
@@ -1386,7 +1452,7 @@ class DocumentPDF(Document):
 
         for page_number in range(1, self.pages + 1):
             page = self.page(page_number)
-            content = self._render_page_content(page, font_registry, image_registry)
+            content = self._render_page_content(page, font_registry, image_registry, graphics_state_registry)
             rendered_pages.append((page, content))
 
         font_object_ids: dict[str, int] = {}
@@ -1454,6 +1520,15 @@ class DocumentPDF(Document):
             )
             object_id += 1
 
+        graphics_state_object_ids: dict[str, int] = {}
+        for resource_name, stroke_opacity, fill_opacity in graphics_state_registry.resources():
+            graphics_state_object_ids[resource_name] = object_id
+            writer.set_object(
+                object_id,
+                _pdf_extgstate_object(stroke_opacity=stroke_opacity, fill_opacity=fill_opacity),
+            )
+            object_id += 1
+
         resource_sections: list[str] = []
         if font_object_ids:
             font_entries = " ".join(f"/{resource_name} {font_object_ids[resource_name]} 0 R" for resource_name in font_object_ids)
@@ -1461,6 +1536,11 @@ class DocumentPDF(Document):
         if image_object_ids:
             image_entries = " ".join(f"/{resource_name} {image_object_ids[resource_name]} 0 R" for resource_name in image_object_ids)
             resource_sections.append(f"/XObject << {image_entries} >>")
+        if graphics_state_object_ids:
+            graphics_state_entries = " ".join(
+                f"/{resource_name} {graphics_state_object_ids[resource_name]} 0 R" for resource_name in graphics_state_object_ids
+            )
+            resource_sections.append(f"/ExtGState << {graphics_state_entries} >>")
         resources = f"<< {' '.join(resource_sections)} >>" if resource_sections else "<< >>"
 
         for page, content in rendered_pages:
@@ -1492,8 +1572,14 @@ class DocumentPDF(Document):
         page: Layers,
         font_registry: _PDFFontRegistry | None = None,
         image_registry: _PDFImageRegistry | None = None,
+        graphics_state_registry: _PDFGraphicsStateRegistry | None = None,
     ) -> str:
-        context = PDFRenderContext(canvas_height=page._canvas.height, font_registry=font_registry, image_registry=image_registry)
+        context = PDFRenderContext(
+            canvas_height=page._canvas.height,
+            font_registry=font_registry,
+            image_registry=image_registry,
+            graphics_state_registry=graphics_state_registry,
+        )
         operators = ["q", f"1 0 0 -1 0 {_number(page._canvas.height)} cm"]
         for layer_name in page.layers:
             layer = page.layer(layer_name)

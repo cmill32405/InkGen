@@ -160,6 +160,124 @@ def test_pdf_primitives_emit_content_stream_operators(drawing_style: DrawingStyl
     assert "(Hello \\(PDF\\)) Tj" in TextPDF("Hello (PDF)", (10.0, 20.0), text_style).generate_pdf()
 
 
+@pytest.mark.condition("PDF-GRAPHICS-STATE-P3")
+def test_document_pdf_emits_extgstate_for_drawing_opacity() -> None:
+    """PDF-GRAPHICS-STATE-P3: DocumentPDF maps drawing opacity to ExtGState resources."""
+    style = DrawingStyle(
+        f"transparent_{uuid.uuid4().hex}",
+        stroke="#112233",
+        fill="#445566",
+        stroke_width=0.5,
+        stroke_opacity=0.25,
+        fill_opacity=0.75,
+    )
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    group = ComponentGroupPDF("opacity")
+    group.add_component(RectanglePDF((1.0, 2.0), 3.0, 4.0, 0.0, style))
+    document.page(1).layer("base").add_component_group(group)
+
+    payload = document.to_pdf_bytes()
+    content = _stream(payload)
+
+    assert b"/ExtGState << /GS1" in payload
+    assert b"<< /Type /ExtGState /CA 0.25 /ca 0.75 >>" in payload
+    _assert_contiguous_object_ids(payload)
+    objects = _pdf_objects(payload)
+    resource_match = re.search(rb"/ExtGState << /GS1 (?P<id>\d+) 0 R", payload)
+    assert resource_match is not None
+    assert objects[int(resource_match.group("id"))] == b"<< /Type /ExtGState /CA 0.25 /ca 0.75 >>"
+    assert "/GS1 gs\n0.066667 0.133333 0.2 RG" in content
+    assert "0.266667 0.333333 0.4 rg" in content
+
+
+@pytest.mark.condition("PDF-GRAPHICS-STATE-P3")
+def test_document_pdf_reuses_opacity_extgstate_resources() -> None:
+    """PDF-GRAPHICS-STATE-P3: Equal opacity tuples share one ExtGState resource."""
+    style = DrawingStyle(
+        f"transparent_reuse_{uuid.uuid4().hex}",
+        stroke="#000000",
+        fill="#ffffff",
+        stroke_opacity=0.5,
+        fill_opacity=0.25,
+    )
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    group = ComponentGroupPDF("opacity-reuse")
+    group.add_component(RectanglePDF((1.0, 2.0), 3.0, 4.0, 0.0, style))
+    group.add_component(CirclePDF((10.0, 10.0), 2.0, style))
+    document.page(1).layer("base").add_component_group(group)
+
+    payload = document.to_pdf_bytes()
+    content = _stream(payload)
+
+    assert payload.count(b"/Type /ExtGState") == 1
+    assert content.count("/GS1 gs") == 2
+
+
+@pytest.mark.condition("PDF-GRAPHICS-STATE-P3")
+def test_document_pdf_separates_stroke_and_fill_opacity_domains() -> None:
+    """PDF-GRAPHICS-STATE-P3: Stroke-only and fill-only paths ignore unused opacity channels."""
+    style = DrawingStyle(
+        f"transparent_channels_{uuid.uuid4().hex}",
+        stroke="#000000",
+        fill="#ffffff",
+        stroke_opacity=0.25,
+        fill_opacity=0.5,
+    )
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    group = ComponentGroupPDF("opacity-channels")
+    group.add_component(LinePDF((1.0, 2.0), (3.0, 4.0), style))
+    group.add_component(RectanglePDF((5.0, 6.0), 7.0, 8.0, 0.0, style))
+    document.page(1).layer("base").add_component_group(group)
+
+    payload = document.to_pdf_bytes()
+    content = _stream(payload)
+
+    assert b"/GS1" in payload
+    assert b"/GS2" in payload
+    assert b"<< /Type /ExtGState /CA 0.25 /ca 1 >>" in payload
+    assert b"<< /Type /ExtGState /CA 0.25 /ca 0.5 >>" in payload
+    assert "/GS1 gs\n0 0 0 RG" in content
+    assert "/GS2 gs\n0 0 0 RG" in content
+
+
+@pytest.mark.condition("PDF-GRAPHICS-STATE-P3")
+def test_document_pdf_omits_extgstate_for_opaque_drawings(drawing_style: DrawingStyle) -> None:
+    """PDF-GRAPHICS-STATE-P3: Opaque drawing styles do not create ExtGState resources."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    group = ComponentGroupPDF("opaque")
+    group.add_component(RectanglePDF((1.0, 2.0), 3.0, 4.0, 0.0, drawing_style))
+    document.page(1).layer("base").add_component_group(group)
+
+    payload = document.to_pdf_bytes()
+
+    assert b"/ExtGState" not in payload
+    assert " gs" not in _stream(payload)
+
+
+@pytest.mark.condition("PDF-GRAPHICS-STATE-P3")
+def test_pdf_opacity_helpers_validate_boundaries_and_reuse_resources() -> None:
+    """PDF-GRAPHICS-STATE-P3: Opacity helper boundaries and resource reuse are explicit."""
+    registry = pdf_generator_module._PDFGraphicsStateRegistry()  # noqa: SLF001
+
+    assert pdf_generator_module._opacity_value(0.0, "alpha") == 0.0  # noqa: SLF001
+    assert pdf_generator_module._opacity_value(1.0, "alpha") == 1.0  # noqa: SLF001
+    assert registry.resource_name_for_opacity(stroke_opacity=1.0, fill_opacity=1.0) is None
+    assert registry.resource_name_for_opacity(stroke_opacity=0.5, fill_opacity=1.0) == "GS1"
+    assert registry.resource_name_for_opacity(stroke_opacity=1.0, fill_opacity=0.25) == "GS2"
+    assert registry.resource_name_for_opacity(stroke_opacity=0.5, fill_opacity=1.0) == "GS1"
+    assert registry.resources() == (("GS1", 0.5, 1.0), ("GS2", 1.0, 0.25))
+    assert pdf_generator_module._pdf_extgstate_object(stroke_opacity=0.5, fill_opacity=1.0) == (  # noqa: SLF001
+        "<< /Type /ExtGState /CA 0.5 /ca 1 >>"
+    )
+    for value in (True, -0.001, 1.001, float("nan"), float("inf")):
+        with pytest.raises(ValueError, match="alpha"):
+            pdf_generator_module._opacity_value(value, "alpha")  # noqa: SLF001
+
+
 @pytest.mark.condition("PDF-P1")
 def test_path_pdf_emits_supported_svg_path_commands(drawing_style: DrawingStyle) -> None:
     """PDF-P1: PathPDF maps supported SVG-style path commands to PDF operators."""
