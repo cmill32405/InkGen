@@ -31,6 +31,33 @@ The dependency-free backend still emits simple WinAnsi text strings. Full
 Unicode/CID text encoding, glyph subsetting, shaping in PDF text operators, and
 complex-script extraction maps are not implemented in this slice.
 
+## PDF Capability Roadmap
+
+InkGen's PDF target is a deterministic synthetic drawing and document-fixture
+backend, not a full Acrobat replacement. The current backend is useful for
+parser-facing technical drawings because it supports pages, vector primitives,
+closed renderer domains, deterministic bytes, extraction/grammar truth, raster
+images with alpha, JPEG pass-through, ICC profile emission, Standard 14 fonts,
+and named TrueType/OpenType font embedding.
+
+The remaining gaps that keep the backend from being a fully featured PDF
+creation system are:
+
+| Area | Current status | Needed for full-feature parity |
+|---|---|---|
+| Text encoding | WinAnsi literal strings and installed-font embedding | Unicode/CID fonts, `/ToUnicode` CMaps, glyph subsetting, and text extraction maps |
+| Text layout | Single positioned text components | Multi-line wrapping, alignment, tabs, columns, kerning, and complex-script shaping |
+| Graphics state | Basic stroke/fill primitives | Clipping paths, dash arrays, line caps/joins, miter limits, opacity groups, blend modes, gradients, and patterns |
+| Document structure | Pages and deterministic metadata | Outlines/bookmarks, links, annotations, tagged PDF structure, page labels, and additional page boxes |
+| Color/profile support | Device RGB/CMYK and JPEG ICC profile objects | Broader calibrated color spaces and selectable PDF/A-style archival constraints |
+| Import/conversion | SVG input remains SVG-only | Arbitrary SVG-to-PDF conversion and external PDF embedding are out of scope until explicitly approved |
+| Optimization/security | Classic xref table and plain objects | Object streams, font/image subsetting, encryption, and signatures if those become product requirements |
+| Parser stress fixtures | Core truth records and current synthetic drawings | Purpose-built fixtures for CID encodings, missing/odd CMaps, rotated pages, transparency, scans, tables, title blocks, and BOM drawings |
+
+The highest-value PDF hardening target for Document Intelligence remains
+Unicode/CID/`ToUnicode` support because parser extraction quality depends on
+recoverable text, especially for hostile or unusual font encodings.
+
 PDF raster images use `RasterImageAsset` and `ImagePDF`. InkGen accepts
 Pillow-decodable raster inputs at the asset boundary, applies EXIF orientation
 before exposing decoded pixels, decodes them to RGB image XObjects, and emits an

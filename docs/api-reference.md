@@ -92,8 +92,8 @@ available from the package root for caller-facing failure handling:
   drawing primitive groups.
 - `DocumentOutputFormat`: Supported document output labels.
 - Formats currently implemented: DOCX, HTML, RTF, and plain text. DOCX uses
-  native WordprocessingML tables and VML drawing groups so no additional document
-  library dependency is required.
+  native WordprocessingML tables, native DrawingML images, and DrawingML vector
+  shapes so no additional document library dependency is required.
 
 ## Grammar Truth (`InkGen.grammar_truth`)
 

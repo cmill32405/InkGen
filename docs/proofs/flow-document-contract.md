@@ -26,8 +26,9 @@ The public behavior under review is:
 
 Affected surface:
 
-- `src/InkGen/document_outputs.py`: DOCX package metadata, drawing
-  materialization guards, and document-output helpers.
+- `src/InkGen/document_outputs.py`: DOCX package metadata, DrawingML vector
+  and image output, drawing materialization guards, and document-output
+  helpers.
 - `tests/test_flow_document_contract.py`: focused FLOW-DOCUMENT-P1 evidence.
 - `tests/test_document_outputs.py`: existing document-output compatibility
   evidence.
@@ -45,8 +46,8 @@ Incoming dependencies:
 Outgoing dependencies:
 
 - Flow documents consume `Paragraph`, `Table`, and `DrawingComponentGroup`.
-- DOCX output depends only on Python `zipfile`, WordprocessingML strings, and
-  VML drawing fragments.
+- DOCX output depends only on Python `zipfile`, WordprocessingML strings,
+  DrawingML shape/picture fragments, and local XML escaping helpers.
 - Drawing fragments depend on neutral drawing primitives materializing to SVG or
   PDF components through `to_component()`.
 - Text escaping depends on stdlib HTML and XML escaping plus local RTF escaping.
@@ -97,10 +98,14 @@ Before/after edge changes:
   silently summarized malformed post-construction drawing-group mutations and
   `parameters` could fail through incidental `AttributeError` while reading
   `component.__dict__`.
-- Before the VML-number hardening update, special-case live `CircleDrawing`
-  DOCX/HTML bounds and DOCX VML output could consume malformed position/radius
-  values through raw arithmetic and `float()` formatting. DOCX twip conversion
-  also used direct `float()` coercion for final artifact numbers.
+- Before the artifact-number hardening update, special-case live
+  `CircleDrawing` DOCX/HTML bounds and DOCX vector output could consume
+  malformed position/radius values through raw arithmetic and `float()`
+  formatting. DOCX twip conversion also used direct `float()` coercion for
+  final artifact numbers.
+- Before the DrawingML modernization update, DOCX vector drawing output used
+  VML groups and polylines while raster images already used DrawingML picture
+  parts.
 - After this slice, DOCX ZIP parts use a fixed timestamp and drawing
   materialization must return an InkGen `Component`.
 - After the drawing-label hardening update, drawing block hydration passes
@@ -138,16 +143,20 @@ Before/after edge changes:
   non-ASCII title and paragraph text as RTF `\uN?` escapes instead of raw
   Unicode text in an `\ansi` document.
 - After the materialized-points hardening update, HTML/DOCX drawing bounds and
-  DOCX VML output validate materialized point surfaces as finite coordinate
-  pairs before generated document artifacts consume them.
+  DOCX DrawingML output validate materialized point surfaces as finite
+  coordinate pairs before generated document artifacts consume them.
 - After the live drawing component hardening update, plain-text drawing
   summaries revalidate public mutable drawing component lists before using
   class names, and serialized flow-document drawing parameters reject malformed
   or unsupported drawing primitives before reading component internals.
-- After the VML-number hardening update, special-case circle bounds/VML and
-  DOCX twip conversion reject booleans, strings, bytes, arbitrary objects,
-  non-finite values, and non-positive circle radii before document artifacts are
-  emitted.
+- After the artifact-number hardening update, special-case circle
+  bounds/DrawingML and DOCX twip conversion reject booleans, strings, bytes,
+  arbitrary objects, non-finite values, and non-positive circle radii before
+  document artifacts are emitted.
+- After the DrawingML modernization update, DOCX vector drawing output emits
+  dependency-free DrawingML anchors and `wps:wsp` shapes. Rectangles and circles
+  become native preset shapes, text drawings become DrawingML text boxes, and
+  other materialized point sequences become anchored DrawingML line segments.
 - No new dependency edge or third-party dependency was introduced.
 
 Cycle/layer/coupling/redundancy result:
@@ -167,7 +176,8 @@ Evidence source and freshness:
   before editing.
 - Test-backed: focused tests exercise deterministic DOCX bytes, fixed ZIP
   timestamps, output escaping, mixed block round trip, invalid drawing
-  materialization failure, and exact VML polyline coordinates.
+  materialization failure, native DrawingML vector emission, and exact
+  DrawingML coordinate/extents in EMUs.
 - No architecture claim in this note relies only on stale memory.
 
 ADR/rule impact:
@@ -188,17 +198,20 @@ ADR/rule impact:
 - Drawing output must fail loudly if a neutral drawing primitive cannot
   materialize to an InkGen `Component` with the renderer-specific fragment
   surface needed by the target document format.
+- DOCX vector output uses DrawingML shapes and anchors. It is not a complete
+  Word shape renderer; unsupported complex paths are represented through
+  materialized line segments rather than custom geometry.
 
 ## Fix Log
 
 - DOCX ZIP parts are now written through `_write_docx_part()` with
   `DOCX_FIXED_TIMESTAMP`.
-- Flow-document drawing HTML, bounds, and VML helpers now call
+- Flow-document drawing HTML, bounds, and DrawingML helpers now call
   `_materialize_drawing_component()`.
 - `_materialize_drawing_component()` rejects missing/non-callable materializers
   and non-`Component` materialization results.
 - `_svg_fragment()` rejects SVG materializations that cannot provide a string
-  `generate_svg()` fragment, and DOCX VML conversion rejects PDF
+  `generate_svg()` fragment, and DOCX DrawingML conversion rejects PDF
   materializations without a `points` surface.
 - `_drawing_from_parameters()` now delegates serialized drawing labels to
   `DrawingComponentGroup` without stringifying malformed values.
@@ -235,15 +248,21 @@ ADR/rule impact:
 - `_normalize_output_filepath()` now requires file-writer parent paths to be
   directories, closing the existing-file-as-parent boundary.
 - `_materialized_points()` validates concrete drawing materialization `points`
-  surfaces before HTML bounds or DOCX VML output consume them.
+  surfaces before HTML bounds or DOCX DrawingML output consume them.
 - `_drawing_plain_text()` validates each live drawing component before
   summarizing names from a public mutable drawing-group list.
 - `_drawing_component_parameters()` validates each live drawing component and
   requires a supported serializable neutral primitive type before reading
   component internals for `FlowDocument.parameters`.
-- `_artifact_number()`, `_artifact_point_pair()`, and
-  `_positive_artifact_number()` validate final document artifact numeric
-  boundaries used by circle VML/bounds and DOCX twip conversion.
+- `_artifact_number()`, `_artifact_point_pair()`,
+  `_positive_artifact_number()`, and `_nonnegative_artifact_number()` validate
+  final document artifact numeric boundaries used by DrawingML shapes,
+  circle/bounds, and DOCX twip conversion.
+- `_component_drawingml()`, `_drawingml_shape_docx()`, and
+  `_drawingml_segments_docx()` replace the DOCX VML vector group with native
+  DrawingML shape anchors while preserving neutral drawing ownership.
+- `_nonnegative_artifact_number()` guards live rectangle dimensions before
+  DrawingML extents are emitted.
 
 ## Comprehensiveness Matrix
 
@@ -267,11 +286,12 @@ ADR/rule impact:
 | File writer path boundary | Accept string/path-like output paths and reject malformed output path values or non-directory parents before writing | PO-FDOC-013 | `test_flow_document_file_writers_accept_pathlike_outputs`, `test_flow_document_file_writers_reject_malformed_paths`, `test_flow_document_file_writers_fail_on_missing_directory`, `test_flow_document_file_writers_reject_file_parent_paths` | killed |
 | Materialized drawing point surface | Accept finite coordinate pairs and reject malformed/non-finite materialized point surfaces before HTML/DOCX artifacts consume them | PO-FDOC-022 | `test_flow_document_accepts_valid_materialized_drawing_points`, `test_flow_document_rejects_malformed_materialized_drawing_points` | killed |
 | Live drawing components in text/parameter paths | Reject malformed public drawing-group mutations before plain-text summaries or serialized parameters consume them | PO-FDOC-023 | `test_flow_document_plain_text_revalidates_mutated_drawing_components`, `test_flow_document_parameters_revalidate_mutated_drawing_components`, `test_flow_document_parameters_preserve_path_drawing_commands` | killed |
-| Document artifact numbers | Reject malformed live circle VML numbers and malformed DOCX twip numbers before artifact serialization | PO-FDOC-026 | `test_flow_document_formats_valid_circle_vml_and_twips`, `test_flow_document_rejects_malformed_circle_vml_numbers`, `test_flow_document_rejects_malformed_docx_twip_numbers` | pending |
+| Document artifact numbers | Reject malformed live circle DrawingML numbers and malformed DOCX twip numbers before artifact serialization | PO-FDOC-026 | `test_flow_document_formats_valid_circle_drawingml_and_twips`, `test_flow_document_rejects_malformed_circle_drawingml_numbers`, `test_flow_document_rejects_malformed_docx_twip_numbers` | pending |
 | Malformed serialized drawing label | Reject through the neutral group label contract | PO-FDOC-006 | `test_flow_document_drawing_group_hydration_rejects_malformed_label` | behavioral evidence |
 | Invalid drawing materialization | Reject before silent omission | PO-FDOC-004 | `test_flow_document_rejects_invalid_drawing_materialization` | killed |
 | Invalid drawing render fragments | Reject SVG materializations without string `generate_svg()` fragments and DOCX/PDF materializations without points | PO-FDOC-014 | `test_flow_document_rejects_materializations_without_render_fragments` | killed |
-| DOCX VML linework | Emit group-relative points | PO-FDOC-005 | `test_flow_document_docx_drawing_polyline_uses_group_relative_points` | killed |
+| DOCX DrawingML linework | Emit group-relative anchored DrawingML coordinates and extents | PO-FDOC-005 | `test_flow_document_docx_drawingml_line_uses_group_relative_points` | killed |
+| DOCX DrawingML native primitives | Emit rectangles, circles, text, images, and materialized linework through DrawingML rather than VML | PO-FDOC-027 | `test_flow_document_exports_tables_and_drawing_primitives`, `test_flow_document_docx_keeps_vector_coordinates_when_images_share_drawing_group`, `test_flow_document_accepts_valid_materialized_drawing_points`, `test_flow_document_docx_drawingml_preserves_style_text_and_line_flips`, `test_flow_document_docx_drawingml_helper_fragments_cover_branches`, `test_flow_document_docx_drawingml_component_helpers_preserve_offsets_and_extents`, `test_flow_document_docx_drawingml_shape_helper_preserves_explicit_flip_flags`, `test_flow_document_docx_drawingml_markup_is_well_formed` | 171 killed; 6 equivalent survivors |
 | Unsupported block private mutation | Excluded from public contract | Explicit exclusion | Not applicable | Out of scope |
 | Full WordprocessingML feature parity | Excluded from minimal dependency-free backend | Explicit exclusion | Not applicable | Out of scope |
 
@@ -289,7 +309,7 @@ ADR/rule impact:
 | Security/adversarial | limited | File writers touch local paths; tests cover malformed, missing-directory, and file-as-parent failures. | `test_flow_document_file_writers_fail_on_missing_directory`, `test_flow_document_file_writers_reject_file_parent_paths` |
 | Performance/resource | no | The slice adds constant-time checks and fixed metadata. | Code inspection |
 | Concurrency/race | no | No shared state, workers, locks, or temp files are added. | Not applicable |
-| Golden artifact/visual | yes | DOCX XML/VML output must be stable. | ZIP/XML/VML assertions |
+| Golden artifact/visual | yes | DOCX XML/DrawingML output must be stable. | ZIP/XML/DrawingML assertions |
 | Regression | yes | This closes nondeterministic DOCX bytes and silent drawing omission. | Determinism and invalid-materialization tests |
 
 ## Mutation Testing Gate
@@ -300,9 +320,10 @@ Proof-critical mutation targets:
   should fail deterministic package tests.
 - Weakening drawing materializer callability or return-type checks should fail
   invalid-materialization tests.
-- Weakening SVG fragment callability/string checks or DOCX VML points-surface
+- Weakening SVG fragment callability/string checks or DOCX DrawingML points-surface
   checks should fail render-fragment tests.
-- Changing DOCX VML group-relative points should fail exact polyline tests.
+- Changing DOCX DrawingML group-relative coordinates should fail exact EMU
+  coordinate tests.
 - Reintroducing drawing-label stringification should fail the serialized drawing
   label hydration test.
 - Reintroducing raw non-ASCII RTF output should fail the RTF Unicode text test.
@@ -322,17 +343,17 @@ Proof-critical mutation targets:
 - Weakening file-writer path normalization should fail malformed-path,
   path-like output, missing-directory, or file-parent output tests.
 - Weakening materialized drawing point validation should fail point-surface
-  failure-mode tests or exact bounds/VML assertions.
+  failure-mode tests or exact bounds/DrawingML assertions.
 - Weakening live drawing component validation before plain-text summaries or
   serialized parameters should fail live-component mutation tests.
-- Weakening final artifact-number validation should fail malformed circle VML,
-  malformed twip, or exact circle VML/twip formatting tests.
+- Weakening final artifact-number validation should fail malformed circle
+  DrawingML, malformed twip, or exact circle DrawingML/twip formatting tests.
 
 Current result:
 
 - Cosmic Ray 8.4.6, scoped to changed DOCX package assembly, drawing
-  materialization guards, and VML point rows: 34 work items, 34 killed, and 0
-  survived.
+  materialization guards, and legacy VML point rows before the DrawingML
+  modernization: 34 work items, 34 killed, and 0 survived.
 - Cosmic Ray 8.4.6, scoped to RTF title/paragraph call sites and
   `_rtf_escape()` Unicode/control escaping rows after the RTF Unicode hardening
   update: 34 work items, 31 killed, and 3 documented equivalent survivors. The
@@ -367,9 +388,31 @@ Current result:
   scoped to `_drawing_plain_text()`, `_drawing_component_parameters()`, and
   `_validate_drawing_component_boundary()` produced 8 proof-critical work
   items. Result: 8 killed, 0 survived.
-- `FLOW-DOCUMENT-VML-NUMBER-P2` scoped to circle bounds/VML, artifact-number
-  helpers, and DOCX twip conversion produced 32 proof-critical work items.
+- `FLOW-DOCUMENT-DRAWINGML-P3` supersedes the legacy
+  `FLOW-DOCUMENT-VML-NUMBER-P2` vector path. The prior artifact-number slice
+  scoped to circle bounds/vector output, artifact-number helpers, and DOCX twip
+  conversion produced 32 proof-critical work items.
   Result: 32 killed, 0 survived.
+- `FLOW-DOCUMENT-DRAWINGML-P3` scoped to `_drawing_docx()`,
+  `_component_drawingml()`, `_drawingml_segments_docx()`,
+  `_drawingml_shape_docx()`, `_drawingml_fill()`, `_drawingml_line()`,
+  `_drawingml_text_body()`, and `_nonnegative_artifact_number()` produced 177
+  proof-critical work items. Result: 171 killed, 6 documented equivalent
+  survivors. Equivalent survivors:
+  - `_drawingml_fill()`: `style.fill == "none"` to `>= "none"` is equivalent
+    for the valid `DrawingStyle.fill` domain because values are normalized to
+    `"none"` or lowercase hex strings beginning with `#`; hex strings compare
+    below `"none"` and `"none"` still selects no fill.
+  - `_drawingml_line()`: `style.stroke == "none"` to `>= "none"` is equivalent
+    for the same normalized color domain.
+  - `_drawingml_line()`: `style.stroke_width <= 0.0` to `== 0.0` is equivalent
+    for the valid `DrawingStyle.stroke_width` domain because negative widths
+    cannot be constructed.
+  - `_drawingml_text_body()`: default text-size constants `1000 -> 999` and
+    `1000 -> 1001` both round to the same DOCX half-point value (`20`) in the
+    no-font fallback path.
+  - `_nonnegative_artifact_number()`: the mutation of the keyword-only `*`
+    separator to `/` does not change any valid call shape used by InkGen.
 - `FLOW-DOCUMENT-FILEPATH-DIRECTORY-P2` refreshed the file-writer path
   boundary and mutation filter. Focused flow-document tests returned
   `121 passed`; compatibility tests returned `178 passed`; the full coverage
@@ -492,12 +535,12 @@ concrete return type before HTML or DOCX drawing output uses the result.
 
 Proven for the stated domain after tests and mutation pass.
 
-## PO-FDOC-005: DOCX VML Points Are Group-Relative
+## PO-FDOC-005: DOCX DrawingML Points Are Group-Relative
 
 ### Claim
 
-Linework emitted into DOCX VML uses coordinates relative to the drawing group's
-minimum x/y bounds.
+Linework emitted into DOCX DrawingML uses coordinates relative to the drawing
+group's minimum x/y bounds.
 
 ### Domain
 
@@ -507,13 +550,66 @@ points.
 ### Proof Method
 
 `_drawing_bounds()` computes group bounds from materialized PDF points.
-`_component_vml()` subtracts minimum x/y from each point before writing VML
-polyline points. The focused test checks exact `coordsize` and polyline
-coordinates for nonzero source points.
+`_component_drawingml()` and `_drawingml_segments_docx()` subtract minimum x/y
+from each point before writing anchored DrawingML line shapes. The focused test
+checks exact DrawingML position offsets and EMU extents for nonzero source
+points.
 
 ### Conclusion
 
 Proven for the stated domain after tests and mutation pass.
+
+## PO-FDOC-027: DOCX Vectors Use Native DrawingML
+
+### Claim
+
+DOCX drawing blocks emit native DrawingML vector shapes instead of VML drawing
+groups, while preserving the renderer-neutral drawing dependency boundary.
+
+### Domain
+
+`FlowDocument.to_docx_bytes()` calls on documents containing
+`DrawingComponentGroup` blocks with supported neutral drawing primitives and
+image drawings.
+
+### Dependencies
+
+- `DrawingComponentGroup`
+- `RectangleDrawing`
+- `CircleDrawing`
+- `TextDrawing`
+- `ImageDrawing`
+- `_drawing_bounds()`
+- `_component_drawingml()`
+- `_drawingml_shape_docx()`
+- `_drawingml_segments_docx()`
+- `_image_drawing_docx()`
+
+### Proof Method
+
+`_drawing_docx()` routes raster image drawings to the existing DrawingML
+picture path and routes all vector drawing components through
+`_component_drawingml()`. Rectangles and circles are emitted as preset
+DrawingML shapes. Text drawings are emitted as DrawingML text boxes. Other
+supported linework materializes through the existing PDF point surface and is
+serialized as anchored DrawingML line segments. The focused tests assert that
+DOCX vector output contains `wp:anchor` and `wps:wsp`, contains native preset
+geometry for rectangle, ellipse, and line cases, preserves EMU offsets/extents,
+and does not emit `<w:pict>` for vector drawings.
+
+### Counterexamples And Exclusions
+
+This is not a full DrawingML custom-geometry implementation. Complex paths,
+curves, arcs, and polygons remain represented as line segments from the
+materialized point surface. Visual rendering in Word and Google Docs should be
+verified with fixture spot checks when a consumer depends on exact appearance.
+
+### Conclusion
+
+Focused tests prove the package/XML live path and the absence of VML for vector
+drawings in the covered domains. Full coverage, lint, docs, and diff hygiene
+passed for the slice. Mutation killed all non-equivalent proof-critical
+mutants.
 
 ## PO-FDOC-006: Drawing Labels Hydrate Through Neutral Contract
 
@@ -785,17 +881,18 @@ Drawing groups exported through `FlowDocument.to_html()` and
 HTML drawing output routes each neutral primitive through `_svg_fragment()`,
 which first uses `_materialize_drawing_component()` to prove the object is an
 InkGen `Component`, then requires a callable `generate_svg()` method returning
-a string. DOCX VML output materializes non-special-case primitives through the
-PDF path and requires a `points` surface before deciding whether an empty point
-list should produce no polyline. Focused tests cover a base `Component`
-materialization that previously produced empty HTML/DOCX drawing output and a
-malformed SVG materialization whose `generate_svg()` does not return a string.
+a string. DOCX DrawingML output materializes non-special-case linework through
+the PDF path and requires a `points` surface before deciding whether an empty
+point list should produce no line segments. Focused tests cover a base
+`Component` materialization that previously produced empty HTML/DOCX drawing
+output and a malformed SVG materialization whose `generate_svg()` does not
+return a string.
 
 ### Counterexamples And Exclusions
 
 Valid components with an empty `points` collection remain allowed to produce no
-VML polyline. Full SVG semantic validation remains delegated to the concrete
-SVG renderer tests.
+DrawingML line segments. Full SVG semantic validation remains delegated to the
+concrete SVG renderer tests.
 
 ### Conclusion
 
@@ -850,15 +947,15 @@ materialize to InkGen `Component` instances exposing `points`.
 
 ### Proof Method
 
-`_drawing_bounds()` and `_component_vml()` both route concrete materialization
-points through `_materialized_points()`. The helper treats a missing points
-surface as empty only for bounds discovery, preserves the existing DOCX VML
-requirement that renderable non-special-case primitives expose points, rejects
-non-sequence point collections, rejects malformed point shapes, and rejects
-boolean, string, non-numeric, or non-finite coordinates. Focused tests cover a
-valid custom point surface through both HTML bounds and DOCX VML output, plus
-malformed point containers, malformed point shapes, `nan`, `inf`, booleans, and
-string coordinates.
+`_drawing_bounds()` and `_component_drawingml()` both route concrete
+materialization points through `_materialized_points()`. The helper treats a
+missing points surface as empty only for bounds discovery, preserves the DOCX
+DrawingML requirement that renderable non-special-case linework expose points,
+rejects non-sequence point collections, rejects malformed point shapes, and
+rejects boolean, string, non-numeric, or non-finite coordinates. Focused tests
+cover a valid custom point surface through both HTML bounds and DOCX DrawingML
+output, plus malformed point containers, malformed point shapes, `nan`, `inf`,
+booleans, and string coordinates.
 
 ### Counterexamples And Exclusions
 
@@ -978,7 +1075,9 @@ twip conversion.
 ### Dependencies
 
 - `_drawing_bounds()`
-- `_component_vml()`
+- `_component_drawingml()`
+- `_drawingml_shape_docx()`
+- `_drawingml_segments_docx()`
 - `_vml_number()`
 - `_artifact_point_pair()`
 - `_artifact_number()`
@@ -987,15 +1086,15 @@ twip conversion.
 
 ### Proof Method
 
-Special-case `CircleDrawing` bounds and VML output now normalize live position
-coordinates through `_artifact_point_pair()` and live radius values through
-`_positive_artifact_number()` before arithmetic or string formatting. VML
-number formatting and DOCX twip conversion use `_artifact_number()` so booleans,
-strings, bytes, arbitrary objects, `nan`, and infinity fail before artifact
-text is emitted. Focused tests pin valid circle VML and twip formatting, then
-mutate live circle and paragraph state to cover malformed point shape, boolean
-coordinates, non-finite coordinates, malformed radius values, non-positive
-radii, and malformed twip values.
+Special-case `CircleDrawing` bounds and DrawingML output now normalize live
+position coordinates through `_artifact_point_pair()` and live radius values
+through `_positive_artifact_number()` before arithmetic or string formatting.
+Artifact number formatting and DOCX twip conversion use `_artifact_number()` so
+booleans, strings, bytes, arbitrary objects, `nan`, and infinity fail before
+artifact text is emitted. Focused tests pin valid circle DrawingML and twip
+formatting, then mutate live circle and paragraph state to cover malformed
+point shape, boolean coordinates, non-finite coordinates, malformed radius
+values, non-positive radii, and malformed twip values.
 
 ### Counterexamples And Exclusions
 

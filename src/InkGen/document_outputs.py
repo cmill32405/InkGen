@@ -55,6 +55,7 @@ DRAWING_COMPONENT_TYPE_NAMES = {
 TEXT_DRAWING_COMPONENT_TYPES = frozenset({"TextDrawing"})
 DOCX_IMAGE_RELATIONSHIP_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
 DOCX_PICTURE_URI = "http://schemas.openxmlformats.org/drawingml/2006/picture"
+DOCX_WORDPROCESSING_SHAPE_URI = "http://schemas.microsoft.com/office/word/2010/wordprocessingShape"
 EMU_PER_MM = 36000
 DOCX_NATIVE_IMAGE_TYPES = {
     "BMP": ("bmp", "image/bmp"),
@@ -250,6 +251,7 @@ class FlowDocument:
             'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" '
             'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
             'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" '
+            'xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" '
             'xmlns:v="urn:schemas-microsoft-com:vml">\n'
             "<w:body>\n"
             f"{blocks}\n"
@@ -304,26 +306,13 @@ class FlowDocument:
 
     def _drawing_docx(self, group: DrawingComponentGroup, media_registry: _DocxMediaRegistry) -> str:
         min_x, min_y, max_x, max_y = _drawing_bounds(group)
-        width = max(max_x - min_x, 1.0)
-        height = max(max_y - min_y, 1.0)
         shapes = []
-        image_paragraphs = []
         for component in group.components:
             if isinstance(component, ImageDrawing):
-                image_paragraphs.append(_image_drawing_docx(component, media_registry))
+                shapes.append(_image_drawing_docx(component, media_registry))
             else:
-                shapes.append(_component_vml(component, min_x, min_y))
-        drawing_parts = []
-        if shapes:
-            drawing_parts.append(
-                "<w:p><w:r><w:pict>"
-                f'<v:group coordorigin="0 0" coordsize="{_vml_number(width)} {_vml_number(height)}" '
-                f'style="width:{_vml_number(width)}mm;height:{_vml_number(height)}mm">'
-                + "".join(shapes)
-                + "</v:group></w:pict></w:r></w:p>"
-            )
-        drawing_parts.extend(image_paragraphs)
-        return "".join(drawing_parts)
+                shapes.append(_component_drawingml(component, min_x, min_y, media_registry))
+        return "".join(shapes)
 
     def _paragraph_properties_docx(self, paragraph: Paragraph) -> str:
         alignment = "both" if paragraph.alignment is ParagraphAlignment.JUSTIFY else paragraph.alignment.value
@@ -597,32 +586,189 @@ def _drawing_bounds(group: DrawingComponentGroup) -> tuple[float, float, float, 
     return min(xs), min(ys), max(xs), max(ys)
 
 
-def _component_vml(component: object, min_x: float, min_y: float) -> str:
+def _component_drawingml(component: object, min_x: float, min_y: float, media_registry: _DocxMediaRegistry) -> str:
+    """Return DrawingML for a neutral vector drawing component."""
+    if isinstance(component, RectangleDrawing):
+        position_x, position_y = _artifact_point_pair(component.position, name="RectangleDrawing position")
+        width = _nonnegative_artifact_number(component.width, name="RectangleDrawing width")
+        height = _nonnegative_artifact_number(component.height, name="RectangleDrawing height")
+        return _drawingml_shape_docx(
+            x=position_x - min_x,
+            y=position_y - min_y,
+            width=max(width, 0.01),
+            height=max(height, 0.01),
+            preset="rect",
+            style=component.style,
+            media_registry=media_registry,
+        )
     if isinstance(component, CircleDrawing):
         center_x, center_y = _artifact_point_pair(component.position, name="CircleDrawing position")
         radius = _positive_artifact_number(component.radius, name="CircleDrawing radius")
         x = center_x - radius - min_x
         y = center_y - radius - min_y
         diameter = radius * 2.0
-        return (
-            f'<v:oval style="position:absolute;left:{_vml_number(x)}mm;top:{_vml_number(y)}mm;'
-            f'width:{_vml_number(diameter)}mm;height:{_vml_number(diameter)}mm"/>'
+        return _drawingml_shape_docx(
+            x=x,
+            y=y,
+            width=diameter,
+            height=diameter,
+            preset="ellipse",
+            style=component.style,
+            media_registry=media_registry,
         )
     if isinstance(component, TextDrawing):
         position_x, position_y = _artifact_point_pair(component.position, name="TextDrawing position")
         x = position_x - min_x
         y = position_y - min_y
-        return (
-            f'<v:shape style="position:absolute;left:{_vml_number(x)}mm;top:{_vml_number(y)}mm;'
-            f'width:80mm;height:10mm"><v:textbox><w:txbxContent><w:p><w:r><w:t>{xml_escape(component.text)}</w:t></w:r></w:p>'
-            "</w:txbxContent></v:textbox></v:shape>"
+        return _drawingml_shape_docx(
+            x=x,
+            y=y,
+            width=80.0,
+            height=10.0,
+            preset="rect",
+            style=None,
+            text=component.text,
+            text_style=component.style,
+            media_registry=media_registry,
         )
     concrete = _materialize_drawing_component(component, OutputFormat.PDF)
     points = _materialized_points(concrete, allow_missing=False)
     if not points:
         return ""
-    point_text = " ".join(f"{_vml_number(point[0] - min_x)},{_vml_number(point[1] - min_y)}" for point in points)
-    return f'<v:polyline points="{point_text}"/>'
+    return "".join(_drawingml_segments_docx(points, min_x, min_y, getattr(component, "style", None), media_registry))
+
+
+def _drawingml_segments_docx(
+    points: Sequence[tuple[float, float]],
+    min_x: float,
+    min_y: float,
+    style: object,
+    media_registry: _DocxMediaRegistry,
+) -> list[str]:
+    """Return DrawingML line segments for a materialized point sequence."""
+    drawing_style = style if isinstance(style, DrawingStyle) else None
+    segments: list[str] = []
+    for start, end in zip(points, points[1:], strict=False):
+        x1 = start[0] - min_x
+        y1 = start[1] - min_y
+        x2 = end[0] - min_x
+        y2 = end[1] - min_y
+        x = min(x1, x2)
+        y = min(y1, y2)
+        width = max(abs(x2 - x1), 0.01)
+        height = max(abs(y2 - y1), 0.01)
+        preset = "line"
+        flip_h = x2 < x1
+        flip_v = y2 < y1
+        segments.append(
+            _drawingml_shape_docx(
+                x=x,
+                y=y,
+                width=width,
+                height=height,
+                preset=preset,
+                style=drawing_style,
+                media_registry=media_registry,
+                flip_horizontal=flip_h,
+                flip_vertical=flip_v,
+            )
+        )
+    return segments
+
+
+def _drawingml_shape_docx(
+    *,
+    x: float,
+    y: float,
+    width: float,
+    height: float,
+    preset: str,
+    style: DrawingStyle | None,
+    media_registry: _DocxMediaRegistry,
+    text: str | None = None,
+    text_style: TextStyle | None = None,
+    flip_horizontal: bool = False,
+    flip_vertical: bool = False,
+) -> str:
+    """Return one anchored DrawingML shape paragraph."""
+    x_emu = _mm_to_emu(x)
+    y_emu = _mm_to_emu(y)
+    width_emu = _mm_to_emu(width)
+    height_emu = _mm_to_emu(height)
+    doc_id = media_registry.next_drawing_id()
+    name = xml_escape(f"Shape {doc_id}")
+    transform_attrs = []
+    if flip_horizontal:
+        transform_attrs.append('flipH="1"')
+    if flip_vertical:
+        transform_attrs.append('flipV="1"')
+    transform_attr_text = " " + " ".join(transform_attrs) if transform_attrs else ""
+    return (
+        "<w:p><w:r><w:drawing>"
+        '<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="0" '
+        'behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1">'
+        '<wp:simplePos x="0" y="0"/>'
+        f'<wp:positionH relativeFrom="column"><wp:posOffset>{x_emu}</wp:posOffset></wp:positionH>'
+        f'<wp:positionV relativeFrom="paragraph"><wp:posOffset>{y_emu}</wp:posOffset></wp:positionV>'
+        f'<wp:extent cx="{width_emu}" cy="{height_emu}"/>'
+        "<wp:wrapNone/>"
+        f'<wp:docPr id="{doc_id}" name="{name}"/>'
+        "<a:graphic>"
+        f'<a:graphicData uri="{DOCX_WORDPROCESSING_SHAPE_URI}">'
+        "<wps:wsp>"
+        "<wps:cNvSpPr/>"
+        "<wps:spPr>"
+        f'<a:xfrm{transform_attr_text}><a:off x="0" y="0"/><a:ext cx="{width_emu}" cy="{height_emu}"/></a:xfrm>'
+        f'<a:prstGeom prst="{preset}"><a:avLst/></a:prstGeom>'
+        f"{_drawingml_fill(style)}"
+        f"{_drawingml_line(style)}"
+        "</wps:spPr>"
+        f"{_drawingml_text_body(text, text_style)}"
+        "</wps:wsp>"
+        "</a:graphicData>"
+        "</a:graphic>"
+        "</wp:anchor>"
+        "</w:drawing></w:r></w:p>"
+    )
+
+
+def _drawingml_fill(style: DrawingStyle | None) -> str:
+    """Return a DrawingML fill fragment for a drawing style."""
+    if style is None or style.fill == "none":
+        return "<a:noFill/>"
+    alpha = int(round(float(style.fill_opacity) * 100000.0))
+    color = style.fill.lstrip("#").upper()
+    return f'<a:solidFill><a:srgbClr val="{color}"><a:alpha val="{alpha}"/></a:srgbClr></a:solidFill>'
+
+
+def _drawingml_line(style: DrawingStyle | None) -> str:
+    """Return a DrawingML line fragment for a drawing style."""
+    if style is None:
+        return '<a:ln w="7200"><a:solidFill><a:srgbClr val="000000"><a:alpha val="100000"/></a:srgbClr></a:solidFill></a:ln>'
+    if style.stroke == "none" or style.stroke_width <= 0.0:
+        return "<a:ln><a:noFill/></a:ln>"
+    width = int(round(float(style.stroke_width) * EMU_PER_MM))
+    alpha = int(round(float(style.stroke_opacity) * 100000.0))
+    color = style.stroke.lstrip("#").upper()
+    return f'<a:ln w="{width}"><a:solidFill><a:srgbClr val="{color}"><a:alpha val="{alpha}"/></a:srgbClr></a:solidFill></a:ln>'
+
+
+def _drawingml_text_body(text: str | None, style: TextStyle | None) -> str:
+    """Return a DrawingML text-box body or an empty shape body."""
+    if text is None:
+        return "<wps:bodyPr/>"
+    color = getattr(style, "color", "#000000").lstrip("#").upper() if style is not None else "000000"
+    size = int(round(float(getattr(getattr(style, "font", None), "size", 10.0)) * 100.0)) if style is not None else 1000
+    return (
+        "<wps:txbx><w:txbxContent><w:p><w:r>"
+        f'<w:rPr><w:color w:val="{color}"/><w:sz w:val="{int(round(size / 50.0))}"/></w:rPr>'
+        f"<w:t>{xml_escape(text)}</w:t>"
+        "</w:r></w:p></w:txbxContent></wps:txbx>"
+        f'<wps:bodyPr/><wps:style><a:fontRef idx="minor"><a:schemeClr val="tx1"/></a:fontRef>'
+        f'<a:lnRef idx="0"><a:schemeClr val="tx1"/></a:lnRef>'
+        f'<a:fillRef idx="0"><a:schemeClr val="tx1"/></a:fillRef>'
+        f'<a:effectRef idx="0"><a:schemeClr val="tx1"/></a:effectRef></wps:style>'
+    )
 
 
 def _image_drawing_docx(component: ImageDrawing, media_registry: _DocxMediaRegistry) -> str:
@@ -856,6 +1002,13 @@ def _positive_artifact_number(value: object, *, name: str) -> float:
     numeric = _artifact_number(value, name=name)
     if numeric <= 0.0:
         raise ValueError(f"{name} must be positive")
+    return numeric
+
+
+def _nonnegative_artifact_number(value: object, *, name: str) -> float:
+    numeric = _artifact_number(value, name=name)
+    if numeric < 0.0:
+        raise ValueError(f"{name} must be nonnegative")
     return numeric
 
 

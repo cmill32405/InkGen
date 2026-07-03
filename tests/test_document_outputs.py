@@ -170,8 +170,12 @@ def test_flow_document_exports_tables_and_drawing_primitives() -> None:
     assert "<svg" in html
     assert "DETAIL A" in html
     assert "<w:tbl>" in document_xml
-    assert "<w:pict>" in document_xml
-    assert "<v:group" in document_xml
+    assert "<w:pict>" not in document_xml
+    assert "<wp:anchor" in document_xml
+    assert "<wps:wsp>" in document_xml
+    assert 'prst="rect"' in document_xml
+    assert 'prst="ellipse"' in document_xml
+    assert "DETAIL A" in document_xml
     assert clone.to_plain_text() == text
 
 
@@ -289,9 +293,9 @@ def test_flow_document_docx_assigns_distinct_relationships_to_distinct_images() 
     assert 'Target="media/image2.png"' in rels_xml
 
 
-@pytest.mark.condition("RASTER-IMAGE-P2")
-def test_flow_document_docx_keeps_vector_bounds_when_images_share_drawing_group() -> None:
-    """RASTER-IMAGE-P2: Native images do not distort DOCX VML vector bounds."""
+@pytest.mark.condition("RASTER-IMAGE-P2", "FLOW-DOCUMENT-DRAWINGML-P3")
+def test_flow_document_docx_keeps_vector_coordinates_when_images_share_drawing_group() -> None:
+    """RASTER-IMAGE-P2: Native images do not distort DOCX DrawingML vectors."""
     group = DrawingComponentGroup("mixed-image-vector")
     group.add_component(RectangleDrawing((1.0, 2.0), 10.0, 5.0, 0.0, DrawingStyle(f"mixed_{uuid4().hex}")))
     group.add_component(ImageDrawing(_image_asset(), (20.0, 30.0), 3.0, 4.0))
@@ -301,9 +305,12 @@ def test_flow_document_docx_keeps_vector_bounds_when_images_share_drawing_group(
     with zipfile.ZipFile(BytesIO(document.to_docx_bytes())) as package:
         document_xml = package.read("word/document.xml").decode("utf-8")
 
-    assert 'coordsize="22 32"' in document_xml
+    assert '<wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH>' in document_xml
+    assert '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>' in document_xml
+    assert 'cx="360000" cy="180000"' in document_xml
     assert "word/media/image" not in document_xml
     assert "<w:drawing>" in document_xml
+    assert "<w:pict>" not in document_xml
 
 
 @pytest.mark.condition("RASTER-IMAGE-P2")

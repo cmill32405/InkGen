@@ -5,11 +5,24 @@ from __future__ import annotations
 import zipfile
 from io import BytesIO
 from uuid import uuid4
+from xml.etree import ElementTree
 
 import pytest
 
 from InkGen.component import Component, PathCommand
-from InkGen.document_outputs import DOCX_FIXED_TIMESTAMP, FlowDocument, _vml_number
+from InkGen.document_outputs import (
+    DOCX_FIXED_TIMESTAMP,
+    FlowDocument,
+    _component_drawingml,
+    _DocxMediaRegistry,
+    _drawingml_fill,
+    _drawingml_line,
+    _drawingml_segments_docx,
+    _drawingml_shape_docx,
+    _drawingml_text_body,
+    _nonnegative_artifact_number,
+    _vml_number,
+)
 from InkGen.drawing_components import (
     ArcDrawing,
     CircleDrawing,
@@ -41,7 +54,7 @@ class _AttributeOnlyDrawingPrimitive:
 
 class _BareComponentDrawingPrimitive:
     def to_component(self, output_format: OutputFormat | str) -> Component:
-        """Return a base component that cannot render as SVG or DOCX VML."""
+        """Return a base component that cannot render as SVG or DOCX DrawingML."""
         return Component()
 
 
@@ -856,9 +869,9 @@ def test_flow_document_rejects_materializations_without_render_fragments() -> No
         document.to_html()
 
 
-@pytest.mark.condition("FLOW-DOCUMENT-DRAWING-POINTS-P2")
+@pytest.mark.condition("FLOW-DOCUMENT-DRAWING-POINTS-P2", "FLOW-DOCUMENT-DRAWINGML-P3")
 def test_flow_document_accepts_valid_materialized_drawing_points() -> None:
-    """FLOW-DOCUMENT-DRAWING-POINTS-P2: Valid materialized point surfaces drive HTML and DOCX bounds."""
+    """FLOW-DOCUMENT-DRAWING-POINTS-P2: Valid materialized point surfaces drive HTML and DOCX geometry."""
     document = FlowDocument()
     group = DrawingComponentGroup("valid-points")
     group.components.append(_PointSurfaceDrawingPrimitive([(2.0, 3.0), (6.0, 8.0)]))  # type: ignore[arg-type]
@@ -869,11 +882,16 @@ def test_flow_document_accepts_valid_materialized_drawing_points() -> None:
         document_xml = package.read("word/document.xml").decode("utf-8")
 
     assert 'viewBox="2 3 4 5"' in html
-    assert 'coordsize="4 5"' in document_xml
-    assert '<v:polyline points="0,0 4,5"/>' in document_xml
+    assert "<w:pict>" not in document_xml
+    assert "<wp:anchor" in document_xml
+    assert "<wps:wsp>" in document_xml
+    assert 'prst="line"' in document_xml
+    assert '<wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH>' in document_xml
+    assert '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>' in document_xml
+    assert 'cx="144000" cy="180000"' in document_xml
 
 
-@pytest.mark.condition("FLOW-DOCUMENT-DRAWING-POINTS-P2")
+@pytest.mark.condition("FLOW-DOCUMENT-DRAWING-POINTS-P2", "FLOW-DOCUMENT-DRAWINGML-P3")
 @pytest.mark.parametrize(
     ("points", "exception_type", "message"),
     [
@@ -906,14 +924,14 @@ def test_flow_document_rejects_malformed_materialized_drawing_points(
         document.to_docx_bytes()
 
 
-@pytest.mark.condition("FLOW-DOCUMENT-VML-NUMBER-P2")
-def test_flow_document_formats_valid_circle_vml_and_twips() -> None:
-    """FLOW-DOCUMENT-VML-NUMBER-P2: Valid artifact numbers are formatted deterministically."""
+@pytest.mark.condition("FLOW-DOCUMENT-DRAWINGML-P3")
+def test_flow_document_formats_valid_circle_drawingml_and_twips() -> None:
+    """FLOW-DOCUMENT-DRAWINGML-P3: Valid artifact numbers are formatted deterministically."""
     paragraph = _paragraph("Spacing")
     paragraph.space_before = 1.0
     document = FlowDocument()
     document.add_paragraph(paragraph)
-    group = DrawingComponentGroup("circle-vml")
+    group = DrawingComponentGroup("circle-drawingml")
     group.add_component(CircleDrawing((4.0, 4.0), 2.0, _drawing_style()))
     document.add_drawing_group(group)
 
@@ -921,28 +939,31 @@ def test_flow_document_formats_valid_circle_vml_and_twips() -> None:
         document_xml = package.read("word/document.xml").decode("utf-8")
 
     assert 'w:before="57"' in document_xml
-    assert 'coordsize="4 4"' in document_xml
-    assert "left:0mm;top:0mm;width:4mm;height:4mm" in document_xml
+    assert "<w:pict>" not in document_xml
+    assert 'prst="ellipse"' in document_xml
+    assert '<wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH>' in document_xml
+    assert '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>' in document_xml
+    assert 'cx="144000" cy="144000"' in document_xml
 
     small_document = FlowDocument()
-    small_group = DrawingComponentGroup("small-circle-vml")
+    small_group = DrawingComponentGroup("small-circle-drawingml")
     small_group.add_component(CircleDrawing((1.0, 1.0), 0.5, _drawing_style()))
     small_document.add_drawing_group(small_group)
     with zipfile.ZipFile(BytesIO(small_document.to_docx_bytes())) as package:
         small_document_xml = package.read("word/document.xml").decode("utf-8")
 
-    assert 'coordsize="1 1"' in small_document_xml
-    assert "width:1mm;height:1mm" in small_document_xml
+    assert 'prst="ellipse"' in small_document_xml
+    assert 'cx="36000" cy="36000"' in small_document_xml
 
 
-@pytest.mark.condition("FLOW-DOCUMENT-VML-NUMBER-P2")
-def test_flow_document_vml_number_formats_fractional_and_near_integer_values() -> None:
-    """FLOW-DOCUMENT-VML-NUMBER-P2: VML numbers preserve fractions and snap near integers."""
+@pytest.mark.condition("FLOW-DOCUMENT-DRAWINGML-P3")
+def test_flow_document_artifact_number_formats_fractional_and_near_integer_values() -> None:
+    """FLOW-DOCUMENT-DRAWINGML-P3: Artifact numbers preserve fractions and snap near integers."""
     assert _vml_number(1.25) == "1.25"
     assert _vml_number(2.0000000005) == "2"
 
 
-@pytest.mark.condition("FLOW-DOCUMENT-VML-NUMBER-P2")
+@pytest.mark.condition("FLOW-DOCUMENT-DRAWINGML-P3")
 @pytest.mark.parametrize(
     ("position", "radius", "exception_type", "message"),
     [
@@ -965,18 +986,18 @@ def test_flow_document_vml_number_formats_fractional_and_near_integer_values() -
         ((2.0, 2.0), -1.0, ValueError, "CircleDrawing radius must be positive"),
     ],
 )
-def test_flow_document_rejects_malformed_circle_vml_numbers(
+def test_flow_document_rejects_malformed_circle_drawingml_numbers(
     position: object,
     radius: object,
     exception_type: type[Exception],
     message: str,
 ) -> None:
-    """FLOW-DOCUMENT-VML-NUMBER-P2: Circle VML numbers must preserve geometry contracts."""
+    """FLOW-DOCUMENT-DRAWINGML-P3: Circle DrawingML numbers must preserve geometry contracts."""
     circle = CircleDrawing((2.0, 2.0), 1.0, _drawing_style())
     object.__setattr__(circle, "position", position)
     object.__setattr__(circle, "radius", radius)
     document = FlowDocument()
-    group = DrawingComponentGroup("bad-circle-vml")
+    group = DrawingComponentGroup("bad-circle-drawingml")
     group.add_component(circle)
     document.add_drawing_group(group)
 
@@ -986,7 +1007,7 @@ def test_flow_document_rejects_malformed_circle_vml_numbers(
         document.to_docx_bytes()
 
 
-@pytest.mark.condition("FLOW-DOCUMENT-VML-NUMBER-P2")
+@pytest.mark.condition("FLOW-DOCUMENT-DRAWINGML-P3")
 @pytest.mark.parametrize(
     ("space_before", "exception_type", "message"),
     [
@@ -1001,7 +1022,7 @@ def test_flow_document_rejects_malformed_docx_twip_numbers(
     exception_type: type[Exception],
     message: str,
 ) -> None:
-    """FLOW-DOCUMENT-VML-NUMBER-P2: DOCX twip values reject malformed live state."""
+    """FLOW-DOCUMENT-DRAWINGML-P3: DOCX twip values reject malformed live state."""
     paragraph = _paragraph("Bad spacing")
     paragraph._space_before = space_before  # type: ignore[assignment]
     document = FlowDocument()
@@ -1011,9 +1032,9 @@ def test_flow_document_rejects_malformed_docx_twip_numbers(
         document.to_docx_bytes()
 
 
-@pytest.mark.condition("FLOW-DOCUMENT-P1")
-def test_flow_document_docx_drawing_polyline_uses_group_relative_points() -> None:
-    """FLOW-DOCUMENT-P1: DOCX VML drawing points are relative to drawing bounds."""
+@pytest.mark.condition("FLOW-DOCUMENT-DRAWINGML-P3")
+def test_flow_document_docx_drawingml_line_uses_group_relative_points() -> None:
+    """FLOW-DOCUMENT-DRAWINGML-P3: DOCX DrawingML linework is relative to drawing bounds."""
     document = FlowDocument()
     group = DrawingComponentGroup("linework")
     group.add_component(LineDrawing((2.0, 3.0), (5.0, 7.0), _drawing_style()))
@@ -1022,8 +1043,210 @@ def test_flow_document_docx_drawing_polyline_uses_group_relative_points() -> Non
     with zipfile.ZipFile(BytesIO(document.to_docx_bytes())) as package:
         document_xml = package.read("word/document.xml").decode("utf-8")
 
-    assert 'coordsize="3 4"' in document_xml
-    assert '<v:polyline points="0,0 3,4"/>' in document_xml
+    assert "<w:pict>" not in document_xml
+    assert "<wp:anchor" in document_xml
+    assert "<wps:wsp>" in document_xml
+    assert 'prst="line"' in document_xml
+    assert '<wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH>' in document_xml
+    assert '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>' in document_xml
+    assert 'cx="108000" cy="144000"' in document_xml
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-DRAWINGML-P3")
+def test_flow_document_docx_drawingml_preserves_style_text_and_line_flips() -> None:
+    """FLOW-DOCUMENT-DRAWINGML-P3: DOCX DrawingML keeps style, text, and reversed line direction."""
+    drawing_style = DrawingStyle(
+        f"drawingml_style_{uuid4().hex}",
+        stroke="#445566",
+        stroke_width=0.5,
+        fill="#112233",
+        stroke_opacity=0.5,
+        fill_opacity=0.25,
+    )
+    text_style = TextStyle(f"drawingml_text_{uuid4().hex}", Font(size=12.0))
+    text_style.color = "#abcdef"
+    document = FlowDocument()
+    group = DrawingComponentGroup("styled-drawingml")
+    group.add_component(RectangleDrawing((1.0, 1.0), 2.0, 3.0, 0.0, drawing_style))
+    group.add_component(TextDrawing("A&B", (4.0, 5.0), text_style))
+    group.add_component(LineDrawing((10.0, 10.0), (2.0, 1.0), drawing_style))
+    document.add_drawing_group(group)
+
+    with zipfile.ZipFile(BytesIO(document.to_docx_bytes())) as package:
+        document_xml = package.read("word/document.xml").decode("utf-8")
+
+    assert '<a:srgbClr val="112233"><a:alpha val="25000"/></a:srgbClr>' in document_xml
+    assert '<a:ln w="18000"><a:solidFill><a:srgbClr val="445566"><a:alpha val="50000"/></a:srgbClr>' in document_xml
+    assert 'flipH="1" flipV="1"' in document_xml
+    assert "A&amp;B" in document_xml
+    assert '<w:color w:val="ABCDEF"/>' in document_xml
+    assert '<w:sz w:val="24"/>' in document_xml
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-DRAWINGML-P3")
+def test_flow_document_docx_drawingml_allows_empty_materialized_point_sequences() -> None:
+    """FLOW-DOCUMENT-DRAWINGML-P3: Empty materialized point surfaces emit no shape."""
+    document = FlowDocument()
+    group = DrawingComponentGroup("empty-points")
+    group.components.append(_PointSurfaceDrawingPrimitive([]))  # type: ignore[arg-type]
+    document.add_drawing_group(group)
+
+    with zipfile.ZipFile(BytesIO(document.to_docx_bytes())) as package:
+        document_xml = package.read("word/document.xml").decode("utf-8")
+
+    assert "<wp:anchor" not in document_xml
+    assert "<w:pict>" not in document_xml
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-DRAWINGML-P3")
+def test_flow_document_docx_drawingml_rejects_negative_shape_extents() -> None:
+    """FLOW-DOCUMENT-DRAWINGML-P3: DrawingML extent helpers reject negative values."""
+    assert _nonnegative_artifact_number(0.0, name="RectangleDrawing width") == 0.0
+    assert _nonnegative_artifact_number(0.5, name="RectangleDrawing width") == 0.5
+    with pytest.raises(ValueError, match="RectangleDrawing width must be nonnegative"):
+        _nonnegative_artifact_number(-0.01, name="RectangleDrawing width")
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-DRAWINGML-P3")
+def test_flow_document_docx_drawingml_helper_fragments_cover_branches() -> None:
+    """FLOW-DOCUMENT-DRAWINGML-P3: DrawingML helper fragments preserve branch contracts."""
+    style = DrawingStyle(
+        f"drawingml_helper_{uuid4().hex}",
+        stroke="#112233",
+        stroke_width=0.5,
+        fill="#445566",
+        stroke_opacity=0.75,
+        fill_opacity=0.25,
+    )
+    no_paint = DrawingStyle(f"drawingml_none_{uuid4().hex}", stroke="none", stroke_width=0.0, fill="none")
+    no_stroke_with_width = DrawingStyle(f"drawingml_no_stroke_{uuid4().hex}", stroke="none", stroke_width=0.5, fill="none")
+    zero_width_stroke = DrawingStyle(f"drawingml_zero_stroke_{uuid4().hex}", stroke="#112233", stroke_width=0.0, fill="none")
+    fractional_alpha = DrawingStyle(
+        f"drawingml_alpha_{uuid4().hex}",
+        stroke="#112233",
+        fill="#445566",
+        fill_opacity=0.50001,
+    )
+    stroke_alpha = DrawingStyle(f"drawingml_stroke_alpha_{uuid4().hex}", stroke="#112233", stroke_opacity=0.50001)
+    text_style = TextStyle(f"drawingml_helper_text_{uuid4().hex}", Font(size=12.0))
+    text_style.color = "#abcdef"
+    small_text_style = TextStyle(f"drawingml_small_text_{uuid4().hex}", Font(size=3.75))
+    large_text_style = TextStyle(f"drawingml_large_text_{uuid4().hex}", Font(size=25.491))
+
+    assert _drawingml_fill(None) == "<a:noFill/>"
+    assert _drawingml_fill(no_paint) == "<a:noFill/>"
+    assert '<a:srgbClr val="445566"><a:alpha val="25000"/></a:srgbClr>' in _drawingml_fill(style)
+    assert '<a:srgbClr val="445566"><a:alpha val="50001"/></a:srgbClr>' in _drawingml_fill(fractional_alpha)
+    assert _drawingml_line(no_paint) == "<a:ln><a:noFill/></a:ln>"
+    assert _drawingml_line(no_stroke_with_width) == "<a:ln><a:noFill/></a:ln>"
+    assert _drawingml_line(zero_width_stroke) == "<a:ln><a:noFill/></a:ln>"
+    assert '<a:ln w="18000">' in _drawingml_line(style)
+    assert '<a:alpha val="75000"/>' in _drawingml_line(style)
+    assert '<a:alpha val="50001"/>' in _drawingml_line(stroke_alpha)
+    assert '<w:sz w:val="24"/>' in _drawingml_text_body("Sized", text_style)
+    assert '<w:sz w:val="8"/>' in _drawingml_text_body("Small", small_text_style)
+    assert '<w:sz w:val="51"/>' in _drawingml_text_body("Large", large_text_style)
+    assert '<w:sz w:val="20"/>' in _drawingml_text_body("Default", None)
+    assert '<w:sz w:val="20"/>' in _drawingml_text_body("Fallback", type("StyleWithoutFont", (), {"color": "#000000"})())
+    assert "<w:t>Sized</w:t>" in _drawingml_text_body("Sized", text_style)
+    assert _drawingml_text_body(None, None) == "<wps:bodyPr/>"
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-DRAWINGML-P3")
+def test_flow_document_docx_drawingml_component_helpers_preserve_offsets_and_extents() -> None:
+    """FLOW-DOCUMENT-DRAWINGML-P3: Component helpers keep exact offsets, extents, and flips."""
+    media_registry = _DocxMediaRegistry()
+    style = DrawingStyle(f"drawingml_component_{uuid4().hex}", stroke="#112233", fill="#445566", stroke_width=0.5)
+    text_style = TextStyle(f"drawingml_component_text_{uuid4().hex}", Font(size=12.0))
+
+    zero_rect = _component_drawingml(RectangleDrawing((5.0, 7.0), 0.0, 0.0, 0.0, style), 5.0, 7.0, media_registry)
+    assert 'cx="360" cy="360"' in zero_rect
+    assert 'flipH="1"' not in zero_rect
+    assert 'flipV="1"' not in zero_rect
+
+    circle = _component_drawingml(CircleDrawing((5.0, 6.0), 2.0, style), 1.0, 1.0, media_registry)
+    assert '<wp:positionH relativeFrom="column"><wp:posOffset>72000</wp:posOffset></wp:positionH>' in circle
+    assert '<wp:positionV relativeFrom="paragraph"><wp:posOffset>108000</wp:posOffset></wp:positionV>' in circle
+    assert 'cx="144000" cy="144000"' in circle
+
+    text = _component_drawingml(TextDrawing("Placed", (4.0, 5.0), text_style), 1.0, 2.0, media_registry)
+    assert '<wp:positionH relativeFrom="column"><wp:posOffset>108000</wp:posOffset></wp:positionH>' in text
+    assert '<wp:positionV relativeFrom="paragraph"><wp:posOffset>108000</wp:posOffset></wp:positionV>' in text
+    assert 'cx="2880000" cy="360000"' in text
+    assert '<w:sz w:val="24"/>' in text
+
+    forward = "".join(_drawingml_segments_docx([(0.0, 0.0), (2.0, 0.0)], 0.0, 0.0, style, media_registry))
+    assert 'flipH="1"' not in forward
+    assert 'flipV="1"' not in forward
+    assert 'cx="72000" cy="360"' in forward
+
+    offset_forward = "".join(_drawingml_segments_docx([(1.0, 1.0), (3.0, 1.0)], 0.0, 0.0, style, media_registry))
+    assert '<wp:positionH relativeFrom="column"><wp:posOffset>36000</wp:posOffset></wp:positionH>' in offset_forward
+    assert '<wp:positionV relativeFrom="paragraph"><wp:posOffset>36000</wp:posOffset></wp:positionV>' in offset_forward
+    assert 'cx="72000" cy="360"' in offset_forward
+
+    vertical = "".join(_drawingml_segments_docx([(1.0, 1.0), (1.0, 3.0)], 1.0, 1.0, style, media_registry))
+    assert 'flipH="1"' not in vertical
+    assert 'flipV="1"' not in vertical
+    assert 'cx="360" cy="72000"' in vertical
+
+    offset_vertical = "".join(_drawingml_segments_docx([(1.0, 1.0), (1.0, 3.0)], 0.0, 0.0, style, media_registry))
+    assert '<wp:positionH relativeFrom="column"><wp:posOffset>36000</wp:posOffset></wp:positionH>' in offset_vertical
+    assert '<wp:positionV relativeFrom="paragraph"><wp:posOffset>36000</wp:posOffset></wp:positionV>' in offset_vertical
+    assert 'cx="360" cy="72000"' in offset_vertical
+
+    default_style_line = "".join(_drawingml_segments_docx([(0.0, 0.0), (0.0, 2.0)], 0.0, 0.0, object(), media_registry))
+    assert '<a:ln w="7200">' in default_style_line
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-DRAWINGML-P3")
+def test_flow_document_docx_drawingml_shape_helper_preserves_explicit_flip_flags() -> None:
+    """FLOW-DOCUMENT-DRAWINGML-P3: Shape helper emits only requested flip flags."""
+    media_registry = _DocxMediaRegistry()
+
+    no_flip = _drawingml_shape_docx(x=0.0, y=0.0, width=1.0, height=1.0, preset="rect", style=None, media_registry=media_registry)
+    horizontal = _drawingml_shape_docx(
+        x=0.0,
+        y=0.0,
+        width=1.0,
+        height=1.0,
+        preset="line",
+        style=None,
+        media_registry=media_registry,
+        flip_horizontal=True,
+    )
+    vertical = _drawingml_shape_docx(
+        x=0.0,
+        y=0.0,
+        width=1.0,
+        height=1.0,
+        preset="line",
+        style=None,
+        media_registry=media_registry,
+        flip_vertical=True,
+    )
+
+    assert 'flipH="1"' not in no_flip
+    assert 'flipV="1"' not in no_flip
+    assert 'flipH="1"' in horizontal
+    assert 'flipV="1"' not in horizontal
+    assert 'flipH="1"' not in vertical
+    assert 'flipV="1"' in vertical
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-DRAWINGML-P3")
+def test_flow_document_docx_drawingml_markup_is_well_formed() -> None:
+    """FLOW-DOCUMENT-DRAWINGML-P3: DOCX DrawingML emits parseable XML."""
+    document = FlowDocument()
+    group = _all_supported_drawing_group()
+    document.add_drawing_group(group)
+
+    with zipfile.ZipFile(BytesIO(document.to_docx_bytes())) as package:
+        document_xml = package.read("word/document.xml")
+        relationships_xml = package.read("word/_rels/document.xml.rels")
+
+    ElementTree.fromstring(document_xml)
+    ElementTree.fromstring(relationships_xml)
 
 
 @pytest.mark.condition("FLOW-DOCUMENT-P1")
