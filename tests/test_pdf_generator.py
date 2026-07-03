@@ -45,9 +45,24 @@ def text_style() -> TextStyle:
 
 
 def _stream(pdf_bytes: bytes) -> str:
-    match = re.search(rb"stream\n(?P<content>.*?)\nendstream", pdf_bytes, re.S)
-    assert match is not None
-    return match.group("content").decode("latin-1")
+    matches = re.findall(rb"stream\n(?P<content>.*?)\nendstream", pdf_bytes, re.S)
+    for match in matches:
+        content = match.decode("latin-1")
+        if " BT\n" in content or " cm\n" in content:
+            return content
+    raise AssertionError("PDF page content stream not found")
+
+
+def _pdf_objects(pdf_bytes: bytes) -> dict[int, bytes]:
+    return {
+        int(match.group("id")): match.group("payload")
+        for match in re.finditer(rb"(?P<id>\d+) 0 obj\n(?P<payload>.*?)\nendobj", pdf_bytes, re.S)
+    }
+
+
+def _assert_contiguous_object_ids(pdf_bytes: bytes) -> None:
+    object_ids = sorted(_pdf_objects(pdf_bytes))
+    assert object_ids == list(range(1, max(object_ids) + 1))
 
 
 def _pdf_bytes_for_single_text_style(style: TextStyle) -> bytes:
@@ -254,6 +269,10 @@ def test_document_pdf_maps_text_styles_to_standard_font_resources() -> None:
 
     assert b"/BaseFont /Times-BoldItalic" in payload
     assert b"/BaseFont /Courier" in payload
+    assert payload.count(b"/ToUnicode ") == 2
+    assert payload.count(b"/CMapName /InkGen-WinAnsi-UCS2") == 2
+    assert payload.count(b"95 beginbfchar") == 2
+    assert b"<7F> <007F>" not in payload
     assert "/F1 11 Tf" in content
     assert "/F2 9 Tf" in content
 
@@ -307,6 +326,21 @@ def test_document_pdf_numeric_weight_threshold_keeps_599_regular() -> None:
     assert b"/BaseFont /Helvetica-Bold" not in payload
 
 
+@pytest.mark.condition("PDF-FONT-TOUNICODE-P3")
+def test_document_pdf_standard_fonts_emit_tounicode_cmaps() -> None:
+    """PDF-FONT-TOUNICODE-P3: Standard PDF fonts include extraction CMaps."""
+    payload = _pdf_bytes_for_single_text_style(TextStyle(f"unicode_{uuid.uuid4().hex}", Font(size=10.0)))
+
+    assert b"/Subtype /Type1" in payload
+    assert b"/ToUnicode " in payload
+    assert b"/CMapName /InkGen-WinAnsi-UCS2" in payload
+    assert b"95 beginbfchar" in payload
+    assert b"<20> <0020>" in payload
+    assert b"<41> <0041>" in payload
+    assert b"<7E> <007E>" in payload
+    assert b"<7F> <007F>" not in payload
+
+
 @pytest.mark.condition("PDF-FONT-EMBED-P3")
 def test_document_pdf_embeds_named_installed_font_resources() -> None:
     """PDF-FONT-EMBED-P3: Named installed fonts embed with widths and descriptors."""
@@ -321,10 +355,23 @@ def test_document_pdf_embeds_named_installed_font_resources() -> None:
     assert b"/FirstChar 32 /LastChar 126" in payload
     assert b"/Widths [" in payload
     assert b"/Encoding /WinAnsiEncoding" in payload
+    assert b"/ToUnicode " in payload
+    assert b"/CMapName /InkGen-WinAnsi-UCS2" in payload
     assert b"/BaseFont /Helvetica" not in payload
     assert b"/F1 10 Tf" in payload
     assert b"/Resources << /Font <<" in payload
     assert b"/XObject" not in payload
+    _assert_contiguous_object_ids(payload)
+    objects = _pdf_objects(payload)
+    font_resource_match = re.search(rb"/Resources << /Font << /F1 (?P<id>\d+) 0 R", payload)
+    assert font_resource_match is not None
+    font_object = objects[int(font_resource_match.group("id"))]
+    descriptor_match = re.search(rb"/FontDescriptor (?P<id>\d+) 0 R", font_object)
+    tounicode_match = re.search(rb"/ToUnicode (?P<id>\d+) 0 R", font_object)
+    assert descriptor_match is not None
+    assert tounicode_match is not None
+    assert b"/Type /FontDescriptor" in objects[int(descriptor_match.group("id"))]
+    assert b"/CMapName /InkGen-WinAnsi-UCS2" in objects[int(tounicode_match.group("id"))]
 
 
 @pytest.mark.condition("PDF-FONT-EMBED-P3")

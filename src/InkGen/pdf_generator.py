@@ -420,10 +420,39 @@ def _pdf_font_descriptor_object(resource: _PDFFontResource, font_file_object_id:
     )
 
 
-def _pdf_font_object(resource: _PDFFontResource, descriptor_object_id: int | None = None) -> str:
+def _pdf_tounicode_cmap_object() -> bytes:
+    """Build a deterministic ToUnicode CMap for InkGen's WinAnsi text domain."""
+    entries = "\n".join(f"<{code:02X}> <{code:04X}>" for code in range(PDF_WINANSI_FIRST_CHAR, PDF_WINANSI_LAST_CHAR + 1))
+    payload = (
+        "/CIDInit /ProcSet findresource begin\n"
+        "12 dict begin\n"
+        "begincmap\n"
+        "/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n"
+        "/CMapName /InkGen-WinAnsi-UCS2 def\n"
+        "/CMapType 2 def\n"
+        "1 begincodespacerange\n"
+        f"<{PDF_WINANSI_FIRST_CHAR:02X}> <{PDF_WINANSI_LAST_CHAR:02X}>\n"
+        "endcodespacerange\n"
+        f"{PDF_WINANSI_LAST_CHAR - PDF_WINANSI_FIRST_CHAR + 1} beginbfchar\n"
+        f"{entries}\n"
+        "endbfchar\n"
+        "endcmap\n"
+        "CMapName currentdict /CMap defineresource pop\n"
+        "end\n"
+        "end\n"
+    ).encode("ascii")
+    return b"<< /Length " + str(len(payload)).encode("ascii") + b" >>\nstream\n" + payload + b"endstream"
+
+
+def _pdf_font_object(
+    resource: _PDFFontResource,
+    descriptor_object_id: int | None = None,
+    tounicode_object_id: int | None = None,
+) -> str:
     """Build a PDF font object for standard or embedded resources."""
+    tounicode = f" /ToUnicode {tounicode_object_id} 0 R" if tounicode_object_id is not None else ""
     if not resource.is_embedded:
-        return f"<< /Type /Font /Subtype /Type1 /BaseFont /{resource.base_font} /Encoding /WinAnsiEncoding >>"
+        return f"<< /Type /Font /Subtype /Type1 /BaseFont /{resource.base_font} /Encoding /WinAnsiEncoding{tounicode} >>"
     if descriptor_object_id is None:
         raise ValueError("embedded font resources require a descriptor object id")
     widths = " ".join(str(width) for width in resource.widths)
@@ -431,7 +460,7 @@ def _pdf_font_object(resource: _PDFFontResource, descriptor_object_id: int | Non
         f"<< /Type /Font /Subtype /TrueType /BaseFont /{resource.base_font} "
         f"/FirstChar {PDF_WINANSI_FIRST_CHAR} /LastChar {PDF_WINANSI_LAST_CHAR} "
         f"/Widths [{widths}] /FontDescriptor {descriptor_object_id} 0 R "
-        f"/Encoding /WinAnsiEncoding >>"
+        f"/Encoding /WinAnsiEncoding{tounicode} >>"
     )
 
 
@@ -1367,14 +1396,19 @@ class DocumentPDF(Document):
                 writer.set_object(font_file_object_id, _pdf_font_file_object(resource))
                 descriptor_object_id = object_id + 1
                 writer.set_object(descriptor_object_id, _pdf_font_descriptor_object(resource, font_file_object_id))
-                font_object_id = object_id + 2
-                writer.set_object(font_object_id, _pdf_font_object(resource, descriptor_object_id))
+                tounicode_object_id = object_id + 2
+                writer.set_object(tounicode_object_id, _pdf_tounicode_cmap_object())
+                font_object_id = object_id + 3
+                writer.set_object(font_object_id, _pdf_font_object(resource, descriptor_object_id, tounicode_object_id))
                 font_object_ids[resource.resource_name] = font_object_id
-                object_id += 3
+                object_id += 4
             else:
-                font_object_ids[resource.resource_name] = object_id
-                writer.set_object(object_id, _pdf_font_object(resource))
-                object_id += 1
+                tounicode_object_id = object_id
+                writer.set_object(tounicode_object_id, _pdf_tounicode_cmap_object())
+                font_object_id = object_id + 1
+                font_object_ids[resource.resource_name] = font_object_id
+                writer.set_object(font_object_id, _pdf_font_object(resource, tounicode_object_id=tounicode_object_id))
+                object_id += 2
 
         image_object_ids: dict[str, int] = {}
         for resource_name, asset in image_registry.resources():

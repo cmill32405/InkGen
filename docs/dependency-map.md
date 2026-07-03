@@ -126,7 +126,7 @@ These contracts are more important than individual implementation details.
 | PDF coordinate frame `pdf_points_bottom_left` | DocInt parser validation and ground truth comparisons | Parser scores compare against the wrong coordinate system |
 | Deterministic artifact bytes/records | Regression tests and fixture generation | Tests become flaky or fixtures churn |
 | Closed PDF renderer component set | PDF noninterference proofs and deterministic rendering | Custom dynamic `generate_pdf()` paths can break proof obligations |
-| PDF font resource policy | Synthetic fixtures using OS fonts and parser text extraction checks | Generic fonts unexpectedly embed, named fonts collapse to Helvetica, or widths/descriptors drift |
+| PDF font resource policy | Synthetic fixtures using OS fonts and parser text extraction checks | Generic fonts unexpectedly embed, named fonts collapse to Helvetica, widths/descriptors drift, or ToUnicode maps disappear |
 | Raster image alpha/orientation/color preservation | SVG/PDF/DOCX/DXF fixtures and colored-background drawings | Transparent pixels are flattened or compared against the wrong background; EXIF-rotated images render with wrong dimensions; CMYK/ICC JPEGs lose color intent |
 | `pdf_render_contract.py` guard semantics | PO-GT-004 mutation gate and PDF render-path failures | Unsupported groups/components render instead of failing at the boundary |
 | `Layer.groups()` complete traversal | SVG/PDF renderers, truth emitters, and duplicate-label model layers | Reverting to `component_groups` collapses repeated labels |

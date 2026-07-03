@@ -25,11 +25,14 @@ and italic/oblique variants. Named installed TrueType/OpenType fonts resolve
 through InkGen's existing `Font.font_file` discovery and are embedded in the PDF
 with WinAnsi widths and a font descriptor. This covers common OS fonts on
 Windows, macOS, and Linux when the font is installed or provided through
-`custom_font_paths`.
+`custom_font_paths`. Used font resources include deterministic `/ToUnicode`
+CMaps for InkGen's current printable WinAnsi text range so standard PDF text
+extractors can map generated ASCII bytes back to Unicode.
 
 The dependency-free backend still emits simple WinAnsi text strings. Full
 Unicode/CID text encoding, glyph subsetting, shaping in PDF text operators, and
-complex-script extraction maps are not implemented in this slice.
+complex-script extraction maps beyond the current WinAnsi CMap are not
+implemented in this slice.
 
 ## PDF Capability Roadmap
 
@@ -45,7 +48,7 @@ creation system are:
 
 | Area | Current status | Needed for full-feature parity |
 |---|---|---|
-| Text encoding | WinAnsi literal strings and installed-font embedding | Unicode/CID fonts, `/ToUnicode` CMaps, glyph subsetting, and text extraction maps |
+| Text encoding | WinAnsi literal strings, installed-font embedding, and printable WinAnsi `/ToUnicode` CMaps | Unicode/CID fonts, glyph subsetting, and full complex-script text extraction maps |
 | Text layout | Single positioned text components | Multi-line wrapping, alignment, tabs, columns, kerning, and complex-script shaping |
 | Graphics state | Basic stroke/fill primitives | Clipping paths, dash arrays, line caps/joins, miter limits, opacity groups, blend modes, gradients, and patterns |
 | Document structure | Pages and deterministic metadata | Outlines/bookmarks, links, annotations, tagged PDF structure, page labels, and additional page boxes |
@@ -54,8 +57,8 @@ creation system are:
 | Optimization/security | Classic xref table and plain objects | Object streams, font/image subsetting, encryption, and signatures if those become product requirements |
 | Parser stress fixtures | Core truth records and current synthetic drawings | Purpose-built fixtures for CID encodings, missing/odd CMaps, rotated pages, transparency, scans, tables, title blocks, and BOM drawings |
 
-The highest-value PDF hardening target for Document Intelligence remains
-Unicode/CID/`ToUnicode` support because parser extraction quality depends on
+The highest-value PDF hardening target for Document Intelligence remains full
+Unicode/CID font support because parser extraction quality depends on
 recoverable text, especially for hostile or unusual font encodings.
 
 PDF raster images use `RasterImageAsset` and `ImagePDF`. InkGen accepts

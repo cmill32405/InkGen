@@ -147,6 +147,9 @@ ADR/rule impact:
   variants, instead of always binding `/F1` to Helvetica.
 - `DocumentPDF.to_pdf_bytes()` now embeds named installed TrueType/OpenType font
   files with WinAnsi widths, font descriptors, and deterministic resource reuse.
+- `DocumentPDF.to_pdf_bytes()` now attaches deterministic `/ToUnicode` CMaps to
+  used Standard 14 and embedded WinAnsi font resources for printable ASCII text
+  extraction.
 - DXF text export is proven to emit a `0/TEXT` entity pair and apply optional
   canvas-height Y inversion.
 - `TextDrawing.__post_init__()` now stores normalized scalar text strings and
@@ -168,6 +171,7 @@ ADR/rule impact:
 | PDF defensive defaults | Use black and 10-point defaults for incomplete internals | PO-TEXT-004 | `test_text_pdf_uses_black_and_ten_point_defensive_defaults` | killed |
 | PDF Standard font resources | Map built-in family/style/weight classes to deterministic page resources | PO-TEXT-010 | `test_document_pdf_maps_text_styles_to_standard_font_resources`, `test_document_pdf_maps_standard_font_variants`, `test_document_pdf_numeric_weight_threshold_keeps_599_regular`, `test_document_pdf_empty_page_has_no_font_resource_dictionary` | killed |
 | PDF embedded named font resources | Embed named installed fonts with widths, descriptors, font-file streams, and deterministic reuse | PO-TEXT-011 | `test_document_pdf_embeds_named_installed_font_resources`, `test_document_pdf_reuses_embedded_font_resources_across_sizes`, `test_pdf_embedded_font_helpers_cover_missing_glyphs_and_open_type_streams`, `test_pdf_embedded_font_lookup_falls_back_for_missing_font_files`, `test_font_preserves_requested_family_for_renderer_policy` | killed/equivalent |
+| PDF WinAnsi ToUnicode maps | Attach deterministic CMaps to used Standard 14 and embedded font dictionaries | PO-TEXT-012 | `test_document_pdf_standard_fonts_emit_tounicode_cmaps`, `test_document_pdf_maps_text_styles_to_standard_font_resources`, `test_document_pdf_embeds_named_installed_font_resources` | killed |
 | Serialization | Preserve parameters round trip | PO-TEXT-005 | `test_text_primitives_round_trip_parameters` | killed/equivalent |
 | Neutral materialization | Materialize to `TextSVG`/`TextPDF` | PO-TEXT-006 | `test_text_drawing_materializes_svg_and_pdf_components` | killed/equivalent |
 | Neutral scalar text payloads | Normalize to strings before public state is exposed | PO-TEXT-008 | `test_text_drawing_normalizes_scalar_text_before_materialization` | killed |
@@ -203,6 +207,8 @@ Proof-critical mutation targets:
   tests.
 - Changing PDF color, font-size, matrix, escaping, font resource selection, or
   text operators should fail exact output tests.
+- Removing or misrouting PDF `/ToUnicode` CMaps should fail font-resource
+  extraction-map tests.
 - Redirecting `TextDrawing.to_component()` should fail materialization tests.
 - Weakening `TextDrawing` text coercion or non-scalar rejection should fail
   direct neutral text and FlowDocument hydration tests.
@@ -226,6 +232,10 @@ Current result:
   `_PDFFontResource`, `_PDFFontRegistry`, embedded-font helpers, font object
   emission, and the text content path: 87 work items, 61 killed, 17 survived as
   documented equivalents, and 9 incompetent mutants.
+- PDF ToUnicode continuation:
+  `tests/mutation/pdf_tounicode_cosmic_ray.toml`, filtered by
+  `tests/mutation/filter_pdf_tounicode_work_items.py`: 50 work items, 50
+  killed, and 0 survived.
 - Equivalent survivor classes:
   - Embedded-font fallback exception replacements still return `None` for the
     tested missing-file and invalid-font paths, preserving Standard 14 fallback.
@@ -406,14 +416,51 @@ that is reused for the same font file across different text sizes.
 ### Counterexamples And Exclusions
 
 Generic families intentionally remain PDF Standard 14 resources. Full Unicode
-CID fonts, ToUnicode CMaps, glyph subsetting, PDF text shaping, vertical text,
-and complex-script extraction are excluded from this obligation.
+CID fonts, glyph subsetting, PDF text shaping, vertical text, and
+complex-script extraction are excluded from this obligation. WinAnsi
+ToUnicode maps are covered separately by PO-TEXT-012.
 
 ### Conclusion
 
 Proven for named installed WinAnsi-compatible font resources after focused
 tests and scoped mutation. Full quality gates remain part of the slice
 closeout.
+
+## PO-TEXT-012: PDF Fonts Include WinAnsi ToUnicode Maps
+
+### Claim
+
+`DocumentPDF.to_pdf_bytes()` attaches deterministic `/ToUnicode` CMaps to used
+Standard 14 and embedded WinAnsi font dictionaries so printable ASCII bytes in
+generated text streams have explicit Unicode extraction mappings.
+
+### Domain
+
+Text rendered through `DocumentPDF` with the current InkGen PDF text encoding
+domain: single-byte WinAnsi literal strings over `PDF_WINANSI_FIRST_CHAR` to
+`PDF_WINANSI_LAST_CHAR`.
+
+### Proof Method
+
+`DocumentPDF.to_pdf_bytes()` allocates a ToUnicode CMap stream for every used
+font resource before emitting that font dictionary. `_pdf_font_object()` writes
+the `/ToUnicode <object> 0 R` reference for both Standard 14 and embedded
+TrueType font dictionaries. `_pdf_tounicode_cmap_object()` emits a deterministic
+`beginbfchar` map from each current printable WinAnsi byte to the same Unicode
+code point. Focused tests assert Standard and embedded font dictionaries include
+`/ToUnicode`, include the expected CMap name, and include representative
+space, `A`, and `~` mappings.
+
+### Counterexamples And Exclusions
+
+This does not implement full Unicode/CID font encoding, glyph subsetting,
+multi-byte text strings, shaping, vertical writing, or CMaps for text outside
+the current printable WinAnsi range.
+
+### Conclusion
+
+Behavioral tests and scoped mutation prove the Standard 14 and embedded-font
+live paths for the current WinAnsi extraction-map domain.
 
 ## PO-TEXT-005: Serialization Preserves Text Parameters
 

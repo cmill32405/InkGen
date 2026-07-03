@@ -456,7 +456,12 @@ def test_document_pdf_reuses_images_and_coexists_with_font_resources() -> None:
     assert b"/Im2" in payload
     assert b"/Font <<" in payload
     assert b"/Count 2" in payload
-    assert b"/Kids [8 0 R 10 0 R]" in payload
+    kids_match = re.search(rb"/Kids \[(?P<kids>[^\]]+)\]", payload)
+    assert kids_match is not None
+    page_ids = [int(value) for value in re.findall(rb"(\d+) 0 R", kids_match.group("kids"))]
+    assert len(page_ids) == 2
+    for page_id in page_ids:
+        assert re.search(rb"%d 0 obj\n<< /Type /Page\b" % page_id, payload) is not None
     assert payload.decode("latin-1").count("/Im1 Do") == 2
 
 
