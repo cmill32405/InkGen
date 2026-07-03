@@ -204,19 +204,79 @@ def test_flow_document_docx_bytes_are_deterministic() -> None:
 
 @pytest.mark.condition("FLOW-DOCUMENT-P1")
 def test_flow_document_escapes_text_across_output_formats() -> None:
-    """FLOW-DOCUMENT-P1: DOCX, HTML, and RTF escape format control characters."""
+    """FLOW-DOCUMENT-P1: DOCX, HTML, Markdown, and RTF escape format control characters."""
     document = FlowDocument(title="Control {Doc}")
     document.add_paragraph(_paragraph("A&B <tag> {x}\\y"))
 
     with zipfile.ZipFile(BytesIO(document.to_docx_bytes())) as package:
         document_xml = package.read("word/document.xml").decode("utf-8")
     html = document.to_html()
+    markdown = document.to_markdown()
     rtf = document.to_rtf()
 
     assert "A&amp;B &lt;tag&gt; {x}\\y" in document_xml
     assert "A&amp;B &lt;tag&gt; {x}\\y" in html
+    assert "# Control \\{Doc\\}" in markdown
+    assert "A&B \\<tag\\> \\{x\\}\\\\y" in markdown
     assert r"Control \{Doc\}" in rtf
     assert r"A&B <tag> \{x\}\\y" in rtf
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-MARKDOWN-P3")
+def test_flow_document_markdown_exports_ordered_blocks_with_escaped_tables_and_svg() -> None:
+    """FLOW-DOCUMENT-MARKDOWN-P3: Markdown export preserves escaped flow blocks and SVG drawings."""
+    table = Table(position=(0.0, 0.0))
+    table.add_column(width=20.0)
+    table.add_column(width=20.0)
+    table.add_row(height=5.0)
+    table.add_row(height=5.0)
+    table.cell(0, 0).add_paragraph("Part | No.")
+    table.cell(0, 1).add_paragraph("Description")
+    table.cell(1, 0).add_paragraph("A-001")
+    table.cell(1, 1).add_paragraph("Line one\nLine two")
+
+    document = FlowDocument(title="A&B <Doc>")
+    document.add_paragraph(_paragraph("# Step 1\nUse *care*"))
+    document.add_table(table)
+    document.add_drawing_group(_drawing_group())
+
+    markdown = document.to_markdown()
+
+    assert markdown.startswith("# A&B \\<Doc\\>\n\n\\# Step 1  \nUse \\*care\\*")
+    assert "| Part \\| No\\. | Description |" in markdown
+    assert "| --- | --- |" in markdown
+    assert "| A\\-001 | Line one<br>Line two |" in markdown
+    assert "<svg" in markdown
+    assert "</svg>\n" in markdown
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-MARKDOWN-P3")
+def test_flow_document_markdown_table_separator_is_inserted_once_after_header() -> None:
+    """FLOW-DOCUMENT-MARKDOWN-P3: Markdown tables place one separator after the first row."""
+    document = FlowDocument()
+    table = Table(position=(0.0, 0.0))
+    table.add_column(width=20.0)
+    table.add_column(width=20.0)
+    table.add_row(height=5.0)
+    table.add_row(height=5.0)
+    table.cell(0, 0).add_paragraph("PN")
+    table.cell(0, 1).add_paragraph("Qty")
+    table.cell(1, 0).add_paragraph("A-1")
+    table.cell(1, 1).add_paragraph("2")
+    document.add_table(table)
+
+    assert document.to_markdown() == ("# InkGen Document\n\n| PN | Qty |\n| --- | --- |\n| A\\-1 | 2 |\n")
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-MARKDOWN-P3")
+def test_flow_document_markdown_omits_zero_column_tables() -> None:
+    """FLOW-DOCUMENT-MARKDOWN-P3: Markdown output omits tables with no columns."""
+    document = FlowDocument()
+    table = Table(position=(0.0, 0.0))
+    table.add_row(height=5.0)
+    document.add_table(table)
+
+    assert document.to_markdown() == "# InkGen Document\n"
 
 
 @pytest.mark.condition("FLOW-DOCUMENT-RTF-UNICODE-P2")
@@ -768,12 +828,16 @@ def test_flow_document_rejects_invalid_drawing_materialization() -> None:
     with pytest.raises(TypeError, match="must return an InkGen Component"):
         document.to_html()
     with pytest.raises(TypeError, match="must return an InkGen Component"):
+        document.to_markdown()
+    with pytest.raises(TypeError, match="must return an InkGen Component"):
         document.to_docx_bytes()
 
     group.components.clear()
     group.components.append(_AttributeOnlyDrawingPrimitive())  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="must implement to_component"):
         document.to_html()
+    with pytest.raises(TypeError, match="must implement to_component"):
+        document.to_markdown()
 
 
 @pytest.mark.condition("FLOW-DOCUMENT-DRAWING-LIVE-COMPONENTS-P2")
@@ -1251,18 +1315,21 @@ def test_flow_document_docx_drawingml_markup_is_well_formed() -> None:
 
 @pytest.mark.condition("FLOW-DOCUMENT-P1")
 def test_flow_document_text_writers_create_requested_files(tmp_path) -> None:
-    """FLOW-DOCUMENT-P1: HTML, RTF, and text writers persist generated payloads."""
+    """FLOW-DOCUMENT-P1: HTML, Markdown, RTF, and text writers persist generated payloads."""
     document = FlowDocument(title="Files")
     document.add_paragraph(_paragraph("Persisted"))
     html_path = tmp_path / "document.html"
+    markdown_path = tmp_path / "document.md"
     rtf_path = tmp_path / "document.rtf"
     text_path = tmp_path / "document.txt"
 
     document.create_html(str(html_path))
+    document.create_markdown(str(markdown_path))
     document.create_rtf(str(rtf_path))
     document.create_text(str(text_path))
 
     assert html_path.read_text(encoding="utf-8") == document.to_html()
+    assert markdown_path.read_text(encoding="utf-8") == document.to_markdown()
     assert rtf_path.read_text(encoding="utf-8") == document.to_rtf()
     assert text_path.read_text(encoding="utf-8") == "Persisted"
 
@@ -1274,16 +1341,19 @@ def test_flow_document_file_writers_accept_pathlike_outputs(tmp_path) -> None:
     document.add_paragraph(_paragraph("Persisted"))
     docx_path = tmp_path / "document.docx"
     html_path = tmp_path / "document.html"
+    markdown_path = tmp_path / "document.md"
     rtf_path = tmp_path / "document.rtf"
     text_path = tmp_path / "document.txt"
 
     document.create_docx(docx_path)
     document.create_html(html_path)
+    document.create_markdown(markdown_path)
     document.create_rtf(rtf_path)
     document.create_text(text_path)
 
     assert docx_path.read_bytes() == document.to_docx_bytes()
     assert html_path.read_text(encoding="utf-8") == document.to_html()
+    assert markdown_path.read_text(encoding="utf-8") == document.to_markdown()
     assert rtf_path.read_text(encoding="utf-8") == document.to_rtf()
     assert text_path.read_text(encoding="utf-8") == "Persisted"
 
@@ -1309,6 +1379,7 @@ def test_flow_document_file_writers_reject_malformed_paths(
     writers = (
         document.create_docx,
         document.create_html,
+        document.create_markdown,
         document.create_rtf,
         document.create_text,
     )

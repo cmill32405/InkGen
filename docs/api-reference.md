@@ -91,9 +91,11 @@ available from the package root for caller-facing failure handling:
 - `FlowDocument`: Ordered flow document exporter for paragraphs, tables, and
   drawing primitive groups.
 - `DocumentOutputFormat`: Supported document output labels.
-- Formats currently implemented: DOCX, HTML, RTF, and plain text. DOCX uses
-  native WordprocessingML tables, native DrawingML images, and DrawingML vector
-  shapes so no additional document library dependency is required.
+- Formats currently implemented: DOCX, HTML, Markdown, RTF, and plain text.
+  DOCX uses native WordprocessingML tables, native DrawingML images, and
+  DrawingML vector shapes so no additional document library dependency is
+  required. Markdown uses pipe tables and validated inline SVG fragments for
+  drawing blocks.
 
 ## Grammar Truth (`InkGen.grammar_truth`)
 

@@ -10,7 +10,7 @@ import pytest
 from PIL import Image
 
 from InkGen.component import PathCommand
-from InkGen.document_outputs import FlowDocument
+from InkGen.document_outputs import DocumentOutputFormat, FlowDocument
 from InkGen.drawing_components import (
     CircleDrawing,
     DrawingComponentGroup,
@@ -116,11 +116,14 @@ def test_flow_document_exports_html_rtf_and_text() -> None:
     document.add_paragraph(_paragraph("Line one\nLine two"))
 
     html = document.to_html()
+    markdown = document.to_markdown()
     rtf = document.to_rtf()
     text = document.to_plain_text()
 
+    assert DocumentOutputFormat.MARKDOWN.value == "md"
     assert "<!doctype html>" in html
     assert "Line one<br>Line two" in html
+    assert markdown == "# Doc\n\nLine one  \nLine two\n"
     assert r"{\rtf1" in rtf
     assert r"\qj" in rtf
     assert text == "Line one\nLine two"
@@ -158,6 +161,7 @@ def test_flow_document_exports_tables_and_drawing_primitives() -> None:
 
     text = document.to_plain_text()
     html = document.to_html()
+    markdown = document.to_markdown()
     clone = FlowDocument.create_from_dict(document.parameters, styles)
     with zipfile.ZipFile(BytesIO(document.to_docx_bytes())) as package:
         document_xml = package.read("word/document.xml").decode("utf-8")
@@ -169,6 +173,10 @@ def test_flow_document_exports_tables_and_drawing_primitives() -> None:
     assert "<table>" in html
     assert "<svg" in html
     assert "DETAIL A" in html
+    assert "| Item | Description |" in markdown
+    assert "| --- | --- |" in markdown
+    assert "<svg" in markdown
+    assert "DETAIL A" in markdown
     assert "<w:tbl>" in document_xml
     assert "<w:pict>" not in document_xml
     assert "<wp:anchor" in document_xml

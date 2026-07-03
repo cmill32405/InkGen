@@ -14,6 +14,7 @@ The public behavior under review is:
 
 - `FlowDocument.to_docx_bytes()`
 - `FlowDocument.to_html()`
+- `FlowDocument.to_markdown()`
 - `FlowDocument.to_rtf()`
 - `FlowDocument.to_plain_text()`
 - `FlowDocument.parameters`
@@ -39,7 +40,8 @@ Incoming dependencies:
   `InkGen`.
 - Word and Google Docs workflows rely on DOCX output being dependency-free and
   importable.
-- Generated synthetic fixtures rely on stable DOCX/HTML/RTF/text block order.
+- Generated synthetic fixtures rely on stable DOCX/HTML/Markdown/RTF/text block
+  order.
 - Drawing groups rely on neutral drawing recipes remaining the geometry source
   of truth.
 
@@ -50,7 +52,8 @@ Outgoing dependencies:
   DrawingML shape/picture fragments, and local XML escaping helpers.
 - Drawing fragments depend on neutral drawing primitives materializing to SVG or
   PDF components through `to_component()`.
-- Text escaping depends on stdlib HTML and XML escaping plus local RTF escaping.
+- Text escaping depends on stdlib HTML and XML escaping plus local Markdown and
+  RTF escaping.
 
 Before/after edge changes:
 
@@ -106,6 +109,9 @@ Before/after edge changes:
 - Before the DrawingML modernization update, DOCX vector drawing output used
   VML groups and polylines while raster images already used DrawingML picture
   parts.
+- Before the Markdown output update, flow documents could not export a
+  dependency-free document artifact that common static-site, README, and docs
+  systems can consume while preserving table and drawing blocks.
 - After this slice, DOCX ZIP parts use a fixed timestamp and drawing
   materialization must return an InkGen `Component`.
 - After the drawing-label hardening update, drawing block hydration passes
@@ -157,6 +163,9 @@ Before/after edge changes:
   dependency-free DrawingML anchors and `wps:wsp` shapes. Rectangles and circles
   become native preset shapes, text drawings become DrawingML text boxes, and
   other materialized point sequences become anchored DrawingML line segments.
+- After the Markdown output update, `FlowDocument.to_markdown()` emits
+  dependency-free Markdown with escaped titles/paragraphs, pipe tables, and
+  validated inline SVG for drawing blocks.
 - No new dependency edge or third-party dependency was introduced.
 
 Cycle/layer/coupling/redundancy result:
@@ -175,9 +184,9 @@ Evidence source and freshness:
   `docs/dependency-map.md`, public exports, and flow-document docs were read
   before editing.
 - Test-backed: focused tests exercise deterministic DOCX bytes, fixed ZIP
-  timestamps, output escaping, mixed block round trip, invalid drawing
-  materialization failure, native DrawingML vector emission, and exact
-  DrawingML coordinate/extents in EMUs.
+  timestamps, output escaping, Markdown block export, mixed block round trip,
+  invalid drawing materialization failure, native DrawingML vector emission, and
+  exact DrawingML coordinate/extents in EMUs.
 - No architecture claim in this note relies only on stale memory.
 
 ADR/rule impact:
@@ -191,7 +200,7 @@ ADR/rule impact:
 
 - A flow document is an ordered list of `Paragraph`, `Table`, and
   `DrawingComponentGroup` blocks.
-- Supported document outputs are DOCX, HTML, RTF, and plain text.
+- Supported document outputs are DOCX, HTML, Markdown, RTF, and plain text.
 - DOCX output is a minimal WordprocessingML ZIP package.
 - Repeated DOCX generation for the same document state must produce identical
   bytes.
@@ -263,13 +272,17 @@ ADR/rule impact:
   DrawingML shape anchors while preserving neutral drawing ownership.
 - `_nonnegative_artifact_number()` guards live rectangle dimensions before
   DrawingML extents are emitted.
+- `FlowDocument.to_markdown()`, `create_markdown()`, `_block_markdown()`,
+  `_table_markdown()`, and Markdown escaping helpers add a dependency-free
+  document output that preserves flow-document block order and reuses validated
+  SVG drawing materialization.
 
 ## Comprehensiveness Matrix
 
 | Domain class | Handling | Proof obligation | Test evidence | Mutation status |
 |---|---|---|---|---|
 | Repeated DOCX generation | Preserve exact bytes and fixed part order/timestamps | PO-FDOC-001 | `test_flow_document_docx_bytes_are_deterministic` | killed |
-| Text with XML/HTML/RTF controls | Escape per target format | PO-FDOC-002 | `test_flow_document_escapes_text_across_output_formats` | behavioral evidence |
+| Text with XML/HTML/Markdown/RTF controls | Escape per target format | PO-FDOC-002 | `test_flow_document_escapes_text_across_output_formats` | behavioral evidence |
 | RTF non-ASCII text | Emit RTF Unicode escapes for title and paragraph text | PO-FDOC-016 | `test_flow_document_rtf_escapes_unicode_text` | killed with documented equivalent survivors |
 | Paragraph/table/drawing block order | Preserve through parameters and output | PO-FDOC-003 | `test_flow_document_preserves_mixed_block_order_after_round_trip` | behavioral evidence |
 | Root payload shape | Accept wrapped/direct mappings and reject malformed payload roots or collection fields | PO-FDOC-008 | `test_flow_document_hydrates_direct_payload_mapping`, `test_flow_document_hydration_rejects_malformed_root_payloads` | killed |
@@ -284,7 +297,7 @@ ADR/rule impact:
 | Serialized radial drawing geometry | Reject malformed `CircleDrawing` and `RegularPolygonDrawing` geometry payloads by dispatching through the neutral constructors | PO-FDOC-020 | `test_flow_document_hydration_rejects_malformed_radial_geometry_payloads` | mutation target in radial slice |
 | Serialized polygonal drawing geometry | Reject malformed `PolygonalDrawing` point payloads by dispatching through the neutral constructor | PO-FDOC-021 | `test_flow_document_hydration_rejects_malformed_polygonal_geometry_payloads` | mutation target in polygonal slice |
 | File writer path boundary | Accept string/path-like output paths and reject malformed output path values or non-directory parents before writing | PO-FDOC-013 | `test_flow_document_file_writers_accept_pathlike_outputs`, `test_flow_document_file_writers_reject_malformed_paths`, `test_flow_document_file_writers_fail_on_missing_directory`, `test_flow_document_file_writers_reject_file_parent_paths` | killed |
-| Materialized drawing point surface | Accept finite coordinate pairs and reject malformed/non-finite materialized point surfaces before HTML/DOCX artifacts consume them | PO-FDOC-022 | `test_flow_document_accepts_valid_materialized_drawing_points`, `test_flow_document_rejects_malformed_materialized_drawing_points` | killed |
+| Materialized drawing point surface | Accept finite coordinate pairs and reject malformed/non-finite materialized point surfaces before HTML/Markdown/DOCX artifacts consume them | PO-FDOC-022 | `test_flow_document_accepts_valid_materialized_drawing_points`, `test_flow_document_rejects_malformed_materialized_drawing_points` | killed |
 | Live drawing components in text/parameter paths | Reject malformed public drawing-group mutations before plain-text summaries or serialized parameters consume them | PO-FDOC-023 | `test_flow_document_plain_text_revalidates_mutated_drawing_components`, `test_flow_document_parameters_revalidate_mutated_drawing_components`, `test_flow_document_parameters_preserve_path_drawing_commands` | killed |
 | Document artifact numbers | Reject malformed live circle DrawingML numbers and malformed DOCX twip numbers before artifact serialization | PO-FDOC-026 | `test_flow_document_formats_valid_circle_drawingml_and_twips`, `test_flow_document_rejects_malformed_circle_drawingml_numbers`, `test_flow_document_rejects_malformed_docx_twip_numbers` | pending |
 | Malformed serialized drawing label | Reject through the neutral group label contract | PO-FDOC-006 | `test_flow_document_drawing_group_hydration_rejects_malformed_label` | behavioral evidence |
@@ -292,6 +305,7 @@ ADR/rule impact:
 | Invalid drawing render fragments | Reject SVG materializations without string `generate_svg()` fragments and DOCX/PDF materializations without points | PO-FDOC-014 | `test_flow_document_rejects_materializations_without_render_fragments` | killed |
 | DOCX DrawingML linework | Emit group-relative anchored DrawingML coordinates and extents | PO-FDOC-005 | `test_flow_document_docx_drawingml_line_uses_group_relative_points` | killed |
 | DOCX DrawingML native primitives | Emit rectangles, circles, text, images, and materialized linework through DrawingML rather than VML | PO-FDOC-027 | `test_flow_document_exports_tables_and_drawing_primitives`, `test_flow_document_docx_keeps_vector_coordinates_when_images_share_drawing_group`, `test_flow_document_accepts_valid_materialized_drawing_points`, `test_flow_document_docx_drawingml_preserves_style_text_and_line_flips`, `test_flow_document_docx_drawingml_helper_fragments_cover_branches`, `test_flow_document_docx_drawingml_component_helpers_preserve_offsets_and_extents`, `test_flow_document_docx_drawingml_shape_helper_preserves_explicit_flip_flags`, `test_flow_document_docx_drawingml_markup_is_well_formed` | 171 killed; 6 equivalent survivors |
+| Markdown document export | Emit escaped Markdown paragraphs, pipe tables, and validated inline SVG drawing blocks in document order | PO-FDOC-028 | `test_flow_document_exports_html_rtf_and_text`, `test_flow_document_exports_tables_and_drawing_primitives`, `test_flow_document_markdown_exports_ordered_blocks_with_escaped_tables_and_svg`, `test_flow_document_markdown_table_separator_is_inserted_once_after_header`, `test_flow_document_markdown_omits_zero_column_tables`, `test_flow_document_rejects_invalid_drawing_materialization`, `test_flow_document_text_writers_create_requested_files`, `test_flow_document_file_writers_accept_pathlike_outputs`, `test_flow_document_file_writers_reject_malformed_paths` | 34 killed; 2 equivalent survivors |
 | Unsupported block private mutation | Excluded from public contract | Explicit exclusion | Not applicable | Out of scope |
 | Full WordprocessingML feature parity | Excluded from minimal dependency-free backend | Explicit exclusion | Not applicable | Out of scope |
 
@@ -302,10 +316,10 @@ ADR/rule impact:
 | Unit | yes | Helpers are deterministic. | FLOW-DOCUMENT-P1 tests |
 | Behavioral/condition | yes | The slice defines document-output behavior. | Tests are marked `@pytest.mark.condition("FLOW-DOCUMENT-P1")`, `@pytest.mark.condition("FLOW-DOCUMENT-SVG-MATERIALIZATION-P2")`, `@pytest.mark.condition("FLOW-DOCUMENT-STYLES-MAPPING-P2")`, `@pytest.mark.condition("FLOW-DOCUMENT-DRAWING-LIVE-COMPONENTS-P2")`, and `@pytest.mark.condition("FLOW-DOCUMENT-FILEPATH-DIRECTORY-P2")`. |
 | Failure-mode | yes | Invalid content, malformed root payloads, malformed serialized block envelopes, malformed drawing payloads, malformed drawing component envelopes, malformed drawing style envelopes, malformed style override maps, malformed path command envelopes, malformed serialized drawing labels, malformed materialization fragments, malformed materialized point surfaces, malformed live drawing components, malformed output paths, and invalid output paths must fail loudly. | Invalid hydration, invalid materialization, render-fragment, point-surface, live-component, style-map, and writer tests |
-| Integration/live-path | yes | DOCX ZIP, HTML, RTF, text, table, and drawing paths cross module boundaries. | Focused and existing document-output tests |
+| Integration/live-path | yes | DOCX ZIP, HTML, Markdown, RTF, text, table, and drawing paths cross module boundaries. | Focused and existing document-output tests |
 | Contract/API compatibility | yes | Parameters and public add methods must preserve existing behavior. | Round-trip and existing rejection tests |
 | Property/fuzz | no | This slice proves finite output and dispatch contracts. | Not applicable |
-| Mutation | yes | Deterministic package writing and materialization guards are proof-critical. | Mutation result recorded below |
+| Mutation | yes | Deterministic package writing, Markdown escaping/table formatting, and materialization guards are proof-critical. | Mutation result recorded below |
 | Security/adversarial | limited | File writers touch local paths; tests cover malformed, missing-directory, and file-as-parent failures. | `test_flow_document_file_writers_fail_on_missing_directory`, `test_flow_document_file_writers_reject_file_parent_paths` |
 | Performance/resource | no | The slice adds constant-time checks and fixed metadata. | Code inspection |
 | Concurrency/race | no | No shared state, workers, locks, or temp files are added. | Not applicable |
@@ -348,6 +362,8 @@ Proof-critical mutation targets:
   serialized parameters should fail live-component mutation tests.
 - Weakening final artifact-number validation should fail malformed circle
   DrawingML, malformed twip, or exact circle DrawingML/twip formatting tests.
+- Weakening Markdown table separator placement, zero-column handling, block
+  dispatch, escaping, or writer routing should fail Markdown output tests.
 
 Current result:
 
@@ -413,6 +429,15 @@ Current result:
     no-font fallback path.
   - `_nonnegative_artifact_number()`: the mutation of the keyword-only `*`
     separator to `/` does not change any valid call shape used by InkGen.
+- `FLOW-DOCUMENT-MARKDOWN-P3` scoped to `to_markdown()`,
+  `create_markdown()`, `_block_markdown()`, `_paragraph_markdown()`,
+  `_table_markdown()`, `_markdown_escape()`, and `_markdown_table_cell()`
+  produced 36 proof-critical work items. Result: 34 killed, 2 documented
+  equivalent survivors. Equivalent survivors:
+  - `_table_markdown()`: `table.column_count == 0` to `<= 0` is equivalent
+    for the valid `Table` domain because column counts cannot be negative.
+  - `_table_markdown()`: `row_index == 0` to `<= 0` is equivalent because
+    indices produced by `range(table.row_count)` are never negative.
 - `FLOW-DOCUMENT-FILEPATH-DIRECTORY-P2` refreshed the file-writer path
   boundary and mutation filter. Focused flow-document tests returned
   `121 passed`; compatibility tests returned `178 passed`; the full coverage
@@ -610,6 +635,56 @@ Focused tests prove the package/XML live path and the absence of VML for vector
 drawings in the covered domains. Full coverage, lint, docs, and diff hygiene
 passed for the slice. Mutation killed all non-equivalent proof-critical
 mutants.
+
+## PO-FDOC-028: Markdown Export Preserves Flow Blocks
+
+### Claim
+
+Markdown output emits document blocks in order, escapes Markdown control
+characters in text content, preserves tables as pipe tables, and includes
+validated inline SVG for drawing groups.
+
+### Domain
+
+`FlowDocument.to_markdown()` and `FlowDocument.create_markdown()` calls on
+documents containing `Paragraph`, `Table`, and `DrawingComponentGroup` blocks.
+
+### Dependencies
+
+- `Paragraph`
+- `Table`
+- `DrawingComponentGroup`
+- `_block_markdown()`
+- `_paragraph_markdown()`
+- `_table_markdown()`
+- `_drawing_html()`
+- `_markdown_escape()`
+
+### Proof Method
+
+`FlowDocument.to_markdown()` builds the same ordered block sequence used by the
+other document exporters, then dispatches each block through
+`_block_markdown()`. Paragraphs escape Markdown control characters and preserve
+line breaks as hard breaks. Tables render as pipe tables with escaped cells and
+HTML `<br>` line separators inside multi-line cells. Drawing groups reuse
+`_drawing_html()`, so the Markdown path goes through the same SVG
+materialization and malformed-drawing guards as HTML.
+
+Focused tests assert block order, title/paragraph/table escaping, pipe-table
+syntax, inline SVG presence, file-writer persistence, path-like support,
+malformed path rejection, and invalid drawing materialization failures.
+
+### Counterexamples And Exclusions
+
+Markdown export is a lightweight interchange format, not a full CommonMark
+layout engine. Inline SVG rendering depends on the downstream Markdown
+consumer. DOCX-native media packaging remains owned by the DOCX exporter.
+
+### Conclusion
+
+Behavioral tests prove the Markdown live path for ordered blocks, escaping,
+tables, drawings, and file writes. Scoped mutation killed all non-equivalent
+proof-critical mutants.
 
 ## PO-FDOC-006: Drawing Labels Hydrate Through Neutral Contract
 
@@ -841,12 +916,12 @@ directories, and preserve generated payloads.
 
 ### Domain
 
-`FlowDocument.create_docx()`, `create_html()`, `create_rtf()`, and
-`create_text()` calls.
+`FlowDocument.create_docx()`, `create_html()`, `create_markdown()`,
+`create_rtf()`, and `create_text()` calls.
 
 ### Proof Method
 
-All four writer methods delegate to `_normalize_output_filepath()` through
+All writer methods delegate to `_normalize_output_filepath()` through
 `_write_text()` or `_write_bytes()`. The helper uses `os.fspath()` to accept
 string and path-like values, rejects bytes and non-path objects, rejects empty
 paths, and requires the parent path to pass `os.path.isdir()`. Focused tests

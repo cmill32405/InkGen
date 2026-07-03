@@ -117,6 +117,7 @@ class DocumentOutputFormat(str, Enum):
 
     DOCX = "docx"
     HTML = "html"
+    MARKDOWN = "md"
     RTF = "rtf"
     TEXT = "txt"
 
@@ -196,6 +197,12 @@ class FlowDocument:
             "<body>\n" + "\n".join(body) + "\n</body>\n</html>\n"
         )
 
+    def to_markdown(self) -> str:
+        """Serialize the document as dependency-free Markdown."""
+        blocks = [f"# {_markdown_escape(self.title)}"] if self.title else []
+        blocks.extend(_block_markdown(block) for block in self._blocks)
+        return "\n\n".join(block for block in blocks if block) + "\n"
+
     def to_rtf(self) -> str:
         """Serialize the document as basic RTF."""
         chunks = [r"{\rtf1\ansi\deff0", r"{\fonttbl{\f0 Arial;}}"]
@@ -233,6 +240,10 @@ class FlowDocument:
     def create_html(self, filepath: str | os.PathLike[str]) -> None:
         """Write an HTML file."""
         _write_text(filepath, self.to_html())
+
+    def create_markdown(self, filepath: str | os.PathLike[str]) -> None:
+        """Write a Markdown file."""
+        _write_text(filepath, self.to_markdown())
 
     def create_rtf(self, filepath: str | os.PathLike[str]) -> None:
         """Write an RTF file."""
@@ -530,11 +541,36 @@ def _block_plain_text(block: Paragraph | Table | DrawingComponentGroup) -> str:
     return _drawing_plain_text(block)
 
 
+def _block_markdown(block: Paragraph | Table | DrawingComponentGroup) -> str:
+    if isinstance(block, Paragraph):
+        return _paragraph_markdown(block)
+    if isinstance(block, Table):
+        return _table_markdown(block)
+    return _drawing_html(block)
+
+
+def _paragraph_markdown(paragraph: Paragraph) -> str:
+    return "  \n".join(_markdown_escape(line) for line in paragraph.text.replace("\r\n", "\n").replace("\r", "\n").split("\n"))
+
+
 def _table_plain_text(table: Table) -> str:
     rows = []
     for row_index in range(table.row_count):
         values = [table.cell(row_index, column_index).text for column_index in range(table.column_count)]
         rows.append("\t".join(values))
+    return "\n".join(rows)
+
+
+def _table_markdown(table: Table) -> str:
+    if table.column_count == 0:
+        return ""
+
+    rows = []
+    for row_index in range(table.row_count):
+        values = [_markdown_table_cell(table.cell(row_index, column_index).text) for column_index in range(table.column_count)]
+        rows.append("| " + " | ".join(values) + " |")
+        if row_index == 0:
+            rows.append("| " + " | ".join("---" for _ in range(table.column_count)) + " |")
     return "\n".join(rows)
 
 
@@ -567,6 +603,16 @@ def _drawing_html(group: DrawingComponentGroup) -> str:
         f'<svg width="{_vml_number(width)}mm" height="{_vml_number(height)}mm" '
         f'viewBox="{_vml_number(min_x)} {_vml_number(min_y)} {_vml_number(width)} {_vml_number(height)}">' + "".join(payload) + "</svg>"
     )
+
+
+def _markdown_escape(value: str) -> str:
+    special_characters = "\\`*_{}[]()#+-.!|<>"
+    return "".join(f"\\{character}" if character in special_characters else character for character in value)
+
+
+def _markdown_table_cell(value: str) -> str:
+    lines = value.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    return "<br>".join(_markdown_escape(line) for line in lines)
 
 
 def _drawing_bounds(group: DrawingComponentGroup) -> tuple[float, float, float, float]:

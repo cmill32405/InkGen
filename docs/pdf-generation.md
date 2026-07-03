@@ -92,7 +92,7 @@ drawing entities, not paged document graphics.
 
 The renderer-neutral drawing class system is scoped to SVG, PDF, and DXF. Flow
 documents use those same primitive groups as document blocks when DOCX, HTML,
-RTF, or plain-text fixtures need embedded diagrams.
+Markdown, RTF, or plain-text fixtures need embedded diagrams.
 
 Semantic extraction-truth annotations can be attached through
 `InkGen.extraction_truth` and emitted with `DocumentPDF.extraction_truth()`. Those
