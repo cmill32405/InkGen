@@ -2,7 +2,7 @@
 
 This note applies the InkGen Definition of Done to the STYLE-DRAWING-P1 drawing
 style slice. It focuses on color normalization, finite stroke width, bounded
-opacity, serialized hydration, and live SVG/PDF use.
+opacity, stroke presentation, serialized hydration, and live SVG/PDF use.
 
 ## Scope
 
@@ -17,27 +17,39 @@ The slice covers:
 - `DrawingStyle.stroke_width`
 - `DrawingStyle.stroke_opacity`
 - `DrawingStyle.fill_opacity`
+- `DrawingStyle.stroke_dasharray`
+- `DrawingStyle.stroke_dash_offset`
+- `DrawingStyle.stroke_linecap`
+- `DrawingStyle.stroke_linejoin`
+- `DrawingStyle.stroke_miterlimit`
 - Drawing-style validation helpers in `src/InkGen/style.py`
 
 ## Architecture Impact
 
 Affected surface:
 
-- `src/InkGen/style.py`: drawing color, stroke width, and opacity validation.
+- `src/InkGen/style.py`: drawing color, stroke width, opacity, and stroke
+  presentation validation.
 - `tests/test_drawing_style_contract.py`: STYLE-DRAWING-P1 behavioral,
   failure-mode, hydration, and live-path tests.
 - `tests/mutation/drawing_style_cosmic_ray.toml`: scoped mutation gate.
 - `tests/mutation/filter_drawing_style_work_items.py`: proof-critical mutation
   filter.
+- `tests/mutation/drawing_style_stroke_presentation_cosmic_ray.toml`: scoped
+  stroke presentation mutation gate.
+- `tests/mutation/filter_drawing_style_stroke_presentation_work_items.py`:
+  proof-critical stroke presentation mutation filter.
 
 Incoming dependencies:
 
 - Drawing components require `DrawingStyle` instances for line, rectangle,
   polygonal, path, curve, and circle authoring.
-- SVG renderers consume `stroke`, `stroke_width`, `fill`, `stroke_opacity`, and
-  `fill_opacity` through style strings.
-- PDF renderers consume drawing colors, stroke width, and opacity through
-  graphics-state operators and ExtGState resources.
+- SVG renderers consume `stroke`, `stroke_width`, `fill`, `stroke_opacity`,
+  `fill_opacity`, dash arrays, line caps, line joins, and miter limits through
+  style strings.
+- PDF renderers consume drawing colors, stroke width, opacity, dash arrays,
+  line caps, line joins, and miter limits through graphics-state operators and
+  ExtGState resources.
 - DXF materialization carries drawing recipes through neutral component paths,
   although DXF output does not currently emit style-specific color or width.
 - Saved component payloads hydrate drawing styles through
@@ -57,11 +69,18 @@ Before/after edge changes:
   and `inf`.
 - Before this slice, opacity accepted booleans and could fail non-numeric values
   through comparison `TypeError` rather than through a shared public boundary.
+- Before the stroke-presentation update, drawing styles had no renderer-neutral
+  way to express dash arrays, dash phase, line caps, line joins, or miter
+  limits.
 - After this slice, drawing colors are explicitly validated as supported names,
   seven-character hex strings, or `"none"`.
 - After this slice, stroke width is finite and greater than or equal to zero.
 - After this slice, opacity is finite, numeric, and in `[0.0, 1.0]`, excluding
   booleans.
+- After the stroke-presentation update, dash arrays are finite non-negative
+  sequences with at least one positive value when present, dash offset is finite
+  and non-negative, line caps and joins are closed enums, and miter limit is
+  finite and positive.
 
 Cycle/layer/coupling/redundancy result:
 
@@ -88,6 +107,12 @@ ADR/rule impact:
 - `"none"` remains the paint-disabled sentinel.
 - Stroke width is a finite numeric value greater than or equal to zero.
 - Stroke and fill opacity are finite numeric values from `0.0` through `1.0`.
+- Stroke dash arrays are empty or finite non-negative numeric sequences with at
+  least one positive value.
+- Stroke dash offset is finite and greater than or equal to zero.
+- Stroke line cap is `butt`, `round`, or `square`.
+- Stroke line join is `miter`, `round`, or `bevel`.
+- Stroke miter limit is finite and greater than zero.
 - Booleans are not numeric drawing-style values.
 
 ## Fix Log
@@ -102,6 +127,8 @@ ADR/rule impact:
   scalar failure modes, hydration, and SVG/PDF live paths.
 - Added deterministic PDF ExtGState resources for non-opaque stroke/fill
   opacity when drawing styles render through `DocumentPDF`.
+- Added renderer-neutral stroke dash/cap/join/miter fields and live SVG/PDF
+  output for those fields.
 
 ## Comprehensiveness Matrix
 
@@ -111,6 +138,7 @@ ADR/rule impact:
 | Invalid colors | Reject unsupported strings, malformed hex strings, empty strings, non-strings, and booleans | PO-DSTYLE-002 | `test_drawing_style_rejects_malformed_colors_without_incidental_errors` | killed |
 | Invalid stroke width | Reject booleans, negative, non-finite, and non-numeric values at construction and setter boundaries | PO-DSTYLE-003 | `test_drawing_style_rejects_invalid_stroke_width_and_opacity_boundaries` | killed |
 | Invalid opacity | Reject booleans, out-of-range, non-finite, and non-numeric values at construction and setter boundaries | PO-DSTYLE-004 | `test_drawing_style_rejects_invalid_stroke_width_and_opacity_boundaries` | killed |
+| Invalid stroke presentation | Reject malformed dash arrays, dash offsets, line caps, line joins, and miter limits | PO-DSTYLE-008 | `test_drawing_style_rejects_invalid_stroke_presentation_boundaries`, `test_stroke_presentation_maps_each_renderer_operator_domain` | 154 killed; 4 equivalent survivors |
 | Hydrated payloads | Route serialized values through the public constructor validation | PO-DSTYLE-005 | `test_drawing_style_hydration_uses_public_validation_boundaries` | killed |
 | SVG/PDF live paths | Emit validated style values into SVG style strings and PDF graphics operators | PO-DSTYLE-006 | `test_drawing_style_contract_remains_live_in_svg_and_pdf_output` | behavioral evidence |
 | PDF stroke/fill opacity | Emit non-opaque drawing style alpha through deterministic ExtGState resources | PO-DSTYLE-007 | `test_document_pdf_emits_extgstate_for_drawing_opacity`, `test_document_pdf_reuses_opacity_extgstate_resources`, `test_document_pdf_separates_stroke_and_fill_opacity_domains`, `test_document_pdf_omits_extgstate_for_opaque_drawings`, `test_pdf_opacity_helpers_validate_boundaries_and_reuse_resources` | 111 killed; 24 equivalent survivors |
@@ -142,6 +170,8 @@ Proof-critical mutation targets:
   scalar-boundary tests.
 - Allowing boolean, out-of-range, non-finite, or non-numeric opacity values must
   fail scalar-boundary tests.
+- Allowing malformed dash arrays, dash offsets, line caps, line joins, or miter
+  limits must fail stroke-presentation boundary tests.
 - Bypassing public constructor validation during hydration must fail payload
   tests.
 - Changing SVG/PDF consumption of validated values must fail live-path tests.
@@ -167,6 +197,21 @@ Current result:
     and `stroke_width` attributes.
   - `resource_name_for_opacity()` mutating `== 1.0` to `>= 1.0` is equivalent
     because opacity values are validated into the closed interval `[0.0, 1.0]`.
+- Stroke presentation continuation:
+  `tests/mutation/drawing_style_stroke_presentation_cosmic_ray.toml`, filtered
+  by `tests/mutation/filter_drawing_style_stroke_presentation_work_items.py`:
+  158 work items, 154 killed, and 4 documented equivalent survivors.
+  Equivalent survivor classes:
+  - `_coerce_stroke_dasharray()` mutating `all(item == 0.0)` to
+    `all(item <= 0.0)` is equivalent because each dash item has already passed
+    non-negative finite validation.
+  - SVG fill opacity mutating `fill.lower() != "none"` to
+    `fill.lower() < "none"` is equivalent for the proven `DrawingStyle` domain
+    because `Style._get_hex_color()` normalizes every non-`none` fill to a
+    lower-case hex string, and `#...` sorts before `none`.
+  - SVG/PDF line-cap checks mutating `linecap != "butt"` to
+    `linecap > "butt"` are equivalent for the validated line-cap domain because
+    the only non-default values, `round` and `square`, sort after `butt`.
 
 ## PO-DSTYLE-001: Valid Drawing Styles Normalize Deterministically
 
@@ -335,3 +380,45 @@ patterns, and transparency groups remain separate roadmap items.
 Behavioral tests and scoped mutation prove the PDF document live path for
 stroke/fill alpha. Remaining mutation survivors are equivalent for the stated
 valid `DrawingStyle` domain.
+
+## PO-DSTYLE-008: Stroke Presentation Is Validated And Rendered
+
+### Claim
+
+`DrawingStyle` validates renderer-neutral stroke dash arrays, dash offsets,
+line caps, line joins, and miter limits, then SVG and PDF output consume those
+values without changing default output for existing styles.
+
+### Domain
+
+Public `DrawingStyle(...)` construction, setters, serialized hydration, SVG
+style output, and PDF drawing operators for valid stroke-presentation values.
+
+### Proof Method
+
+`DrawingStyle` routes dash arrays through `_coerce_stroke_dasharray()`, dash
+offset through non-negative finite validation, line caps through
+`_coerce_line_cap()`, line joins through `_coerce_line_join()`, and miter limit
+through positive finite validation. Serialized hydration accepts older payloads
+by defaulting missing stroke-presentation fields to the current behavior. SVG
+style output emits `stroke-dasharray`, `stroke-dashoffset`, `stroke-linecap`,
+`stroke-linejoin`, and `stroke-miterlimit` only when non-default values are
+present. PDF output emits the corresponding `d`, `J`, `j`, and `M` operators
+only for non-default values.
+
+Focused tests cover valid defaults, serialization, invalid constructor/setter
+boundaries, hydrated values, backward-compatible hydration defaults, exact
+SVG/PDF live output, each PDF stroke operator mapping, default omission, and
+renderer-helper fallback behavior for legacy style-like objects.
+
+### Counterexamples And Exclusions
+
+DXF output still ignores style-specific stroke presentation. PDF clipping
+paths, blend modes, gradients, patterns, and transparency groups remain
+separate roadmap items.
+
+### Conclusion
+
+Behavioral tests and scoped mutation prove the public style boundary and
+SVG/PDF live paths for the stated domain. The mutation gate ran 158 filtered
+work items: 154 killed and 4 equivalent survivors documented above.

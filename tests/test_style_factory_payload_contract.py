@@ -41,6 +41,11 @@ def _drawing_style_payload() -> dict[str, dict[str, object]]:
             "fill": "none",
             "stroke_opacity": 1.0,
             "fill_opacity": 1.0,
+            "stroke_dasharray": [],
+            "stroke_dash_offset": 0.0,
+            "stroke_linecap": "butt",
+            "stroke_linejoin": "miter",
+            "stroke_miterlimit": 10.0,
         }
     }
 

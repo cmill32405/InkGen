@@ -8,7 +8,7 @@ import itertools
 import os
 import platform
 import subprocess
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from math import isfinite
 
 from matplotlib import font_manager
@@ -50,11 +50,41 @@ def _coerce_nonnegative_float(value: float | int, name: str) -> float:
     return number
 
 
+def _coerce_positive_float(value: float | int, name: str) -> float:
+    number = _coerce_finite_float(value, name)
+    if number <= 0.0:
+        raise ValueError(f"{name} must be greater than 0.0.")
+    return number
+
+
 def _coerce_opacity(value: float | int, name: str) -> float:
     opacity = _coerce_finite_float(value, name)
     if 0.0 <= opacity <= 1.0:
         return opacity
     raise ValueError(f"{name} must be between 0.0 and 1.0.")
+
+
+def _coerce_stroke_dasharray(value: Sequence[float | int] | None) -> tuple[float, ...]:
+    if value is None:
+        return ()
+    if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
+        raise TypeError("stroke_dasharray must be a sequence of float or int values.")
+    dasharray = tuple(_coerce_nonnegative_float(item, "stroke_dasharray") for item in value)
+    if dasharray and all(item == 0.0 for item in dasharray):
+        raise ValueError("stroke_dasharray must contain at least one positive value.")
+    return dasharray
+
+
+def _coerce_line_cap(value: str) -> str:
+    if value in {"butt", "round", "square"}:
+        return value
+    raise ValueError("stroke_linecap must be butt, round, or square.")
+
+
+def _coerce_line_join(value: str) -> str:
+    if value in {"miter", "round", "bevel"}:
+        return value
+    raise ValueError("stroke_linejoin must be miter, round, or bevel.")
 
 
 def _coerce_font_size(value: str | float | int) -> str | float:
@@ -286,6 +316,11 @@ class DrawingStyle(Style):
         fill: str = "none",
         stroke_opacity: float = 1.0,
         fill_opacity: float = 1.0,
+        stroke_dasharray: Sequence[float | int] | None = None,
+        stroke_dash_offset: float = 0.0,
+        stroke_linecap: str = "butt",
+        stroke_linejoin: str = "miter",
+        stroke_miterlimit: float = 10.0,
     ):
         """Creates a drawing style containing stroke and fill color and opactiy and stroke width
 
@@ -322,6 +357,11 @@ class DrawingStyle(Style):
         self._stroke_opacity = _coerce_opacity(stroke_opacity, "stroke_opacity")
 
         self._fill_opacity = _coerce_opacity(fill_opacity, "fill_opacity")
+        self._stroke_dasharray = _coerce_stroke_dasharray(stroke_dasharray)
+        self._stroke_dash_offset = _coerce_nonnegative_float(stroke_dash_offset, "stroke_dash_offset")
+        self._stroke_linecap = _coerce_line_cap(stroke_linecap)
+        self._stroke_linejoin = _coerce_line_join(stroke_linejoin)
+        self._stroke_miterlimit = _coerce_positive_float(stroke_miterlimit, "stroke_miterlimit")
 
         super().__init__(name=name)
 
@@ -343,6 +383,11 @@ class DrawingStyle(Style):
             fill=_style_required_field(payload, "fill", "DrawingStyle"),
             stroke_opacity=_style_required_field(payload, "stroke_opacity", "DrawingStyle"),
             fill_opacity=_style_required_field(payload, "fill_opacity", "DrawingStyle"),
+            stroke_dasharray=payload.get("stroke_dasharray"),
+            stroke_dash_offset=payload.get("stroke_dash_offset", 0.0),
+            stroke_linecap=payload.get("stroke_linecap", "butt"),
+            stroke_linejoin=payload.get("stroke_linejoin", "miter"),
+            stroke_miterlimit=payload.get("stroke_miterlimit", 10.0),
         )
 
         return style
@@ -474,6 +519,56 @@ class DrawingStyle(Style):
         self._fill_opacity = _coerce_opacity(opacity, "fill_opacity")
 
     @property
+    def stroke_dasharray(self) -> tuple[float, ...]:
+        """Stroke dash pattern for DrawingComponent."""
+        return self._stroke_dasharray
+
+    @stroke_dasharray.setter
+    def stroke_dasharray(self, dasharray: Sequence[float | int] | None) -> None:
+        """Set the stroke dash pattern."""
+        self._stroke_dasharray = _coerce_stroke_dasharray(dasharray)
+
+    @property
+    def stroke_dash_offset(self) -> float:
+        """Stroke dash phase for DrawingComponent."""
+        return self._stroke_dash_offset
+
+    @stroke_dash_offset.setter
+    def stroke_dash_offset(self, offset: float) -> None:
+        """Set the stroke dash phase."""
+        self._stroke_dash_offset = _coerce_nonnegative_float(offset, "stroke_dash_offset")
+
+    @property
+    def stroke_linecap(self) -> str:
+        """Stroke line-cap style for DrawingComponent."""
+        return self._stroke_linecap
+
+    @stroke_linecap.setter
+    def stroke_linecap(self, linecap: str) -> None:
+        """Set the stroke line-cap style."""
+        self._stroke_linecap = _coerce_line_cap(linecap)
+
+    @property
+    def stroke_linejoin(self) -> str:
+        """Stroke line-join style for DrawingComponent."""
+        return self._stroke_linejoin
+
+    @stroke_linejoin.setter
+    def stroke_linejoin(self, linejoin: str) -> None:
+        """Set the stroke line-join style."""
+        self._stroke_linejoin = _coerce_line_join(linejoin)
+
+    @property
+    def stroke_miterlimit(self) -> float:
+        """Stroke miter-limit value for DrawingComponent."""
+        return self._stroke_miterlimit
+
+    @stroke_miterlimit.setter
+    def stroke_miterlimit(self, miterlimit: float) -> None:
+        """Set the stroke miter-limit value."""
+        self._stroke_miterlimit = _coerce_positive_float(miterlimit, "stroke_miterlimit")
+
+    @property
     def parameters(self) -> dict:
         """Parameters for the object as a dictionary for serialization.
 
@@ -490,6 +585,11 @@ class DrawingStyle(Style):
                 "fill": self.fill,
                 "stroke_opacity": self.stroke_opacity,
                 "fill_opacity": self.fill_opacity,
+                "stroke_dasharray": list(self.stroke_dasharray),
+                "stroke_dash_offset": self.stroke_dash_offset,
+                "stroke_linecap": self.stroke_linecap,
+                "stroke_linejoin": self.stroke_linejoin,
+                "stroke_miterlimit": self.stroke_miterlimit,
             }
         }
 

@@ -1,4 +1,3 @@
-
 import os
 
 import matplotlib.font_manager as fm
@@ -10,6 +9,7 @@ from InkGen.style import DrawingStyle, Font, Style, TextStyle
 @pytest.fixture
 def next_id():
     return Style.id_iter.__reduce__()[1][0]
+
 
 @pytest.fixture(scope="session")
 def system_font_info():
@@ -30,10 +30,12 @@ def system_font_info():
     assert directory is not None
     return {"families": families, "directory": directory}
 
+
 def test_create_style(next_id):
     style = Style("Joe")
     assert style.id == next_id
     assert style.name == "Joe"
+
 
 def test_invalid_name(next_id):
     with pytest.raises(TypeError):
@@ -42,6 +44,7 @@ def test_invalid_name(next_id):
         Style({"dog": 1})
     with pytest.raises(TypeError):
         Style(1)
+
 
 def test_cant_set_id_or_name(next_id):
     name = "Volcano"
@@ -57,6 +60,7 @@ def test_cant_set_id_or_name(next_id):
     assert style.id == next_id
     assert style.name == name
 
+
 def test_cant_reuse_style_name(next_id):
     name = "Original"
     Style(name)
@@ -64,12 +68,12 @@ def test_cant_reuse_style_name(next_id):
     with pytest.raises(ValueError):
         Style(name)
 
+
 def test_create_drawingstyle(next_id):
     name = "Bob"
     stroke = "#ff2201"
     fill = "#ffffff"
-    style = DrawingStyle(name=name, stroke=stroke, stroke_width=0.3,
-                         fill=fill, stroke_opacity=0.9, fill_opacity=0.8)
+    style = DrawingStyle(name=name, stroke=stroke, stroke_width=0.3, fill=fill, stroke_opacity=0.9, fill_opacity=0.8)
     assert style.id == next_id
     assert style.name == name
     assert style.stroke == stroke
@@ -83,8 +87,7 @@ def test_update_drawingstyle(next_id):
     name = "Bill"
     stroke = "#ff2201"
     fill = "#ffffff"
-    style = DrawingStyle(name=name, stroke=stroke, stroke_width=0.3,
-                         fill=fill, stroke_opacity=0.9, fill_opacity=0.8)
+    style = DrawingStyle(name=name, stroke=stroke, stroke_width=0.3, fill=fill, stroke_opacity=0.9, fill_opacity=0.8)
     assert style.id == next_id
     assert style.name == name
     assert style.stroke == stroke
@@ -114,6 +117,7 @@ def test_update_drawingstyle(next_id):
     style.fill_opacity = new_fill_opacity
     assert style.fill_opacity == new_fill_opacity
 
+
 def test_create_and_update_style_with_named_colors(next_id):
     name = "Colors"
     stroke = "black"
@@ -121,8 +125,9 @@ def test_create_and_update_style_with_named_colors(next_id):
     style = DrawingStyle(name=name, stroke=stroke, fill=fill)
     assert style.id == next_id
     assert style.name == name
-    assert style.stroke == '#000000'
+    assert style.stroke == "#000000"
     assert style.fill == "#0000ff"
+
 
 def test_invalid_colors(next_id):
     name = "BadColors"
@@ -205,6 +210,7 @@ def test_invalid_colors(next_id):
     with pytest.raises(ValueError):
         style.fill = "00aabba"
 
+
 def test_invalid_opacity(next_id):
     name = "Opacities"
     stroke = "black"
@@ -229,6 +235,7 @@ def test_invalid_opacity(next_id):
     with pytest.raises(ValueError):
         style.fill_opacity = -0.0000001
 
+
 # Test Font Class
 def test_create_font(system_font_info):
 
@@ -241,15 +248,15 @@ def test_create_font(system_font_info):
     assert ff.weight == "bold"
     assert ff.size == 16.0
 
+
 def test_create_font_custom_location(system_font_info):
     family = system_font_info["families"][0]
     custom_dir = system_font_info["directory"]
     ff = Font(family=family, custom_font_paths=custom_dir)
     assert ff.family.lower() == family.lower()
-    recorded_paths = [
-        p.replace("\\", "/").rstrip("/") for p in ff.parameters["Font"]["custom_font_paths"]
-    ]
+    recorded_paths = [p.replace("\\", "/").rstrip("/") for p in ff.parameters["Font"]["custom_font_paths"]]
     assert custom_dir.replace("\\", "/").rstrip("/") in recorded_paths
+
 
 def test_update_font(system_font_info):
 
@@ -286,6 +293,7 @@ def test_update_font(system_font_info):
     assert ff.weight == 500
     assert ff.size == pytest.approx(14.4, rel=1e-6)
 
+
 # @pytest.fixture
 # def platform(mocker):
 #     mock = Mock()
@@ -300,7 +308,6 @@ def test_update_font(system_font_info):
 #                     '/usr/sbin/fc-list',
 #                     '/usr/local/sbin/fc-list',
 #                     '/usr/local/bin/fc-list']
-
 
 
 def test_font_errors(system_font_info):
@@ -326,12 +333,15 @@ def test_font_errors(system_font_info):
     with pytest.raises(ValueError):
         ff.size = "error"
 
+
 # Test TextStyle
+
 
 @pytest.fixture
 def font(system_font_info):
     ff = Font(system_font_info["families"][0])
     return ff
+
 
 def test_create_text_style(font, system_font_info):
     ts = TextStyle("Test", font)
@@ -343,6 +353,7 @@ def test_create_text_style(font, system_font_info):
     assert ts.text_anchor == "start"
     assert ts.line_spacing == 1.0
     assert ts.font.family.lower() == system_font_info["families"][0].lower()
+
 
 def test_update_text_style(font, system_font_info):
     ts = TextStyle("Test1", font)
@@ -363,6 +374,7 @@ def test_update_text_style(font, system_font_info):
     ts.line_spacing = 1.5
     assert ts.line_spacing == 1.5
 
+
 def test_style_errors(font):
     ts = TextStyle("Test2", font)
     style = Style("Oops")
@@ -381,6 +393,7 @@ def test_style_errors(font):
     with pytest.raises(TypeError):
         ts.line_spacing = "f"
 
+
 def test_save_and_create_style():
     style = Style("test_another_style")
     assert style.parameters == {"Style": {"name": "test_another_style"}}
@@ -388,30 +401,50 @@ def test_save_and_create_style():
     style_2 = Style.create_from_dict({"Style": {"name": "another_style_obj"}})
     assert style_2.name == "another_style_obj"
 
-def test_save_and_create_drawing_style():
-    style = DrawingStyle("Test_this_drawing_style",
-                         "red", 0.4, "red", 0.5, 0.5)
-    assert style.parameters == {"DrawingStyle": {"name": "Test_this_drawing_style",
-                                                 "stroke": '#ff0000',
-                                                 "stroke_width": 0.4,
-                                                 "fill": '#ff0000',
-                                                 "stroke_opacity": 0.5,
-                                                 "fill_opacity": 0.5}}
 
-    style_2 = DrawingStyle.create_from_dict({"DrawingStyle":
-                                             {"name": "Make_another_of_these",
-                                              "stroke": "red",
-                                              "stroke_width": 0.4,
-                                              "fill": "red",
-                                              "stroke_opacity": 0.5,
-                                              "fill_opacity": 0.5}})
+def test_save_and_create_drawing_style():
+    style = DrawingStyle("Test_this_drawing_style", "red", 0.4, "red", 0.5, 0.5)
+    assert style.parameters == {
+        "DrawingStyle": {
+            "name": "Test_this_drawing_style",
+            "stroke": "#ff0000",
+            "stroke_width": 0.4,
+            "fill": "#ff0000",
+            "stroke_opacity": 0.5,
+            "fill_opacity": 0.5,
+            "stroke_dasharray": [],
+            "stroke_dash_offset": 0.0,
+            "stroke_linecap": "butt",
+            "stroke_linejoin": "miter",
+            "stroke_miterlimit": 10.0,
+        }
+    }
+
+    style_2 = DrawingStyle.create_from_dict(
+        {
+            "DrawingStyle": {
+                "name": "Make_another_of_these",
+                "stroke": "red",
+                "stroke_width": 0.4,
+                "fill": "red",
+                "stroke_opacity": 0.5,
+                "fill_opacity": 0.5,
+            }
+        }
+    )
 
     assert style_2.name == "Make_another_of_these"
-    assert style_2.stroke == '#ff0000'
+    assert style_2.stroke == "#ff0000"
     assert style_2.stroke_width == 0.4
-    assert style_2.fill == '#ff0000'
+    assert style_2.fill == "#ff0000"
     assert style_2.stroke_opacity == 0.5
     assert style_2.fill_opacity == 0.5
+    assert style_2.stroke_dasharray == ()
+    assert style_2.stroke_dash_offset == 0.0
+    assert style_2.stroke_linecap == "butt"
+    assert style_2.stroke_linejoin == "miter"
+    assert style_2.stroke_miterlimit == 10.0
+
 
 def test_save_and_create_text_style(system_font_info):
     family = system_font_info["families"][0]
@@ -424,9 +457,7 @@ def test_save_and_create_text_style(system_font_info):
     assert font_parameters["Font"]["stretch"] == "normal"
     assert font_parameters["Font"]["weight"] == "bold"
     assert font_parameters["Font"]["size"] == 12.0
-    recorded_paths = [
-        p.replace("\\", "/").rstrip("/") for p in font_parameters["Font"]["custom_font_paths"]
-    ]
+    recorded_paths = [p.replace("\\", "/").rstrip("/") for p in font_parameters["Font"]["custom_font_paths"]]
     assert custom_dir.replace("\\", "/").rstrip("/") in recorded_paths
 
     style = TextStyle("Let's make a Text Style!", font=font_)
@@ -435,10 +466,10 @@ def test_save_and_create_text_style(system_font_info):
     style.text_align = "end"
     style.superscript = True
     style_parameters = style.parameters
-    style_parameters['TextStyle']['name'] = "The style formally known as Pharos."
+    style_parameters["TextStyle"]["name"] = "The style formally known as Pharos."
 
     style_2 = TextStyle.create_from_dict(style_parameters)
-    assert style_2.color == '#ff0000'
+    assert style_2.color == "#ff0000"
     assert style_2.font.family.lower() == family.lower()
     assert style_2.line_spacing == 2.0
     assert style_2.text_align == "end"

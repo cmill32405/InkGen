@@ -210,6 +210,21 @@ def _style_properties(style: DrawingStyle, *, include_fill: bool = True, include
             parts.append(f"stroke-width:{style.stroke_width}")
         if hasattr(style, "stroke_opacity"):
             parts.append(f"stroke-opacity:{style.stroke_opacity}")
+        dasharray = getattr(style, "stroke_dasharray", ())
+        if dasharray:
+            parts.append("stroke-dasharray:" + ",".join(str(value) for value in dasharray))
+            dash_offset = getattr(style, "stroke_dash_offset", 0.0)
+            if dash_offset:
+                parts.append(f"stroke-dashoffset:{dash_offset}")
+        linecap = getattr(style, "stroke_linecap", "butt")
+        if linecap != "butt":
+            parts.append(f"stroke-linecap:{linecap}")
+        linejoin = getattr(style, "stroke_linejoin", "miter")
+        if linejoin != "miter":
+            parts.append(f"stroke-linejoin:{linejoin}")
+        miterlimit = getattr(style, "stroke_miterlimit", 10.0)
+        if miterlimit != 10.0:
+            parts.append(f"stroke-miterlimit:{miterlimit}")
     else:
         parts.append("stroke:none")
     return ";".join(parts)

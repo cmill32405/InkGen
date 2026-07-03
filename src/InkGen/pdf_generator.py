@@ -306,6 +306,26 @@ def _pdf_extgstate_object(*, stroke_opacity: float, fill_opacity: float) -> str:
     return f"<< /Type /ExtGState /CA {_number(stroke_alpha)} /ca {_number(fill_alpha)} >>"
 
 
+def _pdf_stroke_presentation_operators(style: DrawingStyle) -> list[str]:
+    """Return PDF stroke dash, cap, join, and miter operators for a style."""
+    operators: list[str] = []
+    dasharray = getattr(style, "stroke_dasharray", ())
+    if dasharray:
+        dash_values = " ".join(_number(value) for value in dasharray)
+        dash_offset = getattr(style, "stroke_dash_offset", 0.0)
+        operators.append(f"[{dash_values}] {_number(dash_offset)} d")
+    linecap = getattr(style, "stroke_linecap", "butt")
+    if linecap != "butt":
+        operators.append(f"{ {'round': 1, 'square': 2}[linecap] } J")
+    linejoin = getattr(style, "stroke_linejoin", "miter")
+    if linejoin != "miter":
+        operators.append(f"{ {'round': 1, 'bevel': 2}[linejoin] } j")
+    miterlimit = getattr(style, "stroke_miterlimit", 10.0)
+    if miterlimit != 10.0:
+        operators.append(f"{_number(miterlimit)} M")
+    return operators
+
+
 def _pdf_image_payload(asset: RasterImageAsset) -> _PDFImagePayload:
     """Return color samples, optional alpha samples, and PDF color metadata."""
     color_space = asset.jpeg_passthrough_color_space
@@ -567,6 +587,7 @@ def _style_operators(
         if stroke_color is not None:
             operators.append(f"{_number(stroke_color[0])} {_number(stroke_color[1])} {_number(stroke_color[2])} RG")
         operators.append(f"{_number(getattr(style, 'stroke_width', 0.0))} w")
+        operators.extend(_pdf_stroke_presentation_operators(style))
     if fill:
         fill_color = _color_components(getattr(style, "fill", "none"))
         if fill_color is not None:
