@@ -58,7 +58,7 @@ Outgoing dependencies:
 - PDF output depends on PDF string escaping, `_number()`, and color component
   parsing.
 - PDF document output depends on `_PDFFontRegistry` to assign deterministic
-  built-in font resources after page text content is rendered.
+  standard or embedded font resources after page text content is rendered.
 - DXF output depends on `DXFRenderContext.point()` and `_text_entity()`.
 - Neutral materialization depends on `normalize_output_format()` and lazy
   concrete renderer imports.
@@ -145,6 +145,8 @@ ADR/rule impact:
 - `DocumentPDF.to_pdf_bytes()` now emits built-in PDF Standard font resources
   for Helvetica, Times, and Courier family classes, including bold and italic
   variants, instead of always binding `/F1` to Helvetica.
+- `DocumentPDF.to_pdf_bytes()` now embeds named installed TrueType/OpenType font
+  files with WinAnsi widths, font descriptors, and deterministic resource reuse.
 - DXF text export is proven to emit a `0/TEXT` entity pair and apply optional
   canvas-height Y inversion.
 - `TextDrawing.__post_init__()` now stores normalized scalar text strings and
@@ -165,13 +167,14 @@ ADR/rule impact:
 | PDF output | Emit exact escaped text object | PO-TEXT-004 | `test_text_pdf_emits_exact_text_object_and_escapes_string` | killed/equivalent |
 | PDF defensive defaults | Use black and 10-point defaults for incomplete internals | PO-TEXT-004 | `test_text_pdf_uses_black_and_ten_point_defensive_defaults` | killed |
 | PDF Standard font resources | Map built-in family/style/weight classes to deterministic page resources | PO-TEXT-010 | `test_document_pdf_maps_text_styles_to_standard_font_resources`, `test_document_pdf_maps_standard_font_variants`, `test_document_pdf_numeric_weight_threshold_keeps_599_regular`, `test_document_pdf_empty_page_has_no_font_resource_dictionary` | killed |
+| PDF embedded named font resources | Embed named installed fonts with widths, descriptors, font-file streams, and deterministic reuse | PO-TEXT-011 | `test_document_pdf_embeds_named_installed_font_resources`, `test_document_pdf_reuses_embedded_font_resources_across_sizes`, `test_pdf_embedded_font_helpers_cover_missing_glyphs_and_open_type_streams`, `test_pdf_embedded_font_lookup_falls_back_for_missing_font_files`, `test_font_preserves_requested_family_for_renderer_policy` | killed/equivalent |
 | Serialization | Preserve parameters round trip | PO-TEXT-005 | `test_text_primitives_round_trip_parameters` | killed/equivalent |
 | Neutral materialization | Materialize to `TextSVG`/`TextPDF` | PO-TEXT-006 | `test_text_drawing_materializes_svg_and_pdf_components` | killed/equivalent |
 | Neutral scalar text payloads | Normalize to strings before public state is exposed | PO-TEXT-008 | `test_text_drawing_normalizes_scalar_text_before_materialization` | killed |
 | Non-scalar neutral text payloads | Reject at `TextDrawing` construction and FlowDocument hydration | PO-TEXT-008 | `test_text_drawing_rejects_non_scalar_text_payloads`, `test_flow_document_hydration_rejects_malformed_text_drawing_payloads` | killed |
 | Neutral text anchors | Normalize finite pairs and reject malformed anchors before public state is exposed | PO-TEXT-009 | `test_text_drawing_normalizes_valid_position_before_materialization`, `test_text_drawing_rejects_malformed_positions_before_materialization`, `test_flow_document_hydration_rejects_malformed_text_drawing_positions` | killed/equivalent |
 | DXF output | Emit `TEXT` entity with transformed anchor | PO-TEXT-007 | `test_dxf_text_drawing_exports_text_entity_with_canvas_transform` | killed/equivalent |
-| Multiline text layout, rich text runs, and custom font embedding/subsetting | Excluded from proven domain | Explicit exclusion | Not applicable | Out of scope |
+| Multiline text layout, rich text runs, Unicode/CID font encoding, complex shaping in PDF operators, and glyph subsetting | Excluded from proven domain | Explicit exclusion | Not applicable | Out of scope |
 
 ## Test Applicability Matrix
 
@@ -219,6 +222,23 @@ Current result:
   `tests/mutation/pdf_standard_font_cosmic_ray.toml`, filtered by
   `tests/mutation/filter_pdf_standard_font_work_items.py`: 37 work items, 37
   killed, and 0 survived.
+- PDF embedded font continuation uses the same config and filter expanded to
+  `_PDFFontResource`, `_PDFFontRegistry`, embedded-font helpers, font object
+  emission, and the text content path: 87 work items, 61 killed, 17 survived as
+  documented equivalents, and 9 incompetent mutants.
+- Equivalent survivor classes:
+  - Embedded-font fallback exception replacements still return `None` for the
+    tested missing-file and invalid-font paths, preserving Standard 14 fallback.
+  - Real-font metadata branches for positive units-per-em, postscript-name
+    presence, OS/2 table presence, and `post` table presence are equivalent for
+    the installed DejaVu font fixture.
+  - Embedded resource key fallback using `font_file or base_font` mutates to an
+    equivalent key for resources with both non-empty values in the tested
+    domain.
+  - Font-file subtype comparisons for the literal `FontFile3` are equivalent
+    for the tested TrueType and OpenType resource objects.
+- Incompetent mutants were invalid boolean/exception/subtype mutations that
+  could not run as viable behavioral alternatives.
 - Equivalent survivors:
   - `target is OutputFormat.SVG` changed to `target == OutputFormat.SVG`.
     `normalize_output_format()` returns an `OutputFormat` member, so identity
@@ -350,13 +370,50 @@ content stream resource names and the emitted `/BaseFont` resources.
 
 ### Counterexamples And Exclusions
 
-Custom TrueType/OpenType embedding, font subsetting, glyph encoding beyond
-WinAnsi, rich text runs, and multiline layout are not part of this obligation.
+Named TrueType/OpenType embedding is covered separately by PO-TEXT-011. Font
+subsetting, glyph encoding beyond WinAnsi, rich text runs, and multiline layout
+are not part of this obligation.
 
 ### Conclusion
 
 Proven for built-in PDF Standard font resource selection after focused tests
 and scoped mutation pass. Full quality gates remain part of the slice closeout.
+
+## PO-TEXT-011: PDF Embeds Named Installed Fonts
+
+### Claim
+
+`DocumentPDF.to_pdf_bytes()` embeds named installed TrueType/OpenType font files
+instead of collapsing those text styles to Helvetica.
+
+### Domain
+
+Text rendered through `DocumentPDF` with a `TextStyle.font` whose requested
+family is not generic and whose `Font.font_file` resolves to a readable
+TrueType/OpenType file. Text bytes remain in the simple WinAnsi text-string
+domain.
+
+### Proof Method
+
+`Font` preserves `requested_family` before Matplotlib resolves the closest
+installed font. `_PDFFontRegistry` keeps generic families on the Standard 14
+path and converts named resolved font files into embedded font resources.
+`fonttools` reads units-per-em, WinAnsi glyph widths, bounding box, ascent,
+descent, cap height, italic angle, and font outline type. `DocumentPDF` writes a
+compressed font-file stream, a font descriptor, and a `/TrueType` font resource
+that is reused for the same font file across different text sizes.
+
+### Counterexamples And Exclusions
+
+Generic families intentionally remain PDF Standard 14 resources. Full Unicode
+CID fonts, ToUnicode CMaps, glyph subsetting, PDF text shaping, vertical text,
+and complex-script extraction are excluded from this obligation.
+
+### Conclusion
+
+Proven for named installed WinAnsi-compatible font resources after focused
+tests and scoped mutation. Full quality gates remain part of the slice
+closeout.
 
 ## PO-TEXT-005: Serialization Preserves Text Parameters
 

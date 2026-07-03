@@ -31,6 +31,8 @@ def _text_style(font: Font) -> TextStyle:
 @pytest.mark.condition("FONT-P1")
 def test_font_constructor_and_setters_share_valid_contract() -> None:
     """FONT-P1: Constructor and setters preserve the same valid font domain."""
+    assert Font().size == 10.0
+
     font = Font(
         family=["DejaVu Sans", "sans-serif"],
         style="italic",
@@ -76,6 +78,19 @@ def test_font_constructor_and_setters_share_valid_contract() -> None:
     assert font.weight == 0
     font.weight = 1000
     assert font.weight == 1000
+
+
+@pytest.mark.condition("PDF-FONT-EMBED-P3")
+def test_font_preserves_requested_family_for_renderer_policy() -> None:
+    """PDF-FONT-EMBED-P3: Font records requested family before resolution."""
+    font = Font(family=["Arial", "sans-serif"], size=10)
+
+    assert font.requested_family == ["Arial", "sans-serif"]
+
+    font.family = "serif"
+
+    assert font.requested_family == "serif"
+    assert font.family
 
 
 @pytest.mark.condition("FONT-P1")

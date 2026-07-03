@@ -15,6 +15,8 @@ import zlib
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
+from fontTools.ttLib import TTFont
+
 from InkGen.boundary import Canvas
 from InkGen.component import Arc as ArcComponent
 from InkGen.component import (
@@ -57,6 +59,9 @@ from InkGen.style import DrawingStyle, TextStyle
 from InkGen.svg_generator import LabelGenerator, SegmentGenerator
 
 PDF_FIXED_DATE = "D:20000101000000Z"
+PDF_GENERIC_FONT_FAMILIES = {"serif", "sans-serif", "monospace", "cursive", "fantasy"}
+PDF_WINANSI_FIRST_CHAR = 32
+PDF_WINANSI_LAST_CHAR = 126
 
 
 class PDFGeneratorInterface(metaclass=abc.ABCMeta):
@@ -105,25 +110,72 @@ class _PDFImagePayload:
     icc_profile: bytes | None = None
 
 
+@dataclass(frozen=True)
+class _PDFFontResource:
+    """PDF font resource metadata for standard or embedded fonts."""
+
+    resource_name: str
+    base_font: str
+    font_file: str | None = None
+    font_data: bytes | None = None
+    font_file_key: str | None = None
+    widths: tuple[int, ...] = ()
+    font_bbox: tuple[int, int, int, int] = (0, 0, 0, 0)
+    ascent: int = 0
+    descent: int = 0
+    cap_height: int = 0
+    italic_angle: float = 0.0
+    stem_v: int = 80
+
+    @property
+    def is_embedded(self) -> bool:
+        """Return whether this font needs embedded PDF font objects."""
+        return self.font_file is not None and self.font_data is not None and self.font_file_key is not None
+
+
 class _PDFFontRegistry:
-    """Deterministic registry for built-in PDF Standard 14 font resources."""
+    """Deterministic registry for PDF text font resources."""
 
     def __init__(self) -> None:
-        self._resource_by_base_font: dict[str, str] = {}
+        self._resource_by_key: dict[tuple[str, str], str] = {}
+        self._resource_by_name: dict[str, _PDFFontResource] = {}
 
     def resource_name_for_style(self, style: TextStyle) -> str:
-        """Return a stable resource name for the style's built-in PDF font."""
-        return self.resource_name_for_base_font(_pdf_base_font_for_style(style))
+        """Return a stable resource name for the style's PDF font."""
+        resource = _pdf_embedded_font_for_style(style)
+        if resource is None:
+            return self.resource_name_for_base_font(_pdf_base_font_for_style(style))
+        return self._resource_name_for_resource(("embedded", resource.font_file or resource.base_font), resource)
 
     def resource_name_for_base_font(self, base_font: str) -> str:
         """Return a stable resource name for a PDF Standard 14 base font."""
-        if base_font not in self._resource_by_base_font:
-            self._resource_by_base_font[base_font] = f"F{len(self._resource_by_base_font) + 1}"
-        return self._resource_by_base_font[base_font]
+        resource = _PDFFontResource(resource_name="", base_font=base_font)
+        return self._resource_name_for_resource(("standard", base_font), resource)
 
-    def resources(self) -> tuple[tuple[str, str], ...]:
-        """Return resource-name/base-font pairs in deterministic insertion order."""
-        return tuple((resource_name, base_font) for base_font, resource_name in self._resource_by_base_font.items())
+    def _resource_name_for_resource(self, key: tuple[str, str], resource: _PDFFontResource) -> str:
+        """Return a stable resource name for a concrete font resource."""
+        if key not in self._resource_by_key:
+            resource_name = f"F{len(self._resource_by_key) + 1}"
+            self._resource_by_key[key] = resource_name
+            self._resource_by_name[resource_name] = _PDFFontResource(
+                resource_name=resource_name,
+                base_font=resource.base_font,
+                font_file=resource.font_file,
+                font_data=resource.font_data,
+                font_file_key=resource.font_file_key,
+                widths=resource.widths,
+                font_bbox=resource.font_bbox,
+                ascent=resource.ascent,
+                descent=resource.descent,
+                cap_height=resource.cap_height,
+                italic_angle=resource.italic_angle,
+                stem_v=resource.stem_v,
+            )
+        return self._resource_by_key[key]
+
+    def resources(self) -> tuple[_PDFFontResource, ...]:
+        """Return PDF font resources in deterministic insertion order."""
+        return tuple(self._resource_by_name.values())
 
 
 class _PDFImageRegistry:
@@ -256,6 +308,131 @@ def _pdf_icc_profile_object(profile: bytes, *, components: int, alternate: str) 
     compressed = zlib.compress(profile)
     dictionary = f"<< /N {components} /Alternate /{alternate} /Filter /FlateDecode /Length {len(compressed)} >>"
     return dictionary.encode("ascii") + b"\nstream\n" + compressed + b"\nendstream"
+
+
+def _pdf_embedded_font_for_style(style: TextStyle) -> _PDFFontResource | None:
+    """Return embedded font metadata for named installed fonts when available."""
+    font = getattr(style, "font", None)
+    if font is None or _pdf_requested_family_is_generic(font):
+        return None
+    try:
+        font_file = str(font.font_file)
+    except (AttributeError, OSError, ValueError):
+        return None
+    if not font_file or not os.path.isfile(font_file):
+        return None
+    try:
+        return _pdf_embedded_font_resource(font_file)
+    except (KeyError, OSError, ValueError, TypeError):
+        return None
+
+
+def _pdf_requested_family_is_generic(font: object) -> bool:
+    """Return whether the requested family should stay on PDF Standard fonts."""
+    requested = getattr(font, "requested_family", getattr(font, "family", "sans-serif"))
+    families = requested if isinstance(requested, list) else [requested]
+    return all(str(family).lower() in PDF_GENERIC_FONT_FAMILIES for family in families)
+
+
+def _pdf_embedded_font_resource(font_file: str) -> _PDFFontResource:
+    """Build a PDF embedded-font resource from a TrueType/OpenType file."""
+    font = TTFont(font_file, fontNumber=0)
+    try:
+        units_per_em = int(font["head"].unitsPerEm)
+        if units_per_em <= 0:
+            raise ValueError("font units per em must be positive")
+        postscript_name = font["name"].getDebugName(6) or os.path.splitext(os.path.basename(font_file))[0]
+        base_font = _pdf_name(str(postscript_name))
+        cmap = font.getBestCmap() or {}
+        hmtx = font["hmtx"].metrics
+        widths = tuple(
+            _pdf_glyph_width(code, cmap, hmtx, units_per_em) for code in range(PDF_WINANSI_FIRST_CHAR, PDF_WINANSI_LAST_CHAR + 1)
+        )
+        head = font["head"]
+        hhea = font["hhea"]
+        os2 = font["OS/2"] if "OS/2" in font else None
+        post = font["post"] if "post" in font else None
+        font_file_key = "FontFile2" if "glyf" in font else "FontFile3"
+    finally:
+        font.close()
+    with open(font_file, "rb") as handle:
+        font_data = handle.read()
+    return _PDFFontResource(
+        resource_name="",
+        base_font=base_font,
+        font_file=font_file,
+        font_data=font_data,
+        font_file_key=font_file_key,
+        widths=widths,
+        font_bbox=(
+            _pdf_font_unit(head.xMin, units_per_em),
+            _pdf_font_unit(head.yMin, units_per_em),
+            _pdf_font_unit(head.xMax, units_per_em),
+            _pdf_font_unit(head.yMax, units_per_em),
+        ),
+        ascent=_pdf_font_unit(hhea.ascent, units_per_em),
+        descent=_pdf_font_unit(hhea.descent, units_per_em),
+        cap_height=_pdf_font_unit(getattr(os2, "sCapHeight", hhea.ascent), units_per_em),
+        italic_angle=float(getattr(post, "italicAngle", 0.0)),
+        stem_v=80,
+    )
+
+
+def _pdf_glyph_width(codepoint: int, cmap: dict[int, str], metrics: Mapping[str, tuple[int, int]], units_per_em: int) -> int:
+    """Return a 1000-unit PDF width for one WinAnsi codepoint."""
+    glyph_name = cmap.get(codepoint)
+    if glyph_name is None:
+        return 0
+    return _pdf_font_unit(metrics.get(glyph_name, (0, 0))[0], units_per_em)
+
+
+def _pdf_font_unit(value: float | int, units_per_em: int) -> int:
+    """Scale a font design-unit value to PDF's 1000-unit text space."""
+    return int(round(float(value) * 1000.0 / float(units_per_em)))
+
+
+def _pdf_name(value: str) -> str:
+    """Return a PDF name body with unsafe bytes hex-escaped."""
+    encoded = value.encode("ascii", errors="ignore") or b"EmbeddedFont"
+    allowed = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+    return "".join(chr(byte) if byte in allowed else f"#{byte:02X}" for byte in encoded)
+
+
+def _pdf_font_file_object(resource: _PDFFontResource) -> bytes:
+    """Build an embedded font-file stream object."""
+    if resource.font_data is None or resource.font_file_key is None:
+        raise ValueError("embedded font resources require font data")
+    compressed = zlib.compress(resource.font_data)
+    subtype = " /Subtype /OpenType" if resource.font_file_key == "FontFile3" else ""
+    dictionary = f"<< /Length {len(compressed)} /Filter /FlateDecode{subtype} >>"
+    return dictionary.encode("ascii") + b"\nstream\n" + compressed + b"\nendstream"
+
+
+def _pdf_font_descriptor_object(resource: _PDFFontResource, font_file_object_id: int) -> str:
+    """Build a PDF font descriptor object for an embedded font."""
+    x_min, y_min, x_max, y_max = resource.font_bbox
+    return (
+        f"<< /Type /FontDescriptor /FontName /{resource.base_font} /Flags 32 "
+        f"/FontBBox [{x_min} {y_min} {x_max} {y_max}] "
+        f"/ItalicAngle {_number(resource.italic_angle)} /Ascent {resource.ascent} "
+        f"/Descent {resource.descent} /CapHeight {resource.cap_height} /StemV {resource.stem_v} "
+        f"/{resource.font_file_key} {font_file_object_id} 0 R >>"
+    )
+
+
+def _pdf_font_object(resource: _PDFFontResource, descriptor_object_id: int | None = None) -> str:
+    """Build a PDF font object for standard or embedded resources."""
+    if not resource.is_embedded:
+        return f"<< /Type /Font /Subtype /Type1 /BaseFont /{resource.base_font} /Encoding /WinAnsiEncoding >>"
+    if descriptor_object_id is None:
+        raise ValueError("embedded font resources require a descriptor object id")
+    widths = " ".join(str(width) for width in resource.widths)
+    return (
+        f"<< /Type /Font /Subtype /TrueType /BaseFont /{resource.base_font} "
+        f"/FirstChar {PDF_WINANSI_FIRST_CHAR} /LastChar {PDF_WINANSI_LAST_CHAR} "
+        f"/Widths [{widths}] /FontDescriptor {descriptor_object_id} 0 R "
+        f"/Encoding /WinAnsiEncoding >>"
+    )
 
 
 def _pdf_base_font_for_style(style: TextStyle) -> str:
@@ -1184,13 +1361,20 @@ class DocumentPDF(Document):
             rendered_pages.append((page, content))
 
         font_object_ids: dict[str, int] = {}
-        for resource_name, base_font in font_registry.resources():
-            font_object_ids[resource_name] = object_id
-            writer.set_object(
-                object_id,
-                f"<< /Type /Font /Subtype /Type1 /BaseFont /{base_font} /Encoding /WinAnsiEncoding >>",
-            )
-            object_id += 1
+        for resource in font_registry.resources():
+            if resource.is_embedded:
+                font_file_object_id = object_id
+                writer.set_object(font_file_object_id, _pdf_font_file_object(resource))
+                descriptor_object_id = object_id + 1
+                writer.set_object(descriptor_object_id, _pdf_font_descriptor_object(resource, font_file_object_id))
+                font_object_id = object_id + 2
+                writer.set_object(font_object_id, _pdf_font_object(resource, descriptor_object_id))
+                font_object_ids[resource.resource_name] = font_object_id
+                object_id += 3
+            else:
+                font_object_ids[resource.resource_name] = object_id
+                writer.set_object(object_id, _pdf_font_object(resource))
+                object_id += 1
 
         image_object_ids: dict[str, int] = {}
         for resource_name, asset in image_registry.resources():

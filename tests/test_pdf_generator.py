@@ -273,7 +273,6 @@ def test_document_pdf_maps_text_styles_to_standard_font_resources() -> None:
         ("sans-serif", "normal", 600, "Helvetica-Bold"),
         ("sans-serif", "normal", 700, "Helvetica-Bold"),
         ("sans-serif", "oblique", "normal", "Helvetica-Oblique"),
-        ("Calibri", "italic", "bold", "Helvetica-BoldOblique"),
     ],
 )
 def test_document_pdf_maps_standard_font_variants(
@@ -306,6 +305,100 @@ def test_document_pdf_numeric_weight_threshold_keeps_599_regular() -> None:
 
     assert b"/BaseFont /Helvetica /Encoding" in payload
     assert b"/BaseFont /Helvetica-Bold" not in payload
+
+
+@pytest.mark.condition("PDF-FONT-EMBED-P3")
+def test_document_pdf_embeds_named_installed_font_resources() -> None:
+    """PDF-FONT-EMBED-P3: Named installed fonts embed with widths and descriptors."""
+    font = Font(family="DejaVu Sans", size=10.0)
+    style = TextStyle(f"embedded_{uuid.uuid4().hex}", font)
+
+    payload = _pdf_bytes_for_single_text_style(style)
+
+    assert b"/Subtype /TrueType" in payload
+    assert b"/FontDescriptor" in payload
+    assert b"/FontFile2" in payload
+    assert b"/FirstChar 32 /LastChar 126" in payload
+    assert b"/Widths [" in payload
+    assert b"/Encoding /WinAnsiEncoding" in payload
+    assert b"/BaseFont /Helvetica" not in payload
+    assert b"/F1 10 Tf" in payload
+    assert b"/Resources << /Font <<" in payload
+    assert b"/XObject" not in payload
+
+
+@pytest.mark.condition("PDF-FONT-EMBED-P3")
+def test_document_pdf_reuses_embedded_font_resources_across_sizes() -> None:
+    """PDF-FONT-EMBED-P3: Same named font file shares one embedded PDF resource."""
+    font = Font(family="DejaVu Sans", size=10.0)
+    first_style = TextStyle(f"embedded_first_{uuid.uuid4().hex}", font)
+    second_style = TextStyle(f"embedded_second_{uuid.uuid4().hex}", Font(family="DejaVu Sans", size=18.0))
+    canvas = Canvas(100.0, 80.0)
+    document = DocumentPDF(canvas)
+    document.add_page()
+    group = ComponentGroupPDF("embedded-fonts")
+    group.add_component(TextPDF("Small", (10.0, 20.0), first_style))
+    group.add_component(TextPDF("Large", (10.0, 40.0), second_style))
+    document.page(1).layer("base").add_component_group(group)
+
+    payload = document.to_pdf_bytes()
+
+    assert payload.count(b"/FontFile2") == 1
+    assert b"/F1 10 Tf" in payload
+    assert b"/F1 18 Tf" in payload
+
+
+@pytest.mark.condition("PDF-FONT-EMBED-P3")
+def test_pdf_embedded_font_helpers_cover_missing_glyphs_and_open_type_streams() -> None:
+    """PDF-FONT-EMBED-P3: Embedded-font helpers handle fallback boundaries."""
+    assert pdf_generator_module._pdf_glyph_width(65, {}, {}, 1000) == 0  # noqa: SLF001
+    assert pdf_generator_module._pdf_glyph_width(65, {65: "A"}, {"A": (500, 0)}, 1000) == 500  # noqa: SLF001
+    assert pdf_generator_module._pdf_name("A B") == "A#20B"  # noqa: SLF001
+    assert pdf_generator_module._pdf_name("é") == "EmbeddedFont"  # noqa: SLF001
+
+    missing_data = pdf_generator_module._PDFFontResource(
+        resource_name="F1",
+        base_font="Bad",
+        font_file="bad.otf",
+        font_data=None,
+        font_file_key="FontFile3",
+    )
+    with pytest.raises(ValueError, match="font data"):
+        pdf_generator_module._pdf_font_file_object(missing_data)  # noqa: SLF001
+
+    open_type = pdf_generator_module._PDFFontResource(
+        resource_name="F1",
+        base_font="OpenType",
+        font_file="font.otf",
+        font_data=b"font-data",
+        font_file_key="FontFile3",
+    )
+
+    assert b"/Subtype /OpenType" in pdf_generator_module._pdf_font_file_object(open_type)  # noqa: SLF001
+
+    true_type = pdf_generator_module._PDFFontResource(
+        resource_name="F1",
+        base_font="TrueType",
+        font_file="font.ttf",
+        font_data=b"font-data",
+        font_file_key="FontFile2",
+    )
+
+    assert b"/Subtype /OpenType" not in pdf_generator_module._pdf_font_file_object(true_type)  # noqa: SLF001
+
+
+@pytest.mark.condition("PDF-FONT-EMBED-P3")
+def test_pdf_embedded_font_lookup_falls_back_for_missing_font_files() -> None:
+    """PDF-FONT-EMBED-P3: Missing named font files fall back to Standard fonts."""
+
+    class MissingFont:
+        requested_family = "Missing Font"
+        font_file = "C:/definitely/missing/font.ttf"
+
+    class StyleWithMissingFont:
+        font = MissingFont()
+
+    assert pdf_generator_module._pdf_embedded_font_for_style(StyleWithMissingFont()) is None  # noqa: SLF001
 
 
 @pytest.mark.condition("PDF-FONT-STANDARD-P2")

@@ -108,6 +108,7 @@ tests and, where appropriate, recording an ADR.
 | `pdf_generator.py -> extraction_truth.py/grammar_truth.py` | PDF documents emit parser-facing truth records in PDF coordinates. | Truth schema changes can break downstream parser fixtures. |
 | `pdf_generator.py -> pdf_render_contract.py` | The PDF render path delegates proof-critical closed-domain checks to a small mutation-tested contract module. | Bypassing the helper weakens PO-GT-004 and can hide custom render paths. |
 | `DocumentPDF -> ComponentGroupPDF -> built-in PDF components` | The PDF render path is intentionally closed so noninterference properties can be proven. | Arbitrary custom PDF render components are outside the proven contract. |
+| `pdf_generator.py -> fonttools` | PDF named-font embedding reads installed font metrics and embeds font-file streams without adding a PDF dependency. | Font parsing errors must fail back to Standard 14 behavior rather than corrupting PDF output. |
 | `pdf_generator.py -> image_assets.py` | PDF image rendering consumes decoded image assets and emits image XObjects plus optional alpha soft masks. | Moving image encoding into document outputs would couple drawing rendering to DOCX/HTML policy. |
 | `grammar_truth.py -> extraction_truth.py` | Grammar truth reuses source channel and PDF coordinate conversion constants. | Extraction truth changes can accidentally change grammar truth records. |
 | `cad_component_groups.py -> svg_generator.py` | Legacy CAD helpers still build SVG-specific component groups. | This path is not renderer-neutral and should not be copied into new drawing recipes. |
@@ -124,6 +125,7 @@ These contracts are more important than individual implementation details.
 | PDF coordinate frame `pdf_points_bottom_left` | DocInt parser validation and ground truth comparisons | Parser scores compare against the wrong coordinate system |
 | Deterministic artifact bytes/records | Regression tests and fixture generation | Tests become flaky or fixtures churn |
 | Closed PDF renderer component set | PDF noninterference proofs and deterministic rendering | Custom dynamic `generate_pdf()` paths can break proof obligations |
+| PDF font resource policy | Synthetic fixtures using OS fonts and parser text extraction checks | Generic fonts unexpectedly embed, named fonts collapse to Helvetica, or widths/descriptors drift |
 | Raster image alpha/orientation/color preservation | SVG/PDF/DOCX/DXF fixtures and colored-background drawings | Transparent pixels are flattened or compared against the wrong background; EXIF-rotated images render with wrong dimensions; CMYK/ICC JPEGs lose color intent |
 | `pdf_render_contract.py` guard semantics | PO-GT-004 mutation gate and PDF render-path failures | Unsupported groups/components render instead of failing at the boundary |
 | `Layer.groups()` complete traversal | SVG/PDF renderers, truth emitters, and duplicate-label model layers | Reverting to `component_groups` collapses repeated labels |

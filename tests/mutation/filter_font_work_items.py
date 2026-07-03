@@ -7,7 +7,7 @@ import sqlite3
 from pathlib import Path
 
 FILTER_SQL = """
-module_path = 'src/InkGen/style.py'
+module_path LIKE '%style.py'
 AND (
   (
     definition_name IN ('_coerce_finite_float', '_coerce_font_size', '_coerce_font_family')
@@ -15,15 +15,15 @@ AND (
   )
   OR (
     definition_name = '__init__'
-    AND start_pos_row = 417
+    AND start_pos_row BETWEEN 502 AND 577
   )
   OR (
     definition_name = 'create_from_dict'
-    AND start_pos_row BETWEEN 491 AND 508
+    AND start_pos_row BETWEEN 578 AND 599
   )
   OR (
-    definition_name IN ('family', 'style', 'variant', 'stretch', 'weight', 'size')
-    AND start_pos_row BETWEEN 620 AND 777
+    definition_name IN ('family', 'requested_family', 'style', 'variant', 'stretch', 'weight', 'size')
+    AND start_pos_row BETWEEN 702 AND 895
   )
 )
 AND operator_name NOT LIKE 'core/ReplaceBinaryOperator_BitOr_%'

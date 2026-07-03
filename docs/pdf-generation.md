@@ -18,11 +18,18 @@ the page content-stream level, and text rendering counter-flips glyphs so text
 stays upright. PDF metadata dates and object ordering are fixed so repeated
 renders of the same document produce deterministic bytes.
 
-PDF text uses the built-in PDF Standard font families from `TextStyle.font`
-where possible. Helvetica/sans-serif, Times/serif, and Courier/monospace
-families map to deterministic PDF font resources, including bold and
-italic/oblique variants. Custom TrueType/OpenType font embedding and subsetting
-are not implemented in the dependency-free PDF backend.
+PDF text uses `TextStyle.font` to choose deterministic font resources. Generic
+families keep the built-in PDF Standard behavior: Helvetica/sans-serif,
+Times/serif, and Courier/monospace map to Standard 14 resources, including bold
+and italic/oblique variants. Named installed TrueType/OpenType fonts resolve
+through InkGen's existing `Font.font_file` discovery and are embedded in the PDF
+with WinAnsi widths and a font descriptor. This covers common OS fonts on
+Windows, macOS, and Linux when the font is installed or provided through
+`custom_font_paths`.
+
+The dependency-free backend still emits simple WinAnsi text strings. Full
+Unicode/CID text encoding, glyph subsetting, shaping in PDF text operators, and
+complex-script extraction maps are not implemented in this slice.
 
 PDF raster images use `RasterImageAsset` and `ImagePDF`. InkGen accepts
 Pillow-decodable raster inputs at the asset boundary, applies EXIF orientation

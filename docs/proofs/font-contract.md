@@ -12,6 +12,7 @@ The slice covers:
 - `Font.__init__()`
 - `Font.create_from_dict()`
 - `Font.family`
+- `Font.requested_family`
 - `Font.style`
 - `Font.variant`
 - `Font.stretch`
@@ -62,6 +63,9 @@ Before/after edge changes:
 - After this slice, weight and stretch reject booleans and unsupported values at
   InkGen's public boundary.
 - After this slice, custom path lists are copied before normalization.
+- The PDF embedded-font update records the requested family separately from the
+  resolved family so renderers can distinguish generic family policy from named
+  installed-font policy.
 
 Cycle/layer/coupling/redundancy result:
 
@@ -81,6 +85,8 @@ ADR/rule impact:
 ## Domain Definitions
 
 - A font family is a non-empty string or non-empty list of non-empty strings.
+- `Font.requested_family` is the validated family value last passed by the
+  caller before Matplotlib resolves it to an installed font.
 - Font style is `normal`, `italic`, or `oblique`.
 - Font variant is `normal` or `small-caps`.
 - Font stretch is an integer from `0` through `1000` or a supported Matplotlib
@@ -106,6 +112,8 @@ ADR/rule impact:
 - Copied custom font path lists before appending trailing separators.
 - Added condition-marked tests for constructor/setter equivalence, invalid
   partitions, custom paths, hydration, and live SVG/PDF/DXF/DOCX output use.
+- Added `Font.requested_family` for renderer policy decisions that must know
+  whether the caller requested a generic family or a named installed font.
 
 ## Comprehensiveness Matrix
 
@@ -114,6 +122,7 @@ ADR/rule impact:
 | Valid constructor and setter values | Preserve valid enums, numeric boundaries, named size conversion, and integer sizes | PO-FONT-001 | `test_font_constructor_and_setters_share_valid_contract` | killed |
 | Invalid size values | Reject booleans, zero, negative, out-of-range, non-finite, unsupported names, and non-numeric values | PO-FONT-002 | `test_font_rejects_invalid_size_boundaries` | killed |
 | Invalid family/weight/stretch values | Reject empty families, malformed family lists, booleans, unsupported names, and out-of-range numeric values at InkGen boundary | PO-FONT-003 | `test_font_rejects_invalid_weight_stretch_and_family_boundaries` | killed |
+| Requested family tracking | Preserve the caller-requested family independently from resolved font-manager family | PO-FONT-007 | `test_font_preserves_requested_family_for_renderer_policy` | killed/equivalent |
 | Custom font paths | Validate type/existence and avoid mutating caller lists | PO-FONT-004 | `test_font_custom_paths_are_validated_and_copied` | killed |
 | Hydrated payloads | Route serialized values through public validation boundaries | PO-FONT-005 | `test_font_hydration_uses_public_validation_boundaries` | killed |
 | Live output paths | Emit validated font size/style/weight into SVG, PDF, DXF, and DOCX output | PO-FONT-006 | `test_font_contract_remains_live_in_output_paths` | behavioral evidence |
@@ -145,6 +154,7 @@ Proof-critical mutation targets:
 - Allowing boolean numeric values must fail invalid-boundary tests.
 - Bypassing public validation during hydration must fail payload tests.
 - Mutating custom path type/existence/copy behavior must fail path tests.
+- Mutating requested-family storage must fail renderer-policy tests.
 - Changing live consumption of validated font values must fail SVG/PDF/DXF/DOCX
   output tests.
 
@@ -152,6 +162,13 @@ Current result:
 
 - Cosmic Ray 8.4.6, scoped to executable FONT-P1 rows: 74 work items, 74 killed,
   and 0 survived.
+- The PDF embedded-font continuation expands the filter to include
+  `requested_family`: 78 work items, 77 killed, 1 survived as an equivalent
+  public-error-path survivor.
+- Equivalent survivor:
+  - `custom_font_paths` list validation changed `and` to `or`. The malformed
+    list fixture still raises `TypeError` before public font state is usable;
+    only the internal failing expression changes.
 
 ## PO-FONT-001: Valid Font Values Normalize Deterministically
 
@@ -283,3 +300,27 @@ DOCX half-point/bold/italic run properties.
 ### Conclusion
 
 Supported by behavioral evidence for the stated domain.
+
+## PO-FONT-007: Requested Family Is Preserved For Renderer Policy
+
+### Claim
+
+`Font.requested_family` preserves the validated family value supplied by the
+caller before Matplotlib resolves it to an installed font.
+
+### Domain
+
+Public `Font(...)` construction and `Font.family` setter calls using valid
+string or list family values.
+
+### Proof Method
+
+The family setter validates the value through `_coerce_font_family()`, stores a
+copy for list inputs, and then passes the same value to Matplotlib's
+`FontProperties`. The focused test covers list preservation, setter updates,
+and continued resolved-family availability.
+
+### Conclusion
+
+Proven for the stated renderer-policy domain after focused tests and scoped
+mutation.
