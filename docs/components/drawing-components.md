@@ -76,11 +76,12 @@ pdf_component = image.to_component(OutputFormat.PDF)
 ```
 
 SVG images are embedded as PNG data URIs. PDF images are emitted as image
-XObjects, preserve transparency with a soft mask, and pass through RGB JPEG
-bytes only when the source orientation is already identity. Flow-document DOCX
-output consumes `ImageDrawing` as a native PNG media part with DrawingML
-relationships. DXF raster image export is not supported until referenced-image
-semantics are designed.
+XObjects, preserve transparency with a soft mask, pass through identity RGB and
+CMYK JPEG bytes, and carry JPEG ICC profiles as ICCBased color spaces when
+present. Flow-document DOCX output consumes `ImageDrawing` as native media when
+the source format is safe for the package and falls back to normalized PNG when
+orientation or alpha preservation requires it. DXF output writes IMAGE entities
+that reference deterministic PNG sidecar files next to the DXF artifact.
 
 ## Circles and Arcs
 

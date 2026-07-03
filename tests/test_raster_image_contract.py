@@ -29,23 +29,33 @@ def _image_bytes(format_name: str = "PNG", *, mode: str = "RGBA") -> bytes:
     return output.getvalue()
 
 
-def _jpeg_bytes(*, orientation: int = 1, size: tuple[int, int] = (2, 3)) -> bytes:
+def _jpeg_bytes(
+    *,
+    orientation: int = 1,
+    size: tuple[int, int] = (2, 3),
+    icc_profile: bytes | None = None,
+) -> bytes:
     image = Image.new("RGB", size, (255, 0, 0))
     image.putpixel((0, 0), (0, 255, 0))
     output = io.BytesIO()
-    if orientation == 1:
-        image.save(output, format="JPEG")
-    else:
+    save_kwargs: dict[str, object] = {}
+    if orientation != 1:
         exif = Image.Exif()
         exif[274] = orientation
-        image.save(output, format="JPEG", exif=exif)
+        save_kwargs["exif"] = exif
+    if icc_profile is not None:
+        save_kwargs["icc_profile"] = icc_profile
+    image.save(output, format="JPEG", **save_kwargs)
     return output.getvalue()
 
 
-def _cmyk_jpeg_bytes() -> bytes:
+def _cmyk_jpeg_bytes(*, icc_profile: bytes | None = None) -> bytes:
     image = Image.new("CMYK", (2, 1), (0, 255, 255, 0))
     output = io.BytesIO()
-    image.save(output, format="JPEG")
+    save_kwargs: dict[str, object] = {}
+    if icc_profile is not None:
+        save_kwargs["icc_profile"] = icc_profile
+    image.save(output, format="JPEG", **save_kwargs)
     return output.getvalue()
 
 
@@ -125,14 +135,15 @@ def test_raster_image_asset_allows_identity_rgb_jpeg_passthrough() -> None:
     assert asset.can_passthrough_jpeg is True
 
 
-@pytest.mark.condition("RASTER-IMAGE-P2")
-def test_raster_image_asset_rejects_non_rgb_jpegs_for_passthrough() -> None:
-    """RASTER-IMAGE-P2: Non-RGB JPEGs are decoded instead of passed through."""
+@pytest.mark.condition("RASTER-IMAGE-P3")
+def test_raster_image_asset_allows_identity_cmyk_jpeg_passthrough() -> None:
+    """RASTER-IMAGE-P3: Identity CMYK JPEGs can pass through with DeviceCMYK."""
     asset = RasterImageAsset.from_bytes(_cmyk_jpeg_bytes())
 
     assert asset.format == "JPEG"
     assert asset.mode == "CMYK"
-    assert asset.can_passthrough_jpeg is False
+    assert asset.jpeg_passthrough_color_space == "DeviceCMYK"
+    assert asset.can_passthrough_jpeg is True
 
 
 @pytest.mark.condition("RASTER-IMAGE-P2")
@@ -339,6 +350,66 @@ def test_document_pdf_passes_identity_rgb_jpegs_through_as_dct_streams() -> None
 
     assert b"/Filter /DCTDecode" in payload
     assert b"/SMask" not in payload
+    assert jpeg in payload
+
+
+@pytest.mark.condition("RASTER-IMAGE-P3")
+def test_document_pdf_passes_identity_cmyk_jpegs_through_as_dct_streams() -> None:
+    """RASTER-IMAGE-P3: PDF embeds identity CMYK JPEG bytes as DeviceCMYK."""
+    jpeg = _cmyk_jpeg_bytes()
+    asset = RasterImageAsset.from_bytes(jpeg)
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    group = ComponentGroupPDF(f"image_{uuid.uuid4().hex}")
+    group.add_component(ImagePDF(asset, (1.0, 2.0), 3.0, 4.0))
+    document.page(1).layer("base").add_component_group(group)
+
+    payload = document.to_pdf_bytes()
+
+    assert b"/Filter /DCTDecode" in payload
+    assert b"/ColorSpace /DeviceCMYK" in payload
+    assert b"/SMask" not in payload
+    assert jpeg in payload
+
+
+@pytest.mark.condition("RASTER-IMAGE-P3")
+def test_document_pdf_embeds_jpeg_icc_profiles_as_iccbased_color_spaces() -> None:
+    """RASTER-IMAGE-P3: JPEG ICC profiles are carried into PDF image resources."""
+    profile = b"synthetic-icc-profile"
+    jpeg = _jpeg_bytes(icc_profile=profile)
+    asset = RasterImageAsset.from_bytes(jpeg)
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    group = ComponentGroupPDF(f"image_{uuid.uuid4().hex}")
+    group.add_component(ImagePDF(asset, (1.0, 2.0), 3.0, 4.0))
+    document.page(1).layer("base").add_component_group(group)
+
+    payload = document.to_pdf_bytes()
+
+    assert b"/Filter /DCTDecode" in payload
+    assert b"/ColorSpace [/ICCBased " in payload
+    assert b"/N 3" in payload
+    assert b"/Alternate /DeviceRGB" in payload
+    assert jpeg in payload
+
+
+@pytest.mark.condition("RASTER-IMAGE-P3")
+def test_document_pdf_embeds_cmyk_jpeg_icc_profiles_with_four_components() -> None:
+    """RASTER-IMAGE-P3: CMYK JPEG ICC profiles declare four PDF components."""
+    profile = b"synthetic-cmyk-icc-profile"
+    jpeg = _cmyk_jpeg_bytes(icc_profile=profile)
+    asset = RasterImageAsset.from_bytes(jpeg)
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    group = ComponentGroupPDF(f"image_{uuid.uuid4().hex}")
+    group.add_component(ImagePDF(asset, (1.0, 2.0), 3.0, 4.0))
+    document.page(1).layer("base").add_component_group(group)
+
+    payload = document.to_pdf_bytes()
+
+    assert b"/ColorSpace [/ICCBased " in payload
+    assert b"/N 4" in payload
+    assert b"/Alternate /DeviceCMYK" in payload
     assert jpeg in payload
 
 

@@ -1,4 +1,4 @@
-"""Filter Cosmic Ray work items to RASTER-IMAGE-P1 rows."""
+"""Filter Cosmic Ray work items to raster image proof-critical rows."""
 
 from __future__ import annotations
 
@@ -23,6 +23,8 @@ FILTER_SQL = """
       'has_alpha',
       'parameters',
       'can_passthrough_jpeg',
+      'jpeg_passthrough_color_space',
+      'icc_profile_bytes',
       'image',
       'png_bytes',
       'png_data_uri',
@@ -32,7 +34,7 @@ FILTER_SQL = """
       'convex_hull',
       '_exif_orientation'
     )
-    AND start_pos_row BETWEEN 27 AND 266
+    AND start_pos_row BETWEEN 27 AND 285
   )
 )
 OR (
@@ -53,8 +55,8 @@ OR (
       AND start_pos_row BETWEEN 90 AND 135
     )
     OR (
-      definition_name IN ('_pdf_image_payload', '_pdf_image_xobject')
-      AND start_pos_row BETWEEN 201 AND 232
+      definition_name IN ('_PDFImagePayload', '_pdf_image_payload', '_pdf_image_xobject', '_pdf_color_space_token', '_pdf_icc_profile_object')
+      AND start_pos_row BETWEEN 98 AND 262
     )
     OR (
       definition_name IN ('create_from_dict', 'parameters', 'generate_pdf')
@@ -62,7 +64,7 @@ OR (
     )
     OR (
       definition_name IN ('to_pdf_bytes', '_render_page_content')
-      AND start_pos_row BETWEEN 1141 AND 1234
+      AND start_pos_row BETWEEN 1141 AND 1277
     )
   )
 )
@@ -70,16 +72,33 @@ OR (
   module_path LIKE '%document_outputs.py'
   AND (
     (
-      definition_name IN ('_DocxMediaPart', '_DocxMediaRegistry', 'register_png', 'parts', 'next_drawing_id')
-      AND start_pos_row BETWEEN 62 AND 103
+      definition_name IN ('_DocxMediaPart', '_DocxMediaRegistry', 'register_image', 'parts', 'next_drawing_id')
+      AND start_pos_row BETWEEN 71 AND 110
     )
     OR (
       definition_name IN ('to_docx_bytes', '_docx_document_xml', '_block_docx', '_drawing_docx', '_docx_content_types_xml', '_docx_document_relationships_xml')
       AND start_pos_row BETWEEN 199 AND 413
     )
     OR (
-      definition_name IN ('_image_drawing_docx', '_drawing_component_parameters', '_drawing_component_from_parameters', '_write_docx_binary_part', '_mm_to_emu')
-      AND start_pos_row BETWEEN 618 AND 867
+      definition_name IN ('_image_drawing_docx', '_docx_media_payload', '_docx_native_preserves_alpha', '_docx_media_defaults', '_drawing_component_parameters', '_drawing_component_from_parameters', '_write_docx_binary_part', '_mm_to_emu')
+      AND start_pos_row BETWEEN 618 AND 905
+    )
+  )
+)
+OR (
+  module_path LIKE '%dxf_generator.py'
+  AND (
+    (
+      definition_name IN ('DXFDocument', 'add_group', 'to_dxf_string', 'create_dxf')
+      AND start_pos_row BETWEEN 76 AND 126
+    )
+    OR (
+      definition_name IN ('_DXFImageDefinition', '_DXFImageRegistry', 'register', 'definitions', 'write_sidecars')
+      AND start_pos_row BETWEEN 146 AND 186
+    )
+    OR (
+      definition_name IN ('_component_to_entities', '_image_entity', '_dxf_objects_section')
+      AND start_pos_row BETWEEN 189 AND 381
     )
   )
 )

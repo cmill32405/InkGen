@@ -3,7 +3,8 @@
 This note applies the InkGen Definition of Done to the DXF-P1 renderer slice.
 It covers dependency-free ASCII DXF output for renderer-neutral drawing recipes,
 coordinate conversion, entity dispatch, rounded rectangle sampling, path closure
-flags, text/circle entities, file output guards, and PDF-sampled geometry reuse.
+flags, text/circle entities, image sidecar references, file output guards, and
+PDF-sampled geometry reuse.
 
 ## Scope
 
@@ -19,6 +20,7 @@ The slice covers:
 - `_rectangle_points()` and `_append_corner_arc()`
 - `_line_entity()`, `_lwpolyline_entity()`, `_text_entity()`, and
   `_circle_entity()`
+- `_image_entity()`, `_dxf_objects_section()`, `_DXFImageRegistry`
 - `_format_value()`
 
 The original DXF-P1 slice added condition-marked tests, a scoped mutation gate,
@@ -28,7 +30,9 @@ fail before DXF artifact text is emitted. The filepath hardening update changes
 the public DXF writer boundary so malformed output paths fail before `open()`.
 The layer-boundary hardening update changes the public DXF context and
 `DXFDocument.add_group()` layer override boundaries so malformed layer values
-fail before `_format_value()` can stringify them into artifact text.
+fail before `_format_value()` can stringify them into artifact text. The raster
+image update adds IMAGE entities, IMAGEDEF objects, and deterministic PNG
+sidecar writes for `ImageDrawing` components.
 
 ## Architecture Impact
 
@@ -36,8 +40,8 @@ Affected surface:
 
 - `tests/test_dxf_contract.py`: DXF-P1 condition tests.
 - `src/InkGen/dxf_generator.py`: finite numeric validation for public DXF
-  coordinate and canvas-height boundaries, file-writer path validation, and
-  layer override validation.
+  coordinate and canvas-height boundaries, file-writer path validation, layer
+  override validation, and raster image reference emission.
 - `tests/mutation/dxf_renderer_cosmic_ray.toml`: scoped Cosmic Ray gate.
 - `tests/mutation/filter_dxf_renderer_work_items.py`: proof-critical mutation
   filter.
@@ -56,15 +60,17 @@ Incoming dependencies:
 
 Outgoing dependencies:
 
-- `dxf_generator.py` depends on renderer-neutral drawing classes and
-  `normalize_rectangle_corner_radii()`.
+- `dxf_generator.py` depends on renderer-neutral drawing classes,
+  `RasterImageAsset`, and `normalize_rectangle_corner_radii()`.
 - Indirect sampled geometry depends on the existing PDF component point
   contracts for arcs, curves, paths, and regular polygons.
-- No dependency was added.
+- The raster image update adds the documented `dxf_generator.py ->
+  image_assets.py` edge for PNG sidecar generation.
 
 Before/after edge changes:
 
-- No source dependency changed.
+- The raster image update adds the documented `dxf_generator.py ->
+  image_assets.py` edge.
 - The proof makes the existing `dxf_generator.py -> PDF sampled geometry`
   cross-layer edge explicit and tested.
 - The hardening update adds a local DXF numeric validator; it does not import a
@@ -73,6 +79,8 @@ Before/after edge changes:
   not add a dependency or change DXF entity generation.
 - The layer-boundary hardening update adds a local DXF layer validator; it does
   not add a dependency or change valid DXF entity generation.
+- The raster image update consumes existing image assets and does not add an
+  external package dependency.
 
 Cycle/layer/coupling/redundancy result:
 
@@ -82,12 +90,13 @@ Cycle/layer/coupling/redundancy result:
 - Coupling check: the PDF-sampled geometry dependency remains limited to point
   geometry and is recorded in `docs/dependency-map.md`.
 - Redundancy check: DXF uses one numeric formatter and one LWPOLYLINE emitter
-  for polyline-like geometry.
+  for polyline-like geometry. Raster sidecar filenames and handles come from
+  one deterministic registry.
 
 ADR/rule impact:
 
-- No new ADR is required. The existing dependency-map entry already records the
-  intentional PDF-sampled geometry edge.
+- No new ADR is required. The dependency map records the intentional
+  PDF-sampled geometry edge and the raster image sidecar edge.
 
 ## Domain Definitions
 
@@ -108,6 +117,9 @@ ADR/rule impact:
 - DXF output is ASCII text and ends with `0\nEOF\n`.
 - DXF file output accepts string and path-like paths that resolve to existing
   directories and rejects non-path, bytes, and empty path values.
+- DXF image output stores referenced raster payloads as deterministic PNG
+  sidecar files named `imageN.png`.
+- Reused identical image payloads share one IMAGEDEF object and one sidecar.
 
 ## Comprehensiveness Matrix
 
@@ -121,6 +133,7 @@ ADR/rule impact:
 | Path closure | `Z` closes; non-`Z` valid commands remain open | PO-DXF-005 | open/closed path tests | equivalent survivor documented |
 | PDF-sampled geometry | Arc, cubic Bezier, regular polygon, and path reuse PDF points | PO-DXF-006 | sampled-geometry test | killed |
 | Text and circle entities | Preserve layer, coordinates, height/radius, and newline normalization | PO-DXF-007 | text and circle entity tests | killed |
+| Image entities | Emit IMAGE/IMAGEDEF references, write PNG sidecars, and deduplicate identical image assets | PO-DXF-010 | `test_dxf_document_exports_image_references_and_writes_sidecars`, `test_dxf_document_deduplicates_identical_image_sidecars`, `test_dxf_document_assigns_distinct_image_sidecars_and_handles` | raster image gate killed meaningful mutants; equivalent survivors documented |
 | Unsupported groups/components | Fail loudly | Existing `test_dxf_document_rejects_unsupported_groups_and_components` | killed |
 | Numeric formatting | Integer-like floats and fixed precision serialize deterministically | Formatting tests and exact entity strings | equivalent survivors documented |
 
@@ -181,6 +194,21 @@ Current result after the layer-boundary hardening update:
 - Proof-critical work items after filter: 6.
 - Killed mutants: 6.
 - Surviving mutants: 0.
+- Gate result: pass.
+
+Current result after the raster image reference update:
+
+- Tool: Cosmic Ray 8.4.6.
+- Config: `tests/mutation/raster_image_cosmic_ray.toml`.
+- Filter: `tests/mutation/filter_raster_image_work_items.py`.
+- Test selection: raster image, DOCX image, DXF image/reference, DXF contract,
+  and public API tests.
+- Raw work items: 9,410.
+- Proof-critical work items after filter: 640.
+- Killed mutants: 589.
+- Surviving mutants: 47, documented as equivalent in
+  `docs/proofs/raster-image-contract.md`.
+- Incompetent mutants: 4 invalid PDF resource string arithmetic replacements.
 - Gate result: pass.
 
 Execution note:
@@ -413,3 +441,23 @@ newline-to-space normalization, text height, and circle radius.
 ### Conclusion
 
 Proven for the stated entity fields.
+
+## PO-DXF-010: Raster Image References
+
+### Claim
+
+DXF image output emits external IMAGE references, writes deterministic PNG
+sidecars next to the DXF artifact, and deduplicates identical image assets.
+
+### Proof Method
+
+`DXFDocument.add_group()` routes `ImageDrawing` components through one
+`_DXFImageRegistry`. The registry converts the existing `RasterImageAsset` to
+PNG bytes, keys definitions by SHA-256 digest, assigns deterministic handles and
+filenames, and `create_dxf()` writes registered sidecars before writing the DXF
+file. Tests assert IMAGE and IMAGEDEF group codes, the handle reference, flipped
+placement vectors, sidecar alpha preservation, and deduplication.
+
+### Conclusion
+
+Proven for static raster sidecar references written by `DXFDocument.create_dxf()`.

@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import os
 from dataclasses import dataclass
+from hashlib import sha256
 
 from InkGen.component import normalize_rectangle_corner_radii
 from InkGen.drawing_components import (
@@ -12,6 +13,7 @@ from InkGen.drawing_components import (
     CircleDrawing,
     CubicBezierDrawing,
     DrawingComponentGroup,
+    ImageDrawing,
     LineDrawing,
     OutputFormat,
     PathDrawing,
@@ -21,6 +23,7 @@ from InkGen.drawing_components import (
     RegularPolygonDrawing,
     TextDrawing,
 )
+from InkGen.image_assets import RasterImageAsset
 
 ROUNDED_RECTANGLE_CORNER_SEGMENTS = 4
 
@@ -77,6 +80,7 @@ class DXFDocument:
         """Create an empty DXF document."""
         self._canvas_height = None if canvas_height is None else _coerce_finite_float(canvas_height, name="canvas_height", minimum=0.0)
         self._entities: list[str] = []
+        self._image_registry = _DXFImageRegistry()
 
     def add_group(self, group: DrawingComponentGroup, *, layer: str | None = None) -> None:
         """Append all supported entities from a neutral drawing group."""
@@ -86,7 +90,7 @@ class DXFDocument:
             layer = _coerce_dxf_layer(layer, name="layer")
         context = DXFRenderContext(canvas_height=self._canvas_height, layer=layer or group.group_label or "0")
         for component in group.components:
-            self._entities.extend(_component_to_entities(component, context))
+            self._entities.extend(_component_to_entities(component, context, image_registry=self._image_registry))
 
     def to_dxf_string(self) -> str:
         """Serialize this document as ASCII DXF."""
@@ -109,11 +113,14 @@ class DXFDocument:
         for entity in self._entities:
             lines.extend(entity.splitlines())
         lines.extend(["0", "ENDSEC", "0", "EOF"])
+        if self._image_registry.definitions():
+            lines[-2:-2] = _dxf_objects_section(self._image_registry).splitlines()
         return "\n".join(lines) + "\n"
 
     def create_dxf(self, filepath: str | os.PathLike[str]) -> None:
         """Write this document to a DXF file."""
         path = _normalize_output_filepath(filepath)
+        self._image_registry.write_sidecars(os.path.dirname(path) or os.curdir)
         with open(path, "w", encoding="ascii") as handle:
             handle.write(self.to_dxf_string())
 
@@ -135,7 +142,55 @@ def _normalize_output_filepath(filepath: object) -> str:
     return path
 
 
-def _component_to_entities(component: object, context: DXFRenderContext) -> list[str]:
+@dataclass(frozen=True)
+class _DXFImageDefinition:
+    """External image definition referenced by DXF IMAGE entities."""
+
+    handle: str
+    filename: str
+    data: bytes
+    width: int
+    height: int
+
+
+class _DXFImageRegistry:
+    """Deterministic registry for DXF external image references."""
+
+    def __init__(self) -> None:
+        self._definition_by_digest: dict[str, _DXFImageDefinition] = {}
+
+    def register(self, image: RasterImageAsset) -> _DXFImageDefinition:
+        """Register an EXIF-normalized PNG sidecar image for DXF reference."""
+        data = image.png_bytes()
+        digest = sha256(data).hexdigest()
+        if digest not in self._definition_by_digest:
+            index = len(self._definition_by_digest) + 1
+            self._definition_by_digest[digest] = _DXFImageDefinition(
+                handle=f"{0x100 + index:X}",
+                filename=f"image{index}.png",
+                data=data,
+                width=image.width,
+                height=image.height,
+            )
+        return self._definition_by_digest[digest]
+
+    def definitions(self) -> tuple[_DXFImageDefinition, ...]:
+        """Return registered image definitions in deterministic insertion order."""
+        return tuple(self._definition_by_digest.values())
+
+    def write_sidecars(self, directory: str) -> None:
+        """Write registered sidecar images to a DXF output directory."""
+        for definition in self.definitions():
+            path = os.path.join(directory, definition.filename)
+            with open(path, "wb") as handle:
+                handle.write(definition.data)
+
+
+def _component_to_entities(
+    component: object,
+    context: DXFRenderContext,
+    image_registry: _DXFImageRegistry | None = None,
+) -> list[str]:
     if isinstance(component, LineDrawing):
         return [_line_entity(component.point_1, component.point_2, context)]
     if isinstance(component, RectangleDrawing):
@@ -157,6 +212,11 @@ def _component_to_entities(component: object, context: DXFRenderContext) -> list
         return [_lwpolyline_entity(concrete.points, context, closed=closed)]
     if isinstance(component, TextDrawing):
         return [_text_entity(component, context)]
+    if isinstance(component, ImageDrawing):
+        if image_registry is None:
+            image_registry = _DXFImageRegistry()
+        definition = image_registry.register(component.image)
+        return [_image_entity(component, definition, context)]
     raise TypeError(f"Unsupported DXF component: {component.__class__.__name__}")
 
 
@@ -266,6 +326,57 @@ def _circle_entity(component: CircleDrawing, context: DXFRenderContext) -> str:
             (40, component.radius),
         ]
     )
+
+
+def _image_entity(component: ImageDrawing, definition: _DXFImageDefinition, context: DXFRenderContext) -> str:
+    x, y = context.point(component.position[0], component.position[1])
+    _, y_bottom = context.point(component.position[0], component.position[1] + component.height)
+    v_height = y_bottom - y
+    return _pairs(
+        [
+            (0, "IMAGE"),
+            (8, context.layer),
+            (100, "AcDbRasterImage"),
+            (90, 0),
+            (10, x),
+            (20, y),
+            (30, 0.0),
+            (11, component.width),
+            (21, 0.0),
+            (31, 0.0),
+            (12, 0.0),
+            (22, v_height),
+            (32, 0.0),
+            (13, definition.width),
+            (23, definition.height),
+            (340, definition.handle),
+            (70, 1),
+            (280, 0),
+            (281, 50),
+        ]
+    )
+
+
+def _dxf_objects_section(image_registry: _DXFImageRegistry) -> str:
+    pairs: list[tuple[int, object]] = [(0, "SECTION"), (2, "OBJECTS")]
+    for definition in image_registry.definitions():
+        pairs.extend(
+            [
+                (0, "IMAGEDEF"),
+                (5, definition.handle),
+                (100, "AcDbRasterImageDef"),
+                (90, 0),
+                (1, definition.filename),
+                (10, definition.width),
+                (20, definition.height),
+                (11, 1.0),
+                (21, 1.0),
+                (280, 1),
+                (281, 0),
+            ]
+        )
+    pairs.extend([(0, "ENDSEC")])
+    return _pairs(pairs)
 
 
 def _pairs(pairs: list[tuple[int, object]]) -> str:

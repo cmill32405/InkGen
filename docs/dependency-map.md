@@ -102,6 +102,7 @@ tests and, where appropriate, recording an ADR.
 |---|---|---|
 | `drawing_components.py -> svg_generator.py/pdf_generator.py` inside `to_component()` | Neutral recipes materialize into concrete drawing components on demand. | Adding stateful renderer coupling would break renderer neutrality. |
 | `dxf_generator.py -> pdf_generator.py` indirectly through `component.to_component(OutputFormat.PDF)` for sampled geometry | DXF reuses existing point geometry for arcs, curves, paths, and regular polygons. | PDF changes to geometry sampling can alter DXF output. |
+| `dxf_generator.py -> image_assets.py` | DXF IMAGE entities reference deterministic PNG sidecar files generated from `RasterImageAsset`. | DXF image references require sidecar file writes next to the DXF artifact. |
 | `document_outputs.py -> drawing_components.py` | Flow documents can contain drawing groups and export them to DOCX/HTML/RTF/text. | Document outputs should not become the source of drawing geometry truth. |
 | `document_outputs.py -> image_assets.py` | DOCX output registers native image media parts for `ImageDrawing` blocks. | Flow documents should package media only; raster decoding and PDF/SVG image encoding stay in lower layers. |
 | `pdf_generator.py -> extraction_truth.py/grammar_truth.py` | PDF documents emit parser-facing truth records in PDF coordinates. | Truth schema changes can break downstream parser fixtures. |
@@ -123,7 +124,7 @@ These contracts are more important than individual implementation details.
 | PDF coordinate frame `pdf_points_bottom_left` | DocInt parser validation and ground truth comparisons | Parser scores compare against the wrong coordinate system |
 | Deterministic artifact bytes/records | Regression tests and fixture generation | Tests become flaky or fixtures churn |
 | Closed PDF renderer component set | PDF noninterference proofs and deterministic rendering | Custom dynamic `generate_pdf()` paths can break proof obligations |
-| Raster image alpha/orientation preservation | SVG/PDF/DOCX fixtures and colored-background drawings | Transparent pixels are flattened or compared against the wrong background; EXIF-rotated images render with wrong dimensions |
+| Raster image alpha/orientation/color preservation | SVG/PDF/DOCX/DXF fixtures and colored-background drawings | Transparent pixels are flattened or compared against the wrong background; EXIF-rotated images render with wrong dimensions; CMYK/ICC JPEGs lose color intent |
 | `pdf_render_contract.py` guard semantics | PO-GT-004 mutation gate and PDF render-path failures | Unsupported groups/components render instead of failing at the boundary |
 | `Layer.groups()` complete traversal | SVG/PDF renderers, truth emitters, and duplicate-label model layers | Reverting to `component_groups` collapses repeated labels |
 | Dependency-free PDF/DXF/DOCX emitters | Project dependency policy | New package dependency appears without approval |

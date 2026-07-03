@@ -76,6 +76,19 @@ def _image_asset(color: tuple[int, int, int, int] = (255, 0, 0, 128)) -> RasterI
     return RasterImageAsset.from_bytes(output.getvalue())
 
 
+def _jpeg_asset(*, orientation: int = 1) -> tuple[RasterImageAsset, bytes]:
+    image = Image.new("RGB", (2, 3), (255, 0, 0))
+    output = BytesIO()
+    save_kwargs: dict[str, object] = {}
+    if orientation != 1:
+        exif = Image.Exif()
+        exif[274] = orientation
+        save_kwargs["exif"] = exif
+    image.save(output, format="JPEG", **save_kwargs)
+    data = output.getvalue()
+    return RasterImageAsset.from_bytes(data), data
+
+
 @pytest.mark.condition("PDF-P3")
 def test_flow_document_exports_minimal_docx_package() -> None:
     """PDF-P3: FlowDocument writes a valid minimal DOCX package from paragraphs."""
@@ -191,6 +204,67 @@ def test_flow_document_docx_embeds_image_drawings_as_native_media_parts() -> Non
     assert 'r:embed="rId1"' in document_xml
     assert 'cx="1080000" cy="540000"' in document_xml
     assert "data:image" not in document_xml
+
+
+@pytest.mark.condition("RASTER-IMAGE-P3")
+def test_flow_document_docx_preserves_identity_png_source_bytes() -> None:
+    """RASTER-IMAGE-P3: DOCX keeps safe PNG source bytes instead of re-encoding."""
+    asset = _image_asset()
+    group = DrawingComponentGroup("png-docx")
+    group.add_component(ImageDrawing(asset, (1.0, 2.0), 30.0, 15.0))
+    document = FlowDocument(title="PNG Images")
+    document.add_drawing_group(group)
+
+    with zipfile.ZipFile(BytesIO(document.to_docx_bytes())) as package:
+        media = package.read("word/media/image1.png")
+
+    assert media == asset.data
+
+
+@pytest.mark.condition("RASTER-IMAGE-P3")
+def test_flow_document_docx_preserves_identity_jpegs_as_native_media_parts() -> None:
+    """RASTER-IMAGE-P3: DOCX keeps identity-orientation JPEG media native."""
+    asset, jpeg = _jpeg_asset()
+    group = DrawingComponentGroup("jpeg-docx")
+    group.add_component(ImageDrawing(asset, (1.0, 2.0), 30.0, 15.0))
+    document = FlowDocument(title="JPEG Images")
+    document.add_drawing_group(group)
+
+    with zipfile.ZipFile(BytesIO(document.to_docx_bytes())) as package:
+        names = set(package.namelist())
+        rels_xml = package.read("word/_rels/document.xml.rels").decode("utf-8")
+        content_types = package.read("[Content_Types].xml").decode("utf-8")
+        media = package.read("word/media/image1.jpg")
+
+    assert "word/media/image1.jpg" in names
+    assert media == jpeg
+    assert '<Default Extension="jpg" ContentType="image/jpeg"/>' in content_types
+    assert 'Target="media/image1.jpg"' in rels_xml
+
+
+@pytest.mark.condition("RASTER-IMAGE-P3")
+def test_flow_document_docx_normalizes_oriented_jpegs_to_png_media_parts() -> None:
+    """RASTER-IMAGE-P3: DOCX normalizes oriented JPEGs before media packaging."""
+    asset, _ = _jpeg_asset(orientation=6)
+    group = DrawingComponentGroup("oriented-jpeg-docx")
+    group.add_component(ImageDrawing(asset, (1.0, 2.0), 30.0, 15.0))
+    document = FlowDocument(title="Oriented JPEG Images")
+    document.add_drawing_group(group)
+
+    with zipfile.ZipFile(BytesIO(document.to_docx_bytes())) as package:
+        names = set(package.namelist())
+        rels_xml = package.read("word/_rels/document.xml.rels").decode("utf-8")
+        content_types = package.read("[Content_Types].xml").decode("utf-8")
+        media = package.read("word/media/image1.png")
+
+    with Image.open(BytesIO(media)) as image:
+        image.load()
+        assert image.size == (3, 2)
+
+    assert "word/media/image1.png" in names
+    assert "word/media/image1.jpg" not in names
+    assert '<Default Extension="png" ContentType="image/png"/>' in content_types
+    assert 'Target="media/image1.png"' in rels_xml
 
 
 @pytest.mark.condition("RASTER-IMAGE-P2")

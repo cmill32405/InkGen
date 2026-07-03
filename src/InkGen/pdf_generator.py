@@ -94,6 +94,17 @@ class PDFRenderContext:
         return self.image_registry.resource_name_for_asset(image)
 
 
+@dataclass(frozen=True)
+class _PDFImagePayload:
+    """Prepared PDF image samples and color metadata."""
+
+    color_samples: bytes
+    alpha_samples: bytes | None
+    color_filter: str
+    color_space: str
+    icc_profile: bytes | None = None
+
+
 class _PDFFontRegistry:
     """Deterministic registry for built-in PDF Standard 14 font resources."""
 
@@ -198,17 +209,18 @@ def _color_components(color: str) -> tuple[float, float, float] | None:
     )
 
 
-def _pdf_image_payload(asset: RasterImageAsset) -> tuple[bytes, bytes | None, str]:
-    """Return color samples, optional alpha samples, and the PDF color filter."""
-    if asset.can_passthrough_jpeg:
-        return asset.data, None, "DCTDecode"
+def _pdf_image_payload(asset: RasterImageAsset) -> _PDFImagePayload:
+    """Return color samples, optional alpha samples, and PDF color metadata."""
+    color_space = asset.jpeg_passthrough_color_space
+    if color_space is not None:
+        return _PDFImagePayload(asset.data, None, "DCTDecode", color_space, asset.icc_profile_bytes())
     with asset.image() as image:
         rgba = image.convert("RGBA")
         color = rgba.convert("RGB").tobytes()
         alpha = rgba.getchannel("A").tobytes()
     if all(value == 255 for value in alpha):
-        return color, None, "FlateDecode"
-    return color, alpha, "FlateDecode"
+        return _PDFImagePayload(color, None, "FlateDecode", "DeviceRGB")
+    return _PDFImagePayload(color, alpha, "FlateDecode", "DeviceRGB")
 
 
 def _pdf_image_xobject(
@@ -224,12 +236,26 @@ def _pdf_image_xobject(
     payload = zlib.compress(samples) if filter_name == "FlateDecode" else samples
     dictionary = (
         f"<< /Type /XObject /Subtype /Image /Width {width} /Height {height} "
-        f"/ColorSpace /{color_space} /BitsPerComponent 8 /Filter /{filter_name} /Length {len(payload)}"
+        f"/ColorSpace {_pdf_color_space_token(color_space)} /BitsPerComponent 8 /Filter /{filter_name} /Length {len(payload)}"
     )
     if smask_object_id is not None:
         dictionary += f" /SMask {smask_object_id} 0 R"
     dictionary += " >>"
     return dictionary.encode("ascii") + b"\nstream\n" + payload + b"\nendstream"
+
+
+def _pdf_color_space_token(color_space: str) -> str:
+    """Return a PDF color-space token for name or array-style color spaces."""
+    if color_space.startswith("["):
+        return color_space
+    return f"/{color_space}"
+
+
+def _pdf_icc_profile_object(profile: bytes, *, components: int, alternate: str) -> bytes:
+    """Build a compressed ICC profile stream object."""
+    compressed = zlib.compress(profile)
+    dictionary = f"<< /N {components} /Alternate /{alternate} /Filter /FlateDecode /Length {len(compressed)} >>"
+    return dictionary.encode("ascii") + b"\nstream\n" + compressed + b"\nendstream"
 
 
 def _pdf_base_font_for_style(style: TextStyle) -> str:
@@ -1168,9 +1194,23 @@ class DocumentPDF(Document):
 
         image_object_ids: dict[str, int] = {}
         for resource_name, asset in image_registry.resources():
-            color_samples, alpha_samples, color_filter = _pdf_image_payload(asset)
+            image_payload = _pdf_image_payload(asset)
+            color_space = image_payload.color_space
+            if image_payload.icc_profile is not None:
+                components = 4 if image_payload.color_space == "DeviceCMYK" else 3
+                icc_object_id = object_id
+                writer.set_object(
+                    icc_object_id,
+                    _pdf_icc_profile_object(
+                        image_payload.icc_profile,
+                        components=components,
+                        alternate=image_payload.color_space,
+                    ),
+                )
+                color_space = f"[/ICCBased {icc_object_id} 0 R]"
+                object_id += 1
             smask_object_id = None
-            if alpha_samples is not None:
+            if image_payload.alpha_samples is not None:
                 smask_object_id = object_id
                 writer.set_object(
                     smask_object_id,
@@ -1178,7 +1218,7 @@ class DocumentPDF(Document):
                         width=asset.width,
                         height=asset.height,
                         color_space="DeviceGray",
-                        samples=alpha_samples,
+                        samples=image_payload.alpha_samples,
                     ),
                 )
                 object_id += 1
@@ -1188,10 +1228,10 @@ class DocumentPDF(Document):
                 _pdf_image_xobject(
                     width=asset.width,
                     height=asset.height,
-                    color_space="DeviceRGB",
-                    samples=color_samples,
+                    color_space=color_space,
+                    samples=image_payload.color_samples,
                     smask_object_id=smask_object_id,
-                    filter_name=color_filter,
+                    filter_name=image_payload.color_filter,
                 ),
             )
             object_id += 1

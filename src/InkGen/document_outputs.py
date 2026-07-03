@@ -56,6 +56,15 @@ TEXT_DRAWING_COMPONENT_TYPES = frozenset({"TextDrawing"})
 DOCX_IMAGE_RELATIONSHIP_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
 DOCX_PICTURE_URI = "http://schemas.openxmlformats.org/drawingml/2006/picture"
 EMU_PER_MM = 36000
+DOCX_NATIVE_IMAGE_TYPES = {
+    "BMP": ("bmp", "image/bmp"),
+    "GIF": ("gif", "image/gif"),
+    "JPEG": ("jpg", "image/jpeg"),
+    "JPG": ("jpg", "image/jpeg"),
+    "PNG": ("png", "image/png"),
+    "TIFF": ("tif", "image/tiff"),
+    "TIF": ("tif", "image/tiff"),
+}
 
 
 @dataclass(frozen=True)
@@ -76,19 +85,19 @@ class _DocxMediaRegistry:
         self._part_by_digest: dict[str, _DocxMediaPart] = {}
         self._drawing_id = 0
 
-    def register_png(self, image: RasterImageAsset) -> _DocxMediaPart:
-        """Register an EXIF-normalized PNG media part and return its relationship."""
-        data = image.png_bytes()
-        digest = sha256(data).hexdigest()
+    def register_image(self, image: RasterImageAsset) -> _DocxMediaPart:
+        """Register a native or normalized DOCX media part and return its relationship."""
+        data, extension, content_type = _docx_media_payload(image)
+        digest = sha256(data + content_type.encode("ascii")).hexdigest()
         if digest not in self._part_by_digest:
             index = len(self._part_by_digest) + 1
-            target = f"media/image{index}.png"
+            target = f"media/image{index}.{extension}"
             self._part_by_digest[digest] = _DocxMediaPart(
                 relationship_id=f"rId{index}",
                 target=target,
                 package_name=f"word/{target}",
                 data=data,
-                content_type="image/png",
+                content_type=content_type,
             )
         return self._part_by_digest[digest]
 
@@ -398,9 +407,10 @@ class FlowDocument:
 
     @staticmethod
     def _docx_content_types_xml(media_registry: _DocxMediaRegistry) -> str:
-        media_defaults = ""
-        if any(part.content_type == "image/png" for part in media_registry.parts()):
-            media_defaults = '<Default Extension="png" ContentType="image/png"/>\n'
+        media_defaults = "".join(
+            f'<Default Extension="{extension}" ContentType="{content_type}"/>\n'
+            for extension, content_type in _docx_media_defaults(media_registry.parts())
+        )
         return (
             '<?xml version="1.0" encoding="UTF-8"?>\n'
             '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\n'
@@ -617,7 +627,7 @@ def _component_vml(component: object, min_x: float, min_y: float) -> str:
 
 def _image_drawing_docx(component: ImageDrawing, media_registry: _DocxMediaRegistry) -> str:
     """Return native DrawingML for a DOCX image drawing."""
-    part = media_registry.register_png(component.image)
+    part = media_registry.register_image(component.image)
     width = _positive_artifact_number(component.width, name="ImageDrawing width")
     height = _positive_artifact_number(component.height, name="ImageDrawing height")
     width_emu = _mm_to_emu(width)
@@ -648,6 +658,31 @@ def _image_drawing_docx(component: ImageDrawing, media_registry: _DocxMediaRegis
         "</wp:inline>"
         "</w:drawing></w:r></w:p>"
     )
+
+
+def _docx_media_payload(image: RasterImageAsset) -> tuple[bytes, str, str]:
+    """Return media bytes, extension, and content type for DOCX image packaging."""
+    native = DOCX_NATIVE_IMAGE_TYPES.get(image.format)
+    if native is not None and image.orientation == 1 and _docx_native_preserves_alpha(image):
+        extension, content_type = native
+        return image.data, extension, content_type
+    return image.png_bytes(), "png", "image/png"
+
+
+def _docx_native_preserves_alpha(image: RasterImageAsset) -> bool:
+    """Return whether native DOCX media can preserve this asset's alpha safely."""
+    if not image.has_alpha:
+        return True
+    return image.format == "PNG"
+
+
+def _docx_media_defaults(parts: tuple[_DocxMediaPart, ...]) -> tuple[tuple[str, str], ...]:
+    """Return deterministic extension/content-type defaults for registered media."""
+    defaults: dict[str, str] = {}
+    for part in parts:
+        extension = part.target.rsplit(".", maxsplit=1)[-1]
+        defaults[extension] = part.content_type
+    return tuple(sorted(defaults.items()))
 
 
 def _materialized_points(component: object, *, allow_missing: bool) -> list[tuple[float, float]]:

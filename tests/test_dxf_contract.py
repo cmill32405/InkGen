@@ -15,6 +15,7 @@ from InkGen.drawing_components import (
     LineDrawing,
     OutputFormat,
     PathDrawing,
+    PolygonalDrawing,
     RectangleDrawing,
     RegularPolygonDrawing,
     TextDrawing,
@@ -226,6 +227,21 @@ def test_dxf_rectangle_and_path_closure_contracts() -> None:
     assert path_entity.startswith("0\nLWPOLYLINE\n8\npath\n90\n3\n70\n1\n")
     assert open_path_entity.startswith("0\nLWPOLYLINE\n8\npath\n90\n2\n70\n0\n")
     assert _vertices(rounded_entity) == expected_rounded_points
+
+
+@pytest.mark.condition("RASTER-IMAGE-P3")
+def test_dxf_polygonal_branches_emit_closed_polylines() -> None:
+    """RASTER-IMAGE-P3: Polygon and regular polygon branches stay closed."""
+    style = _drawing_style()
+    context = DXFRenderContext(layer="closed")
+    polygon = PolygonalDrawing([(0.0, 0.0), (2.0, 0.0), (1.0, 2.0)], style)
+    regular = RegularPolygonDrawing((5.0, 5.0), 5, 4.0, style)
+
+    polygon_entity = _component_to_entities(polygon, context)[0]
+    regular_entity = _component_to_entities(regular, context)[0]
+
+    assert "\n70\n1\n" in polygon_entity
+    assert "\n70\n1\n" in regular_entity
 
 
 @pytest.mark.condition("DXF-P1")

@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+from io import BytesIO
 from uuid import uuid4
 
 import pytest
+from PIL import Image
 
 from InkGen.component import PathCommand
 from InkGen.drawing_components import (
     CircleDrawing,
     DrawingComponentGroup,
+    ImageDrawing,
     LineDrawing,
     OutputFormat,
     PathDrawing,
@@ -19,6 +22,7 @@ from InkGen.drawing_components import (
     TextDrawing,
 )
 from InkGen.dxf_generator import DXFDocument, DXFRenderContext, _lwpolyline_entity
+from InkGen.image_assets import RasterImageAsset
 from InkGen.style import DrawingStyle, Font, TextStyle
 
 
@@ -42,6 +46,14 @@ def _dxf_polyline_vertices(payload: str) -> list[tuple[float, float]]:
         else:
             index += 1
     return vertices
+
+
+def _png_asset(color: tuple[int, int, int, int] = (255, 0, 0, 128)) -> RasterImageAsset:
+    image = Image.new("RGBA", (2, 1), color)
+    image.putpixel((0, 0), (255, 0, 0, 0))
+    output = BytesIO()
+    image.save(output, format="PNG")
+    return RasterImageAsset.from_bytes(output.getvalue())
 
 
 @pytest.mark.condition("PDF-P3")
@@ -86,6 +98,82 @@ def test_dxf_document_writes_file_and_rejects_bad_paths(tmp_path) -> None:
     assert target.read_text(encoding="ascii") == document.to_dxf_string()
     with pytest.raises(ValueError, match="file path does not exist"):
         document.create_dxf(str(tmp_path / "missing" / "drawing.dxf"))
+
+
+@pytest.mark.condition("RASTER-IMAGE-P3")
+def test_dxf_document_exports_image_references_and_writes_sidecars(tmp_path) -> None:
+    """RASTER-IMAGE-P3: DXF emits IMAGE references and sidecar PNG assets."""
+    asset = _png_asset()
+    group = DrawingComponentGroup("images")
+    group.add_component(ImageDrawing(asset, (10.0, 20.0), 30.0, 15.0))
+    document = DXFDocument(canvas_height=100.0)
+    document.add_group(group)
+
+    payload = document.to_dxf_string()
+    entities_start = payload.index("\n2\nENTITIES\n")
+    image_start = payload.index("\n0\nIMAGE\n")
+    entities_end = payload.index("\n0\nENDSEC\n0\nSECTION\n2\nOBJECTS\n", image_start)
+    objects_start = payload.index("\n0\nSECTION\n2\nOBJECTS\n")
+    eof_start = payload.index("\n0\nEOF\n")
+    target = tmp_path / "drawing.dxf"
+    document.create_dxf(target)
+    sidecar = tmp_path / "image1.png"
+
+    assert "\nIMAGE\n" in payload
+    assert "\nIMAGEDEF\n" in payload
+    assert "\n1\nimage1.png\n" in payload
+    assert "\n340\n101\n" in payload
+    assert "\n10\n10\n20\n80\n" in payload
+    assert "\n11\n30\n21\n0\n31\n0\n" in payload
+    assert "\n12\n0\n22\n-15\n32\n0\n" in payload
+    assert entities_start < image_start < entities_end < objects_start < eof_start
+    assert target.read_text(encoding="ascii") == document.to_dxf_string()
+    assert sidecar.exists()
+    with Image.open(sidecar) as image:
+        image.load()
+        assert image.mode == "RGBA"
+        assert image.getpixel((0, 0))[3] == 0
+
+
+@pytest.mark.condition("RASTER-IMAGE-P3")
+def test_dxf_document_deduplicates_identical_image_sidecars(tmp_path) -> None:
+    """RASTER-IMAGE-P3: Reused image assets share one IMAGEDEF and sidecar file."""
+    asset = _png_asset()
+    group = DrawingComponentGroup("images")
+    group.add_component(ImageDrawing(asset, (0.0, 0.0), 2.0, 1.0))
+    group.add_component(ImageDrawing(asset, (5.0, 5.0), 2.0, 1.0))
+    document = DXFDocument(canvas_height=10.0)
+    document.add_group(group)
+
+    payload = document.to_dxf_string()
+    document.create_dxf(tmp_path / "drawing.dxf")
+
+    assert payload.count("\nIMAGE\n") == 2
+    assert payload.count("\nIMAGEDEF\n") == 1
+    assert (tmp_path / "image1.png").exists()
+    assert not (tmp_path / "image2.png").exists()
+
+
+@pytest.mark.condition("RASTER-IMAGE-P3")
+def test_dxf_document_assigns_distinct_image_sidecars_and_handles(tmp_path) -> None:
+    """RASTER-IMAGE-P3: Distinct DXF images receive distinct sidecars and handles."""
+    group = DrawingComponentGroup("images")
+    group.add_component(ImageDrawing(_png_asset((255, 0, 0, 128)), (0.0, 0.0), 2.0, 1.0))
+    group.add_component(ImageDrawing(_png_asset((0, 0, 255, 128)), (5.0, 5.0), 2.0, 1.0))
+    document = DXFDocument(canvas_height=10.0)
+    document.add_group(group)
+
+    payload = document.to_dxf_string()
+    document.create_dxf(tmp_path / "drawing.dxf")
+
+    assert payload.count("\nIMAGE\n") == 2
+    assert payload.count("\nIMAGEDEF\n") == 2
+    assert "\n340\n101\n" in payload
+    assert "\n340\n102\n" in payload
+    assert "\n1\nimage1.png\n" in payload
+    assert "\n1\nimage2.png\n" in payload
+    assert (tmp_path / "image1.png").exists()
+    assert (tmp_path / "image2.png").exists()
 
 
 @pytest.mark.condition("PDF-P3")

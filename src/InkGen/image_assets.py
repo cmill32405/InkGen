@@ -156,7 +156,24 @@ class RasterImageAsset:
     @property
     def can_passthrough_jpeg(self) -> bool:
         """Return whether the original JPEG bytes already match displayed pixels."""
-        return self.format in {"JPEG", "JPG"} and self.orientation == 1 and self.mode == "RGB" and not self.has_alpha
+        return self.jpeg_passthrough_color_space is not None
+
+    @property
+    def jpeg_passthrough_color_space(self) -> str | None:
+        """Return the PDF color space for safe JPEG pass-through."""
+        if self.format not in {"JPEG", "JPG"} or self.orientation != 1 or self.has_alpha:
+            return None
+        if self.mode == "RGB":
+            return "DeviceRGB"
+        if self.mode == "CMYK":
+            return "DeviceCMYK"
+        return None
+
+    def icc_profile_bytes(self) -> bytes | None:
+        """Return embedded ICC profile bytes when the source image carries one."""
+        with Image.open(io.BytesIO(self.data)) as image:
+            profile = image.info.get("icc_profile")
+        return profile if isinstance(profile, bytes) and profile else None
 
     def image(self) -> Image.Image:
         """Return a loaded EXIF-normalized Pillow image copy for renderer conversion."""
