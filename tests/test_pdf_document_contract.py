@@ -479,6 +479,212 @@ def test_document_pdf_rejects_invalid_serialized_internal_page_link_metadata() -
     )
 
 
+@pytest.mark.condition("PDF-DOC-NAMED-DEST-P3")
+def test_document_pdf_emits_named_destinations_and_links_round_trips() -> None:
+    """PDF-DOC-NAMED-DEST-P3: Named destinations and links render and round-trip."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    document.add_page()
+    document.add_page()
+    document.add_named_destination(r"A\1", 3, left=9.0)
+    document.add_named_destination("B (2)", 2, left=5.0, top=70.0, zoom=1.25)
+    document.add_named_destination_link(1, [5.0, 6.0, 20.0, 25.0], "B (2)")
+    document.add_named_destination_link(1, [30.0, 6.0, 45.0, 25.0], r"A\1")
+
+    payload = document.to_pdf_bytes()
+    recreated = DocumentPDF.create_from_dict(document.parameters)
+    objects = _pdf_objects(payload)
+    page_ids = _page_object_ids(payload)
+    annotation_refs = _annotation_refs_by_page(payload)
+    annotation_ids = [annotation_id for page_refs in annotation_refs for annotation_id in page_refs]
+
+    assert payload == document.to_pdf_bytes()
+    assert [len(page_refs) for page_refs in annotation_refs] == [2]
+    assert b"/Names << /Dests << /Names [" in objects[1]
+    assert f"(A\\\\1) [{page_ids[2]} 0 R /XYZ 9 null null]".encode("ascii") in objects[1]
+    assert f"(B \\(2\\)) [{page_ids[1]} 0 R /XYZ 5 70 1.25]".encode("ascii") in objects[1]
+    assert objects[1].index(b"(A\\\\1)") < objects[1].index(b"(B \\(2\\))")
+    assert b"/Subtype /Link" in objects[annotation_ids[0]]
+    assert b"/Dest (B \\(2\\))" in objects[annotation_ids[0]]
+    assert b"/Rect [5 6 20 25]" in objects[annotation_ids[0]]
+    assert b"/Dest (A\\\\1)" in objects[annotation_ids[1]]
+    assert b"/Rect [30 6 45 25]" in objects[annotation_ids[1]]
+    assert sorted(objects) == list(range(1, max(objects) + 1))
+    assert document.named_destinations() == (
+        {"name": r"A\1", "page_number": 3, "left": 9.0},
+        {"name": "B (2)", "page_number": 2, "left": 5.0, "top": 70.0, "zoom": 1.25},
+    )
+    assert document.named_destination_links() == (
+        {"page_number": 1, "rect": [5.0, 6.0, 20.0, 25.0], "destination_name": "B (2)"},
+        {"page_number": 1, "rect": [30.0, 6.0, 45.0, 25.0], "destination_name": r"A\1"},
+    )
+    assert recreated.parameters == document.parameters
+    assert recreated.to_pdf_bytes() == payload
+
+
+@pytest.mark.condition("PDF-DOC-NAMED-DEST-P3")
+def test_document_pdf_rejects_invalid_named_destination_metadata() -> None:
+    """PDF-DOC-NAMED-DEST-P3: Named destination metadata fails explicitly."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    document.add_page()
+
+    for name in [object(), "", "not latin \u0100"]:
+        with pytest.raises((TypeError, ValueError)):
+            document.add_named_destination(name, 1)  # type: ignore[arg-type]
+        assert document.named_destinations() == ()
+
+    with pytest.raises(ValueError, match="Position must correlate"):
+        document.add_named_destination("missing", 3)
+
+    invalid_destinations = [
+        {"left": True},
+        {"left": float("nan")},
+        {"top": object()},
+        {"top": float("inf")},
+        {"zoom": "bad"},
+        {"zoom": float("-inf")},
+    ]
+    for kwargs in invalid_destinations:
+        with pytest.raises((TypeError, ValueError), match="named destination"):
+            document.add_named_destination("bad", 1, **kwargs)  # type: ignore[arg-type]
+        assert document.named_destinations() == ()
+
+    document.add_named_destination("target", 2)
+    with pytest.raises(ValueError, match="Position must correlate"):
+        document.add_named_destination_link(3, [0.0, 0.0, 1.0, 1.0], "target")
+    for name in [object(), "", "not latin \u0100", "missing"]:
+        with pytest.raises((TypeError, ValueError)):
+            document.add_named_destination_link(1, [0.0, 0.0, 1.0, 1.0], name)  # type: ignore[arg-type]
+        assert document.named_destination_links() == ()
+    for rect in ["0 0 1 1", [0.0, 0.0, 1.0], [True, 0.0, 1.0, 1.0], [0.0, 0.0, 0.0, 1.0]]:
+        with pytest.raises((TypeError, ValueError)):
+            document.add_named_destination_link(1, rect, "target")  # type: ignore[arg-type]
+        assert document.named_destination_links() == ()
+
+    document.add_named_destination_link(1, [0.0, 0.0, 1.0, 1.0], "target")
+    document.clear_named_destination_links()
+    assert document.named_destination_links() == ()
+    document.add_named_destination_link(1, [0.0, 0.0, 1.0, 1.0], "target")
+    document.clear_named_destinations()
+
+    assert document.named_destinations() == ()
+    assert document.named_destination_links() == ()
+    assert "named_destinations" not in document.parameters["DocumentPDF"]
+    assert "named_destination_links" not in document.parameters["DocumentPDF"]
+    assert b"/Names" not in document.to_pdf_bytes()
+    assert b"/Annots" not in document.to_pdf_bytes()
+
+
+@pytest.mark.condition("PDF-DOC-NAMED-DEST-P3")
+def test_document_pdf_named_destinations_track_page_insertions_and_removals() -> None:
+    """PDF-DOC-NAMED-DEST-P3: Named destination targets and links track page mutations."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    document.add_page()
+    document.add_page()
+    document.add_named_destination("front", 1, left=1.0)
+    document.add_named_destination("middle", 2, left=2.0)
+    document.add_named_destination("tail", 3, left=3.0)
+    document.add_named_destination_link(1, [1.0, 1.0, 10.0, 10.0], "tail")
+    document.add_named_destination_link(2, [4.0, 4.0, 40.0, 40.0], "tail")
+    document.add_named_destination_link(3, [2.0, 2.0, 20.0, 20.0], "front")
+    document.add_named_destination_link(3, [3.0, 3.0, 30.0, 30.0], "middle")
+
+    document.add_page(position=2)
+
+    assert document.named_destinations() == (
+        {"name": "front", "page_number": 1, "left": 1.0},
+        {"name": "middle", "page_number": 3, "left": 2.0},
+        {"name": "tail", "page_number": 4, "left": 3.0},
+    )
+    assert document.named_destination_links() == (
+        {"page_number": 1, "rect": [1.0, 1.0, 10.0, 10.0], "destination_name": "tail"},
+        {"page_number": 3, "rect": [4.0, 4.0, 40.0, 40.0], "destination_name": "tail"},
+        {"page_number": 4, "rect": [2.0, 2.0, 20.0, 20.0], "destination_name": "front"},
+        {"page_number": 4, "rect": [3.0, 3.0, 30.0, 30.0], "destination_name": "middle"},
+    )
+
+    document.remove_page(3)
+
+    assert document.named_destinations() == (
+        {"name": "front", "page_number": 1, "left": 1.0},
+        {"name": "tail", "page_number": 3, "left": 3.0},
+    )
+    assert document.named_destination_links() == (
+        {"page_number": 1, "rect": [1.0, 1.0, 10.0, 10.0], "destination_name": "tail"},
+        {"page_number": 3, "rect": [2.0, 2.0, 20.0, 20.0], "destination_name": "front"},
+    )
+
+    document.remove_page(1)
+
+    assert document.named_destinations() == ({"name": "tail", "page_number": 2, "left": 3.0},)
+    assert document.named_destination_links() == ()
+
+
+@pytest.mark.condition("PDF-DOC-NAMED-DEST-P3")
+def test_document_pdf_named_destinations_use_value_equality_for_large_page_removal() -> None:
+    """PDF-DOC-NAMED-DEST-P3: Named destination removal uses page-number value equality."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    for _ in range(260):
+        document.add_page()
+    document.add_named_destination("front", 1)
+    document.add_named_destination("tail", int("260"))
+    document.add_named_destination_link(1, [1.0, 1.0, 10.0, 10.0], "tail")
+    document.add_named_destination_link(int("260"), [2.0, 2.0, 20.0, 20.0], "front")
+
+    document.remove_page(int("260"))
+
+    assert document.pages == 259
+    assert document.named_destinations() == ({"name": "front", "page_number": 1, "left": 0.0},)
+    assert document.named_destination_links() == ()
+
+
+@pytest.mark.condition("PDF-DOC-NAMED-DEST-P3")
+def test_document_pdf_rejects_invalid_serialized_named_destination_metadata() -> None:
+    """PDF-DOC-NAMED-DEST-P3: Serialized named destinations validate before rendering."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    document.add_page()
+    document.add_named_destination("target", 2, left=5.0, top=6.0, zoom=1.25)
+    document.add_named_destination_link(1, [1.0, 2.0, 30.0, 40.0], "target")
+
+    invalid_payloads = []
+    for mutator in [
+        lambda data: data["DocumentPDF"].__setitem__("named_destinations", "bad"),
+        lambda data: data["DocumentPDF"].__setitem__("named_destinations", [object()]),
+        lambda data: data["DocumentPDF"]["named_destinations"][0].pop("name"),
+        lambda data: data["DocumentPDF"]["named_destinations"][0].pop("page_number"),
+        lambda data: data["DocumentPDF"]["named_destinations"][0].__setitem__("name", ""),
+        lambda data: data["DocumentPDF"]["named_destinations"][0].__setitem__("page_number", 3),
+        lambda data: data["DocumentPDF"]["named_destinations"][0].__setitem__("left", float("nan")),
+        lambda data: data["DocumentPDF"]["named_destinations"][0].__setitem__("top", "bad"),
+        lambda data: data["DocumentPDF"]["named_destinations"][0].__setitem__("zoom", True),
+        lambda data: data["DocumentPDF"].__setitem__("named_destination_links", "bad"),
+        lambda data: data["DocumentPDF"].__setitem__("named_destination_links", [object()]),
+        lambda data: data["DocumentPDF"]["named_destination_links"][0].pop("page_number"),
+        lambda data: data["DocumentPDF"]["named_destination_links"][0].pop("rect"),
+        lambda data: data["DocumentPDF"]["named_destination_links"][0].pop("destination_name"),
+        lambda data: data["DocumentPDF"]["named_destination_links"][0].__setitem__("page_number", 3),
+        lambda data: data["DocumentPDF"]["named_destination_links"][0].__setitem__("rect", [0.0, 0.0, 0.0, 1.0]),
+        lambda data: data["DocumentPDF"]["named_destination_links"][0].__setitem__("destination_name", "missing"),
+    ]:
+        payload = deepcopy(document.parameters)
+        mutator(payload)
+        invalid_payloads.append(payload)
+
+    for payload in invalid_payloads:
+        with pytest.raises((TypeError, ValueError)):
+            DocumentPDF.create_from_dict(payload)
+
+    missing_left_payload = deepcopy(document.parameters)
+    missing_left_payload["DocumentPDF"]["named_destinations"][0].pop("left")
+    recreated = DocumentPDF.create_from_dict(missing_left_payload)
+
+    assert recreated.named_destinations() == ({"name": "target", "page_number": 2, "left": 0.0, "top": 6.0, "zoom": 1.25},)
+    assert recreated.named_destination_links() == ({"page_number": 1, "rect": [1.0, 2.0, 30.0, 40.0], "destination_name": "target"},)
+
+
 @pytest.mark.condition("PDF-DOC-OUTLINE-P3")
 def test_document_pdf_emits_flat_outlines_and_round_trips() -> None:
     """PDF-DOC-OUTLINE-P3: Flat PDF outlines render, link, and round-trip."""

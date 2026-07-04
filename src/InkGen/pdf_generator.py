@@ -106,6 +106,26 @@ class _PDFPageLinkAnnotation:
     zoom: float | None
 
 
+@dataclass(frozen=True)
+class _PDFNamedDestination:
+    """Validated PDF named destination metadata."""
+
+    name: str
+    page_number: int
+    left: float
+    top: float | None
+    zoom: float | None
+
+
+@dataclass(frozen=True)
+class _PDFNamedDestinationLinkAnnotation:
+    """Validated PDF link annotation targeting a named destination."""
+
+    page_number: int
+    rect: tuple[float, float, float, float]
+    destination_name: str
+
+
 class PDFGeneratorInterface(metaclass=abc.ABCMeta):
     """Interface for components that can emit PDF content-stream operators."""
 
@@ -376,6 +396,19 @@ def _coerce_pdf_outline_title(title: object) -> str:
     except UnicodeEncodeError as exc:
         raise ValueError("outline title must be encodable as latin-1") from exc
     return title
+
+
+def _coerce_pdf_destination_name(name: object) -> str:
+    """Return a PDF literal-string-safe named destination key."""
+    if not isinstance(name, str):
+        raise TypeError("named destination must be a string")
+    if not name:
+        raise ValueError("named destination must not be empty")
+    try:
+        name.encode("latin-1")
+    except UnicodeEncodeError as exc:
+        raise ValueError("named destination must be encodable as latin-1") from exc
+    return name
 
 
 def _coerce_pdf_destination_number(value: object, name: str, *, owner: str = "outline") -> float:
@@ -1608,6 +1641,8 @@ class DocumentPDF(Document):
         self._pdf_outlines: list[_PDFOutlineEntry] = []
         self._pdf_uri_links: list[_PDFUriLinkAnnotation] = []
         self._pdf_page_links: list[_PDFPageLinkAnnotation] = []
+        self._pdf_named_destinations: dict[str, _PDFNamedDestination] = {}
+        self._pdf_named_destination_links: list[_PDFNamedDestinationLinkAnnotation] = []
 
     @staticmethod
     def _iter_layer_groups(layer: Layer, *, sort: bool = False) -> tuple[ComponentGroup, ...]:
@@ -1703,6 +1738,56 @@ class DocumentPDF(Document):
         """Return serialized internal page link annotations in insertion order."""
         return tuple(self._page_link_payload(link) for link in self._pdf_page_links)
 
+    def add_named_destination(
+        self,
+        name: str,
+        page_number: int,
+        *,
+        left: float | int = 0.0,
+        top: float | int | None = None,
+        zoom: float | int | None = None,
+    ) -> None:
+        """Add or replace a named destination targeting an existing page."""
+        destination_name = _coerce_pdf_destination_name(name)
+        page_number = self._validate_existing_position(page_number)
+        destination_left = _coerce_pdf_destination_number(left, "left", owner="named destination")
+        destination_top = None if top is None else _coerce_pdf_destination_number(top, "top", owner="named destination")
+        destination_zoom = None if zoom is None else _coerce_pdf_destination_number(zoom, "zoom", owner="named destination")
+        self._pdf_named_destinations[destination_name] = _PDFNamedDestination(
+            destination_name,
+            page_number,
+            destination_left,
+            destination_top,
+            destination_zoom,
+        )
+
+    def clear_named_destinations(self) -> None:
+        """Remove all PDF named destinations and links that target them."""
+        self._pdf_named_destinations.clear()
+        self._pdf_named_destination_links.clear()
+
+    def named_destinations(self) -> tuple[dict[str, object], ...]:
+        """Return serialized named destinations sorted by destination name."""
+        return tuple(self._named_destination_payload(destination) for destination in self._sorted_named_destinations())
+
+    def add_named_destination_link(self, page_number: int, rect: Sequence[float | int], destination_name: str) -> None:
+        """Add a link annotation to an existing named destination."""
+        page_number = self._validate_existing_position(page_number)
+        destination_name = _coerce_pdf_destination_name(destination_name)
+        if destination_name not in self._pdf_named_destinations:
+            raise ValueError("named destination link target must exist")
+        page = self.page(page_number)
+        link_rect = _coerce_pdf_link_rect(rect, canvas_width=page._canvas.width, canvas_height=page._canvas.height)
+        self._pdf_named_destination_links.append(_PDFNamedDestinationLinkAnnotation(page_number, link_rect, destination_name))
+
+    def clear_named_destination_links(self) -> None:
+        """Remove all PDF link annotations targeting named destinations."""
+        self._pdf_named_destination_links.clear()
+
+    def named_destination_links(self) -> tuple[dict[str, object], ...]:
+        """Return serialized named destination link annotations in insertion order."""
+        return tuple(self._named_destination_link_payload(link) for link in self._pdf_named_destination_links)
+
     def set_page_label(self, page_number: int, label: str | None) -> None:
         """Set or clear a PDF page label for an existing page."""
         page_number = self._validate_existing_position(page_number)
@@ -1775,6 +1860,24 @@ class DocumentPDF(Document):
             )
             for link in self._pdf_page_links
         ]
+        self._pdf_named_destinations = {
+            name: _PDFNamedDestination(
+                destination.name,
+                destination.page_number + 1 if destination.page_number >= page_number else destination.page_number,
+                destination.left,
+                destination.top,
+                destination.zoom,
+            )
+            for name, destination in self._pdf_named_destinations.items()
+        }
+        self._pdf_named_destination_links = [
+            _PDFNamedDestinationLinkAnnotation(
+                link.page_number + 1 if link.page_number >= page_number else link.page_number,
+                link.rect,
+                link.destination_name,
+            )
+            for link in self._pdf_named_destination_links
+        ]
 
     def _shift_pdf_page_metadata_for_removal(self, page_number: int) -> None:
         """Shift PDF-specific page metadata when a page is removed."""
@@ -1815,6 +1918,29 @@ class DocumentPDF(Document):
             )
             for link in self._pdf_page_links
             if link.page_number != page_number and link.target_page_number != page_number
+        ]
+        removed_destination_names = {
+            name for name, destination in self._pdf_named_destinations.items() if destination.page_number == page_number
+        }
+        self._pdf_named_destinations = {
+            name: _PDFNamedDestination(
+                destination.name,
+                destination.page_number - 1 if destination.page_number > page_number else destination.page_number,
+                destination.left,
+                destination.top,
+                destination.zoom,
+            )
+            for name, destination in self._pdf_named_destinations.items()
+            if destination.page_number != page_number
+        }
+        self._pdf_named_destination_links = [
+            _PDFNamedDestinationLinkAnnotation(
+                link.page_number - 1 if link.page_number > page_number else link.page_number,
+                link.rect,
+                link.destination_name,
+            )
+            for link in self._pdf_named_destination_links
+            if link.page_number != page_number and link.destination_name not in removed_destination_names
         ]
 
     def _page_label_dictionary(self) -> str:
@@ -1930,6 +2056,65 @@ class DocumentPDF(Document):
             f"{_coerce_pdf_outline_destination_token(link.top)} {_coerce_pdf_outline_destination_token(link.zoom)}]"
         )
         return f"<< /Type /Annot /Subtype /Link /Rect {rect} /Border [0 0 0] /Dest {destination} >>"
+
+    def _sorted_named_destinations(self) -> tuple[_PDFNamedDestination, ...]:
+        """Return named destinations sorted by PDF name-tree key."""
+        return tuple(self._pdf_named_destinations[name] for name in sorted(self._pdf_named_destinations))
+
+    @staticmethod
+    def _named_destination_payload(destination: _PDFNamedDestination) -> dict[str, object]:
+        """Return serialized data for a validated named destination."""
+        payload: dict[str, object] = {
+            "name": destination.name,
+            "page_number": destination.page_number,
+            "left": destination.left,
+        }
+        if destination.top is not None:
+            payload["top"] = destination.top
+        if destination.zoom is not None:
+            payload["zoom"] = destination.zoom
+        return payload
+
+    @staticmethod
+    def _named_destination_link_payload(link: _PDFNamedDestinationLinkAnnotation) -> dict[str, object]:
+        """Return serialized data for a validated named destination link annotation."""
+        return {
+            "page_number": link.page_number,
+            "rect": list(link.rect),
+            "destination_name": link.destination_name,
+        }
+
+    def _named_destination_links_by_page(self) -> dict[int, tuple[_PDFNamedDestinationLinkAnnotation, ...]]:
+        """Return named destination link annotations grouped by source page."""
+        links_by_page: dict[int, list[_PDFNamedDestinationLinkAnnotation]] = {}
+        for link in self._pdf_named_destination_links:
+            links_by_page.setdefault(link.page_number, []).append(link)
+        return {page_number: tuple(links) for page_number, links in links_by_page.items()}
+
+    @staticmethod
+    def _named_destination_object(destination: _PDFNamedDestination, page_ids_by_number: Mapping[int, int]) -> str:
+        """Return a PDF destination array for a named destination."""
+        page_id = page_ids_by_number[destination.page_number]
+        return (
+            f"[{page_id} 0 R /XYZ {_number(destination.left)} "
+            f"{_coerce_pdf_outline_destination_token(destination.top)} {_coerce_pdf_outline_destination_token(destination.zoom)}]"
+        )
+
+    def _names_dictionary(self, page_ids_by_number: Mapping[int, int]) -> str:
+        """Return a PDF Names dictionary for named destinations."""
+        destination_entries = " ".join(
+            f"({_escape_pdf_string(destination.name)}) {self._named_destination_object(destination, page_ids_by_number)}"
+            for destination in self._sorted_named_destinations()
+        )
+        return f"<< /Dests << /Names [{destination_entries}] >> >>"
+
+    @staticmethod
+    def _named_destination_link_annotation_object(link: _PDFNamedDestinationLinkAnnotation) -> str:
+        """Return a PDF link annotation object targeting a named destination."""
+        left, bottom, right, top = link.rect
+        rect = f"[{_number(left)} {_number(bottom)} {_number(right)} {_number(top)}]"
+        destination = _escape_pdf_string(link.destination_name)
+        return f"<< /Type /Annot /Subtype /Link /Rect {rect} /Border [0 0 0] /Dest ({destination}) >>"
 
     def create_pdf(self, filepath: str | os.PathLike[str]) -> None:
         """Create a deterministic PDF file at the requested path."""
@@ -2054,12 +2239,17 @@ class DocumentPDF(Document):
         page_ids_by_number: dict[int, int] = {}
         uri_links_by_page = self._uri_links_by_page()
         page_links_by_page = self._page_links_by_page()
+        named_destination_links_by_page = self._named_destination_links_by_page()
         page_plans = []
         for page_number, (page, content) in enumerate(rendered_pages, start=1):
             content_bytes = content.encode("latin-1")
             content_id = object_id
             page_id = object_id + 1
-            page_annotations = tuple(uri_links_by_page.get(page_number, ())) + tuple(page_links_by_page.get(page_number, ()))
+            page_annotations = (
+                tuple(uri_links_by_page.get(page_number, ()))
+                + tuple(page_links_by_page.get(page_number, ()))
+                + tuple(named_destination_links_by_page.get(page_number, ()))
+            )
             annotation_ids = list(range(object_id + 2, object_id + 2 + len(page_annotations)))
             object_id += 2 + len(page_annotations)
             page_ids.append(page_id)
@@ -2085,12 +2275,15 @@ class DocumentPDF(Document):
             for annotation_id, link in zip(annotation_ids, page_annotations, strict=True):
                 if isinstance(link, _PDFUriLinkAnnotation):
                     writer.set_object(annotation_id, self._uri_link_annotation_object(link))
-                else:
+                elif isinstance(link, _PDFPageLinkAnnotation):
                     writer.set_object(annotation_id, self._page_link_annotation_object(link, page_ids_by_number))
+                else:
+                    writer.set_object(annotation_id, self._named_destination_link_annotation_object(link))
 
         kids = " ".join(f"{page_id} 0 R" for page_id in page_ids)
         writer.set_object(pages_id, f"<< /Type /Pages /Kids [{kids}] /Count {len(page_ids)} >>")
         page_labels = f" /PageLabels {self._page_label_dictionary()}" if self._pdf_page_labels else ""
+        names = f" /Names {self._names_dictionary(page_ids_by_number)}" if self._pdf_named_destinations else ""
         outlines = ""
         if self._pdf_outlines:
             outline_root_id = object_id
@@ -2104,7 +2297,7 @@ class DocumentPDF(Document):
             ).items():
                 writer.set_object(outline_object_id, outline_payload)
             outlines = f" /Outlines {outline_root_id} 0 R /PageMode /UseOutlines"
-        writer.set_object(catalog_id, f"<< /Type /Catalog /Pages {pages_id} 0 R{page_labels}{outlines} >>")
+        writer.set_object(catalog_id, f"<< /Type /Catalog /Pages {pages_id} 0 R{page_labels}{names}{outlines} >>")
         return writer.build(root_id=catalog_id, info_id=info_id)
 
     def _render_page_content(
@@ -2245,6 +2438,22 @@ class DocumentPDF(Document):
             top = link_payload.get("top")
             zoom = link_payload.get("zoom")
             document.add_page_link(page_number, rect, target_page_number, left=left, top=top, zoom=zoom)  # type: ignore[arg-type]
+        for destination_payload in _pdf_optional_sequence(payload, "named_destinations", "DocumentPDF"):
+            if not isinstance(destination_payload, Mapping):
+                raise TypeError("DocumentPDF named_destinations entries must be mappings")
+            name = _pdf_required_field(destination_payload, "name", "DocumentPDF named destination")
+            page_number = _pdf_required_field(destination_payload, "page_number", "DocumentPDF named destination")
+            left = destination_payload.get("left", 0.0)
+            top = destination_payload.get("top")
+            zoom = destination_payload.get("zoom")
+            document.add_named_destination(name, page_number, left=left, top=top, zoom=zoom)  # type: ignore[arg-type]
+        for link_payload in _pdf_optional_sequence(payload, "named_destination_links", "DocumentPDF"):
+            if not isinstance(link_payload, Mapping):
+                raise TypeError("DocumentPDF named_destination_links entries must be mappings")
+            page_number = _pdf_required_field(link_payload, "page_number", "DocumentPDF named destination link")
+            rect = _pdf_required_field(link_payload, "rect", "DocumentPDF named destination link")
+            destination_name = _pdf_required_field(link_payload, "destination_name", "DocumentPDF named destination link")
+            document.add_named_destination_link(page_number, rect, destination_name)  # type: ignore[arg-type]
         return document
 
     @property
@@ -2273,6 +2482,14 @@ class DocumentPDF(Document):
             document_payload["uri_links"] = [self._uri_link_payload(link) for link in self._pdf_uri_links]
         if self._pdf_page_links:
             document_payload["page_links"] = [self._page_link_payload(link) for link in self._pdf_page_links]
+        if self._pdf_named_destinations:
+            document_payload["named_destinations"] = [
+                self._named_destination_payload(destination) for destination in self._sorted_named_destinations()
+            ]
+        if self._pdf_named_destination_links:
+            document_payload["named_destination_links"] = [
+                self._named_destination_link_payload(link) for link in self._pdf_named_destination_links
+            ]
         return {"DocumentPDF": document_payload}
 
 

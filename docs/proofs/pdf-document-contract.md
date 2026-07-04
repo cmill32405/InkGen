@@ -4,7 +4,7 @@ This note applies the InkGen Definition of Done to PDF document contract slices.
 It covers group traversal in rendered PDF bytes, extraction truth, grammar truth
 when a layer contains repeated semantic labels, the public PDF file-writer path
 boundary, PDF page-structure metadata, flat PDF outlines/bookmarks, URI link
-annotations, and internal page link annotations.
+annotations, internal page link annotations, and named destinations.
 
 ## Scope
 
@@ -28,6 +28,12 @@ The slice covers:
 - `DocumentPDF.add_page_link()`
 - `DocumentPDF.clear_page_links()`
 - `DocumentPDF.page_links()`
+- `DocumentPDF.add_named_destination()`
+- `DocumentPDF.clear_named_destinations()`
+- `DocumentPDF.named_destinations()`
+- `DocumentPDF.add_named_destination_link()`
+- `DocumentPDF.clear_named_destination_links()`
+- `DocumentPDF.named_destination_links()`
 - `DocumentPDF.to_pdf_bytes()`
 - `DocumentPDF.create_from_dict()`
 - `DocumentPDF.parameters`
@@ -58,6 +64,8 @@ Affected surface:
   annotation contract.
 - `docs/adr/0006-pdf-internal-page-links.md`: accepted ADR for the internal
   page link annotation contract.
+- `docs/adr/0007-pdf-named-destinations.md`: accepted ADR for the named
+  destination contract.
 
 Incoming dependencies:
 
@@ -79,6 +87,9 @@ Incoming dependencies:
 - Callers can depend on `DocumentPDF.add_page_link()` to create internal PDF page
   link annotations from one existing page to another, and on serialization to
   preserve them.
+- Callers can depend on `DocumentPDF.add_named_destination()` to create named
+  page destinations and on `DocumentPDF.add_named_destination_link()` to create
+  link annotations targeting those destinations.
 
 Outgoing dependencies:
 
@@ -94,6 +105,10 @@ Outgoing dependencies:
 - Internal page link annotations use the same local PDF object writer, existing
   page-number validation, page-box rectangle validator, and `/XYZ` destination
   number validation; no dependency was added.
+- Named destinations and named-destination links use the same local PDF object
+  writer, existing page-number validation, page-box rectangle validator, literal
+  string escaping, and `/XYZ` destination number validation; no dependency was
+  added.
 
 Before/after edge changes:
 
@@ -127,6 +142,11 @@ Before/after edge changes:
   object allocation so internal link annotations can target later page objects,
   then emits page `/Annots` arrays and `/Subtype /Link` annotation objects with
   direct `/Dest` arrays.
+- After the named destination update, `DocumentPDF` owns a named destination map
+  and a flat ordered named-destination link list. Insertions and removals shift
+  or delete destination page targets and link source pages. `to_pdf_bytes()`
+  emits the catalog `/Names` dictionary with a `/Dests` name array and emits
+  `/Subtype /Link` annotations with literal-string `/Dest` names.
 
 Cycle/layer/coupling/redundancy result:
 
@@ -143,10 +163,14 @@ Cycle/layer/coupling/redundancy result:
 - Outline metadata is also local to `DocumentPDF`; nested outline trees remain
   deferred to avoid adding hierarchy semantics before a concrete parser-fixture
   need exists.
-- URI link metadata is local to `DocumentPDF`; generic annotations and internal
-- Internal page link metadata is local to `DocumentPDF`; generic annotations,
-  named destinations, and richer annotation appearances remain deferred until
-  there is a concrete fixture need.
+- URI link metadata is local to `DocumentPDF`; generic annotations and richer
+  annotation appearances remain deferred until there is a concrete fixture need.
+- Internal page link metadata is local to `DocumentPDF`; generic annotations and
+  richer annotation appearances remain deferred until there is a concrete
+  fixture need.
+- Named destination metadata is local to `DocumentPDF`; generic annotations,
+  nested outlines, tagged PDF, and richer annotation appearances remain deferred
+  until there is a concrete fixture need.
 
 ADR/rule impact:
 
@@ -158,6 +182,8 @@ ADR/rule impact:
   public API and serialized parameters.
 - ADR-0006 records the internal page link decision because this slice adds
   public API and serialized parameters.
+- ADR-0007 records the named destination decision because this slice adds public
+  API and serialized parameters.
 
 ## Domain Definitions
 
@@ -196,6 +222,14 @@ ADR/rule impact:
   any URI links on that page.
 - Serialized internal page link entries must be rejected before rendering if
   malformed.
+- PDF named destinations are unique non-empty Latin-1 names targeting existing
+  one-based page numbers with finite `/XYZ` destination numbers when provided.
+- Named destinations emit in deterministic name order in the catalog `/Names`
+  dictionary.
+- Named destination link annotations target existing destination names and use a
+  finite positive-area rectangle inside the source page MediaBox.
+- Serialized named destinations and named destination links must be rejected
+  before rendering if malformed.
 
 ## Comprehensiveness Matrix
 
@@ -219,6 +253,9 @@ ADR/rule impact:
 | Internal page link annotations | Emit deterministic page `/Annots` arrays and `/Subtype /Link` destination objects | PO-PDFDOC-016 | page link render/round-trip test | mutation target |
 | Internal page link source/target index shifts | Insert/remove pages shift or delete page link source and target pages with page indices | PO-PDFDOC-017 | page link page mutation test | mutation target |
 | Serialized internal page link metadata | Reject malformed page link payloads before rendering | PO-PDFDOC-018 | serialized page link rejection test | mutation target |
+| Named destinations | Emit deterministic catalog `/Names` `/Dests` arrays and named-destination links | PO-PDFDOC-019 | named destination render/round-trip test | mutation target |
+| Named destination page/index shifts | Insert/remove pages shift or delete destination targets and named-link source pages | PO-PDFDOC-020 | named destination page mutation test | mutation target |
+| Serialized named destination metadata | Reject malformed named destination payloads before rendering | PO-PDFDOC-021 | serialized named destination rejection test | mutation target |
 | Non-PDF group in a PDF page | Continue to fail loudly | Existing PDF generator test | killed |
 | Private layer storage mutation | Excluded from public contract | Explicit exclusion | Not applicable |
 
@@ -239,7 +276,7 @@ ADR/rule impact:
 | Golden artifact/visual | yes | PDF content stream is a generated artifact. | content-stream assertions |
 | Regression | yes | This closes the duplicate-label traversal regression. | dedicated tests |
 | Serialized payload | yes | Page labels and boxes are persisted in document parameters. | render/round-trip and malformed-payload tests |
-| Navigation metadata | yes | Flat PDF outlines, URI links, and internal page links add document navigation objects and page annotation arrays. | outline, URI link, and page link render/round-trip tests |
+| Navigation metadata | yes | Flat PDF outlines, URI links, internal page links, and named destinations add document navigation objects and page annotation arrays. | outline, URI link, page link, and named destination render/round-trip tests |
 
 ## Mutation Testing Gate
 
@@ -383,6 +420,39 @@ Current result after the internal page link annotation update:
     `strict=False`. `annotation_ids` is constructed from
     `len(page_annotations)`, so it has exactly the same length as the annotation
     sequence.
+- Gate result: pass with documented equivalent survivors.
+
+Current result after the named destination update:
+
+- Tool: Cosmic Ray 8.4.6.
+- Config: `tests/mutation/pdf_document_named_destination_cosmic_ray.toml`.
+- Filter: `tests/mutation/filter_pdf_document_named_destination_work_items.py`.
+- Test selection: focused PDF document, factory payload, and PDF generator tests.
+- Raw work items: 4111.
+- Proof-critical work items after filter: 147.
+- Killed mutants: 142.
+- Equivalent survivors: 5.
+- Surviving equivalent mutations:
+  - `_coerce_pdf_destination_number()` line 414 changed the separator before
+    `owner` from keyword-only `*` to positional-only `/` for `value` and `name`.
+    Public callers pass `value` and `name` positionally and `owner` by keyword,
+    so the public named-destination domain is unchanged.
+  - `_coerce_pdf_link_rect()` line 446 changed the parameter separator from
+    keyword-only `*` to positional-only `/` for `rect`. Public callers pass
+    `rect` positionally and `canvas_width`/`canvas_height` by keyword, so the
+    public `DocumentPDF.add_named_destination_link()` domain is unchanged.
+  - `DocumentPDF.add_named_destination()` line 1745 changed the separator before
+    `left`, `top`, and `zoom` from keyword-only `*` to positional-only `/`.
+    Existing tests and intended public use call destination values by keyword;
+    the mutation does not alter runtime behavior for the declared call domain.
+  - `_shift_pdf_page_metadata_for_removal()` line 1928 changed
+    `destination.page_number > page_number` to `>=`. The comprehension filters
+    `destination.page_number != page_number` before evaluating the output
+    expression, so equality is excluded from the expression domain.
+  - `_shift_pdf_page_metadata_for_removal()` line 1938 changed
+    `link.page_number > page_number` to `>=`. The comprehension filters
+    `link.page_number != page_number` before evaluating the output expression,
+    so equality is excluded from the expression domain.
 - Gate result: pass with documented equivalent survivors.
 
 ## PO-PDFDOC-001: PDF Rendering Traverses Every Stored Group
@@ -665,8 +735,8 @@ deterministic repeated rendering, and serialization round-trip equality.
 
 ### Counterexamples And Exclusions
 
-Named destinations, rich annotation appearances, generic annotation subtypes,
-and non-Latin-1 URI strings are excluded from this flat URI link slice.
+Rich annotation appearances, generic annotation subtypes, and non-Latin-1 URI
+strings are excluded from this flat URI link slice.
 
 ### Conclusion
 
@@ -739,9 +809,8 @@ deterministic repeated rendering, and serialization round-trip equality.
 
 ### Counterexamples And Exclusions
 
-Named destinations, remote destinations, non-`/XYZ` destination modes, rich
-annotation appearances, and generic annotation subtypes are excluded from this
-internal page link slice.
+Remote destinations, non-`/XYZ` destination modes, rich annotation appearances,
+and generic annotation subtypes are excluded from this internal page link slice.
 
 ### Conclusion
 
@@ -794,3 +863,87 @@ source/target pages, invalid rectangles, and invalid destination values.
 
 Proven for serialized internal page link annotations in the declared payload
 domain, with mutation verification documented above.
+
+## PO-PDFDOC-019: Named Destinations Emit And Round Trip
+
+### Claim
+
+`DocumentPDF` emits deterministic PDF named destinations through the catalog
+`/Names` dictionary, stores every same-page named-destination link in page
+`/Annots` arrays, targets destination names with literal-string `/Dest` values,
+and round-trips named destinations and links through `parameters` and
+`create_from_dict()`.
+
+### Proof Method
+
+`add_named_destination()` validates destination names, target page numbers, and
+destination numbers before storing a `_PDFNamedDestination`.
+`add_named_destination_link()` validates source pages, destination existence,
+and link rectangles before storing a `_PDFNamedDestinationLinkAnnotation`.
+`to_pdf_bytes()` emits deterministic `/Names << /Dests << /Names [...] >> >>`
+catalog entries sorted by destination name and emits named-destination link
+annotations after URI and internal page links for each page. Tests parse PDF
+objects, verify name-tree ordering, escaped destination names, exact page object
+targets, named `/Dest` annotations, deterministic repeated rendering, and
+serialization round-trip equality.
+
+### Counterexamples And Exclusions
+
+Nested name trees, remote destinations, non-`/XYZ` destination modes, rich
+annotation appearances, and generic annotation subtypes are excluded from this
+named destination slice.
+
+### Conclusion
+
+Proven for flat catalog named destinations and named-destination links in the
+declared PDF document domain, with the equivalent mutation survivors documented
+above.
+
+## PO-PDFDOC-020: Named Destinations Follow Page Mutations
+
+### Claim
+
+When pages are inserted or removed, named destination page targets and
+named-destination link source pages stay aligned with the same logical pages,
+and destinations or links tied to removed pages are deleted.
+
+### Proof Method
+
+`DocumentPDF.add_page()` and `DocumentPDF.remove_page()` route through the PDF
+metadata shift helpers. The named destination update extends those helpers to
+increment destination targets and link source pages at or after insertion
+points, decrement them after removed pages, remove destinations targeting
+removed pages, and remove named-destination links whose source page or
+destination name has been removed. Tests include links before, on, and after the
+mutation point, plus a large page-number removal case to prove value equality
+rather than object identity.
+
+### Conclusion
+
+Proven for page indices admitted by the `DocumentPDF` public page mutation
+methods, with the equivalent mutation survivors documented above.
+
+## PO-PDFDOC-021: Serialized Named Destination Metadata Fails Explicitly
+
+### Claim
+
+Malformed serialized `named_destinations` and `named_destination_links` payloads
+are rejected during `DocumentPDF.create_from_dict()` before any rendered PDF can
+be produced from bad named-destination metadata.
+
+### Proof Method
+
+`create_from_dict()` reads optional named destination and named-destination link
+sequences through `_pdf_optional_sequence()`, requires each entry to be a
+mapping, requires destination/link fields, defaults missing destination `left`
+to `0.0`, and delegates to `add_named_destination()` and
+`add_named_destination_link()` for name, page, rectangle, and destination
+validation. Tests mutate a valid payload into non-sequence containers,
+non-mapping entries, missing required fields, missing pages, invalid destination
+names, invalid rectangles, invalid destination values, and links to missing
+destination names.
+
+### Conclusion
+
+Proven for serialized named destinations and named-destination links in the
+declared payload domain, with mutation verification documented above.

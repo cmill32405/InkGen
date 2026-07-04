@@ -42,9 +42,9 @@ parser-facing technical drawings because it supports pages, vector primitives,
 closed renderer domains, deterministic bytes, extraction/grammar truth, raster
 images with alpha, JPEG pass-through, ICC profile emission, Standard 14 fonts,
 named TrueType/OpenType font embedding, page labels, Crop/Bleed/Trim/Art page
-boxes, flat outlines/bookmarks, URI and internal page link annotations,
-stroke/fill opacity through PDF ExtGState resources, and stroke
-dash/cap/join/miter operators.
+boxes, flat outlines/bookmarks, URI links, internal page links, named
+destinations, named-destination links, stroke/fill opacity through PDF ExtGState
+resources, and stroke dash/cap/join/miter operators.
 
 The remaining gaps that keep the backend from being a fully featured PDF
 creation system are:
@@ -54,7 +54,7 @@ creation system are:
 | Text encoding | WinAnsi literal strings, installed-font embedding, and printable WinAnsi `/ToUnicode` CMaps | Unicode/CID fonts, glyph subsetting, and full complex-script text extraction maps |
 | Text layout | Single positioned text components | Multi-line wrapping, alignment, tabs, columns, kerning, and complex-script shaping |
 | Graphics state | Basic stroke/fill primitives, stroke/fill alpha ExtGState resources, and stroke dash/cap/join/miter operators | Clipping paths, opacity groups, blend modes, gradients, and patterns |
-| Document structure | Pages, deterministic metadata, page labels, Crop/Bleed/Trim/Art boxes, flat outlines/bookmarks, URI link annotations, and internal page link annotations | Generic annotations, named destinations, nested outlines, and tagged PDF structure |
+| Document structure | Pages, deterministic metadata, page labels, Crop/Bleed/Trim/Art boxes, flat outlines/bookmarks, URI links, internal page links, named destinations, and named-destination links | Generic annotations, nested outlines, and tagged PDF structure |
 | Color/profile support | Device RGB/CMYK and JPEG ICC profile objects | Broader calibrated color spaces and selectable PDF/A-style archival constraints |
 | Import/conversion | SVG input remains SVG-only | Arbitrary SVG-to-PDF conversion and external PDF embedding are out of scope until explicitly approved |
 | Optimization/security | Classic xref table and plain objects | Object streams, font/image subsetting, encryption, and signatures if those become product requirements |
@@ -110,8 +110,19 @@ Omitted `top` or `zoom` values are emitted as PDF `null` destination entries.
 Internal links are stored in document parameters, round-trip through
 `DocumentPDF.create_from_dict()`, follow source and target page insertions and
 removals, and are emitted as deterministic `/Subtype /Link` annotations with a
-direct `/Dest` array. Named destinations, rich annotation appearances, and
-generic PDF annotation types are intentionally out of scope.
+direct `/Dest` array.
+
+Named destinations can be added through `DocumentPDF.add_named_destination()`,
+and active regions that target them can be added through
+`DocumentPDF.add_named_destination_link()`. Destination names are non-empty
+Latin-1 PDF literal strings. Named destinations target existing pages with PDF
+`/XYZ` destinations, are emitted through the catalog `/Names` dictionary, sort
+deterministically by destination name, round-trip through
+`DocumentPDF.create_from_dict()`, and follow page insertions and removals. Links
+to named destinations are deterministic `/Subtype /Link` annotations with a
+literal-string `/Dest`. Generic PDF annotation types, rich annotation
+appearances, nested outlines, and tagged PDF structure are intentionally out of
+scope.
 
 The PDF render path is intentionally closed. `DocumentPDF` renders exact
 `ComponentGroupPDF` groups, and `ComponentGroupPDF` accepts/renders only the
@@ -242,3 +253,6 @@ The PDF backend is covered by PDF-P1 tests for:
 - Internal page link annotations with serialization round trips, same-page
   annotation arrays, source/target page validation, insertion/removal index
   shifts, and invalid metadata rejection
+- Named destinations and named-destination link annotations with serialization
+  round trips, deterministic name-tree ordering, source/target validation,
+  insertion/removal index shifts, and invalid metadata rejection
