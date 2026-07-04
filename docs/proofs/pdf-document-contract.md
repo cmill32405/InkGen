@@ -3,8 +3,8 @@
 This note applies the InkGen Definition of Done to PDF document contract slices.
 It covers group traversal in rendered PDF bytes, extraction truth, grammar truth
 when a layer contains repeated semantic labels, the public PDF file-writer path
-boundary, PDF page-structure metadata, flat PDF outlines/bookmarks, and URI link
-annotations.
+boundary, PDF page-structure metadata, flat PDF outlines/bookmarks, URI link
+annotations, and internal page link annotations.
 
 ## Scope
 
@@ -25,6 +25,9 @@ The slice covers:
 - `DocumentPDF.add_uri_link()`
 - `DocumentPDF.clear_uri_links()`
 - `DocumentPDF.uri_links()`
+- `DocumentPDF.add_page_link()`
+- `DocumentPDF.clear_page_links()`
+- `DocumentPDF.page_links()`
 - `DocumentPDF.to_pdf_bytes()`
 - `DocumentPDF.create_from_dict()`
 - `DocumentPDF.parameters`
@@ -53,6 +56,8 @@ Affected surface:
   contract.
 - `docs/adr/0005-pdf-uri-link-annotations.md`: accepted ADR for the URI link
   annotation contract.
+- `docs/adr/0006-pdf-internal-page-links.md`: accepted ADR for the internal
+  page link annotation contract.
 
 Incoming dependencies:
 
@@ -71,6 +76,9 @@ Incoming dependencies:
   entries that target existing pages, and on serialization to preserve them.
 - Callers can depend on `DocumentPDF.add_uri_link()` to create PDF URI link
   annotations on existing pages, and on serialization to preserve them.
+- Callers can depend on `DocumentPDF.add_page_link()` to create internal PDF page
+  link annotations from one existing page to another, and on serialization to
+  preserve them.
 
 Outgoing dependencies:
 
@@ -83,6 +91,9 @@ Outgoing dependencies:
   validation; no dependency was added.
 - URI link annotations use the same local PDF object writer, existing page-number
   validation, and the page-box rectangle validator; no dependency was added.
+- Internal page link annotations use the same local PDF object writer, existing
+  page-number validation, page-box rectangle validator, and `/XYZ` destination
+  number validation; no dependency was added.
 
 Before/after edge changes:
 
@@ -110,6 +121,12 @@ Before/after edge changes:
   Insertions and removals shift or delete link page targets with affected page
   indices. `to_pdf_bytes()` emits page `/Annots` arrays and `/Subtype /Link`
   annotation objects with URI actions.
+- After the internal page link update, `DocumentPDF` owns a flat ordered page
+  link list. Insertions and removals shift or delete both source pages and target
+  pages with affected page indices. `to_pdf_bytes()` performs two-pass page
+  object allocation so internal link annotations can target later page objects,
+  then emits page `/Annots` arrays and `/Subtype /Link` annotation objects with
+  direct `/Dest` arrays.
 
 Cycle/layer/coupling/redundancy result:
 
@@ -127,7 +144,9 @@ Cycle/layer/coupling/redundancy result:
   deferred to avoid adding hierarchy semantics before a concrete parser-fixture
   need exists.
 - URI link metadata is local to `DocumentPDF`; generic annotations and internal
-  destination links remain deferred until there is a concrete fixture need.
+- Internal page link metadata is local to `DocumentPDF`; generic annotations,
+  named destinations, and richer annotation appearances remain deferred until
+  there is a concrete fixture need.
 
 ADR/rule impact:
 
@@ -136,6 +155,8 @@ ADR/rule impact:
 - ADR-0004 records the flat outline decision because this slice adds public API
   and serialized parameters.
 - ADR-0005 records the URI link annotation decision because this slice adds
+  public API and serialized parameters.
+- ADR-0006 records the internal page link decision because this slice adds
   public API and serialized parameters.
 
 ## Domain Definitions
@@ -167,6 +188,14 @@ ADR/rule impact:
 - Page `/Annots` arrays must include every URI link on that page in insertion
   order.
 - Serialized URI link entries must be rejected before rendering if malformed.
+- PDF internal page link annotations are flat, insertion-ordered entries. Each
+  entry has an existing one-based source page number, an existing one-based
+  target page number, a finite positive-area rectangle inside the source page
+  MediaBox, and finite `/XYZ` destination numbers when provided.
+- Page `/Annots` arrays must include every internal page link on that page after
+  any URI links on that page.
+- Serialized internal page link entries must be rejected before rendering if
+  malformed.
 
 ## Comprehensiveness Matrix
 
@@ -187,6 +216,9 @@ ADR/rule impact:
 | URI link annotations | Emit deterministic page `/Annots` arrays and `/Subtype /Link` URI action objects | PO-PDFDOC-013 | URI link render/round-trip test | mutation target |
 | URI link target index shifts | Insert/remove pages shift or delete URI link page targets with page indices | PO-PDFDOC-014 | URI link page mutation test | mutation target |
 | Serialized URI link metadata | Reject malformed URI link payloads before rendering | PO-PDFDOC-015 | serialized URI link rejection test | mutation target |
+| Internal page link annotations | Emit deterministic page `/Annots` arrays and `/Subtype /Link` destination objects | PO-PDFDOC-016 | page link render/round-trip test | mutation target |
+| Internal page link source/target index shifts | Insert/remove pages shift or delete page link source and target pages with page indices | PO-PDFDOC-017 | page link page mutation test | mutation target |
+| Serialized internal page link metadata | Reject malformed page link payloads before rendering | PO-PDFDOC-018 | serialized page link rejection test | mutation target |
 | Non-PDF group in a PDF page | Continue to fail loudly | Existing PDF generator test | killed |
 | Private layer storage mutation | Excluded from public contract | Explicit exclusion | Not applicable |
 
@@ -207,7 +239,7 @@ ADR/rule impact:
 | Golden artifact/visual | yes | PDF content stream is a generated artifact. | content-stream assertions |
 | Regression | yes | This closes the duplicate-label traversal regression. | dedicated tests |
 | Serialized payload | yes | Page labels and boxes are persisted in document parameters. | render/round-trip and malformed-payload tests |
-| Navigation metadata | yes | Flat PDF outlines and URI link annotations add document navigation objects and page annotation arrays. | outline and URI link render/round-trip tests |
+| Navigation metadata | yes | Flat PDF outlines, URI links, and internal page links add document navigation objects and page annotation arrays. | outline, URI link, and page link render/round-trip tests |
 
 ## Mutation Testing Gate
 
@@ -312,8 +344,45 @@ Current result after the URI link annotation update:
     `link.page_number != page_number` before evaluating the output expression,
     so equality is excluded from the expression domain.
   - `to_pdf_bytes()` line 1982 changed `zip(..., strict=True)` to
-    `strict=False`. `annotation_ids` is constructed from `len(page_links)`, so
-    it has exactly the same length as the page link sequence.
+    `strict=False`. `annotation_ids` is constructed from `len(page_annotations)`,
+    so it has exactly the same length as the annotation sequence.
+- Gate result: pass with documented equivalent survivors.
+
+Current result after the internal page link annotation update:
+
+- Tool: Cosmic Ray 8.4.6.
+- Config: `tests/mutation/pdf_document_page_link_cosmic_ray.toml`.
+- Filter: `tests/mutation/filter_pdf_document_page_link_work_items.py`.
+- Test selection: focused PDF document, factory payload, and PDF generator tests.
+- Raw work items: 3881.
+- Proof-critical work items after filter: 134.
+- Killed mutants: 128.
+- Equivalent survivors: 6.
+- Surviving equivalent mutations:
+  - `_coerce_pdf_destination_number()` line 381 changed the separator before
+    `owner` from keyword-only `*` to positional-only `/` for `value` and `name`.
+    Public callers pass `value` and `name` positionally and `owner` by keyword,
+    so the public `DocumentPDF.add_page_link()` domain is unchanged.
+  - `_coerce_pdf_link_rect()` line 413 changed the parameter separator from
+    keyword-only `*` to positional-only `/` for `rect`. Public callers pass
+    `rect` positionally and `canvas_width`/`canvas_height` by keyword, so the
+    public `DocumentPDF.add_page_link()` domain is unchanged.
+  - `DocumentPDF.add_page_link()` line 1683 changed the separator before
+    `left`, `top`, and `zoom` from keyword-only `*` to positional-only `/`.
+    Existing tests and intended public use call destination values by keyword;
+    the mutation does not alter runtime behavior for the declared call domain.
+  - `_shift_pdf_page_metadata_for_removal()` line 1809 changed
+    `link.page_number > page_number` to `>=`. The comprehension filters
+    `link.page_number != page_number` before evaluating the output expression,
+    so equality is excluded from the expression domain.
+  - `_shift_pdf_page_metadata_for_removal()` line 1811 changed
+    `link.target_page_number > page_number` to `>=`. The comprehension filters
+    `link.target_page_number != page_number` before evaluating the output
+    expression, so equality is excluded from the expression domain.
+  - `to_pdf_bytes()` line 2085 changed `zip(..., strict=True)` to
+    `strict=False`. `annotation_ids` is constructed from
+    `len(page_annotations)`, so it has exactly the same length as the annotation
+    sequence.
 - Gate result: pass with documented equivalent survivors.
 
 ## PO-PDFDOC-001: PDF Rendering Traverses Every Stored Group
@@ -596,9 +665,8 @@ deterministic repeated rendering, and serialization round-trip equality.
 
 ### Counterexamples And Exclusions
 
-Internal page links, named destinations, rich annotation appearances, generic
-annotation subtypes, and non-Latin-1 URI strings are excluded from this flat URI
-link slice.
+Named destinations, rich annotation appearances, generic annotation subtypes,
+and non-Latin-1 URI strings are excluded from this flat URI link slice.
 
 ### Conclusion
 
@@ -648,3 +716,81 @@ rectangles, and empty URI strings.
 
 Proven for serialized URI link annotations in the declared payload domain, with
 mutation verification documented above.
+
+## PO-PDFDOC-016: Internal Page Link Annotations Emit And Round Trip
+
+### Claim
+
+`DocumentPDF` emits deterministic internal page link annotations, stores every
+same-page link in the page `/Annots` array, targets existing PDF page objects
+with `/Dest`, and round-trips internal page links through `parameters` and
+`create_from_dict()`.
+
+### Proof Method
+
+`add_page_link()` validates source page number, target page number, rectangle
+bounds, and destination numbers before storing a `_PDFPageLinkAnnotation`.
+`to_pdf_bytes()` groups page links by source page, performs two-pass page object
+allocation so later page IDs are available to earlier annotations, wires page
+`/Annots` arrays, and emits `/Subtype /Link` dictionaries with direct `/Dest`
+arrays. Tests parse PDF objects, verify same-page annotation arrays, exact
+rectangle bytes, destination page object IDs, `/XYZ` destination tokens,
+deterministic repeated rendering, and serialization round-trip equality.
+
+### Counterexamples And Exclusions
+
+Named destinations, remote destinations, non-`/XYZ` destination modes, rich
+annotation appearances, and generic annotation subtypes are excluded from this
+internal page link slice.
+
+### Conclusion
+
+Proven for internal `/XYZ` page link annotations in the declared PDF document
+domain, with the equivalent mutation survivors documented above.
+
+## PO-PDFDOC-017: Internal Page Links Follow Source And Target Page Mutations
+
+### Claim
+
+When pages are inserted or removed, internal page link source and target pages
+stay aligned with the same logical pages after the mutation, and links whose
+source or target page is removed are deleted.
+
+### Proof Method
+
+`DocumentPDF.add_page()` and `DocumentPDF.remove_page()` route through the PDF
+metadata shift helpers. The internal page link update extends those helpers to
+increment source and target pages at or after insertion points, decrement source
+and target pages after removed pages, and drop links whose source or target page
+matches the removed page. Tests include links before, on, and after the mutation
+point, including a non-target link after a removed page to prove source-page
+decrement, and a large page-number removal case to prove value equality rather
+than object identity.
+
+### Conclusion
+
+Proven for page indices admitted by the `DocumentPDF` public page mutation
+methods, with the equivalent mutation survivors documented above.
+
+## PO-PDFDOC-018: Serialized Internal Page Link Metadata Fails Explicitly
+
+### Claim
+
+Malformed serialized `page_links` payloads are rejected during
+`DocumentPDF.create_from_dict()` before any rendered PDF can be produced from
+bad internal page link metadata.
+
+### Proof Method
+
+`create_from_dict()` reads optional page link sequences through
+`_pdf_optional_sequence()`, requires each entry to be a mapping, requires
+`page_number`, `rect`, and `target_page_number`, defaults missing `left` to
+`0.0`, and delegates to `add_page_link()` for source page, target page,
+rectangle, and destination validation. Tests mutate a valid payload into
+non-sequence containers, non-mapping entries, missing required fields, missing
+source/target pages, invalid rectangles, and invalid destination values.
+
+### Conclusion
+
+Proven for serialized internal page link annotations in the declared payload
+domain, with mutation verification documented above.

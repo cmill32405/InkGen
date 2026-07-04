@@ -32,6 +32,11 @@ def _pdf_objects(pdf_bytes: bytes) -> dict[int, bytes]:
     }
 
 
+def _page_object_ids(pdf_bytes: bytes) -> list[int]:
+    objects = _pdf_objects(pdf_bytes)
+    return [object_id for object_id, payload in sorted(objects.items()) if b"/Type /Page /Parent" in payload]
+
+
 def _annotation_refs_by_page(pdf_bytes: bytes) -> list[list[int]]:
     return [
         [int(object_id) for object_id in re.findall(rb"(\d+) 0 R", match.group("ids"))]
@@ -303,6 +308,175 @@ def test_document_pdf_rejects_invalid_serialized_page_structure_metadata() -> No
     decimal_page_payload["DocumentPDF"]["page_labels"] = {"1.0": "bad"}
     with pytest.raises(TypeError, match="page number keys"):
         DocumentPDF.create_from_dict(decimal_page_payload)
+
+
+@pytest.mark.condition("PDF-DOC-PAGE-LINK-P3")
+def test_document_pdf_emits_internal_page_link_annotations_and_round_trips() -> None:
+    """PDF-DOC-PAGE-LINK-P3: Internal page link annotations render and round-trip."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    document.add_page()
+    document.add_page()
+    document.add_page_link(1, [5.0, 6.0, 20.0, 25.0], 3, left=12.0)
+    document.add_page_link(1, [30.0, 6.0, 45.0, 25.0], 2, left=2.0, top=70.0, zoom=1.5)
+
+    payload = document.to_pdf_bytes()
+    recreated = DocumentPDF.create_from_dict(document.parameters)
+    objects = _pdf_objects(payload)
+    page_ids = _page_object_ids(payload)
+    annotation_refs = _annotation_refs_by_page(payload)
+    annotation_ids = [annotation_id for page_refs in annotation_refs for annotation_id in page_refs]
+
+    assert payload == document.to_pdf_bytes()
+    assert [len(page_refs) for page_refs in annotation_refs] == [2]
+    assert b"/Subtype /Link" in objects[annotation_ids[0]]
+    assert b"/Rect [5 6 20 25]" in objects[annotation_ids[0]]
+    assert b"/Border [0 0 0]" in objects[annotation_ids[0]]
+    assert f"/Dest [{page_ids[2]} 0 R /XYZ 12 null null]".encode("ascii") in objects[annotation_ids[0]]
+    assert b"/Rect [30 6 45 25]" in objects[annotation_ids[1]]
+    assert f"/Dest [{page_ids[1]} 0 R /XYZ 2 70 1.5]".encode("ascii") in objects[annotation_ids[1]]
+    assert sorted(objects) == list(range(1, max(objects) + 1))
+    assert document.page_links() == (
+        {"page_number": 1, "rect": [5.0, 6.0, 20.0, 25.0], "target_page_number": 3, "left": 12.0},
+        {"page_number": 1, "rect": [30.0, 6.0, 45.0, 25.0], "target_page_number": 2, "left": 2.0, "top": 70.0, "zoom": 1.5},
+    )
+    assert recreated.parameters == document.parameters
+    assert recreated.to_pdf_bytes() == payload
+
+
+@pytest.mark.condition("PDF-DOC-PAGE-LINK-P3")
+def test_document_pdf_rejects_invalid_internal_page_link_metadata() -> None:
+    """PDF-DOC-PAGE-LINK-P3: Internal page link metadata fails at explicit boundaries."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    document.add_page()
+
+    with pytest.raises(ValueError, match="Position must correlate"):
+        document.add_page_link(3, [0.0, 0.0, 1.0, 1.0], 1)
+    with pytest.raises(ValueError, match="Position must correlate"):
+        document.add_page_link(1, [0.0, 0.0, 1.0, 1.0], 3)
+
+    invalid_rectangles = [
+        "0 0 1 1",
+        [0.0, 0.0, 1.0],
+        [True, 0.0, 1.0, 1.0],
+        [0.0, 0.0, float("nan"), 1.0],
+        [0.0, 0.0, 0.0, 1.0],
+        [-1.0, 0.0, 1.0, 1.0],
+        [0.0, 0.0, 101.0, 1.0],
+    ]
+    for rect in invalid_rectangles:
+        with pytest.raises((TypeError, ValueError)):
+            document.add_page_link(1, rect, 2)  # type: ignore[arg-type]
+        assert document.page_links() == ()
+
+    invalid_destinations = [
+        {"left": True},
+        {"left": float("nan")},
+        {"top": object()},
+        {"top": float("inf")},
+        {"zoom": "bad"},
+        {"zoom": float("-inf")},
+    ]
+    for kwargs in invalid_destinations:
+        with pytest.raises((TypeError, ValueError), match="page link"):
+            document.add_page_link(1, [0.0, 0.0, 1.0, 1.0], 2, **kwargs)  # type: ignore[arg-type]
+        assert document.page_links() == ()
+
+    document.add_page_link(1, [0.0, 0.0, 1.0, 1.0], 2)
+    document.clear_page_links()
+
+    assert document.page_links() == ()
+    assert "page_links" not in document.parameters["DocumentPDF"]
+    assert b"/Annots" not in document.to_pdf_bytes()
+
+
+@pytest.mark.condition("PDF-DOC-PAGE-LINK-P3")
+def test_document_pdf_internal_page_links_track_page_insertions_and_removals() -> None:
+    """PDF-DOC-PAGE-LINK-P3: Internal page links stay aligned with page mutations."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    document.add_page()
+    document.add_page()
+    document.add_page_link(1, [1.0, 1.0, 10.0, 10.0], 3, left=1.0)
+    document.add_page_link(2, [2.0, 2.0, 20.0, 20.0], 1, left=2.0)
+    document.add_page_link(3, [3.0, 3.0, 30.0, 30.0], 2, left=3.0)
+    document.add_page_link(3, [4.0, 4.0, 40.0, 40.0], 1, left=4.0)
+
+    document.add_page(position=2)
+
+    assert document.page_links() == (
+        {"page_number": 1, "rect": [1.0, 1.0, 10.0, 10.0], "target_page_number": 4, "left": 1.0},
+        {"page_number": 3, "rect": [2.0, 2.0, 20.0, 20.0], "target_page_number": 1, "left": 2.0},
+        {"page_number": 4, "rect": [3.0, 3.0, 30.0, 30.0], "target_page_number": 3, "left": 3.0},
+        {"page_number": 4, "rect": [4.0, 4.0, 40.0, 40.0], "target_page_number": 1, "left": 4.0},
+    )
+
+    document.remove_page(3)
+
+    assert document.page_links() == (
+        {"page_number": 1, "rect": [1.0, 1.0, 10.0, 10.0], "target_page_number": 3, "left": 1.0},
+        {"page_number": 3, "rect": [4.0, 4.0, 40.0, 40.0], "target_page_number": 1, "left": 4.0},
+    )
+
+    document.remove_page(1)
+
+    assert document.page_links() == ()
+
+
+@pytest.mark.condition("PDF-DOC-PAGE-LINK-P3")
+def test_document_pdf_internal_page_links_use_value_equality_for_large_page_removal() -> None:
+    """PDF-DOC-PAGE-LINK-P3: Internal page link removal uses page-number value equality."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    for _ in range(260):
+        document.add_page()
+    document.add_page_link(1, [1.0, 1.0, 10.0, 10.0], 2)
+    document.add_page_link(1, [2.0, 2.0, 20.0, 20.0], int("260"))
+    document.add_page_link(int("260"), [3.0, 3.0, 30.0, 30.0], 1)
+
+    document.remove_page(int("260"))
+
+    assert document.pages == 259
+    assert document.page_links() == ({"page_number": 1, "rect": [1.0, 1.0, 10.0, 10.0], "target_page_number": 2, "left": 0.0},)
+
+
+@pytest.mark.condition("PDF-DOC-PAGE-LINK-P3")
+def test_document_pdf_rejects_invalid_serialized_internal_page_link_metadata() -> None:
+    """PDF-DOC-PAGE-LINK-P3: Serialized internal page links validate before rendering."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    document.add_page()
+    document.add_page_link(1, [1.0, 2.0, 30.0, 40.0], 2, left=5.0, top=6.0, zoom=1.25)
+
+    invalid_payloads = []
+    for mutator in [
+        lambda data: data["DocumentPDF"].__setitem__("page_links", "bad"),
+        lambda data: data["DocumentPDF"].__setitem__("page_links", [object()]),
+        lambda data: data["DocumentPDF"]["page_links"][0].pop("page_number"),
+        lambda data: data["DocumentPDF"]["page_links"][0].pop("rect"),
+        lambda data: data["DocumentPDF"]["page_links"][0].pop("target_page_number"),
+        lambda data: data["DocumentPDF"]["page_links"][0].__setitem__("page_number", 3),
+        lambda data: data["DocumentPDF"]["page_links"][0].__setitem__("target_page_number", 3),
+        lambda data: data["DocumentPDF"]["page_links"][0].__setitem__("rect", [0.0, 0.0, 0.0, 1.0]),
+        lambda data: data["DocumentPDF"]["page_links"][0].__setitem__("left", float("nan")),
+        lambda data: data["DocumentPDF"]["page_links"][0].__setitem__("top", "bad"),
+        lambda data: data["DocumentPDF"]["page_links"][0].__setitem__("zoom", True),
+    ]:
+        payload = deepcopy(document.parameters)
+        mutator(payload)
+        invalid_payloads.append(payload)
+
+    for payload in invalid_payloads:
+        with pytest.raises((TypeError, ValueError)):
+            DocumentPDF.create_from_dict(payload)
+
+    missing_left_payload = deepcopy(document.parameters)
+    missing_left_payload["DocumentPDF"]["page_links"][0].pop("left")
+    recreated = DocumentPDF.create_from_dict(missing_left_payload)
+
+    assert recreated.page_links() == (
+        {"page_number": 1, "rect": [1.0, 2.0, 30.0, 40.0], "target_page_number": 2, "left": 0.0, "top": 6.0, "zoom": 1.25},
+    )
 
 
 @pytest.mark.condition("PDF-DOC-OUTLINE-P3")
