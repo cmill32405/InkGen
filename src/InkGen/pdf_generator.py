@@ -74,6 +74,17 @@ PDF_PAGE_BOX_NAMES = {
 }
 
 
+@dataclass(frozen=True)
+class _PDFOutlineEntry:
+    """Validated flat PDF outline item metadata."""
+
+    title: str
+    page_number: int
+    left: float
+    top: float | None
+    zoom: float | None
+
+
 class PDFGeneratorInterface(metaclass=abc.ABCMeta):
     """Interface for components that can emit PDF content-stream operators."""
 
@@ -331,6 +342,36 @@ def _coerce_pdf_page_box(
     if not (0.0 <= left < right <= canvas_width and 0.0 <= bottom < top <= canvas_height):
         raise ValueError("page box must fit inside the page MediaBox with positive area")
     return left, bottom, right, top
+
+
+def _coerce_pdf_outline_title(title: object) -> str:
+    """Return a PDF literal-string-safe outline title."""
+    if not isinstance(title, str):
+        raise TypeError("outline title must be a string")
+    if not title:
+        raise ValueError("outline title must not be empty")
+    try:
+        title.encode("latin-1")
+    except UnicodeEncodeError as exc:
+        raise ValueError("outline title must be encodable as latin-1") from exc
+    return title
+
+
+def _coerce_pdf_destination_number(value: object, name: str) -> float:
+    """Return a finite PDF destination coordinate or zoom value."""
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise TypeError(f"outline {name} must be a finite number")
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError(f"outline {name} must be a finite number")
+    return number
+
+
+def _coerce_pdf_outline_destination_token(value: float | None) -> str:
+    """Return a PDF outline destination number or null token."""
+    if value is None:
+        return "null"
+    return _number(value)
 
 
 def _color_components(color: str) -> tuple[float, float, float] | None:
@@ -1520,6 +1561,7 @@ class DocumentPDF(Document):
         super().__init__(canvas)
         self._pdf_page_labels: dict[int, str] = {}
         self._pdf_page_boxes: dict[int, dict[str, tuple[float, float, float, float]]] = {}
+        self._pdf_outlines: list[_PDFOutlineEntry] = []
 
     @staticmethod
     def _iter_layer_groups(layer: Layer, *, sort: bool = False) -> tuple[ComponentGroup, ...]:
@@ -1545,6 +1587,31 @@ class DocumentPDF(Document):
         page_number = self._validate_existing_position(position)
         super().remove_page(page_number)
         self._shift_pdf_page_metadata_for_removal(page_number)
+
+    def add_outline(
+        self,
+        title: str,
+        page_number: int,
+        *,
+        left: float | int = 0.0,
+        top: float | int | None = None,
+        zoom: float | int | None = None,
+    ) -> None:
+        """Add a flat PDF outline entry that targets an existing page."""
+        page_number = self._validate_existing_position(page_number)
+        outline_title = _coerce_pdf_outline_title(title)
+        left_value = _coerce_pdf_destination_number(left, "left")
+        top_value = None if top is None else _coerce_pdf_destination_number(top, "top")
+        zoom_value = None if zoom is None else _coerce_pdf_destination_number(zoom, "zoom")
+        self._pdf_outlines.append(_PDFOutlineEntry(outline_title, page_number, left_value, top_value, zoom_value))
+
+    def clear_outlines(self) -> None:
+        """Remove all PDF outline entries from the document."""
+        self._pdf_outlines.clear()
+
+    def outlines(self) -> tuple[dict[str, object], ...]:
+        """Return serialized flat PDF outline entries in insertion order."""
+        return tuple(self._outline_entry_payload(outline) for outline in self._pdf_outlines)
 
     def set_page_label(self, page_number: int, label: str | None) -> None:
         """Set or clear a PDF page label for an existing page."""
@@ -1589,6 +1656,16 @@ class DocumentPDF(Document):
         """Shift PDF-specific page metadata when a page is inserted."""
         self._pdf_page_labels = {index + 1 if index >= page_number else index: label for index, label in self._pdf_page_labels.items()}
         self._pdf_page_boxes = {index + 1 if index >= page_number else index: boxes for index, boxes in self._pdf_page_boxes.items()}
+        self._pdf_outlines = [
+            _PDFOutlineEntry(
+                outline.title,
+                outline.page_number + 1 if outline.page_number >= page_number else outline.page_number,
+                outline.left,
+                outline.top,
+                outline.zoom,
+            )
+            for outline in self._pdf_outlines
+        ]
 
     def _shift_pdf_page_metadata_for_removal(self, page_number: int) -> None:
         """Shift PDF-specific page metadata when a page is removed."""
@@ -1598,6 +1675,17 @@ class DocumentPDF(Document):
         self._pdf_page_boxes = {
             index - 1 if index > page_number else index: boxes for index, boxes in self._pdf_page_boxes.items() if index != page_number
         }
+        self._pdf_outlines = [
+            _PDFOutlineEntry(
+                outline.title,
+                outline.page_number - 1 if outline.page_number > page_number else outline.page_number,
+                outline.left,
+                outline.top,
+                outline.zoom,
+            )
+            for outline in self._pdf_outlines
+            if outline.page_number != page_number
+        ]
 
     def _page_label_dictionary(self) -> str:
         """Return a PDF PageLabels number-tree dictionary for explicit labels."""
@@ -1613,6 +1701,47 @@ class DocumentPDF(Document):
             f"/{name} [{_number(left)} {_number(bottom)} {_number(right)} {_number(top)}]"
             for name, (left, bottom, right, top) in sorted(boxes.items())
         )
+
+    @staticmethod
+    def _outline_entry_payload(outline: _PDFOutlineEntry) -> dict[str, object]:
+        """Return serialized data for a validated PDF outline entry."""
+        payload: dict[str, object] = {
+            "title": outline.title,
+            "page_number": outline.page_number,
+            "left": outline.left,
+        }
+        if outline.top is not None:
+            payload["top"] = outline.top
+        if outline.zoom is not None:
+            payload["zoom"] = outline.zoom
+        return payload
+
+    @staticmethod
+    def _outline_objects(
+        *,
+        outline_root_id: int,
+        outline_item_ids: Sequence[int],
+        outlines: Sequence[_PDFOutlineEntry],
+        page_ids_by_number: Mapping[int, int],
+    ) -> dict[int, str]:
+        """Return flat PDF outline object payloads keyed by object id."""
+        objects: dict[int, str] = {}
+        first_id = outline_item_ids[0]
+        last_id = outline_item_ids[-1]
+        objects[outline_root_id] = f"<< /Type /Outlines /First {first_id} 0 R /Last {last_id} 0 R /Count {len(outlines)} >>"
+        for index, (object_id, outline) in enumerate(zip(outline_item_ids, outlines, strict=True)):
+            prev_link = f" /Prev {outline_item_ids[index - 1]} 0 R" if index > 0 else ""
+            next_link = f" /Next {outline_item_ids[index + 1]} 0 R" if index + 1 < len(outline_item_ids) else ""
+            page_id = page_ids_by_number[outline.page_number]
+            destination = (
+                f"[{page_id} 0 R /XYZ {_number(outline.left)} "
+                f"{_coerce_pdf_outline_destination_token(outline.top)} {_coerce_pdf_outline_destination_token(outline.zoom)}]"
+            )
+            objects[object_id] = (
+                f"<< /Title ({_escape_pdf_string(outline.title)}) /Parent {outline_root_id} 0 R"
+                f"{prev_link}{next_link} /Dest {destination} >>"
+            )
+        return objects
 
     def create_pdf(self, filepath: str | os.PathLike[str]) -> None:
         """Create a deterministic PDF file at the requested path."""
@@ -1734,12 +1863,14 @@ class DocumentPDF(Document):
             resource_sections.append(f"/ExtGState << {graphics_state_entries} >>")
         resources = f"<< {' '.join(resource_sections)} >>" if resource_sections else "<< >>"
 
+        page_ids_by_number: dict[int, int] = {}
         for page_number, (page, content) in enumerate(rendered_pages, start=1):
             content_bytes = content.encode("latin-1")
             content_id = object_id
             page_id = object_id + 1
             object_id += 2
             page_ids.append(page_id)
+            page_ids_by_number[page_number] = page_id
             page_box_entries = self._page_box_operators(page_number)
             page_boxes = f" {page_box_entries}" if page_box_entries else ""
             writer.set_object(
@@ -1758,7 +1889,20 @@ class DocumentPDF(Document):
         kids = " ".join(f"{page_id} 0 R" for page_id in page_ids)
         writer.set_object(pages_id, f"<< /Type /Pages /Kids [{kids}] /Count {len(page_ids)} >>")
         page_labels = f" /PageLabels {self._page_label_dictionary()}" if self._pdf_page_labels else ""
-        writer.set_object(catalog_id, f"<< /Type /Catalog /Pages {pages_id} 0 R{page_labels} >>")
+        outlines = ""
+        if self._pdf_outlines:
+            outline_root_id = object_id
+            outline_item_ids = list(range(object_id + 1, object_id + 1 + len(self._pdf_outlines)))
+            object_id += 1 + len(self._pdf_outlines)
+            for outline_object_id, outline_payload in self._outline_objects(
+                outline_root_id=outline_root_id,
+                outline_item_ids=outline_item_ids,
+                outlines=self._pdf_outlines,
+                page_ids_by_number=page_ids_by_number,
+            ).items():
+                writer.set_object(outline_object_id, outline_payload)
+            outlines = f" /Outlines {outline_root_id} 0 R /PageMode /UseOutlines"
+        writer.set_object(catalog_id, f"<< /Type /Catalog /Pages {pages_id} 0 R{page_labels}{outlines} >>")
         return writer.build(root_id=catalog_id, info_id=info_id)
 
     def _render_page_content(
@@ -1873,6 +2017,15 @@ class DocumentPDF(Document):
                 raise TypeError("DocumentPDF page_boxes entries must be mappings")
             for box_name, box in page_boxes.items():
                 document.set_page_box(page_number, box_name, box)  # type: ignore[arg-type]
+        for outline_payload in _pdf_optional_sequence(payload, "outlines", "DocumentPDF"):
+            if not isinstance(outline_payload, Mapping):
+                raise TypeError("DocumentPDF outlines entries must be mappings")
+            title = _pdf_required_field(outline_payload, "title", "DocumentPDF outline")
+            page_number = _pdf_required_field(outline_payload, "page_number", "DocumentPDF outline")
+            left = outline_payload.get("left", 0.0)
+            top = outline_payload.get("top")
+            zoom = outline_payload.get("zoom")
+            document.add_outline(title, page_number, left=left, top=top, zoom=zoom)  # type: ignore[arg-type]
         return document
 
     @property
@@ -1895,6 +2048,8 @@ class DocumentPDF(Document):
                 str(page_number): {box_name: list(box) for box_name, box in sorted(page_boxes.items())}
                 for page_number, page_boxes in sorted(self._pdf_page_boxes.items())
             }
+        if self._pdf_outlines:
+            document_payload["outlines"] = [self._outline_entry_payload(outline) for outline in self._pdf_outlines]
         return {"DocumentPDF": document_payload}
 
 

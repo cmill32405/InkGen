@@ -25,6 +25,13 @@ def _stream(pdf_bytes: bytes) -> str:
     return match.group("content").decode("latin-1")
 
 
+def _pdf_objects(pdf_bytes: bytes) -> dict[int, bytes]:
+    return {
+        int(match.group("id")): match.group("payload")
+        for match in re.finditer(rb"(?P<id>\d+) 0 obj\n(?P<payload>.*?)\nendobj", pdf_bytes, re.S)
+    }
+
+
 def _document_with_duplicate_label_groups() -> tuple[DocumentPDF, ComponentGroupPDF, ComponentGroupPDF]:
     document = DocumentPDF(Canvas(100.0, 80.0))
     document.add_page()
@@ -289,3 +296,191 @@ def test_document_pdf_rejects_invalid_serialized_page_structure_metadata() -> No
     decimal_page_payload["DocumentPDF"]["page_labels"] = {"1.0": "bad"}
     with pytest.raises(TypeError, match="page number keys"):
         DocumentPDF.create_from_dict(decimal_page_payload)
+
+
+@pytest.mark.condition("PDF-DOC-OUTLINE-P3")
+def test_document_pdf_emits_flat_outlines_and_round_trips() -> None:
+    """PDF-DOC-OUTLINE-P3: Flat PDF outlines render, link, and round-trip."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    document.add_page()
+    document.add_outline("Cover (A)", 1)
+    document.add_outline(r"Details\B", 2, left=12.5, top=70.0, zoom=1.25)
+    document.add_outline(title="Appendix", page_number=2, left=20.0)
+
+    payload = document.to_pdf_bytes()
+    recreated = DocumentPDF.create_from_dict(document.parameters)
+    objects = _pdf_objects(payload)
+
+    outline_root_match = re.search(rb"/Outlines (?P<id>\d+) 0 R", payload)
+    assert outline_root_match is not None
+    outline_root_id = int(outline_root_match.group("id"))
+    outline_root = objects[outline_root_id]
+    first_match = re.search(rb"/First (?P<id>\d+) 0 R", outline_root)
+    last_match = re.search(rb"/Last (?P<id>\d+) 0 R", outline_root)
+    assert first_match is not None
+    assert last_match is not None
+    first_id = int(first_match.group("id"))
+    last_id = int(last_match.group("id"))
+    middle_id = first_id + 1
+
+    assert payload == document.to_pdf_bytes()
+    assert b"/PageMode /UseOutlines" in payload
+    assert b"/Type /Outlines" in outline_root
+    assert b"/Count 3" in outline_root
+    assert b"/Title (Cover \\(A\\))" in objects[first_id]
+    assert b"/Title (Appendix)" in objects[last_id]
+    assert b"/Title (Details\\\\B)" in payload
+    assert f"/Parent {outline_root_id} 0 R".encode("ascii") in objects[first_id]
+    assert b"/Prev" not in objects[first_id]
+    assert f"/Next {middle_id} 0 R".encode("ascii") in objects[first_id]
+    assert f"/Prev {first_id} 0 R".encode("ascii") in objects[middle_id]
+    assert f"/Next {last_id} 0 R".encode("ascii") in objects[middle_id]
+    assert f"/Prev {middle_id} 0 R".encode("ascii") in objects[last_id]
+    assert b"/Next" not in objects[last_id]
+    assert b"/XYZ 0 null null]" in objects[first_id]
+    assert b"/XYZ 12.5 70 1.25]" in objects[middle_id]
+    assert b"/XYZ 20 null null]" in objects[last_id]
+    assert sorted(objects) == list(range(1, max(objects) + 1))
+    assert document.outlines() == (
+        {"title": "Cover (A)", "page_number": 1, "left": 0.0},
+        {"title": r"Details\B", "page_number": 2, "left": 12.5, "top": 70.0, "zoom": 1.25},
+        {"title": "Appendix", "page_number": 2, "left": 20.0},
+    )
+    assert recreated.parameters == document.parameters
+    assert recreated.to_pdf_bytes() == payload
+
+
+@pytest.mark.condition("PDF-DOC-OUTLINE-P3")
+def test_document_pdf_rejects_invalid_outline_metadata() -> None:
+    """PDF-DOC-OUTLINE-P3: Outline metadata fails at explicit boundaries."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+
+    for title in [object(), "", "not latin \u0100"]:
+        with pytest.raises((TypeError, ValueError)):
+            document.add_outline(title, 1)  # type: ignore[arg-type]
+        assert document.outlines() == ()
+
+    with pytest.raises(ValueError, match="Position must correlate"):
+        document.add_outline("missing", 2)
+
+    invalid_destinations = [
+        {"left": True},
+        {"left": float("nan")},
+        {"top": object()},
+        {"top": float("inf")},
+        {"zoom": "bad"},
+        {"zoom": float("-inf")},
+    ]
+    for kwargs in invalid_destinations:
+        with pytest.raises((TypeError, ValueError), match="outline"):
+            document.add_outline("bad destination", 1, **kwargs)  # type: ignore[arg-type]
+        assert document.outlines() == ()
+
+    document.add_outline("valid", 1)
+    document.clear_outlines()
+
+    assert document.outlines() == ()
+    assert "outlines" not in document.parameters["DocumentPDF"]
+    assert b"/Outlines" not in document.to_pdf_bytes()
+
+
+@pytest.mark.condition("PDF-DOC-OUTLINE-P3")
+def test_document_pdf_outline_metadata_tracks_page_insertions_and_removals() -> None:
+    """PDF-DOC-OUTLINE-P3: Outlines stay aligned with page mutations."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    document.add_page()
+    document.add_page()
+    document.add_outline("front", 1)
+    document.add_outline("middle", 2)
+    document.add_outline("tail", 3)
+
+    document.add_page(position=2)
+
+    assert document.outlines() == (
+        {"title": "front", "page_number": 1, "left": 0.0},
+        {"title": "middle", "page_number": 3, "left": 0.0},
+        {"title": "tail", "page_number": 4, "left": 0.0},
+    )
+
+    document.remove_page(3)
+
+    assert document.outlines() == (
+        {"title": "front", "page_number": 1, "left": 0.0},
+        {"title": "tail", "page_number": 3, "left": 0.0},
+    )
+
+    document.remove_page(1)
+
+    assert document.outlines() == ({"title": "tail", "page_number": 2, "left": 0.0},)
+
+
+@pytest.mark.condition("PDF-DOC-OUTLINE-P3")
+def test_document_pdf_outline_metadata_uses_value_equality_for_large_page_removal() -> None:
+    """PDF-DOC-OUTLINE-P3: Outline removal uses page-number value equality."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    for _ in range(260):
+        document.add_page()
+    document.add_outline("front", 1)
+    document.add_outline("tail", int("260"))
+
+    document.remove_page(int("260"))
+
+    assert document.pages == 259
+    assert document.outlines() == ({"title": "front", "page_number": 1, "left": 0.0},)
+
+
+@pytest.mark.condition("PDF-DOC-OUTLINE-P3")
+def test_document_pdf_outlines_render_large_flat_lists_without_terminal_next_link() -> None:
+    """PDF-DOC-OUTLINE-P3: Large flat outline lists terminate the Next chain."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    for index in range(260):
+        document.add_outline(f"bookmark {index}", 1)
+
+    payload = document.to_pdf_bytes()
+
+    assert b"/Count 260" in payload
+    assert b"/Title (bookmark 259)" in payload
+    assert b"/Title (bookmark 260)" not in payload
+
+
+@pytest.mark.condition("PDF-DOC-OUTLINE-P3")
+def test_document_pdf_rejects_invalid_serialized_outline_metadata() -> None:
+    """PDF-DOC-OUTLINE-P3: Serialized outlines validate before rendering."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    document.add_outline("valid", 1, left=1.0, top=2.0, zoom=1.0)
+
+    invalid_payloads = []
+    for mutator in [
+        lambda data: data["DocumentPDF"].__setitem__("outlines", "bad"),
+        lambda data: data["DocumentPDF"].__setitem__("outlines", [object()]),
+        lambda data: data["DocumentPDF"]["outlines"][0].pop("title"),
+        lambda data: data["DocumentPDF"]["outlines"][0].pop("page_number"),
+        lambda data: data["DocumentPDF"]["outlines"][0].__setitem__("title", ""),
+        lambda data: data["DocumentPDF"]["outlines"][0].__setitem__("page_number", 2),
+        lambda data: data["DocumentPDF"]["outlines"][0].__setitem__("left", float("nan")),
+        lambda data: data["DocumentPDF"]["outlines"][0].__setitem__("top", "bad"),
+        lambda data: data["DocumentPDF"]["outlines"][0].__setitem__("zoom", True),
+    ]:
+        payload = deepcopy(document.parameters)
+        mutator(payload)
+        invalid_payloads.append(payload)
+
+    for payload in invalid_payloads:
+        with pytest.raises((TypeError, ValueError)):
+            DocumentPDF.create_from_dict(payload)
+
+    non_sequence_payload = deepcopy(document.parameters)
+    non_sequence_payload["DocumentPDF"]["outlines"] = object()
+    with pytest.raises(TypeError, match="DocumentPDF outlines must be a sequence"):
+        DocumentPDF.create_from_dict(non_sequence_payload)
+
+    missing_left_payload = deepcopy(document.parameters)
+    missing_left_payload["DocumentPDF"]["outlines"][0].pop("left")
+    recreated = DocumentPDF.create_from_dict(missing_left_payload)
+
+    assert recreated.outlines() == ({"title": "valid", "page_number": 1, "left": 0.0, "top": 2.0, "zoom": 1.0},)

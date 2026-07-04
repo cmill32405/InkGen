@@ -42,8 +42,8 @@ parser-facing technical drawings because it supports pages, vector primitives,
 closed renderer domains, deterministic bytes, extraction/grammar truth, raster
 images with alpha, JPEG pass-through, ICC profile emission, Standard 14 fonts,
 named TrueType/OpenType font embedding, page labels, Crop/Bleed/Trim/Art page
-boxes, stroke/fill opacity through PDF ExtGState resources, and stroke
-dash/cap/join/miter operators.
+boxes, flat outlines/bookmarks, stroke/fill opacity through PDF ExtGState
+resources, and stroke dash/cap/join/miter operators.
 
 The remaining gaps that keep the backend from being a fully featured PDF
 creation system are:
@@ -53,7 +53,7 @@ creation system are:
 | Text encoding | WinAnsi literal strings, installed-font embedding, and printable WinAnsi `/ToUnicode` CMaps | Unicode/CID fonts, glyph subsetting, and full complex-script text extraction maps |
 | Text layout | Single positioned text components | Multi-line wrapping, alignment, tabs, columns, kerning, and complex-script shaping |
 | Graphics state | Basic stroke/fill primitives, stroke/fill alpha ExtGState resources, and stroke dash/cap/join/miter operators | Clipping paths, opacity groups, blend modes, gradients, and patterns |
-| Document structure | Pages, deterministic metadata, page labels, and Crop/Bleed/Trim/Art boxes | Outlines/bookmarks, links, annotations, and tagged PDF structure |
+| Document structure | Pages, deterministic metadata, page labels, Crop/Bleed/Trim/Art boxes, and flat outlines/bookmarks | Links, annotations, nested outlines, and tagged PDF structure |
 | Color/profile support | Device RGB/CMYK and JPEG ICC profile objects | Broader calibrated color spaces and selectable PDF/A-style archival constraints |
 | Import/conversion | SVG input remains SVG-only | Arbitrary SVG-to-PDF conversion and external PDF embedding are out of scope until explicitly approved |
 | Optimization/security | Classic xref table and plain objects | Object streams, font/image subsetting, encryption, and signatures if those become product requirements |
@@ -83,6 +83,14 @@ on the target page dictionary as `/CropBox`, `/BleedBox`, `/TrimBox`, or
 stored in document parameters, round-trip through `DocumentPDF.create_from_dict()`,
 and follow page insertions and removals. Invalid page labels, page numbers, box
 names, and box coordinates fail at the `DocumentPDF` boundary before rendering.
+
+`DocumentPDF` also supports flat PDF outlines through `add_outline()`. Each
+outline has a Latin-1 title, targets an existing page, and may set PDF `/XYZ`
+destination `left`, `top`, and `zoom` values. Omitted `top` or `zoom` values are
+emitted as PDF `null` destination entries. Outlines are stored in document
+parameters, round-trip through `DocumentPDF.create_from_dict()`, follow page
+insertions and removals, and are emitted as a deterministic flat outline list.
+Nested outlines are intentionally out of scope for the current backend.
 
 The PDF render path is intentionally closed. `DocumentPDF` renders exact
 `ComponentGroupPDF` groups, and `ComponentGroupPDF` accepts/renders only the
@@ -205,3 +213,5 @@ The PDF backend is covered by PDF-P1 tests for:
 - Visual spot-check artifact generation
 - Page labels and Crop/Bleed/Trim/Art page boxes with serialization round trips,
   insertion/removal index shifts, and invalid metadata rejection
+- Flat PDF outlines/bookmarks with serialization round trips, destination
+  validation, insertion/removal index shifts, and invalid metadata rejection

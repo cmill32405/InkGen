@@ -3,7 +3,7 @@
 This note applies the InkGen Definition of Done to PDF document contract slices.
 It covers group traversal in rendered PDF bytes, extraction truth, grammar truth
 when a layer contains repeated semantic labels, the public PDF file-writer path
-boundary, and PDF page-structure metadata.
+boundary, PDF page-structure metadata, and flat PDF outlines/bookmarks.
 
 ## Scope
 
@@ -18,6 +18,9 @@ The slice covers:
 - `DocumentPDF.page_label()`
 - `DocumentPDF.set_page_box()`
 - `DocumentPDF.page_box()`
+- `DocumentPDF.add_outline()`
+- `DocumentPDF.clear_outlines()`
+- `DocumentPDF.outlines()`
 - `DocumentPDF.to_pdf_bytes()`
 - `DocumentPDF.create_from_dict()`
 - `DocumentPDF.parameters`
@@ -42,6 +45,8 @@ Affected surface:
 - `docs/proofs/pdf-document-contract.md`: proof note.
 - `docs/adr/0003-pdf-page-structure-metadata.md`: accepted ADR for the
   page-label and page-box contract.
+- `docs/adr/0004-pdf-flat-outlines.md`: accepted ADR for the flat outline
+  contract.
 
 Incoming dependencies:
 
@@ -56,6 +61,8 @@ Incoming dependencies:
   `DocumentPDF.set_page_box()` for PDF-specific page metadata, and on
   `DocumentPDF.parameters` plus `DocumentPDF.create_from_dict()` to preserve that
   metadata.
+- Callers can depend on `DocumentPDF.add_outline()` to create flat PDF outline
+  entries that target existing pages, and on serialization to preserve them.
 
 Outgoing dependencies:
 
@@ -64,6 +71,8 @@ Outgoing dependencies:
 - No dependency was added.
 - Page-structure metadata uses only local PDF dictionary serialization and the
   existing `Document` page model.
+- Outlines use the same local PDF object writer and existing page-number
+  validation; no dependency was added.
 
 Before/after edge changes:
 
@@ -83,6 +92,10 @@ Before/after edge changes:
   map keyed by one-based page number. Insertions and removals shift or delete
   metadata with the affected page indices. `to_pdf_bytes()` emits `/PageLabels`
   in the catalog and allowed page boxes in each page dictionary.
+- After the outline update, `DocumentPDF` owns a flat ordered outline list.
+  Insertions and removals shift or delete outline targets with affected page
+  indices. `to_pdf_bytes()` emits a PDF `/Outlines` root, linked flat item
+  objects, `/Dest` arrays, and `/PageMode /UseOutlines` in the catalog.
 
 Cycle/layer/coupling/redundancy result:
 
@@ -96,11 +109,16 @@ Cycle/layer/coupling/redundancy result:
 - Page metadata is intentionally local to `DocumentPDF`; flow documents and
   renderer-neutral drawing components consume drawing primitives and do not own
   PDF page dictionary rendering.
+- Outline metadata is also local to `DocumentPDF`; nested outline trees remain
+  deferred to avoid adding hierarchy semantics before a concrete parser-fixture
+  need exists.
 
 ADR/rule impact:
 
 - ADR-0003 records the page-structure metadata decision because this slice adds
   public API and serialized parameters.
+- ADR-0004 records the flat outline decision because this slice adds public API
+  and serialized parameters.
 
 ## Domain Definitions
 
@@ -120,6 +138,11 @@ ADR/rule impact:
   removal operations.
 - Serialized page labels and page boxes must be rejected before rendering if they
   are malformed.
+- PDF outlines are flat, insertion-ordered entries. Each entry has a non-empty
+  Latin-1 title, targets an existing one-based page number, and has finite
+  destination numbers when `left`, `top`, or `zoom` are provided.
+- Omitted outline `top` and `zoom` values emit PDF `null` destination tokens.
+- Serialized outline entries must be rejected before rendering if malformed.
 
 ## Comprehensiveness Matrix
 
@@ -134,6 +157,9 @@ ADR/rule impact:
 | Page boxes | Emit only allowed Crop/Bleed/Trim/Art boxes in bottom-left coordinates inside MediaBox | PO-PDFDOC-007 | page box render/invalid metadata tests | killed |
 | Page metadata index shifts | Insert/remove pages shift or delete label/box metadata with the page index | PO-PDFDOC-008 | insertion/removal metadata tests | pass with equivalent survivors |
 | Serialized page metadata | Reject malformed page label/page box payloads before rendering | PO-PDFDOC-009 | serialized metadata rejection test | killed |
+| Flat outlines | Emit deterministic flat `/Outlines` root and linked item objects | PO-PDFDOC-010 | outline render/round-trip test | mutation target |
+| Outline target index shifts | Insert/remove pages shift or delete outline targets with page indices | PO-PDFDOC-011 | outline page mutation test | mutation target |
+| Serialized outline metadata | Reject malformed outline payloads before rendering | PO-PDFDOC-012 | serialized outline rejection test | mutation target |
 | Non-PDF group in a PDF page | Continue to fail loudly | Existing PDF generator test | killed |
 | Private layer storage mutation | Excluded from public contract | Explicit exclusion | Not applicable |
 
@@ -154,6 +180,7 @@ ADR/rule impact:
 | Golden artifact/visual | yes | PDF content stream is a generated artifact. | content-stream assertions |
 | Regression | yes | This closes the duplicate-label traversal regression. | dedicated tests |
 | Serialized payload | yes | Page labels and boxes are persisted in document parameters. | render/round-trip and malformed-payload tests |
+| Navigation metadata | yes | Flat PDF outlines add document navigation objects and catalog wiring. | outline render/round-trip tests |
 
 ## Mutation Testing Gate
 
@@ -208,6 +235,34 @@ Current result after the page-structure metadata update:
   - `_shift_pdf_page_metadata_for_removal()` line 1599 made the same equivalent
     `>` to `>=` change for page boxes, with the same `index != page_number`
     pre-filter.
+- Gate result: pass with documented equivalent survivors.
+
+Current result after the flat outline update:
+
+- Tool: Cosmic Ray 8.4.6.
+- Config: `tests/mutation/pdf_document_outline_cosmic_ray.toml`.
+- Filter: `tests/mutation/filter_pdf_document_outline_work_items.py`.
+- Test selection: focused PDF document, factory payload, and PDF generator tests.
+- Raw work items: 3524.
+- Proof-critical work items after filter: 136.
+- Killed mutants: 132.
+- Equivalent survivors: 4.
+- Surviving equivalent mutations:
+  - `_shift_pdf_page_metadata_for_removal()` line 1681 changed
+    `outline.page_number > page_number` to `>=`. The comprehension filters
+    `outline.page_number != page_number` before evaluating the output
+    expression, so equality is excluded from the expression domain.
+  - `_outline_objects()` line 1732 changed `zip(..., strict=True)` to
+    `strict=False`. `outline_item_ids` is constructed from
+    `len(self._pdf_outlines)`, so it has exactly the same length as the outline
+    sequence passed into `_outline_objects()`.
+  - `_outline_objects()` line 1733 changed `index > 0` to `index != 0`.
+    `enumerate()` produces non-negative integer indices only, so the predicates
+    are equivalent for every loop iteration.
+  - `_outline_objects()` line 1734 changed `index + 1 < len(outline_item_ids)`
+    to `index + 1 != len(outline_item_ids)`. In the loop domain,
+    `index + 1 <= len(outline_item_ids)` always holds, so `< len` and
+    `!= len` are equivalent.
 - Gate result: pass with documented equivalent survivors.
 
 ## PO-PDFDOC-001: PDF Rendering Traverses Every Stored Group
@@ -400,3 +455,73 @@ empty labels, unsupported box names, and invalid box coordinates.
 ### Conclusion
 
 Proven for serialized page labels and page boxes in the declared payload domain.
+
+## PO-PDFDOC-010: Flat PDF Outlines Emit And Round Trip
+
+### Claim
+
+`DocumentPDF` emits deterministic flat PDF outline objects, links outline items
+with `/Prev` and `/Next`, targets existing page objects with `/Dest`, escapes
+titles, and round-trips outlines through `parameters` and `create_from_dict()`.
+
+### Proof Method
+
+`add_outline()` validates title, page number, and destination numbers before
+storing a `_PDFOutlineEntry`. `to_pdf_bytes()` allocates one outline root object
+and one item object per outline after page objects exist, then writes catalog
+`/Outlines` and `/PageMode /UseOutlines` entries. Tests parse PDF objects,
+verify root `/First`, `/Last`, and `/Count`, item title escaping, parent/next/prev
+links, exact `/XYZ` destination tokens, deterministic bytes, and serialization
+round-trip equality.
+
+### Counterexamples And Exclusions
+
+Nested outline trees, open/closed outline state, remote destinations, named
+destinations, and non-Latin-1 titles are excluded from this flat outline slice.
+
+### Conclusion
+
+Proven for flat Latin-1 outlines in the declared PDF document domain.
+
+## PO-PDFDOC-011: Outline Targets Follow Page Index Mutations
+
+### Claim
+
+When pages are inserted or removed, outline page targets stay aligned with the
+same logical page after the mutation, and outlines targeting a removed page are
+deleted.
+
+### Proof Method
+
+`DocumentPDF.add_page()` and `DocumentPDF.remove_page()` already route through
+the PDF metadata shift helpers. The outline update extends those helpers to
+increment targets at or after insertion points, decrement targets after removed
+pages, and drop outlines that target removed pages. Tests add middle and tail
+outlines, insert before them, remove a targeted page, then remove an earlier page
+and check serialized outline targets after each step.
+
+### Conclusion
+
+Proven for page indices admitted by the `DocumentPDF` public page mutation
+methods, with the equivalent mutation survivor documented above.
+
+## PO-PDFDOC-012: Serialized Outline Metadata Fails Explicitly
+
+### Claim
+
+Malformed serialized `outlines` payloads are rejected during
+`DocumentPDF.create_from_dict()` before any rendered PDF can be produced from bad
+outline metadata.
+
+### Proof Method
+
+`create_from_dict()` reads optional outline sequences through
+`_pdf_optional_sequence()`, requires each entry to be a mapping, requires `title`
+and `page_number`, and delegates to `add_outline()` for title, page, and
+destination validation. Tests mutate a valid payload into non-sequence outline
+containers, non-mapping entries, missing required fields, empty titles, missing
+pages, and invalid destination values.
+
+### Conclusion
+
+Proven for serialized flat outlines in the declared payload domain.
