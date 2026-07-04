@@ -32,6 +32,13 @@ def _pdf_objects(pdf_bytes: bytes) -> dict[int, bytes]:
     }
 
 
+def _annotation_refs_by_page(pdf_bytes: bytes) -> list[list[int]]:
+    return [
+        [int(object_id) for object_id in re.findall(rb"(\d+) 0 R", match.group("ids"))]
+        for match in re.finditer(rb"/Annots \[(?P<ids>(?:\d+ 0 R ?)+)\]", pdf_bytes)
+    ]
+
+
 def _document_with_duplicate_label_groups() -> tuple[DocumentPDF, ComponentGroupPDF, ComponentGroupPDF]:
     document = DocumentPDF(Canvas(100.0, 80.0))
     document.add_page()
@@ -484,3 +491,148 @@ def test_document_pdf_rejects_invalid_serialized_outline_metadata() -> None:
     recreated = DocumentPDF.create_from_dict(missing_left_payload)
 
     assert recreated.outlines() == ({"title": "valid", "page_number": 1, "left": 0.0, "top": 2.0, "zoom": 1.0},)
+
+
+@pytest.mark.condition("PDF-DOC-LINK-P3")
+def test_document_pdf_emits_uri_link_annotations_and_round_trips() -> None:
+    """PDF-DOC-LINK-P3: URI link annotations render and round-trip."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    document.add_page()
+    document.add_uri_link(1, [5.0, 6.0, 20.0, 25.0], "https://example.com/a?x=(1)")
+    document.add_uri_link(1, [30.0, 6.0, 45.0, 25.0], "https://example.com/b")
+    document.add_uri_link(2, [0.0, 0.0, 100.0, 80.0], r"mailto:test\user@example.com")
+
+    payload = document.to_pdf_bytes()
+    recreated = DocumentPDF.create_from_dict(document.parameters)
+    objects = _pdf_objects(payload)
+    annotation_refs = _annotation_refs_by_page(payload)
+    annotation_ids = [annotation_id for page_refs in annotation_refs for annotation_id in page_refs]
+
+    assert payload == document.to_pdf_bytes()
+    assert [len(page_refs) for page_refs in annotation_refs] == [2, 1]
+    assert b"/Subtype /Link" in objects[annotation_ids[0]]
+    assert b"/Rect [5 6 20 25]" in objects[annotation_ids[0]]
+    assert b"/Border [0 0 0]" in objects[annotation_ids[0]]
+    assert b"/A << /S /URI /URI (https://example.com/a?x=\\(1\\)) >>" in objects[annotation_ids[0]]
+    assert b"/Rect [30 6 45 25]" in objects[annotation_ids[1]]
+    assert b"/URI (https://example.com/b)" in objects[annotation_ids[1]]
+    assert b"/Rect [0 0 100 80]" in objects[annotation_ids[2]]
+    assert b"/URI (mailto:test\\\\user@example.com)" in objects[annotation_ids[2]]
+    assert sorted(objects) == list(range(1, max(objects) + 1))
+    assert document.uri_links() == (
+        {"page_number": 1, "rect": [5.0, 6.0, 20.0, 25.0], "uri": "https://example.com/a?x=(1)"},
+        {"page_number": 1, "rect": [30.0, 6.0, 45.0, 25.0], "uri": "https://example.com/b"},
+        {"page_number": 2, "rect": [0.0, 0.0, 100.0, 80.0], "uri": r"mailto:test\user@example.com"},
+    )
+    assert recreated.parameters == document.parameters
+    assert recreated.to_pdf_bytes() == payload
+
+
+@pytest.mark.condition("PDF-DOC-LINK-P3")
+def test_document_pdf_rejects_invalid_uri_link_metadata() -> None:
+    """PDF-DOC-LINK-P3: URI link metadata fails at explicit boundaries."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+
+    with pytest.raises(ValueError, match="Position must correlate"):
+        document.add_uri_link(2, [0.0, 0.0, 1.0, 1.0], "https://example.com")
+
+    for uri in [object(), "", "not latin \u0100"]:
+        with pytest.raises((TypeError, ValueError)):
+            document.add_uri_link(1, [0.0, 0.0, 1.0, 1.0], uri)  # type: ignore[arg-type]
+        assert document.uri_links() == ()
+
+    invalid_rectangles = [
+        "0 0 1 1",
+        [0.0, 0.0, 1.0],
+        [True, 0.0, 1.0, 1.0],
+        [0.0, 0.0, float("nan"), 1.0],
+        [0.0, 0.0, 0.0, 1.0],
+        [-1.0, 0.0, 1.0, 1.0],
+        [0.0, 0.0, 101.0, 1.0],
+    ]
+    for rect in invalid_rectangles:
+        with pytest.raises((TypeError, ValueError)):
+            document.add_uri_link(1, rect, "https://example.com")  # type: ignore[arg-type]
+        assert document.uri_links() == ()
+
+    document.add_uri_link(1, [0.0, 0.0, 1.0, 1.0], "https://example.com")
+    document.clear_uri_links()
+
+    assert document.uri_links() == ()
+    assert "uri_links" not in document.parameters["DocumentPDF"]
+    assert b"/Annots" not in document.to_pdf_bytes()
+
+
+@pytest.mark.condition("PDF-DOC-LINK-P3")
+def test_document_pdf_uri_links_track_page_insertions_and_removals() -> None:
+    """PDF-DOC-LINK-P3: URI link annotations stay aligned with page mutations."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    document.add_page()
+    document.add_page()
+    document.add_uri_link(1, [1.0, 1.0, 10.0, 10.0], "https://front.example")
+    document.add_uri_link(2, [2.0, 2.0, 20.0, 20.0], "https://middle.example")
+    document.add_uri_link(3, [3.0, 3.0, 30.0, 30.0], "https://tail.example")
+
+    document.add_page(position=2)
+
+    assert document.uri_links() == (
+        {"page_number": 1, "rect": [1.0, 1.0, 10.0, 10.0], "uri": "https://front.example"},
+        {"page_number": 3, "rect": [2.0, 2.0, 20.0, 20.0], "uri": "https://middle.example"},
+        {"page_number": 4, "rect": [3.0, 3.0, 30.0, 30.0], "uri": "https://tail.example"},
+    )
+
+    document.remove_page(3)
+
+    assert document.uri_links() == (
+        {"page_number": 1, "rect": [1.0, 1.0, 10.0, 10.0], "uri": "https://front.example"},
+        {"page_number": 3, "rect": [3.0, 3.0, 30.0, 30.0], "uri": "https://tail.example"},
+    )
+
+    document.remove_page(1)
+
+    assert document.uri_links() == ({"page_number": 2, "rect": [3.0, 3.0, 30.0, 30.0], "uri": "https://tail.example"},)
+
+
+@pytest.mark.condition("PDF-DOC-LINK-P3")
+def test_document_pdf_uri_links_use_value_equality_for_large_page_removal() -> None:
+    """PDF-DOC-LINK-P3: URI link removal uses page-number value equality."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    for _ in range(260):
+        document.add_page()
+    document.add_uri_link(1, [1.0, 1.0, 10.0, 10.0], "https://front.example")
+    document.add_uri_link(int("260"), [2.0, 2.0, 20.0, 20.0], "https://tail.example")
+
+    document.remove_page(int("260"))
+
+    assert document.pages == 259
+    assert document.uri_links() == ({"page_number": 1, "rect": [1.0, 1.0, 10.0, 10.0], "uri": "https://front.example"},)
+
+
+@pytest.mark.condition("PDF-DOC-LINK-P3")
+def test_document_pdf_rejects_invalid_serialized_uri_link_metadata() -> None:
+    """PDF-DOC-LINK-P3: Serialized URI links validate before rendering."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    document.add_uri_link(1, [1.0, 2.0, 30.0, 40.0], "https://example.com")
+
+    invalid_payloads = []
+    for mutator in [
+        lambda data: data["DocumentPDF"].__setitem__("uri_links", "bad"),
+        lambda data: data["DocumentPDF"].__setitem__("uri_links", [object()]),
+        lambda data: data["DocumentPDF"]["uri_links"][0].pop("page_number"),
+        lambda data: data["DocumentPDF"]["uri_links"][0].pop("rect"),
+        lambda data: data["DocumentPDF"]["uri_links"][0].pop("uri"),
+        lambda data: data["DocumentPDF"]["uri_links"][0].__setitem__("page_number", 2),
+        lambda data: data["DocumentPDF"]["uri_links"][0].__setitem__("rect", [0.0, 0.0, 0.0, 1.0]),
+        lambda data: data["DocumentPDF"]["uri_links"][0].__setitem__("uri", ""),
+    ]:
+        payload = deepcopy(document.parameters)
+        mutator(payload)
+        invalid_payloads.append(payload)
+
+    for payload in invalid_payloads:
+        with pytest.raises((TypeError, ValueError)):
+            DocumentPDF.create_from_dict(payload)

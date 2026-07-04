@@ -3,7 +3,8 @@
 This note applies the InkGen Definition of Done to PDF document contract slices.
 It covers group traversal in rendered PDF bytes, extraction truth, grammar truth
 when a layer contains repeated semantic labels, the public PDF file-writer path
-boundary, PDF page-structure metadata, and flat PDF outlines/bookmarks.
+boundary, PDF page-structure metadata, flat PDF outlines/bookmarks, and URI link
+annotations.
 
 ## Scope
 
@@ -21,6 +22,9 @@ The slice covers:
 - `DocumentPDF.add_outline()`
 - `DocumentPDF.clear_outlines()`
 - `DocumentPDF.outlines()`
+- `DocumentPDF.add_uri_link()`
+- `DocumentPDF.clear_uri_links()`
+- `DocumentPDF.uri_links()`
 - `DocumentPDF.to_pdf_bytes()`
 - `DocumentPDF.create_from_dict()`
 - `DocumentPDF.parameters`
@@ -47,6 +51,8 @@ Affected surface:
   page-label and page-box contract.
 - `docs/adr/0004-pdf-flat-outlines.md`: accepted ADR for the flat outline
   contract.
+- `docs/adr/0005-pdf-uri-link-annotations.md`: accepted ADR for the URI link
+  annotation contract.
 
 Incoming dependencies:
 
@@ -63,6 +69,8 @@ Incoming dependencies:
   metadata.
 - Callers can depend on `DocumentPDF.add_outline()` to create flat PDF outline
   entries that target existing pages, and on serialization to preserve them.
+- Callers can depend on `DocumentPDF.add_uri_link()` to create PDF URI link
+  annotations on existing pages, and on serialization to preserve them.
 
 Outgoing dependencies:
 
@@ -73,6 +81,8 @@ Outgoing dependencies:
   existing `Document` page model.
 - Outlines use the same local PDF object writer and existing page-number
   validation; no dependency was added.
+- URI link annotations use the same local PDF object writer, existing page-number
+  validation, and the page-box rectangle validator; no dependency was added.
 
 Before/after edge changes:
 
@@ -96,6 +106,10 @@ Before/after edge changes:
   Insertions and removals shift or delete outline targets with affected page
   indices. `to_pdf_bytes()` emits a PDF `/Outlines` root, linked flat item
   objects, `/Dest` arrays, and `/PageMode /UseOutlines` in the catalog.
+- After the URI link update, `DocumentPDF` owns a flat ordered URI link list.
+  Insertions and removals shift or delete link page targets with affected page
+  indices. `to_pdf_bytes()` emits page `/Annots` arrays and `/Subtype /Link`
+  annotation objects with URI actions.
 
 Cycle/layer/coupling/redundancy result:
 
@@ -112,6 +126,8 @@ Cycle/layer/coupling/redundancy result:
 - Outline metadata is also local to `DocumentPDF`; nested outline trees remain
   deferred to avoid adding hierarchy semantics before a concrete parser-fixture
   need exists.
+- URI link metadata is local to `DocumentPDF`; generic annotations and internal
+  destination links remain deferred until there is a concrete fixture need.
 
 ADR/rule impact:
 
@@ -119,6 +135,8 @@ ADR/rule impact:
   public API and serialized parameters.
 - ADR-0004 records the flat outline decision because this slice adds public API
   and serialized parameters.
+- ADR-0005 records the URI link annotation decision because this slice adds
+  public API and serialized parameters.
 
 ## Domain Definitions
 
@@ -143,6 +161,12 @@ ADR/rule impact:
   destination numbers when `left`, `top`, or `zoom` are provided.
 - Omitted outline `top` and `zoom` values emit PDF `null` destination tokens.
 - Serialized outline entries must be rejected before rendering if malformed.
+- PDF URI link annotations are flat, insertion-ordered entries. Each entry has a
+  non-empty Latin-1 URI string, targets an existing one-based page number, and
+  owns a finite positive-area rectangle inside the target page MediaBox.
+- Page `/Annots` arrays must include every URI link on that page in insertion
+  order.
+- Serialized URI link entries must be rejected before rendering if malformed.
 
 ## Comprehensiveness Matrix
 
@@ -160,6 +184,9 @@ ADR/rule impact:
 | Flat outlines | Emit deterministic flat `/Outlines` root and linked item objects | PO-PDFDOC-010 | outline render/round-trip test | mutation target |
 | Outline target index shifts | Insert/remove pages shift or delete outline targets with page indices | PO-PDFDOC-011 | outline page mutation test | mutation target |
 | Serialized outline metadata | Reject malformed outline payloads before rendering | PO-PDFDOC-012 | serialized outline rejection test | mutation target |
+| URI link annotations | Emit deterministic page `/Annots` arrays and `/Subtype /Link` URI action objects | PO-PDFDOC-013 | URI link render/round-trip test | mutation target |
+| URI link target index shifts | Insert/remove pages shift or delete URI link page targets with page indices | PO-PDFDOC-014 | URI link page mutation test | mutation target |
+| Serialized URI link metadata | Reject malformed URI link payloads before rendering | PO-PDFDOC-015 | serialized URI link rejection test | mutation target |
 | Non-PDF group in a PDF page | Continue to fail loudly | Existing PDF generator test | killed |
 | Private layer storage mutation | Excluded from public contract | Explicit exclusion | Not applicable |
 
@@ -180,7 +207,7 @@ ADR/rule impact:
 | Golden artifact/visual | yes | PDF content stream is a generated artifact. | content-stream assertions |
 | Regression | yes | This closes the duplicate-label traversal regression. | dedicated tests |
 | Serialized payload | yes | Page labels and boxes are persisted in document parameters. | render/round-trip and malformed-payload tests |
-| Navigation metadata | yes | Flat PDF outlines add document navigation objects and catalog wiring. | outline render/round-trip tests |
+| Navigation metadata | yes | Flat PDF outlines and URI link annotations add document navigation objects and page annotation arrays. | outline and URI link render/round-trip tests |
 
 ## Mutation Testing Gate
 
@@ -263,6 +290,30 @@ Current result after the flat outline update:
     to `index + 1 != len(outline_item_ids)`. In the loop domain,
     `index + 1 <= len(outline_item_ids)` always holds, so `< len` and
     `!= len` are equivalent.
+- Gate result: pass with documented equivalent survivors.
+
+Current result after the URI link annotation update:
+
+- Tool: Cosmic Ray 8.4.6.
+- Config: `tests/mutation/pdf_document_uri_link_cosmic_ray.toml`.
+- Filter: `tests/mutation/filter_pdf_document_uri_link_work_items.py`.
+- Test selection: focused PDF document, factory payload, and PDF generator tests.
+- Raw work items: 3660.
+- Proof-critical work items after filter: 79.
+- Killed mutants: 76.
+- Equivalent survivors: 3.
+- Surviving equivalent mutations:
+  - `_coerce_pdf_link_rect()` line 401 changed the parameter separator from
+    keyword-only `*` to positional-only `/` for `rect`. Public callers pass
+    `rect` positionally and `canvas_width`/`canvas_height` by keyword, so the
+    public `DocumentPDF.add_uri_link()` domain is unchanged.
+  - `_shift_pdf_page_metadata_for_removal()` line 1748 changed
+    `link.page_number > page_number` to `>=`. The comprehension filters
+    `link.page_number != page_number` before evaluating the output expression,
+    so equality is excluded from the expression domain.
+  - `to_pdf_bytes()` line 1982 changed `zip(..., strict=True)` to
+    `strict=False`. `annotation_ids` is constructed from `len(page_links)`, so
+    it has exactly the same length as the page link sequence.
 - Gate result: pass with documented equivalent survivors.
 
 ## PO-PDFDOC-001: PDF Rendering Traverses Every Stored Group
@@ -525,3 +576,75 @@ pages, and invalid destination values.
 ### Conclusion
 
 Proven for serialized flat outlines in the declared payload domain.
+
+## PO-PDFDOC-013: URI Link Annotations Emit And Round Trip
+
+### Claim
+
+`DocumentPDF` emits deterministic PDF link annotations, stores every same-page
+link in the page `/Annots` array, escapes literal URI strings, and round-trips
+URI links through `parameters` and `create_from_dict()`.
+
+### Proof Method
+
+`add_uri_link()` validates page number, rectangle bounds, and URI string before
+storing a `_PDFUriLinkAnnotation`. `to_pdf_bytes()` groups URI links by page,
+allocates one annotation object per link, wires page `/Annots` arrays, and emits
+`/Subtype /Link` dictionaries with `/S /URI` actions. Tests parse PDF objects,
+verify same-page annotation arrays, exact rectangle bytes, URI escaping,
+deterministic repeated rendering, and serialization round-trip equality.
+
+### Counterexamples And Exclusions
+
+Internal page links, named destinations, rich annotation appearances, generic
+annotation subtypes, and non-Latin-1 URI strings are excluded from this flat URI
+link slice.
+
+### Conclusion
+
+Proven for Latin-1 URI link annotations in the declared PDF document domain,
+with the equivalent mutation survivors documented above.
+
+## PO-PDFDOC-014: URI Link Targets Follow Page Index Mutations
+
+### Claim
+
+When pages are inserted or removed, URI link page targets stay aligned with the
+same logical page after the mutation, and links targeting a removed page are
+deleted.
+
+### Proof Method
+
+`DocumentPDF.add_page()` and `DocumentPDF.remove_page()` route through the PDF
+metadata shift helpers. The URI link update extends those helpers to increment
+targets at or after insertion points, decrement targets after removed pages, and
+drop links that target removed pages. Tests add front, middle, and tail links,
+insert before the middle link, remove the middle target, then remove an earlier
+page and check serialized link targets after each step.
+
+### Conclusion
+
+Proven for page indices admitted by the `DocumentPDF` public page mutation
+methods, with the equivalent mutation survivor documented above.
+
+## PO-PDFDOC-015: Serialized URI Link Metadata Fails Explicitly
+
+### Claim
+
+Malformed serialized `uri_links` payloads are rejected during
+`DocumentPDF.create_from_dict()` before any rendered PDF can be produced from
+bad URI link metadata.
+
+### Proof Method
+
+`create_from_dict()` reads optional URI link sequences through
+`_pdf_optional_sequence()`, requires each entry to be a mapping, requires
+`page_number`, `rect`, and `uri`, and delegates to `add_uri_link()` for page,
+rectangle, and URI validation. Tests mutate a valid payload into non-sequence
+containers, non-mapping entries, missing required fields, missing pages, invalid
+rectangles, and empty URI strings.
+
+### Conclusion
+
+Proven for serialized URI link annotations in the declared payload domain, with
+mutation verification documented above.

@@ -85,6 +85,15 @@ class _PDFOutlineEntry:
     zoom: float | None
 
 
+@dataclass(frozen=True)
+class _PDFUriLinkAnnotation:
+    """Validated PDF URI link annotation metadata."""
+
+    page_number: int
+    rect: tuple[float, float, float, float]
+    uri: str
+
+
 class PDFGeneratorInterface(metaclass=abc.ABCMeta):
     """Interface for components that can emit PDF content-stream operators."""
 
@@ -372,6 +381,29 @@ def _coerce_pdf_outline_destination_token(value: float | None) -> str:
     if value is None:
         return "null"
     return _number(value)
+
+
+def _coerce_pdf_uri(uri: object) -> str:
+    """Return a PDF literal-string-safe URI target."""
+    if not isinstance(uri, str):
+        raise TypeError("URI link target must be a string")
+    if not uri:
+        raise ValueError("URI link target must not be empty")
+    try:
+        uri.encode("latin-1")
+    except UnicodeEncodeError as exc:
+        raise ValueError("URI link target must be encodable as latin-1") from exc
+    return uri
+
+
+def _coerce_pdf_link_rect(
+    rect: object,
+    *,
+    canvas_width: float,
+    canvas_height: float,
+) -> tuple[float, float, float, float]:
+    """Return a validated PDF annotation rectangle in bottom-left page coordinates."""
+    return _coerce_pdf_page_box(rect, canvas_width=canvas_width, canvas_height=canvas_height)
 
 
 def _color_components(color: str) -> tuple[float, float, float] | None:
@@ -1562,6 +1594,7 @@ class DocumentPDF(Document):
         self._pdf_page_labels: dict[int, str] = {}
         self._pdf_page_boxes: dict[int, dict[str, tuple[float, float, float, float]]] = {}
         self._pdf_outlines: list[_PDFOutlineEntry] = []
+        self._pdf_uri_links: list[_PDFUriLinkAnnotation] = []
 
     @staticmethod
     def _iter_layer_groups(layer: Layer, *, sort: bool = False) -> tuple[ComponentGroup, ...]:
@@ -1612,6 +1645,22 @@ class DocumentPDF(Document):
     def outlines(self) -> tuple[dict[str, object], ...]:
         """Return serialized flat PDF outline entries in insertion order."""
         return tuple(self._outline_entry_payload(outline) for outline in self._pdf_outlines)
+
+    def add_uri_link(self, page_number: int, rect: Sequence[float | int], uri: str) -> None:
+        """Add a URI link annotation to an existing page."""
+        page_number = self._validate_existing_position(page_number)
+        page = self.page(page_number)
+        link_rect = _coerce_pdf_link_rect(rect, canvas_width=page._canvas.width, canvas_height=page._canvas.height)
+        target_uri = _coerce_pdf_uri(uri)
+        self._pdf_uri_links.append(_PDFUriLinkAnnotation(page_number, link_rect, target_uri))
+
+    def clear_uri_links(self) -> None:
+        """Remove all PDF URI link annotations from the document."""
+        self._pdf_uri_links.clear()
+
+    def uri_links(self) -> tuple[dict[str, object], ...]:
+        """Return serialized URI link annotations in insertion order."""
+        return tuple(self._uri_link_payload(link) for link in self._pdf_uri_links)
 
     def set_page_label(self, page_number: int, label: str | None) -> None:
         """Set or clear a PDF page label for an existing page."""
@@ -1666,6 +1715,14 @@ class DocumentPDF(Document):
             )
             for outline in self._pdf_outlines
         ]
+        self._pdf_uri_links = [
+            _PDFUriLinkAnnotation(
+                link.page_number + 1 if link.page_number >= page_number else link.page_number,
+                link.rect,
+                link.uri,
+            )
+            for link in self._pdf_uri_links
+        ]
 
     def _shift_pdf_page_metadata_for_removal(self, page_number: int) -> None:
         """Shift PDF-specific page metadata when a page is removed."""
@@ -1685,6 +1742,15 @@ class DocumentPDF(Document):
             )
             for outline in self._pdf_outlines
             if outline.page_number != page_number
+        ]
+        self._pdf_uri_links = [
+            _PDFUriLinkAnnotation(
+                link.page_number - 1 if link.page_number > page_number else link.page_number,
+                link.rect,
+                link.uri,
+            )
+            for link in self._pdf_uri_links
+            if link.page_number != page_number
         ]
 
     def _page_label_dictionary(self) -> str:
@@ -1742,6 +1808,30 @@ class DocumentPDF(Document):
                 f"{prev_link}{next_link} /Dest {destination} >>"
             )
         return objects
+
+    @staticmethod
+    def _uri_link_payload(link: _PDFUriLinkAnnotation) -> dict[str, object]:
+        """Return serialized data for a validated URI link annotation."""
+        return {
+            "page_number": link.page_number,
+            "rect": list(link.rect),
+            "uri": link.uri,
+        }
+
+    def _uri_links_by_page(self) -> dict[int, tuple[_PDFUriLinkAnnotation, ...]]:
+        """Return URI link annotations grouped by page in insertion order."""
+        links_by_page: dict[int, list[_PDFUriLinkAnnotation]] = {}
+        for link in self._pdf_uri_links:
+            links_by_page.setdefault(link.page_number, []).append(link)
+        return {page_number: tuple(links) for page_number, links in links_by_page.items()}
+
+    @staticmethod
+    def _uri_link_annotation_object(link: _PDFUriLinkAnnotation) -> str:
+        """Return a PDF URI link annotation object dictionary."""
+        left, bottom, right, top = link.rect
+        rect = f"[{_number(left)} {_number(bottom)} {_number(right)} {_number(top)}]"
+        uri = _escape_pdf_string(link.uri)
+        return f"<< /Type /Annot /Subtype /Link /Rect {rect} /Border [0 0 0] /A << /S /URI /URI ({uri}) >> >>"
 
     def create_pdf(self, filepath: str | os.PathLike[str]) -> None:
         """Create a deterministic PDF file at the requested path."""
@@ -1864,15 +1954,19 @@ class DocumentPDF(Document):
         resources = f"<< {' '.join(resource_sections)} >>" if resource_sections else "<< >>"
 
         page_ids_by_number: dict[int, int] = {}
+        uri_links_by_page = self._uri_links_by_page()
         for page_number, (page, content) in enumerate(rendered_pages, start=1):
             content_bytes = content.encode("latin-1")
             content_id = object_id
             page_id = object_id + 1
-            object_id += 2
+            page_links = uri_links_by_page.get(page_number, ())
+            annotation_ids = list(range(object_id + 2, object_id + 2 + len(page_links)))
+            object_id += 2 + len(page_links)
             page_ids.append(page_id)
             page_ids_by_number[page_number] = page_id
             page_box_entries = self._page_box_operators(page_number)
             page_boxes = f" {page_box_entries}" if page_box_entries else ""
+            annotations = f" /Annots [{' '.join(f'{annotation_id} 0 R' for annotation_id in annotation_ids)}]" if annotation_ids else ""
             writer.set_object(
                 content_id, b"<< /Length " + str(len(content_bytes)).encode("ascii") + b" >>\nstream\n" + content_bytes + b"\nendstream"
             )
@@ -1882,9 +1976,11 @@ class DocumentPDF(Document):
                     f"<< /Type /Page /Parent {pages_id} 0 R "
                     f"/MediaBox [0 0 {_number(page._canvas.width)} {_number(page._canvas.height)}]{page_boxes} "
                     f"/Resources {resources} "
-                    f"/Contents {content_id} 0 R >>"
+                    f"/Contents {content_id} 0 R{annotations} >>"
                 ),
             )
+            for annotation_id, link in zip(annotation_ids, page_links, strict=True):
+                writer.set_object(annotation_id, self._uri_link_annotation_object(link))
 
         kids = " ".join(f"{page_id} 0 R" for page_id in page_ids)
         writer.set_object(pages_id, f"<< /Type /Pages /Kids [{kids}] /Count {len(page_ids)} >>")
@@ -2026,6 +2122,13 @@ class DocumentPDF(Document):
             top = outline_payload.get("top")
             zoom = outline_payload.get("zoom")
             document.add_outline(title, page_number, left=left, top=top, zoom=zoom)  # type: ignore[arg-type]
+        for link_payload in _pdf_optional_sequence(payload, "uri_links", "DocumentPDF"):
+            if not isinstance(link_payload, Mapping):
+                raise TypeError("DocumentPDF uri_links entries must be mappings")
+            page_number = _pdf_required_field(link_payload, "page_number", "DocumentPDF URI link")
+            rect = _pdf_required_field(link_payload, "rect", "DocumentPDF URI link")
+            uri = _pdf_required_field(link_payload, "uri", "DocumentPDF URI link")
+            document.add_uri_link(page_number, rect, uri)  # type: ignore[arg-type]
         return document
 
     @property
@@ -2050,6 +2153,8 @@ class DocumentPDF(Document):
             }
         if self._pdf_outlines:
             document_payload["outlines"] = [self._outline_entry_payload(outline) for outline in self._pdf_outlines]
+        if self._pdf_uri_links:
+            document_payload["uri_links"] = [self._uri_link_payload(link) for link in self._pdf_uri_links]
         return {"DocumentPDF": document_payload}
 
 

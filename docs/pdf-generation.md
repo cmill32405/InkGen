@@ -42,8 +42,8 @@ parser-facing technical drawings because it supports pages, vector primitives,
 closed renderer domains, deterministic bytes, extraction/grammar truth, raster
 images with alpha, JPEG pass-through, ICC profile emission, Standard 14 fonts,
 named TrueType/OpenType font embedding, page labels, Crop/Bleed/Trim/Art page
-boxes, flat outlines/bookmarks, stroke/fill opacity through PDF ExtGState
-resources, and stroke dash/cap/join/miter operators.
+boxes, flat outlines/bookmarks, URI link annotations, stroke/fill opacity
+through PDF ExtGState resources, and stroke dash/cap/join/miter operators.
 
 The remaining gaps that keep the backend from being a fully featured PDF
 creation system are:
@@ -53,7 +53,7 @@ creation system are:
 | Text encoding | WinAnsi literal strings, installed-font embedding, and printable WinAnsi `/ToUnicode` CMaps | Unicode/CID fonts, glyph subsetting, and full complex-script text extraction maps |
 | Text layout | Single positioned text components | Multi-line wrapping, alignment, tabs, columns, kerning, and complex-script shaping |
 | Graphics state | Basic stroke/fill primitives, stroke/fill alpha ExtGState resources, and stroke dash/cap/join/miter operators | Clipping paths, opacity groups, blend modes, gradients, and patterns |
-| Document structure | Pages, deterministic metadata, page labels, Crop/Bleed/Trim/Art boxes, and flat outlines/bookmarks | Links, annotations, nested outlines, and tagged PDF structure |
+| Document structure | Pages, deterministic metadata, page labels, Crop/Bleed/Trim/Art boxes, flat outlines/bookmarks, and URI link annotations | Generic annotations, internal page links, nested outlines, and tagged PDF structure |
 | Color/profile support | Device RGB/CMYK and JPEG ICC profile objects | Broader calibrated color spaces and selectable PDF/A-style archival constraints |
 | Import/conversion | SVG input remains SVG-only | Arbitrary SVG-to-PDF conversion and external PDF embedding are out of scope until explicitly approved |
 | Optimization/security | Classic xref table and plain objects | Object streams, font/image subsetting, encryption, and signatures if those become product requirements |
@@ -91,6 +91,16 @@ emitted as PDF `null` destination entries. Outlines are stored in document
 parameters, round-trip through `DocumentPDF.create_from_dict()`, follow page
 insertions and removals, and are emitted as a deterministic flat outline list.
 Nested outlines are intentionally out of scope for the current backend.
+
+URI link annotations can be added through `DocumentPDF.add_uri_link()`. Each
+link targets an existing page, stores a finite positive-area rectangle inside
+that page's MediaBox, and emits a PDF `/Subtype /Link` annotation with a URI
+action. Link target strings are non-empty Latin-1 values because the current
+dependency-free backend emits literal PDF strings. URI links are stored in
+document parameters, round-trip through `DocumentPDF.create_from_dict()`, follow
+page insertions and removals, and are emitted in deterministic page/insertion
+order. Internal page links, named destinations, rich annotation appearances, and
+generic PDF annotation types are intentionally out of scope.
 
 The PDF render path is intentionally closed. `DocumentPDF` renders exact
 `ComponentGroupPDF` groups, and `ComponentGroupPDF` accepts/renders only the
@@ -215,3 +225,6 @@ The PDF backend is covered by PDF-P1 tests for:
   insertion/removal index shifts, and invalid metadata rejection
 - Flat PDF outlines/bookmarks with serialization round trips, destination
   validation, insertion/removal index shifts, and invalid metadata rejection
+- URI link annotations with serialization round trips, same-page annotation
+  arrays, rectangle/URI validation, insertion/removal index shifts, and invalid
+  metadata rejection

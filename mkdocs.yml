@@ -21,6 +21,7 @@ nav:
       - ADR-0002 Closed PDF Renderer: adr/0002-closed-pdf-renderer-domain.md
       - ADR-0003 PDF Page Structure Metadata: adr/0003-pdf-page-structure-metadata.md
       - ADR-0004 PDF Flat Outlines: adr/0004-pdf-flat-outlines.md
+      - ADR-0005 PDF URI Link Annotations: adr/0005-pdf-uri-link-annotations.md
   - Proof Notes:
       - Grammar Truth: proofs/grammar-truth.md
       - Extraction Truth Contract: proofs/extraction-truth-contract.md
