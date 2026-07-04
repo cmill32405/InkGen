@@ -19,6 +19,7 @@ nav:
   - Architecture Decisions:
       - ADR-0001 PDF Grammar Truth: adr/0001-pdf-grammar-truth-annotations.md
       - ADR-0002 Closed PDF Renderer: adr/0002-closed-pdf-renderer-domain.md
+      - ADR-0003 PDF Page Structure Metadata: adr/0003-pdf-page-structure-metadata.md
   - Proof Notes:
       - Grammar Truth: proofs/grammar-truth.md
       - Extraction Truth Contract: proofs/extraction-truth-contract.md

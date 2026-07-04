@@ -62,6 +62,16 @@ PDF_FIXED_DATE = "D:20000101000000Z"
 PDF_GENERIC_FONT_FAMILIES = {"serif", "sans-serif", "monospace", "cursive", "fantasy"}
 PDF_WINANSI_FIRST_CHAR = 32
 PDF_WINANSI_LAST_CHAR = 126
+PDF_PAGE_BOX_NAMES = {
+    "crop": "CropBox",
+    "cropbox": "CropBox",
+    "bleed": "BleedBox",
+    "bleedbox": "BleedBox",
+    "trim": "TrimBox",
+    "trimbox": "TrimBox",
+    "art": "ArtBox",
+    "artbox": "ArtBox",
+}
 
 
 class PDFGeneratorInterface(metaclass=abc.ABCMeta):
@@ -275,6 +285,52 @@ def _number(value: float | int) -> str:
 def _escape_pdf_string(value: str) -> str:
     """Escape text for a literal PDF string."""
     return value.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)").replace("\r", "\\r").replace("\n", "\\n")
+
+
+def _coerce_pdf_page_label(label: object) -> str:
+    """Return a PDF literal-string-safe page label."""
+    if not isinstance(label, str):
+        raise TypeError("page label must be a string")
+    if not label:
+        raise ValueError("page label must not be empty")
+    try:
+        label.encode("latin-1")
+    except UnicodeEncodeError as exc:
+        raise ValueError("page label must be encodable as latin-1") from exc
+    return label
+
+
+def _coerce_pdf_page_box_name(name: object) -> str:
+    """Return the canonical PDF page-box dictionary key."""
+    if not isinstance(name, str):
+        raise TypeError("page box name must be a string")
+    normalized = name.removeprefix("/").lower()
+    if normalized not in PDF_PAGE_BOX_NAMES:
+        raise ValueError("page box name must be CropBox, BleedBox, TrimBox, or ArtBox")
+    return PDF_PAGE_BOX_NAMES[normalized]
+
+
+def _coerce_pdf_page_box(
+    box: object,
+    *,
+    canvas_width: float,
+    canvas_height: float,
+) -> tuple[float, float, float, float]:
+    """Return a validated PDF page box in bottom-left page coordinates."""
+    if isinstance(box, (str, bytes)) or not isinstance(box, Sequence) or len(box) != 4:
+        raise TypeError("page box must be a four-number sequence")
+    values = []
+    for value in box:
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise TypeError("page box coordinates must be finite numbers")
+        number = float(value)
+        if not math.isfinite(number):
+            raise ValueError("page box coordinates must be finite numbers")
+        values.append(number)
+    left, bottom, right, top = values
+    if not (0.0 <= left < right <= canvas_width and 0.0 <= bottom < top <= canvas_height):
+        raise ValueError("page box must fit inside the page MediaBox with positive area")
+    return left, bottom, right, top
 
 
 def _color_components(color: str) -> tuple[float, float, float] | None:
@@ -720,6 +776,29 @@ def _pdf_required_mapping(payload: Mapping[str, object], name: str, owner: str) 
     if not isinstance(value, Mapping):
         raise TypeError(f"{owner} {name} must be a mapping")
     return value
+
+
+def _pdf_optional_mapping(payload: Mapping[str, object], name: str, owner: str) -> Mapping[object, object]:
+    """Return an optional serialized PDF mapping field or fail explicitly."""
+    value = payload.get(name, {})
+    if not isinstance(value, Mapping):
+        raise TypeError(f"{owner} {name} must be a mapping")
+    return value
+
+
+def _pdf_page_number_key(value: object, owner: str) -> int:
+    """Return a positive one-based page number from a serialized page metadata key."""
+    if isinstance(value, bool):
+        raise TypeError(f"{owner} page number keys must be positive integers")
+    if isinstance(value, int):
+        page_number = value
+    elif isinstance(value, str) and value.isdecimal():
+        page_number = int(value)
+    else:
+        raise TypeError(f"{owner} page number keys must be positive integers")
+    if page_number < 1:
+        raise ValueError(f"{owner} page number keys must be positive integers")
+    return page_number
 
 
 def _pdf_single_mapping_entry(payload: object, owner: str) -> tuple[str, Mapping[str, object]]:
@@ -1436,6 +1515,12 @@ class ComponentGroupPDF(ComponentGroup, LabelGenerator, SegmentGenerator):
 class DocumentPDF(Document):
     """Document renderer that writes one PDF page for each InkGen page."""
 
+    def __init__(self, canvas: Canvas) -> None:
+        """Create a PDF document with optional PDF-specific page metadata."""
+        super().__init__(canvas)
+        self._pdf_page_labels: dict[int, str] = {}
+        self._pdf_page_boxes: dict[int, dict[str, tuple[float, float, float, float]]] = {}
+
     @staticmethod
     def _iter_layer_groups(layer: Layer, *, sort: bool = False) -> tuple[ComponentGroup, ...]:
         """Return every stored group in a layer, including repeated labels."""
@@ -1443,6 +1528,91 @@ class DocumentPDF(Document):
         if sort:
             return tuple(sorted(groups, key=lambda group: (group.group_label, group.group_id)))
         return groups
+
+    def add_page(self, position: int = -1, page: Layers | None = None) -> None:
+        """Add a page and shift PDF-specific page metadata with inserted pages."""
+        page_number = self._validate_insert_position(position)
+        if page is not None:
+            if not isinstance(page, Layers):
+                raise TypeError("page argument take a Layers object")
+            self._page_canvas_compatibility(page)
+        if page_number >= 1:
+            self._shift_pdf_page_metadata_for_insert(page_number)
+        super().add_page(position=position, page=page)
+
+    def remove_page(self, position: int) -> None:
+        """Remove a page and shift PDF-specific page metadata with remaining pages."""
+        page_number = self._validate_existing_position(position)
+        super().remove_page(page_number)
+        self._shift_pdf_page_metadata_for_removal(page_number)
+
+    def set_page_label(self, page_number: int, label: str | None) -> None:
+        """Set or clear a PDF page label for an existing page."""
+        page_number = self._validate_existing_position(page_number)
+        if label is None:
+            self._pdf_page_labels.pop(page_number, None)
+            return
+        self._pdf_page_labels[page_number] = _coerce_pdf_page_label(label)
+
+    def page_label(self, page_number: int) -> str | None:
+        """Return the explicit PDF page label for a page, if one is set."""
+        page_number = self._validate_existing_position(page_number)
+        return self._pdf_page_labels.get(page_number)
+
+    def set_page_box(
+        self,
+        page_number: int,
+        box_name: str,
+        box: Sequence[float | int] | None,
+    ) -> None:
+        """Set or clear an additional PDF page box for an existing page."""
+        page_number = self._validate_existing_position(page_number)
+        canonical_name = _coerce_pdf_page_box_name(box_name)
+        if box is None:
+            page_boxes = self._pdf_page_boxes.get(page_number)
+            if page_boxes is not None:
+                page_boxes.pop(canonical_name, None)
+                if not page_boxes:
+                    del self._pdf_page_boxes[page_number]
+            return
+        page = self.page(page_number)
+        page_box = _coerce_pdf_page_box(box, canvas_width=page._canvas.width, canvas_height=page._canvas.height)
+        self._pdf_page_boxes.setdefault(page_number, {})[canonical_name] = page_box
+
+    def page_box(self, page_number: int, box_name: str) -> tuple[float, float, float, float] | None:
+        """Return an explicit PDF page box for a page, if one is set."""
+        page_number = self._validate_existing_position(page_number)
+        canonical_name = _coerce_pdf_page_box_name(box_name)
+        return self._pdf_page_boxes.get(page_number, {}).get(canonical_name)
+
+    def _shift_pdf_page_metadata_for_insert(self, page_number: int) -> None:
+        """Shift PDF-specific page metadata when a page is inserted."""
+        self._pdf_page_labels = {index + 1 if index >= page_number else index: label for index, label in self._pdf_page_labels.items()}
+        self._pdf_page_boxes = {index + 1 if index >= page_number else index: boxes for index, boxes in self._pdf_page_boxes.items()}
+
+    def _shift_pdf_page_metadata_for_removal(self, page_number: int) -> None:
+        """Shift PDF-specific page metadata when a page is removed."""
+        self._pdf_page_labels = {
+            index - 1 if index > page_number else index: label for index, label in self._pdf_page_labels.items() if index != page_number
+        }
+        self._pdf_page_boxes = {
+            index - 1 if index > page_number else index: boxes for index, boxes in self._pdf_page_boxes.items() if index != page_number
+        }
+
+    def _page_label_dictionary(self) -> str:
+        """Return a PDF PageLabels number-tree dictionary for explicit labels."""
+        entries = " ".join(
+            f"{page_number - 1} << /P ({_escape_pdf_string(label)}) >>" for page_number, label in sorted(self._pdf_page_labels.items())
+        )
+        return f"<< /Nums [{entries}] >>"
+
+    def _page_box_operators(self, page_number: int) -> str:
+        """Return additional PDF page-box dictionary entries for a page."""
+        boxes = self._pdf_page_boxes.get(page_number, {})
+        return " ".join(
+            f"/{name} [{_number(left)} {_number(bottom)} {_number(right)} {_number(top)}]"
+            for name, (left, bottom, right, top) in sorted(boxes.items())
+        )
 
     def create_pdf(self, filepath: str | os.PathLike[str]) -> None:
         """Create a deterministic PDF file at the requested path."""
@@ -1564,12 +1734,14 @@ class DocumentPDF(Document):
             resource_sections.append(f"/ExtGState << {graphics_state_entries} >>")
         resources = f"<< {' '.join(resource_sections)} >>" if resource_sections else "<< >>"
 
-        for page, content in rendered_pages:
+        for page_number, (page, content) in enumerate(rendered_pages, start=1):
             content_bytes = content.encode("latin-1")
             content_id = object_id
             page_id = object_id + 1
             object_id += 2
             page_ids.append(page_id)
+            page_box_entries = self._page_box_operators(page_number)
+            page_boxes = f" {page_box_entries}" if page_box_entries else ""
             writer.set_object(
                 content_id, b"<< /Length " + str(len(content_bytes)).encode("ascii") + b" >>\nstream\n" + content_bytes + b"\nendstream"
             )
@@ -1577,7 +1749,7 @@ class DocumentPDF(Document):
                 page_id,
                 (
                     f"<< /Type /Page /Parent {pages_id} 0 R "
-                    f"/MediaBox [0 0 {_number(page._canvas.width)} {_number(page._canvas.height)}] "
+                    f"/MediaBox [0 0 {_number(page._canvas.width)} {_number(page._canvas.height)}]{page_boxes} "
                     f"/Resources {resources} "
                     f"/Contents {content_id} 0 R >>"
                 ),
@@ -1585,7 +1757,8 @@ class DocumentPDF(Document):
 
         kids = " ".join(f"{page_id} 0 R" for page_id in page_ids)
         writer.set_object(pages_id, f"<< /Type /Pages /Kids [{kids}] /Count {len(page_ids)} >>")
-        writer.set_object(catalog_id, f"<< /Type /Catalog /Pages {pages_id} 0 R >>")
+        page_labels = f" /PageLabels {self._page_label_dictionary()}" if self._pdf_page_labels else ""
+        writer.set_object(catalog_id, f"<< /Type /Catalog /Pages {pages_id} 0 R{page_labels} >>")
         return writer.build(root_id=catalog_id, info_id=info_id)
 
     def _render_page_content(
@@ -1692,6 +1865,14 @@ class DocumentPDF(Document):
         for page_payload in _pdf_required_sequence(payload, "pages", "DocumentPDF"):
             page = _layers_pdf_from_dict(page_payload, styles)
             document.add_page(position=-1, page=page)
+        for page_key, label in _pdf_optional_mapping(payload, "page_labels", "DocumentPDF").items():
+            document.set_page_label(_pdf_page_number_key(page_key, "DocumentPDF page_labels"), label)  # type: ignore[arg-type]
+        for page_key, page_boxes in _pdf_optional_mapping(payload, "page_boxes", "DocumentPDF").items():
+            page_number = _pdf_page_number_key(page_key, "DocumentPDF page_boxes")
+            if not isinstance(page_boxes, Mapping):
+                raise TypeError("DocumentPDF page_boxes entries must be mappings")
+            for box_name, box in page_boxes.items():
+                document.set_page_box(page_number, box_name, box)  # type: ignore[arg-type]
         return document
 
     @property
@@ -1707,6 +1888,13 @@ class DocumentPDF(Document):
         grammar_annotations = serialize_grammar_truth_annotations(self)
         if grammar_annotations:
             document_payload["grammar_truth"] = grammar_annotations
+        if self._pdf_page_labels:
+            document_payload["page_labels"] = {str(page_number): label for page_number, label in sorted(self._pdf_page_labels.items())}
+        if self._pdf_page_boxes:
+            document_payload["page_boxes"] = {
+                str(page_number): {box_name: list(box) for box_name, box in sorted(page_boxes.items())}
+                for page_number, page_boxes in sorted(self._pdf_page_boxes.items())
+            }
         return {"DocumentPDF": document_payload}
 
 

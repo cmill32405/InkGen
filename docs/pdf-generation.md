@@ -41,8 +41,9 @@ backend, not a full Acrobat replacement. The current backend is useful for
 parser-facing technical drawings because it supports pages, vector primitives,
 closed renderer domains, deterministic bytes, extraction/grammar truth, raster
 images with alpha, JPEG pass-through, ICC profile emission, Standard 14 fonts,
-named TrueType/OpenType font embedding, stroke/fill opacity through PDF
-ExtGState resources, and stroke dash/cap/join/miter operators.
+named TrueType/OpenType font embedding, page labels, Crop/Bleed/Trim/Art page
+boxes, stroke/fill opacity through PDF ExtGState resources, and stroke
+dash/cap/join/miter operators.
 
 The remaining gaps that keep the backend from being a fully featured PDF
 creation system are:
@@ -52,7 +53,7 @@ creation system are:
 | Text encoding | WinAnsi literal strings, installed-font embedding, and printable WinAnsi `/ToUnicode` CMaps | Unicode/CID fonts, glyph subsetting, and full complex-script text extraction maps |
 | Text layout | Single positioned text components | Multi-line wrapping, alignment, tabs, columns, kerning, and complex-script shaping |
 | Graphics state | Basic stroke/fill primitives, stroke/fill alpha ExtGState resources, and stroke dash/cap/join/miter operators | Clipping paths, opacity groups, blend modes, gradients, and patterns |
-| Document structure | Pages and deterministic metadata | Outlines/bookmarks, links, annotations, tagged PDF structure, page labels, and additional page boxes |
+| Document structure | Pages, deterministic metadata, page labels, and Crop/Bleed/Trim/Art boxes | Outlines/bookmarks, links, annotations, and tagged PDF structure |
 | Color/profile support | Device RGB/CMYK and JPEG ICC profile objects | Broader calibrated color spaces and selectable PDF/A-style archival constraints |
 | Import/conversion | SVG input remains SVG-only | Arbitrary SVG-to-PDF conversion and external PDF embedding are out of scope until explicitly approved |
 | Optimization/security | Classic xref table and plain objects | Object streams, font/image subsetting, encryption, and signatures if those become product requirements |
@@ -73,6 +74,15 @@ compressed ICCBased color-space objects with DeviceRGB or DeviceCMYK alternates.
 JPEGs that require EXIF rotation or unsupported color modes fall back to
 normalized RGB samples. SVG output uses the same `RasterImageAsset` through
 `ImageSVG`, normalized to an embedded PNG data URI.
+
+`DocumentPDF` supports explicit page labels through `set_page_label()` and
+additional page boxes through `set_page_box()`. Page labels are emitted as a PDF
+`/PageLabels` number tree with literal string prefixes. Page boxes are emitted
+on the target page dictionary as `/CropBox`, `/BleedBox`, `/TrimBox`, or
+`/ArtBox` entries in PDF bottom-left page coordinates. Labels and boxes are
+stored in document parameters, round-trip through `DocumentPDF.create_from_dict()`,
+and follow page insertions and removals. Invalid page labels, page numbers, box
+names, and box coordinates fail at the `DocumentPDF` boundary before rendering.
 
 The PDF render path is intentionally closed. `DocumentPDF` renders exact
 `ComponentGroupPDF` groups, and `ComponentGroupPDF` accepts/renders only the
@@ -193,3 +203,5 @@ The PDF backend is covered by PDF-P1 tests for:
 - Renderer-neutral zoning recipes that emit PDF-safe component groups
 - Grammar truth records for cues, constructs, links, and assessments
 - Visual spot-check artifact generation
+- Page labels and Crop/Bleed/Trim/Art page boxes with serialization round trips,
+  insertion/removal index shifts, and invalid metadata rejection
