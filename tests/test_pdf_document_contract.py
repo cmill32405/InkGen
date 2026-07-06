@@ -310,6 +310,204 @@ def test_document_pdf_rejects_invalid_serialized_page_structure_metadata() -> No
         DocumentPDF.create_from_dict(decimal_page_payload)
 
 
+@pytest.mark.condition("PDF-DOC-TEXT-ANNOTATION-P3")
+def test_document_pdf_emits_text_annotations_and_round_trips() -> None:
+    """PDF-DOC-TEXT-ANNOTATION-P3: Text annotations render and round-trip."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    document.add_page()
+    document.add_text_annotation(
+        1,
+        [5.0, 6.0, 20.0, 25.0],
+        "Check this (A)",
+        title=r"Reviewer\One",
+        open=True,
+    )
+    document.add_text_annotation(page_number=1, rect=[30.0, 6.0, 45.0, 25.0], contents="Closed note")
+    document.add_text_annotation(2, [0.0, 0.0, 100.0, 80.0], "Page 2 note")
+
+    payload = document.to_pdf_bytes()
+    recreated = DocumentPDF.create_from_dict(document.parameters)
+    objects = _pdf_objects(payload)
+    annotation_refs = _annotation_refs_by_page(payload)
+    annotation_ids = [annotation_id for page_refs in annotation_refs for annotation_id in page_refs]
+
+    assert payload == document.to_pdf_bytes()
+    assert [len(page_refs) for page_refs in annotation_refs] == [2, 1]
+    assert b"/Subtype /Text" in objects[annotation_ids[0]]
+    assert b"/Rect [5 6 20 25]" in objects[annotation_ids[0]]
+    assert b"/T (Reviewer\\\\One)" in objects[annotation_ids[0]]
+    assert b"/Contents (Check this \\(A\\))" in objects[annotation_ids[0]]
+    assert b"/Open true" in objects[annotation_ids[0]]
+    assert b"/Rect [30 6 45 25]" in objects[annotation_ids[1]]
+    assert b"/Contents (Closed note)" in objects[annotation_ids[1]]
+    assert b"/Open" not in objects[annotation_ids[1]]
+    assert b"/Rect [0 0 100 80]" in objects[annotation_ids[2]]
+    assert b"/Contents (Page 2 note)" in objects[annotation_ids[2]]
+    assert sorted(objects) == list(range(1, max(objects) + 1))
+    assert document.text_annotations() == (
+        {
+            "page_number": 1,
+            "rect": [5.0, 6.0, 20.0, 25.0],
+            "contents": "Check this (A)",
+            "title": r"Reviewer\One",
+            "open": True,
+        },
+        {"page_number": 1, "rect": [30.0, 6.0, 45.0, 25.0], "contents": "Closed note"},
+        {"page_number": 2, "rect": [0.0, 0.0, 100.0, 80.0], "contents": "Page 2 note"},
+    )
+    assert recreated.parameters == document.parameters
+    assert recreated.to_pdf_bytes() == payload
+
+
+@pytest.mark.condition("PDF-DOC-TEXT-ANNOTATION-P3")
+def test_document_pdf_rejects_invalid_text_annotation_metadata() -> None:
+    """PDF-DOC-TEXT-ANNOTATION-P3: Text annotation metadata fails at explicit boundaries."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+
+    with pytest.raises(ValueError, match="Position must correlate"):
+        document.add_text_annotation(2, [0.0, 0.0, 1.0, 1.0], "note")
+
+    for contents in [object(), "", "not latin \u0100"]:
+        with pytest.raises((TypeError, ValueError)):
+            document.add_text_annotation(1, [0.0, 0.0, 1.0, 1.0], contents)  # type: ignore[arg-type]
+        assert document.text_annotations() == ()
+
+    for title in [object(), "", "not latin \u0100"]:
+        with pytest.raises((TypeError, ValueError)):
+            document.add_text_annotation(1, [0.0, 0.0, 1.0, 1.0], "note", title=title)  # type: ignore[arg-type]
+        assert document.text_annotations() == ()
+
+    for open_state in [0, 1, "true", object()]:
+        with pytest.raises(TypeError):
+            document.add_text_annotation(1, [0.0, 0.0, 1.0, 1.0], "note", open=open_state)  # type: ignore[arg-type]
+        assert document.text_annotations() == ()
+
+    invalid_rectangles = [
+        "0 0 1 1",
+        [0.0, 0.0, 1.0],
+        [True, 0.0, 1.0, 1.0],
+        [0.0, 0.0, float("nan"), 1.0],
+        [0.0, 0.0, 0.0, 1.0],
+        [-1.0, 0.0, 1.0, 1.0],
+        [0.0, 0.0, 101.0, 1.0],
+    ]
+    for rect in invalid_rectangles:
+        with pytest.raises((TypeError, ValueError)):
+            document.add_text_annotation(1, rect, "note")  # type: ignore[arg-type]
+        assert document.text_annotations() == ()
+
+    document.add_text_annotation(1, [0.0, 0.0, 1.0, 1.0], "note")
+    document.clear_text_annotations()
+
+    assert document.text_annotations() == ()
+    assert "text_annotations" not in document.parameters["DocumentPDF"]
+    assert b"/Annots" not in document.to_pdf_bytes()
+
+
+@pytest.mark.condition("PDF-DOC-TEXT-ANNOTATION-P3")
+def test_document_pdf_text_annotations_track_page_insertions_and_removals() -> None:
+    """PDF-DOC-TEXT-ANNOTATION-P3: Text annotations stay aligned with page mutations."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    document.add_page()
+    document.add_page()
+    document.add_text_annotation(1, [1.0, 1.0, 10.0, 10.0], "front")
+    document.add_text_annotation(2, [2.0, 2.0, 20.0, 20.0], "middle")
+    document.add_text_annotation(3, [3.0, 3.0, 30.0, 30.0], "tail", title="Tail", open=True)
+
+    document.add_page(position=2)
+
+    assert document.text_annotations() == (
+        {"page_number": 1, "rect": [1.0, 1.0, 10.0, 10.0], "contents": "front"},
+        {"page_number": 3, "rect": [2.0, 2.0, 20.0, 20.0], "contents": "middle"},
+        {
+            "page_number": 4,
+            "rect": [3.0, 3.0, 30.0, 30.0],
+            "contents": "tail",
+            "title": "Tail",
+            "open": True,
+        },
+    )
+
+    document.remove_page(3)
+
+    assert document.text_annotations() == (
+        {"page_number": 1, "rect": [1.0, 1.0, 10.0, 10.0], "contents": "front"},
+        {
+            "page_number": 3,
+            "rect": [3.0, 3.0, 30.0, 30.0],
+            "contents": "tail",
+            "title": "Tail",
+            "open": True,
+        },
+    )
+
+    document.remove_page(1)
+
+    assert document.text_annotations() == (
+        {
+            "page_number": 2,
+            "rect": [3.0, 3.0, 30.0, 30.0],
+            "contents": "tail",
+            "title": "Tail",
+            "open": True,
+        },
+    )
+
+
+@pytest.mark.condition("PDF-DOC-TEXT-ANNOTATION-P3")
+def test_document_pdf_text_annotations_use_value_equality_for_large_page_removal() -> None:
+    """PDF-DOC-TEXT-ANNOTATION-P3: Text annotation removal uses page-number value equality."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    for _ in range(260):
+        document.add_page()
+    document.add_text_annotation(1, [1.0, 1.0, 10.0, 10.0], "front")
+    document.add_text_annotation(int("260"), [2.0, 2.0, 20.0, 20.0], "tail")
+
+    document.remove_page(int("260"))
+
+    assert document.pages == 259
+    assert document.text_annotations() == ({"page_number": 1, "rect": [1.0, 1.0, 10.0, 10.0], "contents": "front"},)
+
+
+@pytest.mark.condition("PDF-DOC-TEXT-ANNOTATION-P3")
+def test_document_pdf_rejects_invalid_serialized_text_annotation_metadata() -> None:
+    """PDF-DOC-TEXT-ANNOTATION-P3: Serialized text annotations validate before rendering."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    document.add_text_annotation(1, [1.0, 2.0, 30.0, 40.0], "note", title="Reviewer", open=True)
+
+    invalid_payloads = []
+    for mutator in [
+        lambda data: data["DocumentPDF"].__setitem__("text_annotations", "bad"),
+        lambda data: data["DocumentPDF"].__setitem__("text_annotations", [object()]),
+        lambda data: data["DocumentPDF"]["text_annotations"][0].pop("page_number"),
+        lambda data: data["DocumentPDF"]["text_annotations"][0].pop("rect"),
+        lambda data: data["DocumentPDF"]["text_annotations"][0].pop("contents"),
+        lambda data: data["DocumentPDF"]["text_annotations"][0].__setitem__("page_number", 2),
+        lambda data: data["DocumentPDF"]["text_annotations"][0].__setitem__("rect", [0.0, 0.0, 0.0, 1.0]),
+        lambda data: data["DocumentPDF"]["text_annotations"][0].__setitem__("contents", ""),
+        lambda data: data["DocumentPDF"]["text_annotations"][0].__setitem__("title", object()),
+        lambda data: data["DocumentPDF"]["text_annotations"][0].__setitem__("open", 1),
+    ]:
+        payload = deepcopy(document.parameters)
+        mutator(payload)
+        invalid_payloads.append(payload)
+
+    for payload in invalid_payloads:
+        with pytest.raises((TypeError, ValueError)):
+            DocumentPDF.create_from_dict(payload)
+
+    missing_optional_payload = deepcopy(document.parameters)
+    missing_optional_payload["DocumentPDF"]["text_annotations"][0].pop("title")
+    missing_optional_payload["DocumentPDF"]["text_annotations"][0].pop("open")
+    recreated = DocumentPDF.create_from_dict(missing_optional_payload)
+
+    assert recreated.text_annotations() == ({"page_number": 1, "rect": [1.0, 2.0, 30.0, 40.0], "contents": "note"},)
+
+
 @pytest.mark.condition("PDF-DOC-PAGE-LINK-P3")
 def test_document_pdf_emits_internal_page_link_annotations_and_round_trips() -> None:
     """PDF-DOC-PAGE-LINK-P3: Internal page link annotations render and round-trip."""

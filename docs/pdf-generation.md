@@ -42,9 +42,10 @@ parser-facing technical drawings because it supports pages, vector primitives,
 closed renderer domains, deterministic bytes, extraction/grammar truth, raster
 images with alpha, JPEG pass-through, ICC profile emission, Standard 14 fonts,
 named TrueType/OpenType font embedding, page labels, Crop/Bleed/Trim/Art page
-boxes, flat and one-level nested outlines/bookmarks, URI links, internal page links, named
-destinations, named-destination links, stroke/fill opacity through PDF ExtGState
-resources, and stroke dash/cap/join/miter operators.
+boxes, flat and one-level nested outlines/bookmarks, URI links, internal page
+links, named destinations, named-destination links, text annotations,
+stroke/fill opacity through PDF ExtGState resources, and stroke
+dash/cap/join/miter operators.
 
 The remaining gaps that keep the backend from being a fully featured PDF
 creation system are:
@@ -54,7 +55,7 @@ creation system are:
 | Text encoding | WinAnsi literal strings, installed-font embedding, and printable WinAnsi `/ToUnicode` CMaps | Unicode/CID fonts, glyph subsetting, and full complex-script text extraction maps |
 | Text layout | Single positioned text components | Multi-line wrapping, alignment, tabs, columns, kerning, and complex-script shaping |
 | Graphics state | Basic stroke/fill primitives, stroke/fill alpha ExtGState resources, and stroke dash/cap/join/miter operators | Clipping paths, opacity groups, blend modes, gradients, and patterns |
-| Document structure | Pages, deterministic metadata, page labels, Crop/Bleed/Trim/Art boxes, flat and one-level nested outlines/bookmarks, URI links, internal page links, named destinations, and named-destination links | Generic annotations, deeper outline trees, and tagged PDF structure |
+| Document structure | Pages, deterministic metadata, page labels, Crop/Bleed/Trim/Art boxes, flat and one-level nested outlines/bookmarks, URI links, internal page links, named destinations, named-destination links, and text annotations | Generic non-text annotations, deeper outline trees, and tagged PDF structure |
 | Color/profile support | Device RGB/CMYK and JPEG ICC profile objects | Broader calibrated color spaces and selectable PDF/A-style archival constraints |
 | Import/conversion | SVG input remains SVG-only | Arbitrary SVG-to-PDF conversion and external PDF embedding are out of scope until explicitly approved |
 | Optimization/security | Classic xref table and plain objects | Object streams, font/image subsetting, encryption, and signatures if those become product requirements |
@@ -126,6 +127,17 @@ to named destinations are deterministic `/Subtype /Link` annotations with a
 literal-string `/Dest`. Generic PDF annotation types, rich annotation
 appearances, deeper outline trees, and tagged PDF structure are intentionally out of
 scope.
+
+Text annotations can be added through `DocumentPDF.add_text_annotation()`. Each
+annotation has an existing source page, a finite positive-area rectangle inside
+that page's MediaBox, non-empty Latin-1 contents, an optional non-empty Latin-1
+title, and a strict boolean `open` state. Text annotations are stored in document
+parameters, round-trip through `DocumentPDF.create_from_dict()`, follow page
+insertions and removals, and are emitted as deterministic `/Subtype /Text`
+annotation objects after URI, internal page, and named-destination links on each
+page. Rich annotation appearance streams, comments/replies, file attachments,
+stamps, highlights, widgets, and other non-text annotation subtypes are
+intentionally out of scope.
 
 The PDF render path is intentionally closed. `DocumentPDF` renders exact
 `ComponentGroupPDF` groups, and `ComponentGroupPDF` accepts/renders only the

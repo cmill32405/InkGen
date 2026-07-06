@@ -127,6 +127,17 @@ class _PDFNamedDestinationLinkAnnotation:
     destination_name: str
 
 
+@dataclass(frozen=True)
+class _PDFTextAnnotation:
+    """Validated PDF text annotation metadata."""
+
+    page_number: int
+    rect: tuple[float, float, float, float]
+    contents: str
+    title: str | None
+    open: bool
+
+
 class PDFGeneratorInterface(metaclass=abc.ABCMeta):
     """Interface for components that can emit PDF content-stream operators."""
 
@@ -440,6 +451,26 @@ def _coerce_pdf_uri(uri: object) -> str:
     except UnicodeEncodeError as exc:
         raise ValueError("URI link target must be encodable as latin-1") from exc
     return uri
+
+
+def _coerce_pdf_annotation_text(value: object, name: str) -> str:
+    """Return a PDF literal-string-safe annotation text field."""
+    if not isinstance(value, str):
+        raise TypeError(f"{name} must be a string")
+    if not value:
+        raise ValueError(f"{name} must not be empty")
+    try:
+        value.encode("latin-1")
+    except UnicodeEncodeError as exc:
+        raise ValueError(f"{name} must be encodable as latin-1") from exc
+    return value
+
+
+def _coerce_pdf_annotation_open(value: object) -> bool:
+    """Return a strict PDF text annotation open-state flag."""
+    if not isinstance(value, bool):
+        raise TypeError("text annotation open must be a boolean")
+    return value
 
 
 def _coerce_pdf_link_rect(
@@ -1644,6 +1675,7 @@ class DocumentPDF(Document):
         self._pdf_page_links: list[_PDFPageLinkAnnotation] = []
         self._pdf_named_destinations: dict[str, _PDFNamedDestination] = {}
         self._pdf_named_destination_links: list[_PDFNamedDestinationLinkAnnotation] = []
+        self._pdf_text_annotations: list[_PDFTextAnnotation] = []
 
     @staticmethod
     def _iter_layer_groups(layer: Layer, *, sort: bool = False) -> tuple[ComponentGroup, ...]:
@@ -1798,6 +1830,34 @@ class DocumentPDF(Document):
         """Return serialized named destination link annotations in insertion order."""
         return tuple(self._named_destination_link_payload(link) for link in self._pdf_named_destination_links)
 
+    def add_text_annotation(
+        self,
+        page_number: int,
+        rect: Sequence[float | int],
+        contents: str,
+        *,
+        title: str | None = None,
+        open: bool = False,
+    ) -> None:
+        """Add a PDF text annotation to an existing page."""
+        page_number = self._validate_existing_position(page_number)
+        page = self.page(page_number)
+        annotation_rect = _coerce_pdf_link_rect(rect, canvas_width=page._canvas.width, canvas_height=page._canvas.height)
+        annotation_contents = _coerce_pdf_annotation_text(contents, "text annotation contents")
+        annotation_title = None if title is None else _coerce_pdf_annotation_text(title, "text annotation title")
+        annotation_open = _coerce_pdf_annotation_open(open)
+        self._pdf_text_annotations.append(
+            _PDFTextAnnotation(page_number, annotation_rect, annotation_contents, annotation_title, annotation_open)
+        )
+
+    def clear_text_annotations(self) -> None:
+        """Remove all PDF text annotations."""
+        self._pdf_text_annotations.clear()
+
+    def text_annotations(self) -> tuple[dict[str, object], ...]:
+        """Return serialized PDF text annotations in insertion order."""
+        return tuple(self._text_annotation_payload(annotation) for annotation in self._pdf_text_annotations)
+
     def set_page_label(self, page_number: int, label: str | None) -> None:
         """Set or clear a PDF page label for an existing page."""
         page_number = self._validate_existing_position(page_number)
@@ -1889,6 +1949,16 @@ class DocumentPDF(Document):
             )
             for link in self._pdf_named_destination_links
         ]
+        self._pdf_text_annotations = [
+            _PDFTextAnnotation(
+                annotation.page_number + 1 if annotation.page_number >= page_number else annotation.page_number,
+                annotation.rect,
+                annotation.contents,
+                annotation.title,
+                annotation.open,
+            )
+            for annotation in self._pdf_text_annotations
+        ]
 
     def _shift_pdf_page_metadata_for_removal(self, page_number: int) -> None:
         """Shift PDF-specific page metadata when a page is removed."""
@@ -1955,6 +2025,17 @@ class DocumentPDF(Document):
             )
             for link in self._pdf_named_destination_links
             if link.page_number != page_number and link.destination_name not in removed_destination_names
+        ]
+        self._pdf_text_annotations = [
+            _PDFTextAnnotation(
+                annotation.page_number - 1 if annotation.page_number > page_number else annotation.page_number,
+                annotation.rect,
+                annotation.contents,
+                annotation.title,
+                annotation.open,
+            )
+            for annotation in self._pdf_text_annotations
+            if annotation.page_number != page_number
         ]
 
     def _page_label_dictionary(self) -> str:
@@ -2158,6 +2239,37 @@ class DocumentPDF(Document):
         destination = _escape_pdf_string(link.destination_name)
         return f"<< /Type /Annot /Subtype /Link /Rect {rect} /Border [0 0 0] /Dest ({destination}) >>"
 
+    @staticmethod
+    def _text_annotation_payload(annotation: _PDFTextAnnotation) -> dict[str, object]:
+        """Return serialized data for a validated PDF text annotation."""
+        payload: dict[str, object] = {
+            "page_number": annotation.page_number,
+            "rect": list(annotation.rect),
+            "contents": annotation.contents,
+        }
+        if annotation.title is not None:
+            payload["title"] = annotation.title
+        if annotation.open:
+            payload["open"] = annotation.open
+        return payload
+
+    def _text_annotations_by_page(self) -> dict[int, tuple[_PDFTextAnnotation, ...]]:
+        """Return PDF text annotations grouped by page in insertion order."""
+        annotations_by_page: dict[int, list[_PDFTextAnnotation]] = {}
+        for annotation in self._pdf_text_annotations:
+            annotations_by_page.setdefault(annotation.page_number, []).append(annotation)
+        return {page_number: tuple(annotations) for page_number, annotations in annotations_by_page.items()}
+
+    @staticmethod
+    def _text_annotation_object(annotation: _PDFTextAnnotation) -> str:
+        """Return a PDF text annotation object dictionary."""
+        left, bottom, right, top = annotation.rect
+        rect = f"[{_number(left)} {_number(bottom)} {_number(right)} {_number(top)}]"
+        title = f" /T ({_escape_pdf_string(annotation.title)})" if annotation.title is not None else ""
+        open_state = " /Open true" if annotation.open else ""
+        contents = _escape_pdf_string(annotation.contents)
+        return f"<< /Type /Annot /Subtype /Text /Rect {rect}{title} /Contents ({contents}){open_state} >>"
+
     def create_pdf(self, filepath: str | os.PathLike[str]) -> None:
         """Create a deterministic PDF file at the requested path."""
         path = _normalize_output_filepath(filepath)
@@ -2282,6 +2394,7 @@ class DocumentPDF(Document):
         uri_links_by_page = self._uri_links_by_page()
         page_links_by_page = self._page_links_by_page()
         named_destination_links_by_page = self._named_destination_links_by_page()
+        text_annotations_by_page = self._text_annotations_by_page()
         page_plans = []
         for page_number, (page, content) in enumerate(rendered_pages, start=1):
             content_bytes = content.encode("latin-1")
@@ -2291,6 +2404,7 @@ class DocumentPDF(Document):
                 tuple(uri_links_by_page.get(page_number, ()))
                 + tuple(page_links_by_page.get(page_number, ()))
                 + tuple(named_destination_links_by_page.get(page_number, ()))
+                + tuple(text_annotations_by_page.get(page_number, ()))
             )
             annotation_ids = list(range(object_id + 2, object_id + 2 + len(page_annotations)))
             object_id += 2 + len(page_annotations)
@@ -2319,8 +2433,10 @@ class DocumentPDF(Document):
                     writer.set_object(annotation_id, self._uri_link_annotation_object(link))
                 elif isinstance(link, _PDFPageLinkAnnotation):
                     writer.set_object(annotation_id, self._page_link_annotation_object(link, page_ids_by_number))
-                else:
+                elif isinstance(link, _PDFNamedDestinationLinkAnnotation):
                     writer.set_object(annotation_id, self._named_destination_link_annotation_object(link))
+                else:
+                    writer.set_object(annotation_id, self._text_annotation_object(link))
 
         kids = " ".join(f"{page_id} 0 R" for page_id in page_ids)
         writer.set_object(pages_id, f"<< /Type /Pages /Kids [{kids}] /Count {len(page_ids)} >>")
@@ -2497,6 +2613,15 @@ class DocumentPDF(Document):
             rect = _pdf_required_field(link_payload, "rect", "DocumentPDF named destination link")
             destination_name = _pdf_required_field(link_payload, "destination_name", "DocumentPDF named destination link")
             document.add_named_destination_link(page_number, rect, destination_name)  # type: ignore[arg-type]
+        for annotation_payload in _pdf_optional_sequence(payload, "text_annotations", "DocumentPDF"):
+            if not isinstance(annotation_payload, Mapping):
+                raise TypeError("DocumentPDF text_annotations entries must be mappings")
+            page_number = _pdf_required_field(annotation_payload, "page_number", "DocumentPDF text annotation")
+            rect = _pdf_required_field(annotation_payload, "rect", "DocumentPDF text annotation")
+            contents = _pdf_required_field(annotation_payload, "contents", "DocumentPDF text annotation")
+            title = annotation_payload.get("title")
+            open_state = annotation_payload.get("open", False)
+            document.add_text_annotation(page_number, rect, contents, title=title, open=open_state)  # type: ignore[arg-type]
         return document
 
     @property
@@ -2533,6 +2658,8 @@ class DocumentPDF(Document):
             document_payload["named_destination_links"] = [
                 self._named_destination_link_payload(link) for link in self._pdf_named_destination_links
             ]
+        if self._pdf_text_annotations:
+            document_payload["text_annotations"] = [self._text_annotation_payload(annotation) for annotation in self._pdf_text_annotations]
         return {"DocumentPDF": document_payload}
 
 

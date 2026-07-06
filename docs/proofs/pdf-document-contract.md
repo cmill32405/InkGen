@@ -34,6 +34,9 @@ The slice covers:
 - `DocumentPDF.add_named_destination_link()`
 - `DocumentPDF.clear_named_destination_links()`
 - `DocumentPDF.named_destination_links()`
+- `DocumentPDF.add_text_annotation()`
+- `DocumentPDF.clear_text_annotations()`
+- `DocumentPDF.text_annotations()`
 - `DocumentPDF.to_pdf_bytes()`
 - `DocumentPDF.create_from_dict()`
 - `DocumentPDF.parameters`
@@ -68,6 +71,8 @@ Affected surface:
   destination contract.
 - `docs/adr/0008-pdf-nested-outlines.md`: accepted ADR for the one-level nested
   outline contract.
+- `docs/adr/0009-pdf-text-annotations.md`: accepted ADR for the text annotation
+  contract.
 
 Incoming dependencies:
 
@@ -93,6 +98,8 @@ Incoming dependencies:
 - Callers can depend on `DocumentPDF.add_named_destination()` to create named
   page destinations and on `DocumentPDF.add_named_destination_link()` to create
   link annotations targeting those destinations.
+- Callers can depend on `DocumentPDF.add_text_annotation()` to create PDF text
+  annotations on existing pages, and on serialization to preserve them.
 
 Outgoing dependencies:
 
@@ -113,6 +120,9 @@ Outgoing dependencies:
   writer, existing page-number validation, page-box rectangle validator, literal
   string escaping, and `/XYZ` destination number validation; no dependency was
   added.
+- Text annotations use the same local PDF object writer, existing page-number
+  validation, page-box rectangle validator, literal string escaping, and strict
+  boolean validation; no dependency was added.
 
 Before/after edge changes:
 
@@ -157,6 +167,10 @@ Before/after edge changes:
   or delete destination page targets and link source pages. `to_pdf_bytes()`
   emits the catalog `/Names` dictionary with a `/Dests` name array and emits
   `/Subtype /Link` annotations with literal-string `/Dest` names.
+- After the text annotation update, `DocumentPDF` owns a flat ordered text
+  annotation list. Insertions and removals shift or delete annotation source
+  pages. `to_pdf_bytes()` emits `/Subtype /Text` annotation objects in page
+  `/Annots` arrays after URI, internal page, and named-destination links.
 
 Cycle/layer/coupling/redundancy result:
 
@@ -178,9 +192,12 @@ Cycle/layer/coupling/redundancy result:
 - Internal page link metadata is local to `DocumentPDF`; generic annotations and
   richer annotation appearances remain deferred until there is a concrete
   fixture need.
-- Named destination metadata is local to `DocumentPDF`; generic annotations,
-  nested outlines, tagged PDF, and richer annotation appearances remain deferred
+- Named destination metadata is local to `DocumentPDF`; generic non-text
+  annotations, tagged PDF, and richer annotation appearances remain deferred
   until there is a concrete fixture need.
+- Text annotation metadata is local to `DocumentPDF`; file attachments, stamps,
+  highlights, widgets, replies, rich appearances, and other non-text annotation
+  subtypes remain deferred until there is a concrete fixture need.
 
 ADR/rule impact:
 
@@ -195,6 +212,8 @@ ADR/rule impact:
 - ADR-0007 records the named destination decision because this slice adds public
   API and serialized parameters.
 - ADR-0008 records the nested outline decision because this slice extends public
+  API and serialized parameters.
+- ADR-0009 records the text annotation decision because this slice adds public
   API and serialized parameters.
 
 ## Domain Definitions
@@ -245,6 +264,14 @@ ADR/rule impact:
   finite positive-area rectangle inside the source page MediaBox.
 - Serialized named destinations and named destination links must be rejected
   before rendering if malformed.
+- PDF text annotations are flat, insertion-ordered entries. Each entry has an
+  existing one-based page number, a finite positive-area rectangle inside the
+  page MediaBox, non-empty Latin-1 contents, optional non-empty Latin-1 title,
+  and a strict boolean open state.
+- Page `/Annots` arrays must include every text annotation on that page after
+  URI links, internal page links, and named-destination links on that page.
+- Serialized text annotation entries must be rejected before rendering if
+  malformed.
 
 ## Comprehensiveness Matrix
 
@@ -274,6 +301,9 @@ ADR/rule impact:
 | Named destinations | Emit deterministic catalog `/Names` `/Dests` arrays and named-destination links | PO-PDFDOC-019 | named destination render/round-trip test | mutation target |
 | Named destination page/index shifts | Insert/remove pages shift or delete destination targets and named-link source pages | PO-PDFDOC-020 | named destination page mutation test | mutation target |
 | Serialized named destination metadata | Reject malformed named destination payloads before rendering | PO-PDFDOC-021 | serialized named destination rejection test | mutation target |
+| Text annotations | Emit deterministic `/Subtype /Text` annotation objects and round-trip through parameters | PO-PDFDOC-025 | text annotation render/round-trip test | mutation target |
+| Text annotation page/index shifts | Insert/remove pages shift or delete text annotation pages with page indices | PO-PDFDOC-026 | text annotation page mutation test | mutation target |
+| Serialized text annotation metadata | Reject malformed text annotation payloads before rendering | PO-PDFDOC-027 | serialized text annotation rejection test | mutation target |
 | Non-PDF group in a PDF page | Continue to fail loudly | Existing PDF generator test | killed |
 | Private layer storage mutation | Excluded from public contract | Explicit exclusion | Not applicable |
 
@@ -294,7 +324,7 @@ ADR/rule impact:
 | Golden artifact/visual | yes | PDF content stream is a generated artifact. | content-stream assertions |
 | Regression | yes | This closes the duplicate-label traversal regression. | dedicated tests |
 | Serialized payload | yes | Page labels and boxes are persisted in document parameters. | render/round-trip and malformed-payload tests |
-| Navigation metadata | yes | Flat PDF outlines, URI links, internal page links, and named destinations add document navigation objects and page annotation arrays. | outline, URI link, page link, and named destination render/round-trip tests |
+| Navigation metadata | yes | Flat/nested PDF outlines, URI links, internal page links, named destinations, and text annotations add document navigation/comment objects and page annotation arrays. | outline, URI link, page link, named destination, and text annotation render/round-trip tests |
 
 ## Mutation Testing Gate
 
@@ -512,6 +542,31 @@ Current result after the nested outline update:
     post-outline object-id increment. No later indirect objects are allocated
     after outlines in the current writer path, so the increment value has no
     observable serialized effect.
+- Gate result: pass with documented equivalent survivors.
+
+Current result after the text annotation update:
+
+- Tool: Cosmic Ray 8.4.6.
+- Config: `tests/mutation/pdf_document_text_annotation_cosmic_ray.toml`.
+- Filter: `tests/mutation/filter_pdf_document_text_annotation_work_items.py`.
+- Test selection: focused PDF document, factory payload, and PDF generator tests.
+- Proof-critical work items after filter: 117.
+- Killed mutants: 114.
+- Equivalent survivors: 3.
+- Surviving equivalent mutations:
+  - `_coerce_pdf_link_rect()` line 478 changed the parameter separator from
+    keyword-only `*` to positional-only `/` for `rect`. Public callers enter
+    through `DocumentPDF.add_text_annotation()`, which passes `rect`
+    positionally and page dimensions by keyword, so the text annotation domain is
+    unchanged.
+  - `_shift_pdf_page_metadata_for_removal()` line 2031 changed
+    `annotation.page_number > page_number` to `>=`. The comprehension filters
+    `annotation.page_number != page_number` before evaluating the output
+    expression, so equality is excluded from the expression domain.
+  - `to_pdf_bytes()` line 2431 changed `zip(..., strict=True)` to
+    `strict=False`. `annotation_ids` is constructed from
+    `len(page_annotations)`, so it has exactly the same length as the annotation
+    sequence.
 - Gate result: pass with documented equivalent survivors.
 
 ## PO-PDFDOC-001: PDF Rendering Traverses Every Stored Group
@@ -1078,3 +1133,81 @@ destination names.
 
 Proven for serialized named destinations and named-destination links in the
 declared payload domain, with mutation verification documented above.
+
+## PO-PDFDOC-025: PDF Text Annotations Emit And Round Trip
+
+### Claim
+
+`DocumentPDF` emits deterministic PDF text annotations, stores every same-page
+text annotation in the page `/Annots` array after existing link annotations,
+escapes literal contents and title strings, preserves deterministic bytes, and
+round-trips text annotations through `parameters` and `create_from_dict()`.
+
+### Proof Method
+
+`add_text_annotation()` validates page number, rectangle bounds, contents, title,
+and open state before storing a `_PDFTextAnnotation`. `to_pdf_bytes()` groups
+text annotations by page, allocates one annotation object per entry, appends
+their IDs to page `/Annots` arrays after URI/page/named-destination links, and
+emits `/Subtype /Text` dictionaries with `/Contents`, optional `/T`, and
+optional `/Open true`. Tests parse PDF objects, verify same-page annotation
+arrays, exact rectangle bytes, escaped contents/title strings, deterministic
+repeated rendering, and serialization round-trip equality.
+
+### Counterexamples And Exclusions
+
+Rich appearance streams, annotation replies, file attachments, stamps,
+highlights, widgets, other non-text annotation subtypes, and non-Latin-1 strings
+are excluded from this text annotation slice.
+
+### Conclusion
+
+Proven for Latin-1 PDF text annotations in the declared PDF document domain,
+with mutation verification documented above.
+
+## PO-PDFDOC-026: PDF Text Annotations Follow Page Mutations
+
+### Claim
+
+When pages are inserted or removed, text annotation source pages stay aligned
+with the same logical pages after the mutation, and annotations tied to removed
+pages are deleted.
+
+### Proof Method
+
+`DocumentPDF.add_page()` and `DocumentPDF.remove_page()` route through the PDF
+metadata shift helpers. The text annotation update extends those helpers to
+increment source pages at or after insertion points, decrement source pages
+after removed pages, and drop annotations whose source page matches the removed
+page. Tests include annotations before, on, and after the mutation point, plus a
+large page-number removal case to prove value equality rather than object
+identity.
+
+### Conclusion
+
+Proven for page indices admitted by the `DocumentPDF` public page mutation
+methods, with mutation verification documented above.
+
+## PO-PDFDOC-027: Serialized Text Annotation Metadata Fails Explicitly
+
+### Claim
+
+Malformed serialized `text_annotations` payloads are rejected during
+`DocumentPDF.create_from_dict()` before any rendered PDF can be produced from
+bad text annotation metadata.
+
+### Proof Method
+
+`create_from_dict()` reads optional text annotation sequences through
+`_pdf_optional_sequence()`, requires each entry to be a mapping, requires
+`page_number`, `rect`, and `contents`, defaults missing `open` to `False`, and
+delegates to `add_text_annotation()` for page, rectangle, contents, title, and
+open-state validation. Tests mutate a valid payload into non-sequence
+containers, non-mapping entries, missing required fields, missing pages, invalid
+rectangles, empty contents, invalid titles, and non-boolean open states. A
+separate test proves missing optional title/open values hydrate with defaults.
+
+### Conclusion
+
+Proven for serialized text annotations in the declared payload domain, with
+mutation verification documented above.
