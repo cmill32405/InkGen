@@ -479,8 +479,8 @@ Current result after the nested outline update:
 - Config: `tests/mutation/pdf_document_nested_outline_cosmic_ray.toml`.
 - Filter: `tests/mutation/filter_pdf_document_nested_outline_work_items.py`.
 - Test selection: focused PDF document, factory payload, and PDF generator tests.
-- Proof-critical work items after filter: 239.
-- Killed mutants: 227.
+- Proof-critical work items after filter: 245.
+- Killed mutants: 233.
 - Equivalent survivors: 12.
 - Surviving equivalent mutations:
   - `_coerce_pdf_destination_number()` line 415 changed the separator before
