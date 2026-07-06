@@ -24,6 +24,7 @@ nav:
       - ADR-0005 PDF URI Link Annotations: adr/0005-pdf-uri-link-annotations.md
       - ADR-0006 PDF Internal Page Links: adr/0006-pdf-internal-page-links.md
       - ADR-0007 PDF Named Destinations: adr/0007-pdf-named-destinations.md
+      - ADR-0008 PDF Nested Outlines: adr/0008-pdf-nested-outlines.md
   - Proof Notes:
       - Grammar Truth: proofs/grammar-truth.md
       - Extraction Truth Contract: proofs/extraction-truth-contract.md

@@ -3,8 +3,8 @@
 This note applies the InkGen Definition of Done to PDF document contract slices.
 It covers group traversal in rendered PDF bytes, extraction truth, grammar truth
 when a layer contains repeated semantic labels, the public PDF file-writer path
-boundary, PDF page-structure metadata, flat PDF outlines/bookmarks, URI link
-annotations, internal page link annotations, and named destinations.
+boundary, PDF page-structure metadata, flat/nested PDF outlines/bookmarks, URI
+link annotations, internal page link annotations, and named destinations.
 
 ## Scope
 
@@ -66,6 +66,8 @@ Affected surface:
   page link annotation contract.
 - `docs/adr/0007-pdf-named-destinations.md`: accepted ADR for the named
   destination contract.
+- `docs/adr/0008-pdf-nested-outlines.md`: accepted ADR for the one-level nested
+  outline contract.
 
 Incoming dependencies:
 
@@ -80,8 +82,9 @@ Incoming dependencies:
   `DocumentPDF.set_page_box()` for PDF-specific page metadata, and on
   `DocumentPDF.parameters` plus `DocumentPDF.create_from_dict()` to preserve that
   metadata.
-- Callers can depend on `DocumentPDF.add_outline()` to create flat PDF outline
-  entries that target existing pages, and on serialization to preserve them.
+- Callers can depend on `DocumentPDF.add_outline()` to create top-level or
+  one-level child PDF outline entries that target existing pages, and on
+  serialization to preserve them.
 - Callers can depend on `DocumentPDF.add_uri_link()` to create PDF URI link
   annotations on existing pages, and on serialization to preserve them.
 - Callers can depend on `DocumentPDF.add_page_link()` to create internal PDF page
@@ -98,8 +101,9 @@ Outgoing dependencies:
 - No dependency was added.
 - Page-structure metadata uses only local PDF dictionary serialization and the
   existing `Document` page model.
-- Outlines use the same local PDF object writer and existing page-number
-  validation; no dependency was added.
+- Outlines use the same local PDF object writer, existing page-number
+  validation, literal string escaping, and `/XYZ` destination number validation;
+  no dependency was added.
 - URI link annotations use the same local PDF object writer, existing page-number
   validation, and the page-box rectangle validator; no dependency was added.
 - Internal page link annotations use the same local PDF object writer, existing
@@ -132,6 +136,12 @@ Before/after edge changes:
   Insertions and removals shift or delete outline targets with affected page
   indices. `to_pdf_bytes()` emits a PDF `/Outlines` root, linked flat item
   objects, `/Dest` arrays, and `/PageMode /UseOutlines` in the catalog.
+- After the nested outline update, `DocumentPDF.add_outline(parent=...)` stores
+  one-level child outline relationships under an earlier unique top-level title.
+  Insertions and removals preserve parent metadata and prune orphan children when
+  their parent outline is removed. `to_pdf_bytes()` emits deterministic
+  root-level links, parent child links, child sibling links, and item `/Dest`
+  arrays.
 - After the URI link update, `DocumentPDF` owns a flat ordered URI link list.
   Insertions and removals shift or delete link page targets with affected page
   indices. `to_pdf_bytes()` emits page `/Annots` arrays and `/Subtype /Link`
@@ -160,9 +170,9 @@ Cycle/layer/coupling/redundancy result:
 - Page metadata is intentionally local to `DocumentPDF`; flow documents and
   renderer-neutral drawing components consume drawing primitives and do not own
   PDF page dictionary rendering.
-- Outline metadata is also local to `DocumentPDF`; nested outline trees remain
-  deferred to avoid adding hierarchy semantics before a concrete parser-fixture
-  need exists.
+- Outline metadata is also local to `DocumentPDF`; deeper outline trees remain
+  deferred to avoid adding arbitrary hierarchy semantics before a concrete
+  parser-fixture need exists.
 - URI link metadata is local to `DocumentPDF`; generic annotations and richer
   annotation appearances remain deferred until there is a concrete fixture need.
 - Internal page link metadata is local to `DocumentPDF`; generic annotations and
@@ -184,6 +194,8 @@ ADR/rule impact:
   public API and serialized parameters.
 - ADR-0007 records the named destination decision because this slice adds public
   API and serialized parameters.
+- ADR-0008 records the nested outline decision because this slice extends public
+  API and serialized parameters.
 
 ## Domain Definitions
 
@@ -203,9 +215,12 @@ ADR/rule impact:
   removal operations.
 - Serialized page labels and page boxes must be rejected before rendering if they
   are malformed.
-- PDF outlines are flat, insertion-ordered entries. Each entry has a non-empty
+- PDF outlines are insertion-ordered entries. Each entry has a non-empty
   Latin-1 title, targets an existing one-based page number, and has finite
   destination numbers when `left`, `top`, or `zoom` are provided.
+- A child outline may name one earlier unique top-level parent by exact title
+  value. Grandchildren and arbitrary-depth outline trees are intentionally out
+  of scope.
 - Omitted outline `top` and `zoom` values emit PDF `null` destination tokens.
 - Serialized outline entries must be rejected before rendering if malformed.
 - PDF URI link annotations are flat, insertion-ordered entries. Each entry has a
@@ -247,6 +262,9 @@ ADR/rule impact:
 | Flat outlines | Emit deterministic flat `/Outlines` root and linked item objects | PO-PDFDOC-010 | outline render/round-trip test | mutation target |
 | Outline target index shifts | Insert/remove pages shift or delete outline targets with page indices | PO-PDFDOC-011 | outline page mutation test | mutation target |
 | Serialized outline metadata | Reject malformed outline payloads before rendering | PO-PDFDOC-012 | serialized outline rejection test | mutation target |
+| Nested outlines | Emit deterministic one-level outline child chains and prune orphaned children | PO-PDFDOC-022 | nested outline render/round-trip and page mutation tests | mutation target |
+| Nested outline parent validation | Reject missing, ambiguous, non-Latin-1, and non-string parents | PO-PDFDOC-023 | invalid parent and serialized parent tests | mutation target |
+| Nested outline serialization | Preserve child parent metadata through parameters and hydration | PO-PDFDOC-024 | nested outline round-trip test | mutation target |
 | URI link annotations | Emit deterministic page `/Annots` arrays and `/Subtype /Link` URI action objects | PO-PDFDOC-013 | URI link render/round-trip test | mutation target |
 | URI link target index shifts | Insert/remove pages shift or delete URI link page targets with page indices | PO-PDFDOC-014 | URI link page mutation test | mutation target |
 | Serialized URI link metadata | Reject malformed URI link payloads before rendering | PO-PDFDOC-015 | serialized URI link rejection test | mutation target |
@@ -453,6 +471,47 @@ Current result after the named destination update:
     `link.page_number > page_number` to `>=`. The comprehension filters
     `link.page_number != page_number` before evaluating the output expression,
     so equality is excluded from the expression domain.
+- Gate result: pass with documented equivalent survivors.
+
+Current result after the nested outline update:
+
+- Tool: Cosmic Ray 8.4.6.
+- Config: `tests/mutation/pdf_document_nested_outline_cosmic_ray.toml`.
+- Filter: `tests/mutation/filter_pdf_document_nested_outline_work_items.py`.
+- Test selection: focused PDF document, factory payload, and PDF generator tests.
+- Proof-critical work items after filter: 239.
+- Killed mutants: 227.
+- Equivalent survivors: 12.
+- Surviving equivalent mutations:
+  - `_coerce_pdf_destination_number()` line 415 changed the separator before
+    `owner` from keyword-only `*` to positional-only `/` for `value` and `name`.
+    Public callers pass `value` and `name` positionally and `owner` by keyword,
+    so the public outline destination domain is unchanged.
+  - `_shift_pdf_page_metadata_for_removal()` line 1894 changed page-label
+    `index > page_number` to `>=`. The comprehension filters
+    `index != page_number` before evaluating the expression, so equality is
+    excluded from the expression domain.
+  - `_shift_pdf_page_metadata_for_removal()` line 1897 made the same equivalent
+    page-box `>` to `>=` change with the same pre-filter.
+  - `_shift_pdf_page_metadata_for_removal()` line 1902 changed
+    `outline.page_number > page_number` to `>=`. The comprehension filters
+    `outline.page_number != page_number` before evaluating the expression, so
+    equality is excluded from the expression domain.
+  - `_outline_objects()` line 2018 changed `zip(..., strict=True)` to
+    `strict=False`. `outline_item_ids` is constructed from the outline count, so
+    it has exactly the same length as the outline sequence.
+  - `_outline_objects()` line 2028 changed `sibling_position > 0` to
+    `sibling_position != 0`. `list.index()` returns non-negative indices, so the
+    predicates are equivalent for every sibling position.
+  - `_outline_objects()` line 2029 changed
+    `sibling_position + 1 < len(siblings)` to
+    `sibling_position + 1 != len(siblings)`. In the loop domain,
+    `sibling_position + 1 <= len(siblings)` always holds, so the predicates are
+    equivalent.
+  - `to_pdf_bytes()` line 2331 produced five equivalent mutations in the
+    post-outline object-id increment. No later indirect objects are allocated
+    after outlines in the current writer path, so the increment value has no
+    observable serialized effect.
 - Gate result: pass with documented equivalent survivors.
 
 ## PO-PDFDOC-001: PDF Rendering Traverses Every Stored Group
@@ -666,12 +725,12 @@ round-trip equality.
 
 ### Counterexamples And Exclusions
 
-Nested outline trees, open/closed outline state, remote destinations, named
-destinations, and non-Latin-1 titles are excluded from this flat outline slice.
+Deeper outline trees, open/closed outline state, remote destinations, named
+destinations, and non-Latin-1 titles are excluded from this outline slice.
 
 ### Conclusion
 
-Proven for flat Latin-1 outlines in the declared PDF document domain.
+Proven for top-level Latin-1 outlines in the declared PDF document domain.
 
 ## PO-PDFDOC-011: Outline Targets Follow Page Index Mutations
 
@@ -714,7 +773,79 @@ pages, and invalid destination values.
 
 ### Conclusion
 
-Proven for serialized flat outlines in the declared payload domain.
+Proven for serialized top-level outlines in the declared payload domain.
+
+## PO-PDFDOC-022: Nested PDF Outlines Emit And Prune Orphans
+
+### Claim
+
+`DocumentPDF` emits deterministic one-level nested PDF outlines with root-level
+sibling links, parent child links, child sibling links, and valid `/Dest` arrays.
+When page removal deletes a parent outline, surviving children of that parent are
+pruned rather than emitted as orphaned outline objects.
+
+### Proof Method
+
+`add_outline(parent=...)` stores an optional parent title after validating that
+the parent is exactly one earlier top-level outline, and rejects later top-level
+duplicates that would make existing child relationships ambiguous.
+`_outline_objects()` derives top-level and child sibling chains from the ordered
+outline list, emits
+`/First`, `/Last`, `/Prev`, `/Next`, `/Parent`, and `/Count` relationships, and
+uses `_outline_destination()` for every item. Page-removal tests cover children
+whose page survives while the parent page is removed, proving orphan pruning.
+
+### Counterexamples And Exclusions
+
+Grandchildren, arbitrary-depth outline trees, closed outline state, and remote
+destinations are excluded from this one-level nested outline slice.
+
+### Conclusion
+
+Proven for one-level nested Latin-1 outlines in the declared PDF document domain,
+with the equivalent mutation survivors documented above.
+
+## PO-PDFDOC-023: Nested Outline Parents Fail Explicitly
+
+### Claim
+
+`DocumentPDF.add_outline(parent=...)` rejects missing, ambiguous, non-Latin-1,
+and non-string parents before mutating PDF outline metadata. It also rejects a
+later top-level outline title that would make an existing child parent
+ambiguous.
+
+### Proof Method
+
+The public boundary coerces parent titles through the same Latin-1 outline-title
+validator used for outline titles, then matches only top-level outlines by title
+value. Tests cover missing parents, duplicate top-level parent titles, value
+equality for an independently constructed matching string, and invalid object
+parents. Tests also cover a later top-level duplicate after a child exists.
+Serialized-payload tests cover malformed `parent` values and serialized
+duplicate-after-child ambiguity through `DocumentPDF.create_from_dict()`.
+
+### Conclusion
+
+Proven for parent validation at the public API and serialized payload boundary.
+
+## PO-PDFDOC-024: Nested Outline Serialization Preserves Parents
+
+### Claim
+
+Child outline parent metadata is preserved in `DocumentPDF.parameters`,
+`DocumentPDF.outlines()`, and `DocumentPDF.create_from_dict()`.
+
+### Proof Method
+
+`_outline_entry_payload()` includes `parent` only for child outlines.
+`create_from_dict()` reads optional `parent` values and delegates to
+`add_outline()` in serialized order so parents must exist before children.
+Behavioral tests assert exact `outlines()` payloads and byte-for-byte equality
+between the original document and a document recreated from parameters.
+
+### Conclusion
+
+Proven for serialized one-level nested outlines in the declared payload domain.
 
 ## PO-PDFDOC-013: URI Link Annotations Emit And Round Trip
 

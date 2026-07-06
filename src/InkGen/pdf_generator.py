@@ -76,13 +76,14 @@ PDF_PAGE_BOX_NAMES = {
 
 @dataclass(frozen=True)
 class _PDFOutlineEntry:
-    """Validated flat PDF outline item metadata."""
+    """Validated PDF outline item metadata."""
 
     title: str
     page_number: int
     left: float
     top: float | None
     zoom: float | None
+    parent: str | None = None
 
 
 @dataclass(frozen=True)
@@ -1677,14 +1678,23 @@ class DocumentPDF(Document):
         left: float | int = 0.0,
         top: float | int | None = None,
         zoom: float | int | None = None,
+        parent: str | None = None,
     ) -> None:
-        """Add a flat PDF outline entry that targets an existing page."""
+        """Add a PDF outline entry that targets an existing page."""
         page_number = self._validate_existing_position(page_number)
         outline_title = _coerce_pdf_outline_title(title)
+        parent_title = None
+        if parent is not None:
+            parent_title = _coerce_pdf_outline_title(parent)
+            matches = [outline for outline in self._pdf_outlines if outline.parent is None and outline.title == parent_title]
+            if len(matches) != 1:
+                raise ValueError("outline parent must match exactly one existing top-level outline")
+        elif any(outline.parent == outline_title for outline in self._pdf_outlines):
+            raise ValueError("outline title conflicts with an existing child outline parent")
         left_value = _coerce_pdf_destination_number(left, "left")
         top_value = None if top is None else _coerce_pdf_destination_number(top, "top")
         zoom_value = None if zoom is None else _coerce_pdf_destination_number(zoom, "zoom")
-        self._pdf_outlines.append(_PDFOutlineEntry(outline_title, page_number, left_value, top_value, zoom_value))
+        self._pdf_outlines.append(_PDFOutlineEntry(outline_title, page_number, left_value, top_value, zoom_value, parent_title))
 
     def clear_outlines(self) -> None:
         """Remove all PDF outline entries from the document."""
@@ -1838,6 +1848,7 @@ class DocumentPDF(Document):
                 outline.left,
                 outline.top,
                 outline.zoom,
+                outline.parent,
             )
             for outline in self._pdf_outlines
         ]
@@ -1894,10 +1905,13 @@ class DocumentPDF(Document):
                 outline.left,
                 outline.top,
                 outline.zoom,
+                outline.parent,
             )
             for outline in self._pdf_outlines
             if outline.page_number != page_number
         ]
+        top_level_titles = {outline.title for outline in self._pdf_outlines if outline.parent is None}
+        self._pdf_outlines = [outline for outline in self._pdf_outlines if outline.parent is None or outline.parent in top_level_titles]
         self._pdf_uri_links = [
             _PDFUriLinkAnnotation(
                 link.page_number - 1 if link.page_number > page_number else link.page_number,
@@ -1970,7 +1984,18 @@ class DocumentPDF(Document):
             payload["top"] = outline.top
         if outline.zoom is not None:
             payload["zoom"] = outline.zoom
+        if outline.parent is not None:
+            payload["parent"] = outline.parent
         return payload
+
+    @staticmethod
+    def _outline_destination(outline: _PDFOutlineEntry, page_ids_by_number: Mapping[int, int]) -> str:
+        """Return a PDF outline destination array."""
+        page_id = page_ids_by_number[outline.page_number]
+        return (
+            f"[{page_id} 0 R /XYZ {_number(outline.left)} "
+            f"{_coerce_pdf_outline_destination_token(outline.top)} {_coerce_pdf_outline_destination_token(outline.zoom)}]"
+        )
 
     @staticmethod
     def _outline_objects(
@@ -1980,22 +2005,39 @@ class DocumentPDF(Document):
         outlines: Sequence[_PDFOutlineEntry],
         page_ids_by_number: Mapping[int, int],
     ) -> dict[int, str]:
-        """Return flat PDF outline object payloads keyed by object id."""
+        """Return PDF outline object payloads keyed by object id."""
         objects: dict[int, str] = {}
-        first_id = outline_item_ids[0]
-        last_id = outline_item_ids[-1]
+        object_ids_by_index = dict(enumerate(outline_item_ids))
+        top_level_indices = [index for index, outline in enumerate(outlines) if outline.parent is None]
+        child_indices_by_parent: dict[str, list[int]] = {}
+        for index, outline in enumerate(outlines):
+            if outline.parent is not None:
+                child_indices_by_parent.setdefault(outline.parent, []).append(index)
+        first_id = object_ids_by_index[top_level_indices[0]]
+        last_id = object_ids_by_index[top_level_indices[-1]]
         objects[outline_root_id] = f"<< /Type /Outlines /First {first_id} 0 R /Last {last_id} 0 R /Count {len(outlines)} >>"
+        top_index_by_title = {outlines[index].title: index for index in top_level_indices}
         for index, (object_id, outline) in enumerate(zip(outline_item_ids, outlines, strict=True)):
-            prev_link = f" /Prev {outline_item_ids[index - 1]} 0 R" if index > 0 else ""
-            next_link = f" /Next {outline_item_ids[index + 1]} 0 R" if index + 1 < len(outline_item_ids) else ""
-            page_id = page_ids_by_number[outline.page_number]
-            destination = (
-                f"[{page_id} 0 R /XYZ {_number(outline.left)} "
-                f"{_coerce_pdf_outline_destination_token(outline.top)} {_coerce_pdf_outline_destination_token(outline.zoom)}]"
-            )
+            if outline.parent is None:
+                siblings = top_level_indices
+                parent_id = outline_root_id
+                children = child_indices_by_parent.get(outline.title, [])
+            else:
+                siblings = child_indices_by_parent[outline.parent]
+                parent_id = object_ids_by_index[top_index_by_title[outline.parent]]
+                children = []
+            sibling_position = siblings.index(index)
+            prev_link = f" /Prev {object_ids_by_index[siblings[sibling_position - 1]]} 0 R" if sibling_position > 0 else ""
+            next_link = f" /Next {object_ids_by_index[siblings[sibling_position + 1]]} 0 R" if sibling_position + 1 < len(siblings) else ""
+            child_links = ""
+            if children:
+                child_links = (
+                    f" /First {object_ids_by_index[children[0]]} 0 R /Last {object_ids_by_index[children[-1]]} 0 R /Count {len(children)}"
+                )
+            destination = DocumentPDF._outline_destination(outline, page_ids_by_number)
             objects[object_id] = (
-                f"<< /Title ({_escape_pdf_string(outline.title)}) /Parent {outline_root_id} 0 R"
-                f"{prev_link}{next_link} /Dest {destination} >>"
+                f"<< /Title ({_escape_pdf_string(outline.title)}) /Parent {parent_id} 0 R"
+                f"{prev_link}{next_link}{child_links} /Dest {destination} >>"
             )
         return objects
 
@@ -2420,7 +2462,8 @@ class DocumentPDF(Document):
             left = outline_payload.get("left", 0.0)
             top = outline_payload.get("top")
             zoom = outline_payload.get("zoom")
-            document.add_outline(title, page_number, left=left, top=top, zoom=zoom)  # type: ignore[arg-type]
+            parent = outline_payload.get("parent")
+            document.add_outline(title, page_number, left=left, top=top, zoom=zoom, parent=parent)  # type: ignore[arg-type]
         for link_payload in _pdf_optional_sequence(payload, "uri_links", "DocumentPDF"):
             if not isinstance(link_payload, Mapping):
                 raise TypeError("DocumentPDF uri_links entries must be mappings")

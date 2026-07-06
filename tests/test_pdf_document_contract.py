@@ -738,6 +738,63 @@ def test_document_pdf_emits_flat_outlines_and_round_trips() -> None:
     assert recreated.to_pdf_bytes() == payload
 
 
+@pytest.mark.condition("PDF-DOC-NESTED-OUTLINE-P3")
+def test_document_pdf_emits_nested_outlines_and_round_trips() -> None:
+    """PDF-DOC-NESTED-OUTLINE-P3: One-level nested PDF outlines render and round-trip."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    document.add_page()
+    document.add_page()
+    document.add_outline("Chapter 1", 1)
+    document.add_outline("Section 1.1", 2, left=10.0, parent="Chapter 1")
+    document.add_outline("Section 1.2", 3, left=20.0, top=70.0, zoom=1.25, parent="Chapter 1")
+    document.add_outline("Section 1.3", 3, left=25.0, parent="Chapter 1")
+    document.add_outline("Chapter 2", 3, left=30.0)
+
+    payload = document.to_pdf_bytes()
+    recreated = DocumentPDF.create_from_dict(document.parameters)
+    objects = _pdf_objects(payload)
+    outline_root_id = int(re.search(rb"/Outlines (?P<id>\d+) 0 R", payload).group("id"))  # type: ignore[union-attr]
+    outline_root = objects[outline_root_id]
+    first_id = int(re.search(rb"/First (?P<id>\d+) 0 R", outline_root).group("id"))  # type: ignore[union-attr]
+    child_1_id = first_id + 1
+    child_2_id = first_id + 2
+    child_3_id = first_id + 3
+    second_top_id = first_id + 4
+
+    assert payload == document.to_pdf_bytes()
+    assert b"/Count 5" in outline_root
+    assert f"/First {first_id} 0 R".encode("ascii") in outline_root
+    assert f"/Last {second_top_id} 0 R".encode("ascii") in outline_root
+    assert f"/Parent {outline_root_id} 0 R".encode("ascii") in objects[first_id]
+    assert f"/Next {second_top_id} 0 R".encode("ascii") in objects[first_id]
+    assert f"/First {child_1_id} 0 R".encode("ascii") in objects[first_id]
+    assert f"/Last {child_3_id} 0 R".encode("ascii") in objects[first_id]
+    assert b"/Count 3" in objects[first_id]
+    assert f"/Parent {first_id} 0 R".encode("ascii") in objects[child_1_id]
+    assert b"/Prev" not in objects[child_1_id]
+    assert f"/Next {child_2_id} 0 R".encode("ascii") in objects[child_1_id]
+    assert f"/Parent {first_id} 0 R".encode("ascii") in objects[child_2_id]
+    assert f"/Prev {child_1_id} 0 R".encode("ascii") in objects[child_2_id]
+    assert f"/Next {child_3_id} 0 R".encode("ascii") in objects[child_2_id]
+    assert f"/Parent {first_id} 0 R".encode("ascii") in objects[child_3_id]
+    assert f"/Prev {child_2_id} 0 R".encode("ascii") in objects[child_3_id]
+    assert b"/Next" not in objects[child_3_id]
+    assert f"/Prev {first_id} 0 R".encode("ascii") in objects[second_top_id]
+    assert b"/Next" not in objects[second_top_id]
+    assert b"/Title (Section 1.2)" in objects[child_2_id]
+    assert b"/XYZ 20 70 1.25]" in objects[child_2_id]
+    assert document.outlines() == (
+        {"title": "Chapter 1", "page_number": 1, "left": 0.0},
+        {"title": "Section 1.1", "page_number": 2, "left": 10.0, "parent": "Chapter 1"},
+        {"title": "Section 1.2", "page_number": 3, "left": 20.0, "top": 70.0, "zoom": 1.25, "parent": "Chapter 1"},
+        {"title": "Section 1.3", "page_number": 3, "left": 25.0, "parent": "Chapter 1"},
+        {"title": "Chapter 2", "page_number": 3, "left": 30.0},
+    )
+    assert recreated.parameters == document.parameters
+    assert recreated.to_pdf_bytes() == payload
+
+
 @pytest.mark.condition("PDF-DOC-OUTLINE-P3")
 def test_document_pdf_rejects_invalid_outline_metadata() -> None:
     """PDF-DOC-OUTLINE-P3: Outline metadata fails at explicit boundaries."""
@@ -751,6 +808,20 @@ def test_document_pdf_rejects_invalid_outline_metadata() -> None:
 
     with pytest.raises(ValueError, match="Position must correlate"):
         document.add_outline("missing", 2)
+
+    with pytest.raises(ValueError, match="outline parent"):
+        document.add_outline("orphan", 1, parent="missing")
+    document.add_outline("parent", 1)
+    document.add_outline("value child", 1, parent="".join(["par", "ent"]))
+    with pytest.raises(ValueError, match="conflicts"):
+        document.add_outline("parent", 1)
+    document.add_outline("duplicate", 1)
+    document.add_outline("duplicate", 1)
+    with pytest.raises(ValueError, match="outline parent"):
+        document.add_outline("ambiguous", 1, parent="duplicate")
+    with pytest.raises((TypeError, ValueError)):
+        document.add_outline("bad parent", 1, parent=object())  # type: ignore[arg-type]
+    document.clear_outlines()
 
     invalid_destinations = [
         {"left": True},
@@ -783,6 +854,9 @@ def test_document_pdf_outline_metadata_tracks_page_insertions_and_removals() -> 
     document.add_outline("front", 1)
     document.add_outline("middle", 2)
     document.add_outline("tail", 3)
+    document.add_outline("front child", 2, parent="front")
+    document.add_outline("middle child", 1, parent="middle")
+    document.add_outline("tail child", 3, parent="tail")
 
     document.add_page(position=2)
 
@@ -790,6 +864,9 @@ def test_document_pdf_outline_metadata_tracks_page_insertions_and_removals() -> 
         {"title": "front", "page_number": 1, "left": 0.0},
         {"title": "middle", "page_number": 3, "left": 0.0},
         {"title": "tail", "page_number": 4, "left": 0.0},
+        {"title": "front child", "page_number": 3, "left": 0.0, "parent": "front"},
+        {"title": "middle child", "page_number": 1, "left": 0.0, "parent": "middle"},
+        {"title": "tail child", "page_number": 4, "left": 0.0, "parent": "tail"},
     )
 
     document.remove_page(3)
@@ -797,11 +874,15 @@ def test_document_pdf_outline_metadata_tracks_page_insertions_and_removals() -> 
     assert document.outlines() == (
         {"title": "front", "page_number": 1, "left": 0.0},
         {"title": "tail", "page_number": 3, "left": 0.0},
+        {"title": "tail child", "page_number": 3, "left": 0.0, "parent": "tail"},
     )
 
     document.remove_page(1)
 
-    assert document.outlines() == ({"title": "tail", "page_number": 2, "left": 0.0},)
+    assert document.outlines() == (
+        {"title": "tail", "page_number": 2, "left": 0.0},
+        {"title": "tail child", "page_number": 2, "left": 0.0, "parent": "tail"},
+    )
 
 
 @pytest.mark.condition("PDF-DOC-OUTLINE-P3")
@@ -852,6 +933,14 @@ def test_document_pdf_rejects_invalid_serialized_outline_metadata() -> None:
         lambda data: data["DocumentPDF"]["outlines"][0].__setitem__("left", float("nan")),
         lambda data: data["DocumentPDF"]["outlines"][0].__setitem__("top", "bad"),
         lambda data: data["DocumentPDF"]["outlines"][0].__setitem__("zoom", True),
+        lambda data: data["DocumentPDF"]["outlines"][0].__setitem__("parent", "missing"),
+        lambda data: data["DocumentPDF"]["outlines"][0].__setitem__("parent", object()),
+        lambda data: data["DocumentPDF"]["outlines"].extend(
+            [
+                {"title": "child", "page_number": 1, "parent": "valid"},
+                {"title": "valid", "page_number": 1},
+            ],
+        ),
     ]:
         payload = deepcopy(document.parameters)
         mutator(payload)
