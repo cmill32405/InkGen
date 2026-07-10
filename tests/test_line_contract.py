@@ -24,7 +24,7 @@ def drawing_style() -> DrawingStyle:
 def _dxf_line_codes(payload: str) -> dict[str, str]:
     lines = payload.splitlines()
     start = lines.index("LINE") - 1
-    entity_lines = lines[start : start + 18]
+    entity_lines = lines[start : start + 22]
     values: dict[str, str] = {}
     for index in range(0, len(entity_lines) - 1, 2):
         values[entity_lines[index]] = entity_lines[index + 1]

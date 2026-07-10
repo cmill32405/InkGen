@@ -24,8 +24,10 @@ from InkGen.drawing_components import (
     TextDrawing,
 )
 from InkGen.image_assets import RasterImageAsset
+from InkGen.style import DrawingStyle
 
 ROUNDED_RECTANGLE_CORNER_SEGMENTS = 4
+DXF_STANDARD_LINEWEIGHTS = (0, 5, 9, 13, 15, 18, 20, 25, 30, 35, 40, 50, 53, 60, 70, 80, 90, 100, 106, 120, 140, 158, 200, 211)
 
 
 @dataclass(frozen=True)
@@ -192,24 +194,24 @@ def _component_to_entities(
     image_registry: _DXFImageRegistry | None = None,
 ) -> list[str]:
     if isinstance(component, LineDrawing):
-        return [_line_entity(component.point_1, component.point_2, context)]
+        return [_line_entity(component.point_1, component.point_2, context, style=component.style)]
     if isinstance(component, RectangleDrawing):
         points = _rectangle_points(component)
-        return [_lwpolyline_entity(points, context, closed=True)]
+        return [_lwpolyline_entity(points, context, closed=True, style=component.style)]
     if isinstance(component, CircleDrawing):
         return [_circle_entity(component, context)]
     if isinstance(component, PolygonalDrawing):
-        return [_lwpolyline_entity(component.points, context, closed=True)]
+        return [_lwpolyline_entity(component.points, context, closed=True, style=component.style)]
     if isinstance(component, RegularPolygonDrawing):
         concrete = component.to_component(OutputFormat.PDF)
-        return [_lwpolyline_entity(concrete.points, context, closed=True)]
+        return [_lwpolyline_entity(concrete.points, context, closed=True, style=component.style)]
     if isinstance(component, (ArcDrawing, QuadraticBezierDrawing, CubicBezierDrawing)):
         concrete = component.to_component(OutputFormat.PDF)
-        return [_lwpolyline_entity(concrete.points, context, closed=False)]
+        return [_lwpolyline_entity(concrete.points, context, closed=False, style=component.style)]
     if isinstance(component, PathDrawing):
         concrete = component.to_component(OutputFormat.PDF)
         closed = bool(component.commands and component.commands[-1].type.upper() == "Z")
-        return [_lwpolyline_entity(concrete.points, context, closed=closed)]
+        return [_lwpolyline_entity(concrete.points, context, closed=closed, style=component.style)]
     if isinstance(component, TextDrawing):
         return [_text_entity(component, context)]
     if isinstance(component, ImageDrawing):
@@ -267,13 +269,20 @@ def _append_corner_arc(
             points.append(point)
 
 
-def _line_entity(point_1: tuple[float, float], point_2: tuple[float, float], context: DXFRenderContext) -> str:
+def _line_entity(
+    point_1: tuple[float, float],
+    point_2: tuple[float, float],
+    context: DXFRenderContext,
+    *,
+    style: DrawingStyle | None = None,
+) -> str:
     x1, y1 = context.point(point_1[0], point_1[1])
     x2, y2 = context.point(point_2[0], point_2[1])
     return _pairs(
         [
             (0, "LINE"),
             (8, context.layer),
+            *_dxf_style_pairs(style),
             (10, x1),
             (20, y1),
             (30, 0.0),
@@ -284,10 +293,17 @@ def _line_entity(point_1: tuple[float, float], point_2: tuple[float, float], con
     )
 
 
-def _lwpolyline_entity(points: list[tuple[float, float]], context: DXFRenderContext, *, closed: bool) -> str:
+def _lwpolyline_entity(
+    points: list[tuple[float, float]],
+    context: DXFRenderContext,
+    *,
+    closed: bool,
+    style: DrawingStyle | None = None,
+) -> str:
     pairs: list[tuple[int, object]] = [
         (0, "LWPOLYLINE"),
         (8, context.layer),
+        *_dxf_style_pairs(style),
         (90, len(points)),
         (70, 1 if closed else 0),
     ]
@@ -320,12 +336,33 @@ def _circle_entity(component: CircleDrawing, context: DXFRenderContext) -> str:
         [
             (0, "CIRCLE"),
             (8, context.layer),
+            *_dxf_style_pairs(component.style),
             (10, x),
             (20, y),
             (30, 0.0),
             (40, component.radius),
         ]
     )
+
+
+def _dxf_style_pairs(style: DrawingStyle | None) -> list[tuple[int, int]]:
+    """Return DXF entity style pairs for a drawing style."""
+    if style is None or style.stroke == "none":
+        return []
+    true_color = _dxf_true_color(style.stroke)
+    lineweight = _dxf_lineweight(style.stroke_width)
+    return [(420, true_color), (370, lineweight)]
+
+
+def _dxf_true_color(color: str) -> int:
+    """Return a DXF true-color integer from a validated InkGen hex color."""
+    return int(color.lstrip("#"), 16)
+
+
+def _dxf_lineweight(stroke_width: float) -> int:
+    """Return the nearest standard DXF lineweight in hundredths of a millimeter."""
+    requested = int(round(float(stroke_width) * 100.0))
+    return min(DXF_STANDARD_LINEWEIGHTS, key=lambda candidate: abs(candidate - requested))
 
 
 def _image_entity(component: ImageDrawing, definition: _DXFImageDefinition, context: DXFRenderContext) -> str:

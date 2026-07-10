@@ -32,7 +32,9 @@ The layer-boundary hardening update changes the public DXF context and
 `DXFDocument.add_group()` layer override boundaries so malformed layer values
 fail before `_format_value()` can stringify them into artifact text. The raster
 image update adds IMAGE entities, IMAGEDEF objects, and deterministic PNG
-sidecar writes for `ImageDrawing` components.
+sidecar writes for `ImageDrawing` components. The style update adds DXF
+true-color and lineweight group codes for drawing entities that carry a
+`DrawingStyle` stroke.
 
 ## Architecture Impact
 
@@ -41,7 +43,8 @@ Affected surface:
 - `tests/test_dxf_contract.py`: DXF-P1 condition tests.
 - `src/InkGen/dxf_generator.py`: finite numeric validation for public DXF
   coordinate and canvas-height boundaries, file-writer path validation, layer
-  override validation, and raster image reference emission.
+  override validation, raster image reference emission, and drawing stroke style
+  group-code emission.
 - `tests/mutation/dxf_renderer_cosmic_ray.toml`: scoped Cosmic Ray gate.
 - `tests/mutation/filter_dxf_renderer_work_items.py`: proof-critical mutation
   filter.
@@ -49,6 +52,10 @@ Affected surface:
   hardening mutation gate.
 - `tests/mutation/filter_dxf_context_finite_work_items.py`: finite-boundary
   hardening mutation filter.
+- `tests/mutation/dxf_style_cosmic_ray.toml`: stroke style-emission mutation
+  gate.
+- `tests/mutation/filter_dxf_style_work_items.py`: proof-critical stroke style
+  filter.
 - `docs/proofs/dxf-renderer-contract.md`: proof note.
 
 Incoming dependencies:
@@ -71,6 +78,8 @@ Before/after edge changes:
 
 - The raster image update adds the documented `dxf_generator.py ->
   image_assets.py` edge.
+- The style update consumes `DrawingStyle` fields already attached to neutral
+  drawing primitives and does not add a new dependency layer.
 - The proof makes the existing `dxf_generator.py -> PDF sampled geometry`
   cross-layer edge explicit and tested.
 - The hardening update adds a local DXF numeric validator; it does not import a
@@ -89,9 +98,9 @@ Cycle/layer/coupling/redundancy result:
   recipes.
 - Coupling check: the PDF-sampled geometry dependency remains limited to point
   geometry and is recorded in `docs/dependency-map.md`.
-- Redundancy check: DXF uses one numeric formatter and one LWPOLYLINE emitter
-  for polyline-like geometry. Raster sidecar filenames and handles come from
-  one deterministic registry.
+- Redundancy check: DXF uses one numeric formatter, one LWPOLYLINE emitter for
+  polyline-like geometry, and one stroke style-pair helper. Raster sidecar
+  filenames and handles come from one deterministic registry.
 
 ADR/rule impact:
 
@@ -120,6 +129,12 @@ ADR/rule impact:
 - DXF image output stores referenced raster payloads as deterministic PNG
   sidecar files named `imageN.png`.
 - Reused identical image payloads share one IMAGEDEF object and one sidecar.
+- DXF drawing stroke colors are emitted as group code `420` true-color values
+  from validated `#rrggbb` strokes.
+- DXF drawing stroke widths are emitted as group code `370` lineweights in
+  hundredths of a millimeter, snapped to the nearest standard DXF lineweight.
+- Drawing styles with `stroke="none"` omit DXF stroke color and lineweight
+  group codes. DXF fill/HATCH entities are out of scope for this slice.
 
 ## Comprehensiveness Matrix
 
@@ -134,6 +149,7 @@ ADR/rule impact:
 | PDF-sampled geometry | Arc, cubic Bezier, regular polygon, and path reuse PDF points | PO-DXF-006 | sampled-geometry test | killed |
 | Text and circle entities | Preserve layer, coordinates, height/radius, and newline normalization | PO-DXF-007 | text and circle entity tests | killed |
 | Image entities | Emit IMAGE/IMAGEDEF references, write PNG sidecars, and deduplicate identical image assets | PO-DXF-010 | `test_dxf_document_exports_image_references_and_writes_sidecars`, `test_dxf_document_deduplicates_identical_image_sidecars`, `test_dxf_document_assigns_distinct_image_sidecars_and_handles` | raster image gate killed meaningful mutants; equivalent survivors documented |
+| Drawing stroke style | Emit stroke true-color and standard lineweight group codes through live DXF document paths | PO-DXF-011 | `test_dxf_entities_emit_drawing_style_color_and_lineweight`, `test_dxf_style_lineweight_uses_standard_values_and_disabled_stroke_omits_codes` | DXF style gate |
 | Unsupported groups/components | Fail loudly | Existing `test_dxf_document_rejects_unsupported_groups_and_components` | killed |
 | Numeric formatting | Integer-like floats and fixed precision serialize deterministically | Formatting tests and exact entity strings | equivalent survivors documented |
 
@@ -215,6 +231,22 @@ Execution note:
 
 - The WSL mutation environment needs the mutation virtualenv on `PATH` so the
   Cosmic Ray worker command `python -m pytest ...` resolves `python`.
+
+Current result after the stroke style-emission update:
+
+- Tool: Cosmic Ray 8.4.6.
+- Config: `tests/mutation/dxf_style_cosmic_ray.toml`.
+- Filter: `tests/mutation/filter_dxf_style_work_items.py`.
+- Test selection: focused DXF-P1 contract tests.
+- Raw work items: 1,020.
+- Proof-critical work items after filter: 21.
+- Killed mutants: 20.
+- Surviving mutants: 1 documented equivalent survivor.
+- Equivalent survivor class:
+  - `_dxf_style_pairs()` mutating `style.stroke == "none"` to
+    `style.stroke >= "none"` is equivalent for the validated `DrawingStyle`
+    domain because non-`none` stroke colors are normalized to `#rrggbb`, and
+    `#` sorts before `n`.
 
 Equivalent survivor classes:
 
@@ -461,3 +493,36 @@ placement vectors, sidecar alpha preservation, and deduplication.
 ### Conclusion
 
 Proven for static raster sidecar references written by `DXFDocument.create_dxf()`.
+
+## PO-DXF-011: Drawing Stroke Style Group Codes
+
+### Claim
+
+DXF drawing entities emit validated `DrawingStyle` stroke color and stroke
+width through live `DXFDocument.add_group()` paths.
+
+### Proof Method
+
+`DXFDocument.add_group()` iterates over neutral drawing primitives and passes
+their attached `DrawingStyle` to `_line_entity()`, `_lwpolyline_entity()`, or
+`_circle_entity()`. Those entity helpers call `_dxf_style_pairs()`, which emits
+group code `420` for the validated stroke true-color integer and group code
+`370` for the nearest standard DXF lineweight in hundredths of a millimeter.
+The helper omits both codes when `stroke == "none"` so disabled strokes are not
+serialized as misleading black defaults.
+
+Tests exercise the public document path with line, rectangle/polyline, and
+circle drawing entities, assert exact true-color and lineweight values, assert
+standard lineweight snapping, and assert disabled strokes omit both style codes.
+
+### Counterexamples And Exclusions
+
+DXF fill output would require HATCH or other filled-entity semantics and is not
+claimed here. Stroke opacity, dash arrays, caps, joins, and miter limits also
+remain outside the DXF style domain until there is an explicit DXF contract for
+those features.
+
+### Conclusion
+
+Behavioral tests and scoped mutation prove the stated domain with one
+equivalent survivor documented above.

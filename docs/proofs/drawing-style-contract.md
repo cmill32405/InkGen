@@ -50,8 +50,9 @@ Incoming dependencies:
 - PDF renderers consume drawing colors, stroke width, opacity, dash arrays,
   line caps, line joins, and miter limits through graphics-state operators and
   ExtGState resources.
-- DXF materialization carries drawing recipes through neutral component paths,
-  although DXF output does not currently emit style-specific color or width.
+- DXF materialization carries drawing recipes through neutral component paths
+  and emits drawing stroke color and stroke width as DXF entity true-color and
+  lineweight group codes.
 - Saved component payloads hydrate drawing styles through
   `DrawingStyle.create_from_dict()`.
 
@@ -129,6 +130,8 @@ ADR/rule impact:
   opacity when drawing styles render through `DocumentPDF`.
 - Added renderer-neutral stroke dash/cap/join/miter fields and live SVG/PDF
   output for those fields.
+- Added DXF drawing stroke color and lineweight output for neutral drawing
+  entities. DXF fill/HATCH output remains out of scope.
 
 ## Comprehensiveness Matrix
 
@@ -142,6 +145,7 @@ ADR/rule impact:
 | Hydrated payloads | Route serialized values through the public constructor validation | PO-DSTYLE-005 | `test_drawing_style_hydration_uses_public_validation_boundaries` | killed |
 | SVG/PDF live paths | Emit validated style values into SVG style strings and PDF graphics operators | PO-DSTYLE-006 | `test_drawing_style_contract_remains_live_in_svg_and_pdf_output` | behavioral evidence |
 | PDF stroke/fill opacity | Emit non-opaque drawing style alpha through deterministic ExtGState resources | PO-DSTYLE-007 | `test_document_pdf_emits_extgstate_for_drawing_opacity`, `test_document_pdf_reuses_opacity_extgstate_resources`, `test_document_pdf_separates_stroke_and_fill_opacity_domains`, `test_document_pdf_omits_extgstate_for_opaque_drawings`, `test_pdf_opacity_helpers_validate_boundaries_and_reuse_resources` | 111 killed; 24 equivalent survivors |
+| DXF stroke style output | Emit validated stroke color and stroke width as DXF true-color and standard lineweight group codes | PO-DSTYLE-009 | `test_dxf_entities_emit_drawing_style_color_and_lineweight`, `test_dxf_style_lineweight_uses_standard_values_and_disabled_stroke_omits_codes` | DXF-STYLES-P2 gate |
 
 ## Test Applicability Matrix
 
@@ -422,3 +426,36 @@ separate roadmap items.
 Behavioral tests and scoped mutation prove the public style boundary and
 SVG/PDF live paths for the stated domain. The mutation gate ran 158 filtered
 work items: 154 killed and 4 equivalent survivors documented above.
+
+## PO-DSTYLE-009: DXF Stroke Style Output
+
+### Claim
+
+DXF output consumes validated `DrawingStyle.stroke` and
+`DrawingStyle.stroke_width` values for drawing entities.
+
+### Domain
+
+Renderer-neutral drawing primitives exported through `DXFDocument.add_group()`
+and represented as DXF LINE, LWPOLYLINE, and CIRCLE entities.
+
+### Proof Method
+
+`DrawingStyle` already validates stroke color and finite non-negative stroke
+width. The DXF renderer consumes those values only from validated drawing
+styles attached to neutral drawing primitives. It emits stroke colors as DXF
+true-color group code `420` and emits stroke width as group code `370`, snapped
+to the nearest standard DXF lineweight.
+
+Focused tests cover live document output for line, rectangle/polyline, and
+circle entities, standard lineweight snapping, and disabled-stroke omission.
+
+### Counterexamples And Exclusions
+
+DXF fill/HATCH output is not included. DXF stroke opacity, dash arrays, caps,
+joins, and miter limits are not claimed in this obligation.
+
+### Conclusion
+
+Behavioral tests and the DXF-STYLES-P2 mutation gate prove the stated domain
+with one equivalent survivor documented in `dxf-renderer-contract.md`.

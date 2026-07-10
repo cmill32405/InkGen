@@ -22,7 +22,7 @@ def _pdf_number(value: float) -> str:
 def _dxf_group_values(payload: str, code: str) -> list[str]:
     lines = payload.splitlines()
     start = lines.index("CIRCLE") - 1
-    entity_lines = lines[start : start + 12]
+    entity_lines = lines[start : start + 16]
     values: list[str] = []
     for index in range(0, len(entity_lines) - 1, 2):
         line = entity_lines[index]

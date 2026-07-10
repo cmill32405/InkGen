@@ -48,6 +48,12 @@ def _vertices(payload: str) -> list[tuple[float, float]]:
     return vertices
 
 
+def _pair_values(payload: str, code: str) -> list[str]:
+    """Return all values following a DXF group code in an artifact string."""
+    lines = payload.splitlines()
+    return [lines[index + 1] for index, line in enumerate(lines[:-1]) if line == code]
+
+
 @pytest.mark.condition("DXF-P1")
 def test_dxf_context_and_numeric_format_are_deterministic() -> None:
     """DXF-P1: Context coordinate conversion and value formatting stay deterministic."""
@@ -223,9 +229,9 @@ def test_dxf_rectangle_and_path_closure_contracts() -> None:
     assert len(rounded_points) == 20
     assert rounded_points == expected_rounded_points
     assert rounded_points[0] != rounded_points[-1]
-    assert rounded_entity.startswith("0\nLWPOLYLINE\n8\nrounded\n90\n20\n70\n1\n")
-    assert path_entity.startswith("0\nLWPOLYLINE\n8\npath\n90\n3\n70\n1\n")
-    assert open_path_entity.startswith("0\nLWPOLYLINE\n8\npath\n90\n2\n70\n0\n")
+    assert rounded_entity.startswith("0\nLWPOLYLINE\n8\nrounded\n420\n0\n370\n20\n90\n20\n70\n1\n")
+    assert path_entity.startswith("0\nLWPOLYLINE\n8\npath\n420\n0\n370\n20\n90\n3\n70\n1\n")
+    assert open_path_entity.startswith("0\nLWPOLYLINE\n8\npath\n420\n0\n370\n20\n90\n2\n70\n0\n")
     assert _vertices(rounded_entity) == expected_rounded_points
 
 
@@ -272,7 +278,51 @@ def test_dxf_circle_entity_contract() -> None:
 
     entity = _component_to_entities(circle, DXFRenderContext(canvas_height=100.0, layer="C"))[0]
 
-    assert entity == "0\nCIRCLE\n8\nC\n10\n10\n20\n88\n30\n0\n40\n5"
+    assert entity == "0\nCIRCLE\n8\nC\n420\n0\n370\n20\n10\n10\n20\n88\n30\n0\n40\n5"
+
+
+@pytest.mark.condition("DXF-P1")
+def test_dxf_entities_emit_drawing_style_color_and_lineweight() -> None:
+    """DXF-P1: DXF drawing entities consume validated DrawingStyle stroke values."""
+    styled = DrawingStyle(f"dxf_style_{uuid4().hex}", stroke="#112233", stroke_width=0.25)
+    group = DrawingComponentGroup("styled")
+    group.add_component(LineDrawing((0.0, 0.0), (1.0, 1.0), styled))
+    group.add_component(RectangleDrawing((2.0, 2.0), 3.0, 4.0, 0.0, styled))
+    group.add_component(CircleDrawing((8.0, 8.0), 2.0, styled))
+    document = DXFDocument()
+
+    document.add_group(group)
+    payload = document.to_dxf_string()
+
+    assert _pair_values(payload, "420") == ["1122867", "1122867", "1122867"]
+    assert _pair_values(payload, "370") == ["25", "25", "25"]
+
+
+@pytest.mark.condition("DXF-P1")
+def test_dxf_style_lineweight_uses_standard_values_and_disabled_stroke_omits_codes() -> None:
+    """DXF-P1: DXF lineweight snaps to standard values and disabled strokes stay unstyled."""
+    wide = DrawingStyle(f"dxf_wide_{uuid4().hex}", stroke="#abcdef", stroke_width=0.27)
+    below_threshold = DrawingStyle(f"dxf_below_{uuid4().hex}", stroke="#010203", stroke_width=0.273)
+    above_threshold = DrawingStyle(f"dxf_above_{uuid4().hex}", stroke="#040506", stroke_width=0.275)
+    disabled = DrawingStyle(f"dxf_none_{uuid4().hex}", stroke="none", stroke_width=0.25)
+    wide_group = DrawingComponentGroup("wide")
+    below_group = DrawingComponentGroup("below")
+    above_group = DrawingComponentGroup("above")
+    disabled_group = DrawingComponentGroup("disabled")
+    wide_group.add_component(LineDrawing((0.0, 0.0), (1.0, 1.0), wide))
+    below_group.add_component(LineDrawing((1.0, 1.0), (2.0, 2.0), below_threshold))
+    above_group.add_component(LineDrawing((2.0, 2.0), (3.0, 3.0), above_threshold))
+    disabled_group.add_component(LineDrawing((2.0, 2.0), (3.0, 3.0), disabled))
+
+    document = DXFDocument()
+    document.add_group(wide_group)
+    document.add_group(below_group)
+    document.add_group(above_group)
+    document.add_group(disabled_group)
+    payload = document.to_dxf_string()
+
+    assert _pair_values(payload, "420") == ["11259375", "66051", "263430"]
+    assert _pair_values(payload, "370") == ["25", "25", "30"]
 
 
 @pytest.mark.condition("DXF-P1")
