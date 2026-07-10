@@ -55,7 +55,7 @@ creation system are:
 |---|---|---|
 | Text encoding | WinAnsi literal strings, installed-font embedding, and printable WinAnsi `/ToUnicode` CMaps | Unicode/CID fonts, glyph subsetting, and full complex-script text extraction maps |
 | Text layout | Positioned text components with explicit line-break output using `TextStyle.line_spacing` | Automatic wrapping, alignment across line boxes, tabs, columns, kerning, and complex-script shaping |
-| Graphics state | Basic stroke/fill primitives, rectangular and closed path group clipping, group blend modes, stroke/fill alpha ExtGState resources, and stroke dash/cap/join/miter operators | Fill-rule clipping variants, opacity groups, gradients, and patterns |
+| Graphics state | Basic stroke/fill primitives, rectangular and closed path group clipping with nonzero/even-odd clip rules, group blend modes, stroke/fill alpha ExtGState resources, and stroke dash/cap/join/miter operators | Opacity groups, gradients, and patterns |
 | Document structure | Pages, deterministic metadata, page labels, Crop/Bleed/Trim/Art boxes, flat and arbitrary-depth nested outlines/bookmarks, URI links, internal page links, named destinations, named-destination links, text annotations, highlight annotations, and square annotations | Other generic annotations and tagged PDF structure |
 | Color/profile support | Device RGB/CMYK and JPEG ICC profile objects | Broader calibrated color spaces and selectable PDF/A-style archival constraints |
 | Import/conversion | SVG input remains SVG-only | Arbitrary SVG-to-PDF conversion and external PDF embedding are out of scope until explicitly approved |
@@ -82,9 +82,14 @@ as `PathPDF`, must be non-empty, must start with `M`, must end with `Z`, are
 cloned before storage, and are validated before group state changes. They are
 stored as `clip_path` in group parameters, hydrate through
 `ComponentGroupPDF.create_from_dict()`, and render as path operators followed by
-`W` and `n`. Rectangular and path clips can be configured together; PDF applies
-them as intersecting clipping paths inside the same group graphics-state wrapper.
-Raw PDF clipping operators, open paths, even-odd fill rules, text clipping, and
+`W` or `W*` and `n`. Rectangular and path clips can be configured together; PDF
+applies them as intersecting clipping paths inside the same group graphics-state
+wrapper.
+
+Clip rules can be selected with `ComponentGroupPDF.set_clip_rule()`. The default
+`nonzero` rule emits `W` and is not serialized; `evenodd` emits `W*` for every
+configured group clip and round-trips as `clip_rule`. Per-clip fill rules inside
+one group, raw PDF clipping operators, open paths, text clipping, and
 renderer-neutral clipping state remain intentionally out of scope.
 
 `ComponentGroupPDF` also supports standard PDF blend modes through

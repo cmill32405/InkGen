@@ -90,6 +90,12 @@ PDF_BLEND_MODES = {
     "color": "Color",
     "luminosity": "Luminosity",
 }
+PDF_CLIP_RULES = {
+    "nonzero": "nonzero",
+    "nonzerowinding": "nonzero",
+    "winding": "nonzero",
+    "evenodd": "evenodd",
+}
 
 
 @dataclass(frozen=True)
@@ -641,6 +647,20 @@ def _coerce_pdf_clip_path(commands: object) -> tuple[PathCommand, ...]:
         raise ValueError("PDF clip path must end with a Z command")
     _pdf_path_command_operators(normalized, owner="PDF clip path")
     return tuple(normalized)
+
+
+def _coerce_pdf_clip_rule(rule: object) -> str:
+    """Return a supported PDF clipping fill rule."""
+    if rule is None:
+        return "nonzero"
+    if not isinstance(rule, str):
+        raise TypeError("PDF clip rule must be a string or None")
+    key = rule.replace("-", "").replace("_", "").replace(" ", "").lower()
+    if not key:
+        raise ValueError("PDF clip rule must not be empty")
+    if key not in PDF_CLIP_RULES:
+        raise ValueError("PDF clip rule must be nonzero or evenodd")
+    return PDF_CLIP_RULES[key]
 
 
 def _coerce_pdf_blend_mode(blend_mode: object) -> str | None:
@@ -1821,6 +1841,7 @@ class ComponentGroupPDF(ComponentGroup, LabelGenerator, SegmentGenerator):
         super().__init__(group_label)
         self._pdf_clip_rect: tuple[float, float, float, float] | None = None
         self._pdf_clip_path: tuple[PathCommand, ...] | None = None
+        self._pdf_clip_rule = "nonzero"
         self._pdf_blend_mode: str | None = None
 
     def add_component(self, component: Component) -> None:
@@ -1864,6 +1885,18 @@ class ComponentGroupPDF(ComponentGroup, LabelGenerator, SegmentGenerator):
             return None
         return tuple(_clone_path_command(command) for command in self._pdf_clip_path)
 
+    def set_clip_rule(self, rule: str | None) -> None:
+        """Set the PDF clipping fill rule for group clips."""
+        self._pdf_clip_rule = _coerce_pdf_clip_rule(rule)
+
+    def clear_clip_rule(self) -> None:
+        """Reset the group's PDF clipping fill rule to nonzero winding."""
+        self._pdf_clip_rule = "nonzero"
+
+    def clip_rule(self) -> str:
+        """Return the group's PDF clipping fill rule."""
+        return self._pdf_clip_rule
+
     def set_blend_mode(self, blend_mode: str | None) -> None:
         """Set or clear a standard PDF blend mode for this group."""
         self._pdf_blend_mode = _coerce_pdf_blend_mode(blend_mode)
@@ -1885,6 +1918,8 @@ class ComponentGroupPDF(ComponentGroup, LabelGenerator, SegmentGenerator):
             group.set_clip_rect(payload["clip_rect"])
         if "clip_path" in payload:
             group.set_clip_path(payload["clip_path"])
+        if "clip_rule" in payload:
+            group.set_clip_rule(payload["clip_rule"])
         if "blend_mode" in payload:
             group.set_blend_mode(payload["blend_mode"])
         restore_extraction_truth_annotations(group, payload.get("extraction_truth", []))
@@ -1924,6 +1959,8 @@ class ComponentGroupPDF(ComponentGroup, LabelGenerator, SegmentGenerator):
             group_payload["clip_rect"] = list(self._pdf_clip_rect)
         if self._pdf_clip_path is not None:
             group_payload["clip_path"] = [_path_command_payload(command) for command in self._pdf_clip_path]
+        if self._pdf_clip_rule != "nonzero":
+            group_payload["clip_rule"] = self._pdf_clip_rule
         if self._pdf_blend_mode is not None:
             group_payload["blend_mode"] = self._pdf_blend_mode
         annotations = serialize_extraction_truth_annotations(self)
@@ -1958,6 +1995,7 @@ class ComponentGroupPDF(ComponentGroup, LabelGenerator, SegmentGenerator):
                 "Q",
             ]
             insert_at = 1
+            clip_operator = "W*" if self._pdf_clip_rule == "evenodd" else "W"
             if blend_resource is not None:
                 operators.insert(insert_at, f"/{blend_resource} gs")
                 insert_at += 1
@@ -1965,7 +2003,7 @@ class ComponentGroupPDF(ComponentGroup, LabelGenerator, SegmentGenerator):
                 left, top, width, height = self._pdf_clip_rect
                 operators[insert_at:insert_at] = [
                     f"{_number(left)} {_number(top)} {_number(width)} {_number(height)} re",
-                    "W",
+                    clip_operator,
                     "n",
                 ]
                 insert_at += 3
@@ -1973,7 +2011,7 @@ class ComponentGroupPDF(ComponentGroup, LabelGenerator, SegmentGenerator):
                 clip_operators = _pdf_path_command_operators(self._pdf_clip_path, owner="PDF clip path")
                 operators[insert_at:insert_at] = [
                     *clip_operators,
-                    "W",
+                    clip_operator,
                     "n",
                 ]
         return "\n".join(operators)

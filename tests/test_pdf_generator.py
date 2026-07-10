@@ -832,6 +832,28 @@ def test_document_pdf_consumes_group_clip_path_with_rect_and_blend_live(drawing_
 
 
 @pytest.mark.condition("PDF-GROUP-CLIP-P3")
+def test_component_group_pdf_evenodd_clip_rule_applies_to_rect_and_path(drawing_style: DrawingStyle) -> None:
+    """PDF-GROUP-CLIP-P3: Even-odd clip rules emit W* for every group clip."""
+    group = ComponentGroupPDF("clip-rule")
+    group.set_clip_rule("even-odd")
+    group.set_clip_rect((1.0, 2.0, 30.0, 40.0))
+    group.set_clip_path(
+        [
+            PathCommand("M", [(2.0, 3.0)]),
+            PathCommand("L", [(20.0, 3.0), (20.0, 30.0)]),
+            PathCommand("Z", []),
+        ]
+    )
+    group.add_component(RectanglePDF((10.0, 20.0), 3.0, 4.0, 0.0, drawing_style))
+
+    content = group.generate_pdf()
+
+    assert "1 2 30 40 re\nW*\nn\n2 3 m\n20 3 l\n20 30 l\nh\nW*\nn\n" in content
+    assert "\nW\n" not in content
+    assert content.index("W*\nn") < content.index("10 20 3 4 re")
+
+
+@pytest.mark.condition("PDF-GROUP-CLIP-P3")
 def test_component_group_pdf_clip_path_round_trips_and_returns_detached_commands(drawing_style: DrawingStyle) -> None:
     """PDF-GROUP-CLIP-P3: Group clip paths serialize, hydrate, and avoid aliasing."""
     commands = [
@@ -861,6 +883,26 @@ def test_component_group_pdf_clip_path_round_trips_and_returns_detached_commands
     group.set_clip_path(None)
     assert group.clip_path() is None
     assert "clip_path" not in group.parameters["ComponentGroupPDF"]
+
+
+@pytest.mark.condition("PDF-GROUP-CLIP-P3")
+def test_component_group_pdf_clip_rule_round_trips_and_clears(drawing_style: DrawingStyle) -> None:
+    """PDF-GROUP-CLIP-P3: Clip rules serialize only when non-default."""
+    group = ComponentGroupPDF("clip-rule-roundtrip")
+    group.set_clip_rule("even odd")
+    group.set_clip_rect((1.0, 2.0, 30.0, 40.0))
+    group.add_component(RectanglePDF((10.0, 20.0), 3.0, 4.0, 0.0, drawing_style))
+
+    recreated = ComponentGroupPDF.create_from_dict(group.parameters, {drawing_style.name: drawing_style})
+
+    assert group.clip_rule() == "evenodd"
+    assert group.parameters["ComponentGroupPDF"]["clip_rule"] == "evenodd"
+    assert recreated.clip_rule() == "evenodd"
+    assert recreated.generate_pdf() == group.generate_pdf()
+
+    group.clear_clip_rule()
+    assert group.clip_rule() == "nonzero"
+    assert "clip_rule" not in group.parameters["ComponentGroupPDF"]
 
 
 @pytest.mark.condition("PDF-GROUP-CLIP-P3")
@@ -982,6 +1024,28 @@ def test_component_group_pdf_factory_rejects_malformed_clip_paths() -> None:
     payload = {"ComponentGroupPDF": {"group_label": "clip-path-invalid", "components": [], "clip_path": [{"type": "L", "points": []}]}}
 
     with pytest.raises(ValueError, match="PDF clip path must start with an M command"):
+        ComponentGroupPDF.create_from_dict(payload)
+
+
+@pytest.mark.condition("PDF-GROUP-CLIP-P3")
+@pytest.mark.parametrize("clip_rule", [object(), "", "not-a-rule"])
+def test_component_group_pdf_rejects_malformed_clip_rules(clip_rule: object) -> None:
+    """PDF-GROUP-CLIP-P3: Malformed PDF clip rules fail before state mutation."""
+    group = ComponentGroupPDF("clip-rule-invalid")
+    group.set_clip_rule("evenodd")
+
+    with pytest.raises((TypeError, ValueError), match="PDF clip rule"):
+        group.set_clip_rule(clip_rule)  # type: ignore[arg-type]
+
+    assert group.clip_rule() == "evenodd"
+
+
+@pytest.mark.condition("PDF-GROUP-CLIP-P3")
+def test_component_group_pdf_factory_rejects_malformed_clip_rules() -> None:
+    """PDF-GROUP-CLIP-P3: Group hydration rejects malformed serialized clip rules."""
+    payload = {"ComponentGroupPDF": {"group_label": "clip-rule-invalid", "components": [], "clip_rule": "not-a-rule"}}
+
+    with pytest.raises(ValueError, match="PDF clip rule must be nonzero or evenodd"):
         ComponentGroupPDF.create_from_dict(payload)
 
 

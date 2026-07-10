@@ -12,6 +12,8 @@ The slice covers:
 - `ComponentGroupPDF.create_from_dict()`
 - `ComponentGroupPDF.set_clip_rect()`, `clear_clip_rect()`, and `clip_rect()`.
 - `ComponentGroupPDF.set_clip_path()`, `clear_clip_path()`, and `clip_path()`.
+- `ComponentGroupPDF.set_clip_rule()`, `clear_clip_rule()`, and
+  `clip_rule()`.
 - `ComponentGroupPDF.set_blend_mode()`, `clear_blend_mode()`, and
   `blend_mode()`.
 - PDF child component envelope validation.
@@ -19,6 +21,7 @@ The slice covers:
 - Closed PDF component type dispatch.
 - Rectangular PDF group clip serialization, hydration, and render output.
 - Closed PDF group clip-path serialization, hydration, and render output.
+- PDF group clip-rule serialization, hydration, and render output.
 - Standard PDF group blend-mode serialization, hydration, and render output.
 
 Out of scope:
@@ -58,11 +61,14 @@ Public contract:
   group clipping state.
 - Optional `clip_path` payloads hydrate to closed `PathCommand`-based PDF group
   clipping state.
+- Optional `clip_rule` payloads hydrate to either the default nonzero winding
+  rule or even-odd clipping.
 - Optional `blend_mode` payloads hydrate to a supported standard PDF blend
   mode or clear the setting for `Normal`.
 - Malformed roots, missing `group_label`, missing or malformed `components`,
-  malformed `clip_rect`, malformed `clip_path`, malformed `blend_mode`,
-  malformed child entries, malformed style envelopes, and unsupported child or style types fail
+  malformed `clip_rect`, malformed `clip_path`, malformed `clip_rule`,
+  malformed `blend_mode`, malformed child entries, malformed style envelopes,
+  and unsupported child or style types fail
   explicitly before dynamic dispatch or rendering.
 - Child payloads still flow through the concrete child factory contract.
 
@@ -72,6 +78,8 @@ Serialized/artifact contract:
   configured.
 - `ComponentGroupPDF.parameters` adds `clip_path` only when a group clip path is
   configured.
+- `ComponentGroupPDF.parameters` adds `clip_rule` only when the rule is
+  non-default.
 - `ComponentGroupPDF.parameters` adds `blend_mode` only when a non-default
   group blend mode is configured.
 - Valid group hydration preserves generated PDF operators.
@@ -91,6 +99,7 @@ ADR/rule impact:
 - ADR-0014 records the bounded PDF group clipping decision.
 - ADR-0015 records the bounded PDF group blend-mode decision.
 - ADR-0017 records the bounded PDF group clip-path decision.
+- ADR-0018 records the bounded PDF group clip-rule decision.
 - The slices preserve the dependency-free PDF renderer policy and add no
   library.
 
@@ -111,6 +120,11 @@ ADR/rule impact:
   `PathPDF` command arity rules before state mutation.
 - Clip path commands are cloned before storage and when returned through
   `clip_path()`.
+- `clip_rule`, when present, is a string that normalizes to `nonzero` or
+  `evenodd`.
+- `nonzero` is the default clipping rule and is not serialized.
+- `evenodd` emits the PDF `W*` clipping operator for all configured clips in the
+  group.
 - `blend_mode`, when present, is a string naming a standard PDF blend mode.
 - `Normal` and `None` clear blend state and are not serialized.
 - Non-default blend mode spellings normalize to canonical PDF names after
@@ -145,6 +159,9 @@ ADR/rule impact:
 | Serialized clip path | Preserve through parameters/hydration and avoid aliasing | PO-PDFGROUP-017 | clip-path round-trip/copy test | mutation target |
 | Malformed clip path | Reject before public state mutation or hydration return | PO-PDFGROUP-018 | malformed clip-path tests | mutation target |
 | Blend plus rectangle and path clips | Share one group graphics-state wrapper | PO-PDFGROUP-019 | blend+rect+path live-path test | mutation target |
+| Even-odd clip rule | Emit `W*` for rectangular and path clips | PO-PDFGROUP-020 | even-odd clip render test | mutation target |
+| Serialized clip rule | Preserve non-default rule and omit default rule | PO-PDFGROUP-021 | clip-rule round-trip test | mutation target |
+| Malformed clip rule | Reject before public state mutation or hydration return | PO-PDFGROUP-022 | malformed clip-rule tests | mutation target |
 
 ## Test Applicability Matrix
 
@@ -247,6 +264,37 @@ Current result:
   boundary errors, start-command ordering, and the shared path-command
   `points` sequence guard; those tests and the guard were added before the
   passing mutation run.
+
+`PDF-GROUP-CLIP-RULE-P3` mutation result:
+
+- Tool: Cosmic Ray 8.4.6.
+- Environment: WSL Python 3.12 virtualenv.
+- Config: `tests/mutation/pdf_group_clip_rule_cosmic_ray.toml`.
+- Filter:
+  `tests/mutation/filter_pdf_group_clip_rule_work_items.py`.
+- Test selection: PDF generator, PDF group factory payload, and PDF render
+  contract tests.
+- Raw work items: 5261.
+- Proof-critical work items after filter: 34.
+- Killed mutants: 30.
+- Equivalent survivors: 4.
+- Surviving equivalent mutations:
+  - `parameters()` line 1962 changed `self._pdf_clip_rule != "nonzero"` to
+    `is not "nonzero"`. Public state enters through `_coerce_pdf_clip_rule()`,
+    which returns the local literal values from `PDF_CLIP_RULES`, or through the
+    constructor/clear method that set the same local literal.
+  - `parameters()` line 1962 changed `!= "nonzero"` to `< "nonzero"`. The
+    admitted rule domain is exactly `{"nonzero", "evenodd"}` and `"evenodd"`
+    sorts before `"nonzero"`, so the predicates are equivalent for all admitted
+    values.
+  - `generate_pdf()` line 1998 changed `self._pdf_clip_rule == "evenodd"` to
+    `is "evenodd"`. Public state enters through `_coerce_pdf_clip_rule()`,
+    which returns the local literal values from `PDF_CLIP_RULES`.
+  - `generate_pdf()` line 1998 changed `== "evenodd"` to `<= "evenodd"`. The
+    admitted rule domain is exactly `{"nonzero", "evenodd"}` and `"nonzero"`
+    sorts after `"evenodd"`, so the predicates are equivalent for all admitted
+    values.
+- Gate result: pass with documented equivalent survivors.
 
 ## PO-PDFGROUP-001: PDF Group Roots And Required Fields Are Validated
 
@@ -590,3 +638,59 @@ then child operators.
 
 Proven for group blend plus rectangular and closed path clip composition after
 tests and mutation pass.
+
+## PO-PDFGROUP-020: Even-Odd Clip Rules Emit W-Star
+
+### Claim
+
+A group configured with the even-odd clip rule emits `W*` for every configured
+rectangular or closed path clip.
+
+### Proof Method
+
+`set_clip_rule()` normalizes accepted even-odd spellings to `evenodd`.
+`generate_pdf()` selects `W*` instead of `W` when `_pdf_clip_rule` is
+`evenodd`. The render condition test configures both `clip_rect` and
+`clip_path`, then asserts both clip operators are `W*` and no plain `W`
+operator is emitted.
+
+### Conclusion
+
+Proven for declared group clip-rule render behavior after tests and mutation
+pass.
+
+## PO-PDFGROUP-021: Group Clip Rules Round Trip Through Parameters
+
+### Claim
+
+Non-default clip rules serialize and hydrate through `ComponentGroupPDF`
+parameters, while the default nonzero rule remains unserialized.
+
+### Proof Method
+
+`parameters` writes `clip_rule` only when the normalized rule is not `nonzero`.
+`create_from_dict()` calls `set_clip_rule()` when the field is present. The
+round-trip condition test verifies hydrated state and generated PDF equality,
+then clears the rule and verifies the serialized field is omitted.
+
+### Conclusion
+
+Proven for serialized clip-rule state after tests and mutation pass.
+
+## PO-PDFGROUP-022: Malformed Clip Rules Fail Explicitly
+
+### Claim
+
+Malformed direct and serialized clip rules fail before public group state is
+mutated or a hydrated group is returned.
+
+### Proof Method
+
+`_coerce_pdf_clip_rule()` rejects non-string values, empty strings, and strings
+outside the supported nonzero/even-odd rule set. Condition tests cover direct
+state mutation and serialized hydration.
+
+### Conclusion
+
+Proven for declared malformed clip-rule partitions after tests and mutation
+pass.
