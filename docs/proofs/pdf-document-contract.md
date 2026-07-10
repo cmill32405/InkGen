@@ -5,7 +5,7 @@ It covers group traversal in rendered PDF bytes, extraction truth, grammar truth
 when a layer contains repeated semantic labels, the public PDF file-writer path
 boundary, PDF page-structure metadata, flat/nested PDF outlines/bookmarks, URI
 link annotations, internal page link annotations, named destinations, text
-annotations, and highlight annotations.
+annotations, highlight annotations, and square annotations.
 
 ## Scope
 
@@ -41,6 +41,9 @@ The slice covers:
 - `DocumentPDF.add_highlight_annotation()`
 - `DocumentPDF.clear_highlight_annotations()`
 - `DocumentPDF.highlight_annotations()`
+- `DocumentPDF.add_square_annotation()`
+- `DocumentPDF.clear_square_annotations()`
+- `DocumentPDF.square_annotations()`
 - `DocumentPDF.to_pdf_bytes()`
 - `DocumentPDF.create_from_dict()`
 - `DocumentPDF.parameters`
@@ -83,6 +86,8 @@ Affected surface:
   outline tree contract.
 - `docs/adr/0013-pdf-highlight-annotations.md`: accepted ADR for the highlight
   annotation contract.
+- `docs/adr/0016-pdf-square-annotations.md`: accepted ADR for the square
+  annotation contract.
 
 Incoming dependencies:
 
@@ -113,6 +118,8 @@ Incoming dependencies:
 - Callers can depend on `DocumentPDF.add_highlight_annotation()` to create PDF
   highlight annotations on existing pages, and on serialization to preserve
   them.
+- Callers can depend on `DocumentPDF.add_square_annotation()` to create PDF
+  square annotations on existing pages, and on serialization to preserve them.
 
 Outgoing dependencies:
 
@@ -139,6 +146,9 @@ Outgoing dependencies:
 - Highlight annotations use the same local PDF object writer, existing
   page-number validation, page-box rectangle validator, literal string escaping,
   and local RGB color validation; no dependency was added.
+- Square annotations use the same local PDF object writer, existing page-number
+  validation, page-box rectangle validator, literal string escaping, and local
+  RGB color validation; no dependency was added.
 
 Before/after edge changes:
 
@@ -199,6 +209,10 @@ Before/after edge changes:
   highlight annotation list. Insertions and removals shift or delete annotation
   source pages. `to_pdf_bytes()` emits `/Subtype /Highlight` annotation objects
   in page `/Annots` arrays after text annotations.
+- After the square annotation update, `DocumentPDF` owns a flat ordered square
+  annotation list. Insertions and removals shift or delete annotation source
+  pages. `to_pdf_bytes()` emits `/Subtype /Square` annotation objects in page
+  `/Annots` arrays after highlight annotations.
 
 Cycle/layer/coupling/redundancy result:
 
@@ -225,9 +239,10 @@ Cycle/layer/coupling/redundancy result:
 - Named destination metadata is local to `DocumentPDF`; generic non-text
   annotations, tagged PDF, and richer annotation appearances remain deferred
   until there is a concrete fixture need.
-- Text and highlight annotation metadata is local to `DocumentPDF`; file
-  attachments, stamps, widgets, replies, rich appearances, and other annotation
-  subtypes remain deferred until there is a concrete fixture need.
+- Text, highlight, and square annotation metadata is local to `DocumentPDF`;
+  file attachments, stamps, widgets, replies, rich appearances, fill colors,
+  and other annotation subtypes remain deferred until there is a concrete
+  fixture need.
 
 ADR/rule impact:
 
@@ -251,6 +266,8 @@ ADR/rule impact:
   outline hierarchy semantics without changing the serialized payload shape.
 - ADR-0013 records the highlight annotation decision because this slice adds
   public API and serialized parameters.
+- ADR-0016 records the square annotation decision because this slice adds public
+  API and serialized parameters.
 
 ## Domain Definitions
 
@@ -323,6 +340,16 @@ ADR/rule impact:
   rectangle and must stay inside the same rectangle.
 - Serialized highlight annotation entries must be rejected before rendering if
   malformed.
+- PDF square annotations are flat, insertion-ordered entries. Each entry has an
+  existing one-based page number, a finite positive-area rectangle inside the
+  page MediaBox, a strict RGB border color accepted as a `#rrggbb` string or
+  serialized 0.0-1.0 numeric triple, and optional non-empty Latin-1 contents.
+- Page `/Annots` arrays must include every square annotation on that page after
+  URI links, internal page links, named-destination links, text annotations, and
+  highlight annotations on that page.
+- Square annotations emit a deterministic `/Border [0 0 1]` contract.
+- Serialized square annotation entries must be rejected before rendering if
+  malformed.
 
 ## Comprehensiveness Matrix
 
@@ -364,6 +391,9 @@ ADR/rule impact:
 | Highlight annotations | Emit deterministic `/Subtype /Highlight` annotation objects and round-trip through parameters | PO-PDFDOC-034 | highlight annotation render/round-trip test | mutation target |
 | Highlight annotation page/index shifts | Insert/remove pages shift or delete highlight annotation pages with page indices | PO-PDFDOC-035 | highlight annotation page mutation test | mutation target |
 | Serialized highlight annotation metadata | Reject malformed highlight annotation payloads before rendering | PO-PDFDOC-036 | serialized highlight annotation rejection test | mutation target |
+| Square annotations | Emit deterministic `/Subtype /Square` annotation objects and round-trip through parameters | PO-PDFDOC-037 | square annotation render/round-trip test | mutation target |
+| Square annotation page/index shifts | Insert/remove pages shift or delete square annotation pages with page indices | PO-PDFDOC-038 | square annotation page mutation test | mutation target |
+| Serialized square annotation metadata | Reject malformed square annotation payloads before rendering | PO-PDFDOC-039 | serialized square annotation rejection test | mutation target |
 | Non-PDF group in a PDF page | Continue to fail loudly | Existing PDF generator test | killed |
 | Private layer storage mutation | Excluded from public contract | Explicit exclusion | Not applicable |
 
@@ -384,7 +414,7 @@ ADR/rule impact:
 | Golden artifact/visual | yes | PDF content stream is a generated artifact. | content-stream assertions |
 | Regression | yes | This closes the duplicate-label traversal regression. | dedicated tests |
 | Serialized payload | yes | Page labels and boxes are persisted in document parameters. | render/round-trip and malformed-payload tests |
-| Navigation metadata | yes | Flat/nested PDF outlines, URI links, internal page links, named destinations, text annotations, and highlight annotations add document navigation/comment objects and page annotation arrays. | outline, URI link, page link, named destination, text annotation, and highlight annotation render/round-trip tests |
+| Navigation metadata | yes | Flat/nested PDF outlines, URI links, internal page links, named destinations, text annotations, highlight annotations, and square annotations add document navigation/comment objects and page annotation arrays. | outline, URI link, page link, named destination, text annotation, highlight annotation, and square annotation render/round-trip tests |
 
 ## Mutation Testing Gate
 
@@ -695,6 +725,28 @@ Current result after the highlight annotation update:
     from `[5:7]` to `[5:8]`. The exact `len(value) != 7` guard guarantees the
     admitted string ends at index 7, so both slices return the same two
     characters for every admitted input.
+- Gate result: pass with documented equivalent survivors.
+
+Current result after the square annotation update:
+
+- Tool: Cosmic Ray 8.4.6.
+- Config: `tests/mutation/pdf_document_square_annotation_cosmic_ray.toml`.
+- Filter:
+  `tests/mutation/filter_pdf_document_square_annotation_work_items.py`.
+- Test selection: focused PDF document, factory payload, and PDF generator tests.
+- Raw work items: 5132.
+- Proof-critical work items after filter: 165.
+- Killed mutants: 163.
+- Equivalent survivors: 2.
+- Surviving equivalent mutations:
+  - `_coerce_pdf_annotation_color()` line 568 changed the blue-channel slice
+    from `[5:7]` to `[5:8]`. The exact `len(value) != 7` guard guarantees the
+    admitted string ends at index 7, so both slices return the same two
+    characters for every admitted input.
+  - `_shift_pdf_page_metadata_for_removal()` line 2378 changed
+    `annotation.page_number > page_number` to `>=`. The comprehension filters
+    `annotation.page_number != page_number` before evaluating the output
+    expression, so equality is excluded from the expression domain.
 - Gate result: pass with documented equivalent survivors.
 
 ## PO-PDFDOC-001: PDF Rendering Traverses Every Stored Group
@@ -1553,4 +1605,82 @@ contents hydrate with defaults.
 ### Conclusion
 
 Proven for serialized highlight annotations in the declared payload domain, with
+mutation verification documented above.
+
+## PO-PDFDOC-037: PDF Square Annotations Emit And Round Trip
+
+### Claim
+
+`DocumentPDF` emits deterministic PDF square annotations, stores every same-page
+square annotation in the page `/Annots` array after existing link, text, and
+highlight annotations, preserves deterministic bytes, and round-trips square
+annotations through `parameters` and `create_from_dict()`.
+
+### Proof Method
+
+`add_square_annotation()` validates page number, rectangle bounds, border color,
+and optional contents before storing a `_PDFSquareAnnotation`. `to_pdf_bytes()`
+groups squares by page, allocates one annotation object per entry, appends their
+IDs to page `/Annots` arrays after URI/page/named-destination links, text
+annotations, and highlight annotations, and emits `/Subtype /Square`
+dictionaries with `/Rect`, `/C`, `/Border [0 0 1]`, and optional `/Contents`.
+Tests parse PDF objects, verify same-page annotation ordering, exact rectangle
+bytes, color bytes, border bytes, escaped contents strings, deterministic
+repeated rendering, and serialization round-trip equality.
+
+### Counterexamples And Exclusions
+
+Rich appearance streams, fill colors, custom border styles, annotation replies,
+widgets, other annotation subtypes, tagged PDF structure, and non-Latin-1
+contents are excluded from this square annotation slice.
+
+### Conclusion
+
+Proven for rectangular Latin-1 PDF square annotations in the declared PDF
+document domain, with mutation verification documented above.
+
+## PO-PDFDOC-038: PDF Square Annotations Follow Page Mutations
+
+### Claim
+
+When pages are inserted or removed, square annotation source pages stay aligned
+with the same logical pages after the mutation, and annotations tied to removed
+pages are deleted.
+
+### Proof Method
+
+`DocumentPDF.add_page()` and `DocumentPDF.remove_page()` route through the PDF
+metadata shift helpers. The square annotation update extends those helpers to
+increment source pages at or after insertion points, decrement source pages
+after removed pages, and drop annotations whose source page matches the removed
+page. Tests include annotations before, on, and after the mutation point, plus a
+large page-number removal case to prove value equality rather than object
+identity.
+
+### Conclusion
+
+Proven for page indices admitted by the `DocumentPDF` public page mutation
+methods, with mutation verification documented above.
+
+## PO-PDFDOC-039: Serialized Square Annotation Metadata Fails Explicitly
+
+### Claim
+
+Malformed serialized `square_annotations` payloads are rejected during
+`DocumentPDF.create_from_dict()` before any rendered PDF can be produced from
+bad square annotation metadata.
+
+### Proof Method
+
+`create_from_dict()` reads optional square annotation sequences through
+`_pdf_optional_sequence()`, requires each entry to be a mapping, requires
+`page_number`, `rect`, and `color`, and delegates to `add_square_annotation()`
+for page, rectangle, color, and contents validation. Tests mutate a valid
+payload into non-sequence containers, non-mapping entries, missing required
+fields, missing pages, invalid rectangles, invalid colors, and empty contents. A
+separate test proves missing optional contents hydrate with defaults.
+
+### Conclusion
+
+Proven for serialized square annotations in the declared payload domain, with
 mutation verification documented above.
