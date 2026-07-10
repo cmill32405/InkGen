@@ -183,6 +183,16 @@ class _PDFSquareAnnotation:
     contents: str | None
 
 
+@dataclass(frozen=True)
+class _PDFCircleAnnotation:
+    """Validated PDF circle annotation metadata."""
+
+    page_number: int
+    rect: tuple[float, float, float, float]
+    color: tuple[float, float, float]
+    contents: str | None
+
+
 class PDFGeneratorInterface(metaclass=abc.ABCMeta):
     """Interface for components that can emit PDF content-stream operators."""
 
@@ -2041,6 +2051,7 @@ class DocumentPDF(Document):
         self._pdf_text_annotations: list[_PDFTextAnnotation] = []
         self._pdf_highlight_annotations: list[_PDFHighlightAnnotation] = []
         self._pdf_square_annotations: list[_PDFSquareAnnotation] = []
+        self._pdf_circle_annotations: list[_PDFCircleAnnotation] = []
 
     @staticmethod
     def _iter_layer_groups(layer: Layer, *, sort: bool = False) -> tuple[ComponentGroup, ...]:
@@ -2275,6 +2286,30 @@ class DocumentPDF(Document):
         """Return serialized PDF square annotations in insertion order."""
         return tuple(self._square_annotation_payload(annotation) for annotation in self._pdf_square_annotations)
 
+    def add_circle_annotation(
+        self,
+        page_number: int,
+        rect: Sequence[float | int],
+        *,
+        color: str | Sequence[float | int] = "#ff0000",
+        contents: str | None = None,
+    ) -> None:
+        """Add a PDF circle markup annotation to an existing page."""
+        page_number = self._validate_existing_position(page_number)
+        page = self.page(page_number)
+        annotation_rect = _coerce_pdf_link_rect(rect, canvas_width=page._canvas.width, canvas_height=page._canvas.height)
+        annotation_color = _coerce_pdf_annotation_color(color)
+        annotation_contents = None if contents is None else _coerce_pdf_annotation_text(contents, "circle annotation contents")
+        self._pdf_circle_annotations.append(_PDFCircleAnnotation(page_number, annotation_rect, annotation_color, annotation_contents))
+
+    def clear_circle_annotations(self) -> None:
+        """Remove all PDF circle annotations."""
+        self._pdf_circle_annotations.clear()
+
+    def circle_annotations(self) -> tuple[dict[str, object], ...]:
+        """Return serialized PDF circle annotations in insertion order."""
+        return tuple(self._circle_annotation_payload(annotation) for annotation in self._pdf_circle_annotations)
+
     def set_page_label(self, page_number: int, label: str | None) -> None:
         """Set or clear a PDF page label for an existing page."""
         page_number = self._validate_existing_position(page_number)
@@ -2395,6 +2430,15 @@ class DocumentPDF(Document):
             )
             for annotation in self._pdf_square_annotations
         ]
+        self._pdf_circle_annotations = [
+            _PDFCircleAnnotation(
+                annotation.page_number + 1 if annotation.page_number >= page_number else annotation.page_number,
+                annotation.rect,
+                annotation.color,
+                annotation.contents,
+            )
+            for annotation in self._pdf_circle_annotations
+        ]
 
     def _shift_pdf_page_metadata_for_removal(self, page_number: int) -> None:
         """Shift PDF-specific page metadata when a page is removed."""
@@ -2491,6 +2535,16 @@ class DocumentPDF(Document):
                 annotation.contents,
             )
             for annotation in self._pdf_square_annotations
+            if annotation.page_number != page_number
+        ]
+        self._pdf_circle_annotations = [
+            _PDFCircleAnnotation(
+                annotation.page_number - 1 if annotation.page_number > page_number else annotation.page_number,
+                annotation.rect,
+                annotation.color,
+                annotation.contents,
+            )
+            for annotation in self._pdf_circle_annotations
             if annotation.page_number != page_number
         ]
 
@@ -2808,6 +2862,34 @@ class DocumentPDF(Document):
         contents = f" /Contents ({_escape_pdf_string(annotation.contents)})" if annotation.contents is not None else ""
         return f"<< /Type /Annot /Subtype /Square /Rect {rect} /C {color} /Border [0 0 1]{contents} >>"
 
+    @staticmethod
+    def _circle_annotation_payload(annotation: _PDFCircleAnnotation) -> dict[str, object]:
+        """Return serialized data for a validated PDF circle annotation."""
+        payload: dict[str, object] = {
+            "page_number": annotation.page_number,
+            "rect": list(annotation.rect),
+            "color": [round(channel, 6) for channel in annotation.color],
+        }
+        if annotation.contents is not None:
+            payload["contents"] = annotation.contents
+        return payload
+
+    def _circle_annotations_by_page(self) -> dict[int, tuple[_PDFCircleAnnotation, ...]]:
+        """Return PDF circle annotations grouped by page in insertion order."""
+        annotations_by_page: dict[int, list[_PDFCircleAnnotation]] = {}
+        for annotation in self._pdf_circle_annotations:
+            annotations_by_page.setdefault(annotation.page_number, []).append(annotation)
+        return {page_number: tuple(annotations) for page_number, annotations in annotations_by_page.items()}
+
+    @staticmethod
+    def _circle_annotation_object(annotation: _PDFCircleAnnotation) -> str:
+        """Return a PDF circle annotation object dictionary."""
+        left, bottom, right, top = annotation.rect
+        rect = f"[{_number(left)} {_number(bottom)} {_number(right)} {_number(top)}]"
+        color = f"[{_number(annotation.color[0])} {_number(annotation.color[1])} {_number(annotation.color[2])}]"
+        contents = f" /Contents ({_escape_pdf_string(annotation.contents)})" if annotation.contents is not None else ""
+        return f"<< /Type /Annot /Subtype /Circle /Rect {rect} /C {color} /Border [0 0 1]{contents} >>"
+
     def create_pdf(self, filepath: str | os.PathLike[str]) -> None:
         """Create a deterministic PDF file at the requested path."""
         path = _normalize_output_filepath(filepath)
@@ -2939,6 +3021,7 @@ class DocumentPDF(Document):
         text_annotations_by_page = self._text_annotations_by_page()
         highlight_annotations_by_page = self._highlight_annotations_by_page()
         square_annotations_by_page = self._square_annotations_by_page()
+        circle_annotations_by_page = self._circle_annotations_by_page()
         page_plans = []
         for page_number, (page, content) in enumerate(rendered_pages, start=1):
             content_bytes = content.encode("latin-1")
@@ -2951,6 +3034,7 @@ class DocumentPDF(Document):
                 + tuple(text_annotations_by_page.get(page_number, ()))
                 + tuple(highlight_annotations_by_page.get(page_number, ()))
                 + tuple(square_annotations_by_page.get(page_number, ()))
+                + tuple(circle_annotations_by_page.get(page_number, ()))
             )
             annotation_ids = list(range(object_id + 2, object_id + 2 + len(page_annotations)))
             object_id += 2 + len(page_annotations)
@@ -2987,6 +3071,8 @@ class DocumentPDF(Document):
                     writer.set_object(annotation_id, self._highlight_annotation_object(link))
                 elif isinstance(link, _PDFSquareAnnotation):
                     writer.set_object(annotation_id, self._square_annotation_object(link))
+                elif isinstance(link, _PDFCircleAnnotation):
+                    writer.set_object(annotation_id, self._circle_annotation_object(link))
                 else:  # pragma: no cover - page plans are built from closed annotation lists.
                     raise TypeError(f"Unsupported PDF annotation type: {link.__class__.__name__}")
 
@@ -3191,6 +3277,14 @@ class DocumentPDF(Document):
             color = _pdf_required_field(annotation_payload, "color", "DocumentPDF square annotation")
             contents = annotation_payload.get("contents")
             document.add_square_annotation(page_number, rect, color=color, contents=contents)  # type: ignore[arg-type]
+        for annotation_payload in _pdf_optional_sequence(payload, "circle_annotations", "DocumentPDF"):
+            if not isinstance(annotation_payload, Mapping):
+                raise TypeError("DocumentPDF circle_annotations entries must be mappings")
+            page_number = _pdf_required_field(annotation_payload, "page_number", "DocumentPDF circle annotation")
+            rect = _pdf_required_field(annotation_payload, "rect", "DocumentPDF circle annotation")
+            color = _pdf_required_field(annotation_payload, "color", "DocumentPDF circle annotation")
+            contents = annotation_payload.get("contents")
+            document.add_circle_annotation(page_number, rect, color=color, contents=contents)  # type: ignore[arg-type]
         return document
 
     @property
@@ -3236,6 +3330,10 @@ class DocumentPDF(Document):
         if self._pdf_square_annotations:
             document_payload["square_annotations"] = [
                 self._square_annotation_payload(annotation) for annotation in self._pdf_square_annotations
+            ]
+        if self._pdf_circle_annotations:
+            document_payload["circle_annotations"] = [
+                self._circle_annotation_payload(annotation) for annotation in self._pdf_circle_annotations
             ]
         return {"DocumentPDF": document_payload}
 

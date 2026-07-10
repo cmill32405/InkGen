@@ -35,6 +35,7 @@ nav:
       - ADR-0016 PDF Square Annotations: adr/0016-pdf-square-annotations.md
       - ADR-0017 PDF Group Clip Paths: adr/0017-pdf-group-clip-paths.md
       - ADR-0018 PDF Group Clip Rules: adr/0018-pdf-group-clip-rules.md
+      - ADR-0019 PDF Circle Annotations: adr/0019-pdf-circle-annotations.md
   - Proof Notes:
       - Grammar Truth: proofs/grammar-truth.md
       - Extraction Truth Contract: proofs/extraction-truth-contract.md

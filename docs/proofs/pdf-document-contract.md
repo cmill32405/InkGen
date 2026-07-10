@@ -5,7 +5,7 @@ It covers group traversal in rendered PDF bytes, extraction truth, grammar truth
 when a layer contains repeated semantic labels, the public PDF file-writer path
 boundary, PDF page-structure metadata, flat/nested PDF outlines/bookmarks, URI
 link annotations, internal page link annotations, named destinations, text
-annotations, highlight annotations, and square annotations.
+annotations, highlight annotations, square annotations, and circle annotations.
 
 ## Scope
 
@@ -44,6 +44,9 @@ The slice covers:
 - `DocumentPDF.add_square_annotation()`
 - `DocumentPDF.clear_square_annotations()`
 - `DocumentPDF.square_annotations()`
+- `DocumentPDF.add_circle_annotation()`
+- `DocumentPDF.clear_circle_annotations()`
+- `DocumentPDF.circle_annotations()`
 - `DocumentPDF.to_pdf_bytes()`
 - `DocumentPDF.create_from_dict()`
 - `DocumentPDF.parameters`
@@ -88,6 +91,8 @@ Affected surface:
   annotation contract.
 - `docs/adr/0016-pdf-square-annotations.md`: accepted ADR for the square
   annotation contract.
+- `docs/adr/0019-pdf-circle-annotations.md`: accepted ADR for the circle
+  annotation contract.
 
 Incoming dependencies:
 
@@ -120,6 +125,8 @@ Incoming dependencies:
   them.
 - Callers can depend on `DocumentPDF.add_square_annotation()` to create PDF
   square annotations on existing pages, and on serialization to preserve them.
+- Callers can depend on `DocumentPDF.add_circle_annotation()` to create PDF
+  circle annotations on existing pages, and on serialization to preserve them.
 
 Outgoing dependencies:
 
@@ -147,6 +154,9 @@ Outgoing dependencies:
   page-number validation, page-box rectangle validator, literal string escaping,
   and local RGB color validation; no dependency was added.
 - Square annotations use the same local PDF object writer, existing page-number
+  validation, page-box rectangle validator, literal string escaping, and local
+  RGB color validation; no dependency was added.
+- Circle annotations use the same local PDF object writer, existing page-number
   validation, page-box rectangle validator, literal string escaping, and local
   RGB color validation; no dependency was added.
 
@@ -213,6 +223,10 @@ Before/after edge changes:
   annotation list. Insertions and removals shift or delete annotation source
   pages. `to_pdf_bytes()` emits `/Subtype /Square` annotation objects in page
   `/Annots` arrays after highlight annotations.
+- After the circle annotation update, `DocumentPDF` owns a flat ordered circle
+  annotation list. Insertions and removals shift or delete annotation source
+  pages. `to_pdf_bytes()` emits `/Subtype /Circle` annotation objects in page
+  `/Annots` arrays after square annotations.
 
 Cycle/layer/coupling/redundancy result:
 
@@ -239,7 +253,7 @@ Cycle/layer/coupling/redundancy result:
 - Named destination metadata is local to `DocumentPDF`; generic non-text
   annotations, tagged PDF, and richer annotation appearances remain deferred
   until there is a concrete fixture need.
-- Text, highlight, and square annotation metadata is local to `DocumentPDF`;
+- Text, highlight, square, and circle annotation metadata is local to `DocumentPDF`;
   file attachments, stamps, widgets, replies, rich appearances, fill colors,
   and other annotation subtypes remain deferred until there is a concrete
   fixture need.
@@ -267,6 +281,8 @@ ADR/rule impact:
 - ADR-0013 records the highlight annotation decision because this slice adds
   public API and serialized parameters.
 - ADR-0016 records the square annotation decision because this slice adds public
+  API and serialized parameters.
+- ADR-0019 records the circle annotation decision because this slice adds public
   API and serialized parameters.
 
 ## Domain Definitions
@@ -394,6 +410,9 @@ ADR/rule impact:
 | Square annotations | Emit deterministic `/Subtype /Square` annotation objects and round-trip through parameters | PO-PDFDOC-037 | square annotation render/round-trip test | mutation target |
 | Square annotation page/index shifts | Insert/remove pages shift or delete square annotation pages with page indices | PO-PDFDOC-038 | square annotation page mutation test | mutation target |
 | Serialized square annotation metadata | Reject malformed square annotation payloads before rendering | PO-PDFDOC-039 | serialized square annotation rejection test | mutation target |
+| Circle annotations | Emit deterministic `/Subtype /Circle` annotation objects and round-trip through parameters | PO-PDFDOC-040 | circle annotation render/round-trip test | pass with equivalent survivors |
+| Circle annotation page/index shifts | Insert/remove pages shift or delete circle annotation pages with page indices | PO-PDFDOC-041 | circle annotation page mutation test | pass with equivalent survivors |
+| Serialized circle annotation metadata | Reject malformed circle annotation payloads before rendering | PO-PDFDOC-042 | serialized circle annotation rejection test | pass with equivalent survivors |
 | Non-PDF group in a PDF page | Continue to fail loudly | Existing PDF generator test | killed |
 | Private layer storage mutation | Excluded from public contract | Explicit exclusion | Not applicable |
 
@@ -414,7 +433,7 @@ ADR/rule impact:
 | Golden artifact/visual | yes | PDF content stream is a generated artifact. | content-stream assertions |
 | Regression | yes | This closes the duplicate-label traversal regression. | dedicated tests |
 | Serialized payload | yes | Page labels and boxes are persisted in document parameters. | render/round-trip and malformed-payload tests |
-| Navigation metadata | yes | Flat/nested PDF outlines, URI links, internal page links, named destinations, text annotations, highlight annotations, and square annotations add document navigation/comment objects and page annotation arrays. | outline, URI link, page link, named destination, text annotation, highlight annotation, and square annotation render/round-trip tests |
+| Navigation metadata | yes | Flat/nested PDF outlines, URI links, internal page links, named destinations, text annotations, highlight annotations, square annotations, and circle annotations add document navigation/comment objects and page annotation arrays. | outline, URI link, page link, named destination, text annotation, highlight annotation, square annotation, and circle annotation render/round-trip tests |
 
 ## Mutation Testing Gate
 
@@ -747,6 +766,28 @@ Current result after the square annotation update:
     `annotation.page_number > page_number` to `>=`. The comprehension filters
     `annotation.page_number != page_number` before evaluating the output
     expression, so equality is excluded from the expression domain.
+- Gate result: pass with documented equivalent survivors.
+
+Current result after the circle annotation update:
+
+- Tool: Cosmic Ray 8.4.6.
+- Config: `tests/mutation/pdf_document_circle_annotation_cosmic_ray.toml`.
+- Filter:
+  `tests/mutation/filter_pdf_document_circle_annotation_work_items.py`.
+- Test selection: focused PDF document, factory payload, and PDF generator tests.
+- Raw work items: 5399.
+- Proof-critical work items after filter: 145.
+- Killed mutants: 143.
+- Equivalent survivors: 2.
+- Surviving equivalent mutations:
+  - `_shift_pdf_page_metadata_for_removal()` line 2542 changed
+    `annotation.page_number > page_number` to `>=`. The comprehension filters
+    `annotation.page_number != page_number` before evaluating the output
+    expression, so equality is excluded from the expression domain.
+  - `to_pdf_bytes()` line 3061 changed `zip(annotation_ids, page_annotations,
+    strict=True)` to `strict=False`. `annotation_ids` is constructed from
+    `len(page_annotations)` immediately before the loop, so both sequences have
+    the same length by construction in the closed page-plan path.
 - Gate result: pass with documented equivalent survivors.
 
 ## PO-PDFDOC-001: PDF Rendering Traverses Every Stored Group
@@ -1683,4 +1724,83 @@ separate test proves missing optional contents hydrate with defaults.
 ### Conclusion
 
 Proven for serialized square annotations in the declared payload domain, with
+mutation verification documented above.
+
+## PO-PDFDOC-040: PDF Circle Annotations Emit And Round Trip
+
+### Claim
+
+`DocumentPDF` emits deterministic PDF circle annotations, stores every same-page
+circle annotation in the page `/Annots` array after existing link, text,
+highlight, and square annotations, preserves deterministic bytes, and
+round-trips circle annotations through `parameters` and `create_from_dict()`.
+
+### Proof Method
+
+`add_circle_annotation()` validates page number, rectangle bounds, border color,
+and optional contents before storing a `_PDFCircleAnnotation`. `to_pdf_bytes()`
+groups circles by page, allocates one annotation object per entry, appends their
+IDs to page `/Annots` arrays after URI/page/named-destination links, text
+annotations, highlight annotations, and square annotations, and emits
+`/Subtype /Circle` dictionaries with `/Rect`, `/C`, `/Border [0 0 1]`, and
+optional `/Contents`. Tests parse PDF objects, verify same-page annotation
+ordering, exact rectangle bytes, color bytes, border bytes, escaped contents
+strings, deterministic repeated rendering, and serialization round-trip
+equality.
+
+### Counterexamples And Exclusions
+
+Rich appearance streams, fill colors, custom border styles, annotation replies,
+widgets, other annotation subtypes, tagged PDF structure, and non-Latin-1
+contents are excluded from this circle annotation slice.
+
+### Conclusion
+
+Proven for rectangular Latin-1 PDF circle annotations in the declared PDF
+document domain, with mutation verification documented above.
+
+## PO-PDFDOC-041: PDF Circle Annotations Follow Page Mutations
+
+### Claim
+
+When pages are inserted or removed, circle annotation source pages stay aligned
+with the same logical pages after the mutation, and annotations tied to removed
+pages are deleted.
+
+### Proof Method
+
+`DocumentPDF.add_page()` and `DocumentPDF.remove_page()` route through the PDF
+metadata shift helpers. The circle annotation update extends those helpers to
+increment source pages at or after insertion points, decrement source pages
+after removed pages, and drop annotations whose source page matches the removed
+page. Tests include annotations before, on, and after the mutation point, plus a
+large page-number removal case to prove value equality rather than object
+identity.
+
+### Conclusion
+
+Proven for page indices admitted by the `DocumentPDF` public page mutation
+methods, with the equivalent mutation survivor documented above.
+
+## PO-PDFDOC-042: Serialized Circle Annotation Metadata Fails Explicitly
+
+### Claim
+
+Malformed serialized `circle_annotations` payloads are rejected during
+`DocumentPDF.create_from_dict()` before any rendered PDF can be produced from
+bad circle annotation metadata.
+
+### Proof Method
+
+`create_from_dict()` reads optional circle annotation sequences through
+`_pdf_optional_sequence()`, requires each entry to be a mapping, requires
+`page_number`, `rect`, and `color`, and delegates to `add_circle_annotation()`
+for page, rectangle, color, and contents validation. Tests mutate a valid
+payload into non-sequence containers, non-mapping entries, missing required
+fields, missing pages, invalid rectangles, invalid colors, and empty contents. A
+separate test proves missing optional contents hydrate with defaults.
+
+### Conclusion
+
+Proven for serialized circle annotations in the declared payload domain, with
 mutation verification documented above.

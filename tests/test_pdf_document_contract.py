@@ -843,6 +843,189 @@ def test_document_pdf_rejects_invalid_serialized_square_annotation_metadata() ->
     assert recreated.square_annotations() == ({"page_number": 1, "rect": [1.0, 2.0, 30.0, 40.0], "color": [0.2, 0.4, 0.6]},)
 
 
+@pytest.mark.condition("PDF-DOC-CIRCLE-ANNOTATION-P3")
+def test_document_pdf_emits_circle_annotations_and_round_trips() -> None:
+    """PDF-DOC-CIRCLE-ANNOTATION-P3: Circle annotations render and round-trip."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    document.add_page()
+    document.add_square_annotation(1, [0.0, 0.0, 4.0, 4.0])
+    document.add_circle_annotation(1, [5.0, 6.0, 20.0, 25.0], color="#336699", contents="Oval (A)")
+    document.add_circle_annotation(2, [0.0, 0.0, 100.0, 80.0])
+    document.add_circle_annotation(2, [10.0, 10.0, 20.0, 20.0], color=[0.1234564, 0.2, 0.3])
+
+    payload = document.to_pdf_bytes()
+    recreated = DocumentPDF.create_from_dict(document.parameters)
+    objects = _pdf_objects(payload)
+    annotation_refs = _annotation_refs_by_page(payload)
+    annotation_ids = [annotation_id for page_refs in annotation_refs for annotation_id in page_refs]
+
+    assert payload == document.to_pdf_bytes()
+    assert [len(page_refs) for page_refs in annotation_refs] == [2, 2]
+    assert b"/Subtype /Square" in objects[annotation_ids[0]]
+    assert b"/Subtype /Circle" in objects[annotation_ids[1]]
+    assert b"/Rect [5 6 20 25]" in objects[annotation_ids[1]]
+    assert b"/C [0.2 0.4 0.6]" in objects[annotation_ids[1]]
+    assert b"/Border [0 0 1]" in objects[annotation_ids[1]]
+    assert b"/Contents (Oval \\(A\\))" in objects[annotation_ids[1]]
+    assert b"/Subtype /Circle" in objects[annotation_ids[2]]
+    assert b"/Rect [0 0 100 80]" in objects[annotation_ids[2]]
+    assert b"/C [1 0 0]" in objects[annotation_ids[2]]
+    assert b"/Subtype /Circle" in objects[annotation_ids[3]]
+    assert b"/C [0.123456 0.2 0.3]" in objects[annotation_ids[3]]
+    assert sorted(objects) == list(range(1, max(objects) + 1))
+    assert document.circle_annotations() == (
+        {"page_number": 1, "rect": [5.0, 6.0, 20.0, 25.0], "color": [0.2, 0.4, 0.6], "contents": "Oval (A)"},
+        {"page_number": 2, "rect": [0.0, 0.0, 100.0, 80.0], "color": [1.0, 0.0, 0.0]},
+        {"page_number": 2, "rect": [10.0, 10.0, 20.0, 20.0], "color": [0.123456, 0.2, 0.3]},
+    )
+    assert recreated.parameters == document.parameters
+    assert recreated.to_pdf_bytes() == payload
+
+
+@pytest.mark.condition("PDF-DOC-CIRCLE-ANNOTATION-P3")
+def test_document_pdf_rejects_invalid_circle_annotation_metadata() -> None:
+    """PDF-DOC-CIRCLE-ANNOTATION-P3: Circle metadata fails at explicit boundaries."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+
+    with pytest.raises(ValueError, match="Position must correlate"):
+        document.add_circle_annotation(2, [0.0, 0.0, 1.0, 1.0])
+    with pytest.raises(TypeError):
+        document.add_circle_annotation(1, [0.0, 0.0, 1.0, 1.0], "#ff0000")  # type: ignore[misc]
+
+    invalid_rectangles = [
+        "0 0 1 1",
+        [0.0, 0.0, 1.0],
+        [True, 0.0, 1.0, 1.0],
+        [0.0, 0.0, float("nan"), 1.0],
+        [0.0, 0.0, 0.0, 1.0],
+        [-1.0, 0.0, 1.0, 1.0],
+        [0.0, 0.0, 101.0, 1.0],
+    ]
+    for rect in invalid_rectangles:
+        with pytest.raises((TypeError, ValueError)):
+            document.add_circle_annotation(1, rect)  # type: ignore[arg-type]
+        assert document.circle_annotations() == ()
+
+    invalid_colors = [
+        "",
+        "red",
+        "#12345",
+        "#12345g",
+        "#3366990",
+        None,
+        object(),
+        [1.0, 0.0],
+        [1.0, 0.0, 0.0, 0.0],
+        [1.0, True, 0.0],
+        [-0.1, 0.0, 0.0],
+        [1.1, 0.0, 0.0],
+        [float("nan"), 0.0, 0.0],
+    ]
+    for color in invalid_colors:
+        with pytest.raises((TypeError, ValueError)):
+            document.add_circle_annotation(1, [0.0, 0.0, 1.0, 1.0], color=color)  # type: ignore[arg-type]
+        assert document.circle_annotations() == ()
+
+    for contents in [object(), "", "not latin \u0100"]:
+        with pytest.raises((TypeError, ValueError)):
+            document.add_circle_annotation(1, [0.0, 0.0, 1.0, 1.0], contents=contents)  # type: ignore[arg-type]
+        assert document.circle_annotations() == ()
+
+    document.add_circle_annotation(1, [0.0, 0.0, 1.0, 1.0])
+    document.clear_circle_annotations()
+
+    assert document.circle_annotations() == ()
+    assert "circle_annotations" not in document.parameters["DocumentPDF"]
+    assert b"/Annots" not in document.to_pdf_bytes()
+
+
+@pytest.mark.condition("PDF-DOC-CIRCLE-ANNOTATION-P3")
+def test_document_pdf_circle_annotations_track_page_insertions_and_removals() -> None:
+    """PDF-DOC-CIRCLE-ANNOTATION-P3: Circle annotations stay aligned with page mutations."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    document.add_page()
+    document.add_page()
+    document.add_circle_annotation(1, [1.0, 1.0, 10.0, 10.0], color="#ff0000")
+    document.add_circle_annotation(2, [2.0, 2.0, 20.0, 20.0], color="#00ff00", contents="middle")
+    document.add_circle_annotation(3, [3.0, 3.0, 30.0, 30.0], color="#0000ff")
+
+    document.add_page(position=2)
+
+    assert document.circle_annotations() == (
+        {"page_number": 1, "rect": [1.0, 1.0, 10.0, 10.0], "color": [1.0, 0.0, 0.0]},
+        {
+            "page_number": 3,
+            "rect": [2.0, 2.0, 20.0, 20.0],
+            "color": [0.0, 1.0, 0.0],
+            "contents": "middle",
+        },
+        {"page_number": 4, "rect": [3.0, 3.0, 30.0, 30.0], "color": [0.0, 0.0, 1.0]},
+    )
+
+    document.remove_page(3)
+
+    assert document.circle_annotations() == (
+        {"page_number": 1, "rect": [1.0, 1.0, 10.0, 10.0], "color": [1.0, 0.0, 0.0]},
+        {"page_number": 3, "rect": [3.0, 3.0, 30.0, 30.0], "color": [0.0, 0.0, 1.0]},
+    )
+
+    document.remove_page(1)
+
+    assert document.circle_annotations() == ({"page_number": 2, "rect": [3.0, 3.0, 30.0, 30.0], "color": [0.0, 0.0, 1.0]},)
+
+
+@pytest.mark.condition("PDF-DOC-CIRCLE-ANNOTATION-P3")
+def test_document_pdf_circle_annotations_use_value_equality_for_large_page_removal() -> None:
+    """PDF-DOC-CIRCLE-ANNOTATION-P3: Circle removal uses page-number value equality."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    for _ in range(260):
+        document.add_page()
+    document.add_circle_annotation(1, [1.0, 1.0, 10.0, 10.0])
+    document.add_circle_annotation(int("260"), [2.0, 2.0, 20.0, 20.0])
+
+    document.remove_page(int("260"))
+
+    assert document.pages == 259
+    assert document.circle_annotations() == ({"page_number": 1, "rect": [1.0, 1.0, 10.0, 10.0], "color": [1.0, 0.0, 0.0]},)
+
+
+@pytest.mark.condition("PDF-DOC-CIRCLE-ANNOTATION-P3")
+def test_document_pdf_rejects_invalid_serialized_circle_annotation_metadata() -> None:
+    """PDF-DOC-CIRCLE-ANNOTATION-P3: Serialized circles validate before rendering."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    document.add_circle_annotation(1, [1.0, 2.0, 30.0, 40.0], color="#336699", contents="note")
+
+    invalid_payloads = []
+    for mutator in [
+        lambda data: data["DocumentPDF"].__setitem__("circle_annotations", "bad"),
+        lambda data: data["DocumentPDF"].__setitem__("circle_annotations", [object()]),
+        lambda data: data["DocumentPDF"]["circle_annotations"][0].pop("page_number"),
+        lambda data: data["DocumentPDF"]["circle_annotations"][0].pop("rect"),
+        lambda data: data["DocumentPDF"]["circle_annotations"][0].pop("color"),
+        lambda data: data["DocumentPDF"]["circle_annotations"][0].__setitem__("page_number", 2),
+        lambda data: data["DocumentPDF"]["circle_annotations"][0].__setitem__("rect", [0.0, 0.0, 0.0, 1.0]),
+        lambda data: data["DocumentPDF"]["circle_annotations"][0].__setitem__("color", [2.0, 0.0, 0.0]),
+        lambda data: data["DocumentPDF"]["circle_annotations"][0].__setitem__("contents", ""),
+    ]:
+        payload = deepcopy(document.parameters)
+        mutator(payload)
+        invalid_payloads.append(payload)
+
+    for payload in invalid_payloads:
+        with pytest.raises((TypeError, ValueError)):
+            DocumentPDF.create_from_dict(payload)
+
+    missing_optional_payload = deepcopy(document.parameters)
+    missing_optional_payload["DocumentPDF"]["circle_annotations"][0].pop("contents")
+    recreated = DocumentPDF.create_from_dict(missing_optional_payload)
+
+    assert recreated.circle_annotations() == ({"page_number": 1, "rect": [1.0, 2.0, 30.0, 40.0], "color": [0.2, 0.4, 0.6]},)
+
+
 @pytest.mark.condition("PDF-DOC-TEXT-ANNOTATION-P3")
 def test_document_pdf_rejects_invalid_serialized_text_annotation_metadata() -> None:
     """PDF-DOC-TEXT-ANNOTATION-P3: Serialized text annotations validate before rendering."""
