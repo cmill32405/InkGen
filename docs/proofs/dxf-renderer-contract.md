@@ -4,7 +4,8 @@ This note applies the InkGen Definition of Done to the DXF-P1 renderer slice.
 It covers dependency-free ASCII DXF output for renderer-neutral drawing recipes,
 coordinate conversion, entity dispatch, rounded rectangle sampling, path closure
 flags, text/circle entities, image sidecar references, file output guards, and
-PDF-sampled geometry reuse.
+PDF-sampled geometry reuse. The HATCH hardening update adds deterministic
+solid-fill entities for closed filled drawing shapes.
 
 ## Scope
 
@@ -20,6 +21,8 @@ The slice covers:
 - `_rectangle_points()` and `_append_corner_arc()`
 - `_line_entity()`, `_lwpolyline_entity()`, `_text_entity()`, and
   `_circle_entity()`
+- `_closed_shape_entities()`, `_style_has_fill()`, `_circle_hatch_points()`,
+  and `_hatch_entity()`
 - `_image_entity()`, `_dxf_objects_section()`, `_DXFImageRegistry`
 - `_format_value()`
 
@@ -34,7 +37,8 @@ fail before `_format_value()` can stringify them into artifact text. The raster
 image update adds IMAGE entities, IMAGEDEF objects, and deterministic PNG
 sidecar writes for `ImageDrawing` components. The style update adds DXF
 true-color and lineweight group codes for drawing entities that carry a
-`DrawingStyle` stroke.
+`DrawingStyle` stroke. The HATCH update adds solid-fill HATCH entities for
+closed shapes whose `DrawingStyle.fill` is not `"none"`.
 
 ## Architecture Impact
 
@@ -56,6 +60,8 @@ Affected surface:
   gate.
 - `tests/mutation/filter_dxf_style_work_items.py`: proof-critical stroke style
   filter.
+- `tests/mutation/dxf_hatch_cosmic_ray.toml`: solid-fill HATCH mutation gate.
+- `tests/mutation/filter_dxf_hatch_work_items.py`: proof-critical HATCH filter.
 - `docs/proofs/dxf-renderer-contract.md`: proof note.
 
 Incoming dependencies:
@@ -90,6 +96,9 @@ Before/after edge changes:
   not add a dependency or change valid DXF entity generation.
 - The raster image update consumes existing image assets and does not add an
   external package dependency.
+- The HATCH update consumes existing `DrawingStyle.fill` state attached to
+  neutral drawing primitives and does not add a new dependency or document
+  output ownership edge.
 
 Cycle/layer/coupling/redundancy result:
 
@@ -100,7 +109,8 @@ Cycle/layer/coupling/redundancy result:
   geometry and is recorded in `docs/dependency-map.md`.
 - Redundancy check: DXF uses one numeric formatter, one LWPOLYLINE emitter for
   polyline-like geometry, and one stroke style-pair helper. Raster sidecar
-  filenames and handles come from one deterministic registry.
+  filenames and handles come from one deterministic registry. Solid HATCH
+  output uses one closed-shape wrapper and one HATCH serializer.
 
 ADR/rule impact:
 
@@ -134,7 +144,14 @@ ADR/rule impact:
 - DXF drawing stroke widths are emitted as group code `370` lineweights in
   hundredths of a millimeter, snapped to the nearest standard DXF lineweight.
 - Drawing styles with `stroke="none"` omit DXF stroke color and lineweight
-  group codes. DXF fill/HATCH entities are out of scope for this slice.
+  group codes.
+- DXF drawing fills are emitted as solid HATCH entities for closed rectangles,
+  polygonal drawings, regular polygons, closed paths, and circles when
+  `DrawingStyle.fill != "none"`.
+- DXF HATCH fill colors are emitted as group code `420` true-color values from
+  validated `#rrggbb` fills.
+- Open paths, lines, text, images, fill opacity/alpha, gradients, patterns, and
+  associative boundary handles are outside the DXF HATCH slice.
 
 ## Comprehensiveness Matrix
 
@@ -150,6 +167,7 @@ ADR/rule impact:
 | Text and circle entities | Preserve layer, coordinates, height/radius, and newline normalization | PO-DXF-007 | text and circle entity tests | killed |
 | Image entities | Emit IMAGE/IMAGEDEF references, write PNG sidecars, and deduplicate identical image assets | PO-DXF-010 | `test_dxf_document_exports_image_references_and_writes_sidecars`, `test_dxf_document_deduplicates_identical_image_sidecars`, `test_dxf_document_assigns_distinct_image_sidecars_and_handles` | raster image gate killed meaningful mutants; equivalent survivors documented |
 | Drawing stroke style | Emit stroke true-color and standard lineweight group codes through live DXF document paths | PO-DXF-011 | `test_dxf_entities_emit_drawing_style_color_and_lineweight`, `test_dxf_style_lineweight_uses_standard_values_and_disabled_stroke_omits_codes` | DXF style gate |
+| Drawing fill style | Emit deterministic solid HATCH entities for closed filled drawing shapes and omit them for fill `none` | PO-DXF-012 | `test_dxf_filled_closed_shapes_emit_solid_hatch_entities`, `test_dxf_fill_none_omits_hatch_entities` | DXF HATCH gate |
 | Unsupported groups/components | Fail loudly | Existing `test_dxf_document_rejects_unsupported_groups_and_components` | killed |
 | Numeric formatting | Integer-like floats and fixed precision serialize deterministically | Formatting tests and exact entity strings | equivalent survivors documented |
 
@@ -158,7 +176,7 @@ ADR/rule impact:
 | Test class | Applicable? | Reason | Evidence |
 |---|---|---|---|
 | Unit | yes | Entity helpers and numeric formatting are deterministic. | `tests/test_dxf_contract.py` |
-| Behavioral/condition | yes | The slice defines DXF-P1 renderer behavior. | Tests are marked `@pytest.mark.condition("DXF-P1")`. |
+| Behavioral/condition | yes | The slice defines DXF-P1 renderer behavior and DXF-HATCH-P3 fill behavior. | Tests are marked `@pytest.mark.condition("DXF-P1")` and `@pytest.mark.condition("DXF-HATCH-P3")`. |
 | Failure-mode | yes | Bad coordinates, bad canvas heights, bad layer overrides, bad group types, unsupported components, malformed output paths, and missing directories must fail. | DXF generator and contract tests |
 | Integration/live-path | yes | `DXFDocument.add_group()` and `to_dxf_string()` are exercised with neutral drawing groups. | document layer/text tests and existing DXF generator tests |
 | Contract/API compatibility | yes | Public `DXFDocument`/`DXFRenderContext` behavior and private proof-critical entity contracts are pinned. | focused DXF gate |
@@ -247,6 +265,29 @@ Current result after the stroke style-emission update:
     `style.stroke >= "none"` is equivalent for the validated `DrawingStyle`
     domain because non-`none` stroke colors are normalized to `#rrggbb`, and
     `#` sorts before `n`.
+
+Current result after the HATCH fill update:
+
+- Tool: Cosmic Ray 8.4.6.
+- Config: `tests/mutation/dxf_hatch_cosmic_ray.toml`.
+- Filter: `tests/mutation/filter_dxf_hatch_work_items.py`.
+- Test selection: focused DXF contract and generator tests.
+- Raw work items: 1,272.
+- Proof-critical work items after filter: 159.
+- Killed mutants: 155.
+- Equivalent survivors: 4.
+- Equivalent survivor classes:
+  - `_closed_shape_entities()` and `_hatch_entity()` mutating keyword-only `*`
+    to positional-only `/` is equivalent for the live renderer path because the
+    helpers are private and all internal calls pass `style` by keyword.
+  - `_component_to_entities()` mutating path closure `== "Z"` to `>= "Z"` is
+    equivalent for valid `PathCommand` commands because `"Z"` is the only valid
+    command greater than or equal to `"Z"`.
+  - `_style_has_fill()` mutating `style.fill != "none"` to
+    `style.fill < "none"` is equivalent for validated `DrawingStyle` fills
+    because non-`none` fills are normalized to `#rrggbb`, and `#` sorts before
+    `n`.
+- Gate result: pass with documented equivalent survivors.
 
 Equivalent survivor classes:
 
@@ -517,12 +558,49 @@ standard lineweight snapping, and assert disabled strokes omit both style codes.
 
 ### Counterexamples And Exclusions
 
-DXF fill output would require HATCH or other filled-entity semantics and is not
-claimed here. Stroke opacity, dash arrays, caps, joins, and miter limits also
-remain outside the DXF style domain until there is an explicit DXF contract for
-those features.
+Stroke opacity, dash arrays, caps, joins, and miter limits remain outside the
+DXF stroke style domain until there is an explicit DXF contract for those
+features. Fill/HATCH behavior is covered separately by `PO-DXF-012`.
 
 ### Conclusion
 
 Behavioral tests and scoped mutation prove the stated domain with one
 equivalent survivor documented above.
+
+## PO-DXF-012: Drawing Fill Style Emits Solid HATCH Entities
+
+### Claim
+
+DXF drawing output emits deterministic solid-fill HATCH entities for closed
+filled rectangle, polygon, regular-polygon, path, and circle drawings, while
+omitting HATCH entities when `DrawingStyle.fill == "none"` or when a drawing is
+not a closed fillable shape.
+
+### Proof Method
+
+`DXFDocument.add_group()` routes closed fillable neutral drawing primitives
+through `_closed_shape_entities()` or the circle/path branches in
+`_component_to_entities()`. `_style_has_fill()` admits only styles whose fill is
+not `"none"`. `_hatch_entity()` emits a SOLID HATCH with the existing layer,
+validated fill true-color group code `420`, one closed polyline boundary path,
+deterministic vertex count, y-axis conversion through `DXFRenderContext`, and a
+deterministic seed point. Circle fills use `_circle_hatch_points()` to emit a
+32-point closed boundary for the HATCH while preserving the visible CIRCLE
+entity.
+
+Tests exercise the public document path with rectangle, polygon, regular
+polygon, closed path, circle, line, and open path inputs. They assert exact
+HATCH counts, fill true-color values, boundary vertex counts, layer emission,
+SOLID pattern codes, coordinate flipping, seed points, and absence of HATCH
+entities when fill is disabled.
+
+### Counterexamples And Exclusions
+
+Open paths, lines, text, images, alpha/fill opacity, gradients, patterns,
+associative boundary handles, and CAD-specific hatch pattern libraries are
+outside this solid-fill slice.
+
+### Conclusion
+
+Behavioral tests and scoped mutation prove the stated solid-fill HATCH domain
+with mutation result documented above.

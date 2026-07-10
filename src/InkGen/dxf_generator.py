@@ -197,21 +197,27 @@ def _component_to_entities(
         return [_line_entity(component.point_1, component.point_2, context, style=component.style)]
     if isinstance(component, RectangleDrawing):
         points = _rectangle_points(component)
-        return [_lwpolyline_entity(points, context, closed=True, style=component.style)]
+        return _closed_shape_entities(points, context, style=component.style)
     if isinstance(component, CircleDrawing):
-        return [_circle_entity(component, context)]
+        entities = [_circle_entity(component, context)]
+        if _style_has_fill(component.style):
+            entities.append(_hatch_entity(_circle_hatch_points(component), context, style=component.style))
+        return entities
     if isinstance(component, PolygonalDrawing):
-        return [_lwpolyline_entity(component.points, context, closed=True, style=component.style)]
+        return _closed_shape_entities(component.points, context, style=component.style)
     if isinstance(component, RegularPolygonDrawing):
         concrete = component.to_component(OutputFormat.PDF)
-        return [_lwpolyline_entity(concrete.points, context, closed=True, style=component.style)]
+        return _closed_shape_entities(concrete.points, context, style=component.style)
     if isinstance(component, (ArcDrawing, QuadraticBezierDrawing, CubicBezierDrawing)):
         concrete = component.to_component(OutputFormat.PDF)
         return [_lwpolyline_entity(concrete.points, context, closed=False, style=component.style)]
     if isinstance(component, PathDrawing):
         concrete = component.to_component(OutputFormat.PDF)
         closed = bool(component.commands and component.commands[-1].type.upper() == "Z")
-        return [_lwpolyline_entity(concrete.points, context, closed=closed, style=component.style)]
+        entities = [_lwpolyline_entity(concrete.points, context, closed=closed, style=component.style)]
+        if closed and _style_has_fill(component.style):
+            entities.append(_hatch_entity(concrete.points, context, style=component.style))
+        return entities
     if isinstance(component, TextDrawing):
         return [_text_entity(component, context)]
     if isinstance(component, ImageDrawing):
@@ -220,6 +226,20 @@ def _component_to_entities(
         definition = image_registry.register(component.image)
         return [_image_entity(component, definition, context)]
     raise TypeError(f"Unsupported DXF component: {component.__class__.__name__}")
+
+
+def _closed_shape_entities(
+    points: list[tuple[float, float]] | tuple[tuple[float, float], ...],
+    context: DXFRenderContext,
+    *,
+    style: DrawingStyle,
+) -> list[str]:
+    """Return boundary and optional solid-fill HATCH entities for a closed shape."""
+    point_list = list(points)
+    entities = [_lwpolyline_entity(point_list, context, closed=True, style=style)]
+    if _style_has_fill(style):
+        entities.append(_hatch_entity(point_list, context, style=style))
+    return entities
 
 
 def _rectangle_points(component: RectangleDrawing) -> list[tuple[float, float]]:
@@ -343,6 +363,63 @@ def _circle_entity(component: CircleDrawing, context: DXFRenderContext) -> str:
             (40, component.radius),
         ]
     )
+
+
+def _style_has_fill(style: DrawingStyle | None) -> bool:
+    """Return whether a drawing style requests a DXF solid fill."""
+    return style is not None and style.fill != "none"
+
+
+def _circle_hatch_points(component: CircleDrawing) -> list[tuple[float, float]]:
+    """Return sampled circle boundary points for a solid-fill HATCH."""
+    return [
+        (
+            round(component.position[0] + component.radius * math.cos(math.tau * index / 32.0), 6),
+            round(component.position[1] + component.radius * math.sin(math.tau * index / 32.0), 6),
+        )
+        for index in range(32)
+    ]
+
+
+def _hatch_entity(points: list[tuple[float, float]], context: DXFRenderContext, *, style: DrawingStyle) -> str:
+    """Return a solid-fill DXF HATCH entity for a closed point loop."""
+    pairs: list[tuple[int, object]] = [
+        (0, "HATCH"),
+        (8, context.layer),
+        (420, _dxf_true_color(style.fill)),
+        (100, "AcDbEntity"),
+        (100, "AcDbHatch"),
+        (10, 0.0),
+        (20, 0.0),
+        (30, 0.0),
+        (210, 0.0),
+        (220, 0.0),
+        (230, 1.0),
+        (2, "SOLID"),
+        (70, 1),
+        (71, 0),
+        (91, 1),
+        (92, 7),
+        (72, 0),
+        (73, 1),
+        (93, len(points)),
+    ]
+    for x, y in points:
+        dxf_x, dxf_y = context.point(x, y)
+        pairs.append((10, dxf_x))
+        pairs.append((20, dxf_y))
+    seed_x, seed_y = context.point(points[0][0], points[0][1])
+    pairs.extend(
+        [
+            (97, 0),
+            (75, 0),
+            (76, 1),
+            (98, 1),
+            (10, seed_x),
+            (20, seed_y),
+        ]
+    )
+    return _pairs(pairs)
 
 
 def _dxf_style_pairs(style: DrawingStyle | None) -> list[tuple[int, int]]:

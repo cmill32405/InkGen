@@ -131,7 +131,7 @@ ADR/rule impact:
 - Added renderer-neutral stroke dash/cap/join/miter fields and live SVG/PDF
   output for those fields.
 - Added DXF drawing stroke color and lineweight output for neutral drawing
-  entities. DXF fill/HATCH output remains out of scope.
+  entities. DXF solid-fill HATCH output is covered by the DXF renderer proof.
 
 ## Comprehensiveness Matrix
 
@@ -452,8 +452,9 @@ circle entities, standard lineweight snapping, and disabled-stroke omission.
 
 ### Counterexamples And Exclusions
 
-DXF fill/HATCH output is not included. DXF stroke opacity, dash arrays, caps,
-joins, and miter limits are not claimed in this obligation.
+DXF solid-fill HATCH output is covered by `PO-DXF-012` in the DXF renderer
+proof. DXF stroke opacity, dash arrays, caps, joins, and miter limits are not
+claimed in this obligation.
 
 ### Conclusion
 

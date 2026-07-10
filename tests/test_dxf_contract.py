@@ -20,7 +20,16 @@ from InkGen.drawing_components import (
     RegularPolygonDrawing,
     TextDrawing,
 )
-from InkGen.dxf_generator import DXFDocument, DXFRenderContext, _append_corner_arc, _component_to_entities, _format_value, _rectangle_points
+from InkGen.dxf_generator import (
+    DXFDocument,
+    DXFRenderContext,
+    _append_corner_arc,
+    _circle_hatch_points,
+    _component_to_entities,
+    _format_value,
+    _hatch_entity,
+    _rectangle_points,
+)
 from InkGen.style import DrawingStyle, Font, TextStyle
 
 
@@ -323,6 +332,94 @@ def test_dxf_style_lineweight_uses_standard_values_and_disabled_stroke_omits_cod
 
     assert _pair_values(payload, "420") == ["11259375", "66051", "263430"]
     assert _pair_values(payload, "370") == ["25", "25", "30"]
+
+
+@pytest.mark.condition("DXF-HATCH-P3")
+def test_dxf_filled_closed_shapes_emit_solid_hatch_entities() -> None:
+    """DXF-HATCH-P3: Closed filled drawing shapes emit deterministic solid HATCH entities."""
+    fill_style = DrawingStyle(f"dxf_fill_{uuid4().hex}", stroke="none", fill="#abcdef")
+    group = DrawingComponentGroup("filled")
+    group.add_component(RectangleDrawing((10.0, 20.0), 30.0, 40.0, 0.0, fill_style))
+    group.add_component(PolygonalDrawing([(0.0, 0.0), (2.0, 0.0), (1.0, 2.0)], fill_style))
+    group.add_component(RegularPolygonDrawing((5.0, 5.0), 5, 4.0, fill_style))
+    group.add_component(
+        PathDrawing(
+            fill_style,
+            [
+                PathCommand("M", [(0.0, 0.0)]),
+                PathCommand("L", [(3.0, 0.0)]),
+                PathCommand("L", [(3.0, 3.0)]),
+                PathCommand("Z", []),
+            ],
+        )
+    )
+    group.add_component(CircleDrawing((50.0, 50.0), 5.0, fill_style))
+    group.add_component(LineDrawing((0.0, 0.0), (1.0, 1.0), fill_style))
+    group.add_component(PathDrawing(fill_style, [PathCommand("M", [(0.0, 0.0)]), PathCommand("L", [(1.0, 0.0)])]))
+    document = DXFDocument(canvas_height=100.0)
+
+    document.add_group(group)
+    payload = document.to_dxf_string()
+
+    assert payload.count("\n0\nHATCH\n") == 5
+    assert _pair_values(payload, "420") == ["11259375"] * 5
+    assert _pair_values(payload, "93") == ["4", "3", "5", "3", "32"]
+    assert "\n0\nHATCH\n8\nfilled\n420\n11259375\n100\nAcDbEntity\n100\nAcDbHatch\n" in payload
+    assert "\n2\nSOLID\n" in payload
+    assert "\n91\n1\n92\n7\n72\n0\n73\n1\n93\n4\n10\n10\n20\n80\n" in payload
+    assert "\n98\n1\n10\n10\n20\n80\n" in payload
+
+
+@pytest.mark.condition("DXF-HATCH-P3")
+def test_dxf_hatch_helper_serializes_exact_boundary_codes() -> None:
+    """DXF-HATCH-P3: HATCH helper preserves required group codes and converted vertices."""
+    fill_style = DrawingStyle(f"dxf_fill_helper_{uuid4().hex}", stroke="none", fill="#abcdef")
+    context = DXFRenderContext(canvas_height=100.0, layer="filled")
+    points = [(10.0, 20.0), (40.0, 25.0), (35.0, 60.0), (12.0, 55.0)]
+
+    entity = _hatch_entity(points, context, style=fill_style)
+
+    assert entity == (
+        "0\nHATCH\n8\nfilled\n420\n11259375\n100\nAcDbEntity\n100\nAcDbHatch\n"
+        "10\n0\n20\n0\n30\n0\n210\n0\n220\n0\n230\n1\n2\nSOLID\n70\n1\n71\n0\n"
+        "91\n1\n92\n7\n72\n0\n73\n1\n93\n4\n"
+        "10\n10\n20\n80\n10\n40\n20\n75\n10\n35\n20\n40\n10\n12\n20\n45\n"
+        "97\n0\n75\n0\n76\n1\n98\n1\n10\n10\n20\n80"
+    )
+
+
+@pytest.mark.condition("DXF-HATCH-P3")
+def test_dxf_circle_hatch_points_are_deterministic() -> None:
+    """DXF-HATCH-P3: Circle HATCH sampling preserves radius, center, and ordering."""
+    circle = CircleDrawing((40.0, 50.0), 5.0, _drawing_style())
+
+    points = _circle_hatch_points(circle)
+
+    assert len(points) == 32
+    assert points[0] == (45.0, 50.0)
+    assert points[4] == (43.535534, 53.535534)
+    assert points[8] == (40.0, 55.0)
+    assert points[16] == (35.0, 50.0)
+    assert points[24] == (40.0, 45.0)
+    assert points[-1] == (44.903926, 49.024548)
+
+
+@pytest.mark.condition("DXF-HATCH-P3")
+def test_dxf_fill_none_omits_hatch_entities() -> None:
+    """DXF-HATCH-P3: Disabled fills preserve boundary output without HATCH entities."""
+    style = DrawingStyle(f"dxf_no_fill_{uuid4().hex}", stroke="#112233", fill="none")
+    group = DrawingComponentGroup("outline")
+    group.add_component(RectangleDrawing((0.0, 0.0), 2.0, 3.0, 0.0, style))
+    group.add_component(CircleDrawing((5.0, 5.0), 2.0, style))
+    document = DXFDocument()
+
+    document.add_group(group)
+    payload = document.to_dxf_string()
+
+    assert "\n0\nLWPOLYLINE\n" in payload
+    assert "\n0\nCIRCLE\n" in payload
+    assert "\n0\nHATCH\n" not in payload
+    assert _pair_values(payload, "420") == ["1122867", "1122867"]
 
 
 @pytest.mark.condition("DXF-P1")

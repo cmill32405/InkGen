@@ -168,8 +168,10 @@ renderer-neutral zoning recipe and can materialize either `ComponentGroupSVG` or
 convert arbitrary external SVG files into PDF operators.
 
 For CAD-oriented interchange, use `InkGen.dxf_generator.DXFDocument` with
-renderer-neutral drawing groups. DXF is separate from PDF because it represents
-drawing entities, not paged document graphics.
+renderer-neutral drawing groups. DXF emits drawing entities, including
+true-color stroke/lineweight group codes and solid-fill HATCH entities for
+closed filled shapes. DXF is separate from PDF because it represents drawing
+entities, not paged document graphics.
 
 The renderer-neutral drawing class system is scoped to SVG, PDF, and DXF. Flow
 documents use those same primitive groups as document blocks when DOCX, HTML,
