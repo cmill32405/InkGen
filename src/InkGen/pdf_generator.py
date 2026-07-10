@@ -139,6 +139,16 @@ class _PDFTextAnnotation:
     open: bool
 
 
+@dataclass(frozen=True)
+class _PDFHighlightAnnotation:
+    """Validated PDF highlight annotation metadata."""
+
+    page_number: int
+    rect: tuple[float, float, float, float]
+    color: tuple[float, float, float]
+    contents: str | None
+
+
 class PDFGeneratorInterface(metaclass=abc.ABCMeta):
     """Interface for components that can emit PDF content-stream operators."""
 
@@ -479,6 +489,33 @@ def _coerce_pdf_annotation_open(value: object) -> bool:
     if not isinstance(value, bool):
         raise TypeError("text annotation open must be a boolean")
     return value
+
+
+def _coerce_pdf_annotation_color(value: object) -> tuple[float, float, float]:
+    """Return a PDF RGB color tuple from a hex string or serialized RGB triple."""
+    if isinstance(value, Sequence) and not isinstance(value, str | bytes):
+        if len(value) != 3:
+            raise ValueError("annotation color RGB triples must contain three values")
+        channels = []
+        for channel in value:
+            if isinstance(channel, bool) or not isinstance(channel, int | float):
+                raise TypeError("annotation color channels must be finite numbers")
+            number = float(channel)
+            if not math.isfinite(number) or not 0.0 <= number <= 1.0:
+                raise ValueError("annotation color channels must be between 0.0 and 1.0")
+            channels.append(number)
+        return channels[0], channels[1], channels[2]
+    if not isinstance(value, str):
+        raise TypeError("annotation color must be a #rrggbb string or RGB triple")
+    if len(value) != 7 or not value.startswith("#"):
+        raise ValueError("annotation color must be a #rrggbb string")
+    try:
+        red = int(value[1:3], 16) / 255.0
+        green = int(value[3:5], 16) / 255.0
+        blue = int(value[5:7], 16) / 255.0
+    except ValueError as exc:
+        raise ValueError("annotation color must be a #rrggbb string") from exc
+    return red, green, blue
 
 
 def _coerce_pdf_link_rect(
@@ -1738,6 +1775,7 @@ class DocumentPDF(Document):
         self._pdf_named_destinations: dict[str, _PDFNamedDestination] = {}
         self._pdf_named_destination_links: list[_PDFNamedDestinationLinkAnnotation] = []
         self._pdf_text_annotations: list[_PDFTextAnnotation] = []
+        self._pdf_highlight_annotations: list[_PDFHighlightAnnotation] = []
 
     @staticmethod
     def _iter_layer_groups(layer: Layer, *, sort: bool = False) -> tuple[ComponentGroup, ...]:
@@ -1924,6 +1962,30 @@ class DocumentPDF(Document):
         """Return serialized PDF text annotations in insertion order."""
         return tuple(self._text_annotation_payload(annotation) for annotation in self._pdf_text_annotations)
 
+    def add_highlight_annotation(
+        self,
+        page_number: int,
+        rect: Sequence[float | int],
+        *,
+        color: str | Sequence[float | int] = "#ffff00",
+        contents: str | None = None,
+    ) -> None:
+        """Add a PDF highlight annotation to an existing page."""
+        page_number = self._validate_existing_position(page_number)
+        page = self.page(page_number)
+        annotation_rect = _coerce_pdf_link_rect(rect, canvas_width=page._canvas.width, canvas_height=page._canvas.height)
+        annotation_color = _coerce_pdf_annotation_color(color)
+        annotation_contents = None if contents is None else _coerce_pdf_annotation_text(contents, "highlight annotation contents")
+        self._pdf_highlight_annotations.append(_PDFHighlightAnnotation(page_number, annotation_rect, annotation_color, annotation_contents))
+
+    def clear_highlight_annotations(self) -> None:
+        """Remove all PDF highlight annotations."""
+        self._pdf_highlight_annotations.clear()
+
+    def highlight_annotations(self) -> tuple[dict[str, object], ...]:
+        """Return serialized PDF highlight annotations in insertion order."""
+        return tuple(self._highlight_annotation_payload(annotation) for annotation in self._pdf_highlight_annotations)
+
     def set_page_label(self, page_number: int, label: str | None) -> None:
         """Set or clear a PDF page label for an existing page."""
         page_number = self._validate_existing_position(page_number)
@@ -2026,6 +2088,15 @@ class DocumentPDF(Document):
             )
             for annotation in self._pdf_text_annotations
         ]
+        self._pdf_highlight_annotations = [
+            _PDFHighlightAnnotation(
+                annotation.page_number + 1 if annotation.page_number >= page_number else annotation.page_number,
+                annotation.rect,
+                annotation.color,
+                annotation.contents,
+            )
+            for annotation in self._pdf_highlight_annotations
+        ]
 
     def _shift_pdf_page_metadata_for_removal(self, page_number: int) -> None:
         """Shift PDF-specific page metadata when a page is removed."""
@@ -2102,6 +2173,16 @@ class DocumentPDF(Document):
                 annotation.open,
             )
             for annotation in self._pdf_text_annotations
+            if annotation.page_number != page_number
+        ]
+        self._pdf_highlight_annotations = [
+            _PDFHighlightAnnotation(
+                annotation.page_number - 1 if annotation.page_number > page_number else annotation.page_number,
+                annotation.rect,
+                annotation.color,
+                annotation.contents,
+            )
+            for annotation in self._pdf_highlight_annotations
             if annotation.page_number != page_number
         ]
 
@@ -2362,6 +2443,35 @@ class DocumentPDF(Document):
         contents = _escape_pdf_string(annotation.contents)
         return f"<< /Type /Annot /Subtype /Text /Rect {rect}{title} /Contents ({contents}){open_state} >>"
 
+    @staticmethod
+    def _highlight_annotation_payload(annotation: _PDFHighlightAnnotation) -> dict[str, object]:
+        """Return serialized data for a validated PDF highlight annotation."""
+        payload: dict[str, object] = {
+            "page_number": annotation.page_number,
+            "rect": list(annotation.rect),
+            "color": [round(channel, 6) for channel in annotation.color],
+        }
+        if annotation.contents is not None:
+            payload["contents"] = annotation.contents
+        return payload
+
+    def _highlight_annotations_by_page(self) -> dict[int, tuple[_PDFHighlightAnnotation, ...]]:
+        """Return PDF highlight annotations grouped by page in insertion order."""
+        annotations_by_page: dict[int, list[_PDFHighlightAnnotation]] = {}
+        for annotation in self._pdf_highlight_annotations:
+            annotations_by_page.setdefault(annotation.page_number, []).append(annotation)
+        return {page_number: tuple(annotations) for page_number, annotations in annotations_by_page.items()}
+
+    @staticmethod
+    def _highlight_annotation_object(annotation: _PDFHighlightAnnotation) -> str:
+        """Return a PDF highlight annotation object dictionary."""
+        left, bottom, right, top = annotation.rect
+        rect = f"[{_number(left)} {_number(bottom)} {_number(right)} {_number(top)}]"
+        quad_points = f"[{_number(left)} {_number(top)} {_number(right)} {_number(top)} {_number(left)} {_number(bottom)} {_number(right)} {_number(bottom)}]"
+        color = f"[{_number(annotation.color[0])} {_number(annotation.color[1])} {_number(annotation.color[2])}]"
+        contents = f" /Contents ({_escape_pdf_string(annotation.contents)})" if annotation.contents is not None else ""
+        return f"<< /Type /Annot /Subtype /Highlight /Rect {rect} /QuadPoints {quad_points} /C {color}{contents} >>"
+
     def create_pdf(self, filepath: str | os.PathLike[str]) -> None:
         """Create a deterministic PDF file at the requested path."""
         path = _normalize_output_filepath(filepath)
@@ -2487,6 +2597,7 @@ class DocumentPDF(Document):
         page_links_by_page = self._page_links_by_page()
         named_destination_links_by_page = self._named_destination_links_by_page()
         text_annotations_by_page = self._text_annotations_by_page()
+        highlight_annotations_by_page = self._highlight_annotations_by_page()
         page_plans = []
         for page_number, (page, content) in enumerate(rendered_pages, start=1):
             content_bytes = content.encode("latin-1")
@@ -2497,6 +2608,7 @@ class DocumentPDF(Document):
                 + tuple(page_links_by_page.get(page_number, ()))
                 + tuple(named_destination_links_by_page.get(page_number, ()))
                 + tuple(text_annotations_by_page.get(page_number, ()))
+                + tuple(highlight_annotations_by_page.get(page_number, ()))
             )
             annotation_ids = list(range(object_id + 2, object_id + 2 + len(page_annotations)))
             object_id += 2 + len(page_annotations)
@@ -2527,8 +2639,12 @@ class DocumentPDF(Document):
                     writer.set_object(annotation_id, self._page_link_annotation_object(link, page_ids_by_number))
                 elif isinstance(link, _PDFNamedDestinationLinkAnnotation):
                     writer.set_object(annotation_id, self._named_destination_link_annotation_object(link))
-                else:
+                elif isinstance(link, _PDFTextAnnotation):
                     writer.set_object(annotation_id, self._text_annotation_object(link))
+                elif isinstance(link, _PDFHighlightAnnotation):
+                    writer.set_object(annotation_id, self._highlight_annotation_object(link))
+                else:  # pragma: no cover - page plans are built from closed annotation lists.
+                    raise TypeError(f"Unsupported PDF annotation type: {link.__class__.__name__}")
 
         kids = " ".join(f"{page_id} 0 R" for page_id in page_ids)
         writer.set_object(pages_id, f"<< /Type /Pages /Kids [{kids}] /Count {len(page_ids)} >>")
@@ -2715,6 +2831,14 @@ class DocumentPDF(Document):
             title = annotation_payload.get("title")
             open_state = annotation_payload.get("open", False)
             document.add_text_annotation(page_number, rect, contents, title=title, open=open_state)  # type: ignore[arg-type]
+        for annotation_payload in _pdf_optional_sequence(payload, "highlight_annotations", "DocumentPDF"):
+            if not isinstance(annotation_payload, Mapping):
+                raise TypeError("DocumentPDF highlight_annotations entries must be mappings")
+            page_number = _pdf_required_field(annotation_payload, "page_number", "DocumentPDF highlight annotation")
+            rect = _pdf_required_field(annotation_payload, "rect", "DocumentPDF highlight annotation")
+            color = _pdf_required_field(annotation_payload, "color", "DocumentPDF highlight annotation")
+            contents = annotation_payload.get("contents")
+            document.add_highlight_annotation(page_number, rect, color=color, contents=contents)  # type: ignore[arg-type]
         return document
 
     @property
@@ -2753,6 +2877,10 @@ class DocumentPDF(Document):
             ]
         if self._pdf_text_annotations:
             document_payload["text_annotations"] = [self._text_annotation_payload(annotation) for annotation in self._pdf_text_annotations]
+        if self._pdf_highlight_annotations:
+            document_payload["highlight_annotations"] = [
+                self._highlight_annotation_payload(annotation) for annotation in self._pdf_highlight_annotations
+            ]
         return {"DocumentPDF": document_payload}
 
 

@@ -4,7 +4,8 @@ This note applies the InkGen Definition of Done to PDF document contract slices.
 It covers group traversal in rendered PDF bytes, extraction truth, grammar truth
 when a layer contains repeated semantic labels, the public PDF file-writer path
 boundary, PDF page-structure metadata, flat/nested PDF outlines/bookmarks, URI
-link annotations, internal page link annotations, and named destinations.
+link annotations, internal page link annotations, named destinations, text
+annotations, and highlight annotations.
 
 ## Scope
 
@@ -37,6 +38,9 @@ The slice covers:
 - `DocumentPDF.add_text_annotation()`
 - `DocumentPDF.clear_text_annotations()`
 - `DocumentPDF.text_annotations()`
+- `DocumentPDF.add_highlight_annotation()`
+- `DocumentPDF.clear_highlight_annotations()`
+- `DocumentPDF.highlight_annotations()`
 - `DocumentPDF.to_pdf_bytes()`
 - `DocumentPDF.create_from_dict()`
 - `DocumentPDF.parameters`
@@ -77,6 +81,8 @@ Affected surface:
   expansion-state contract.
 - `docs/adr/0011-pdf-deep-outline-trees.md`: accepted ADR for the arbitrary-depth
   outline tree contract.
+- `docs/adr/0013-pdf-highlight-annotations.md`: accepted ADR for the highlight
+  annotation contract.
 
 Incoming dependencies:
 
@@ -104,6 +110,9 @@ Incoming dependencies:
   link annotations targeting those destinations.
 - Callers can depend on `DocumentPDF.add_text_annotation()` to create PDF text
   annotations on existing pages, and on serialization to preserve them.
+- Callers can depend on `DocumentPDF.add_highlight_annotation()` to create PDF
+  highlight annotations on existing pages, and on serialization to preserve
+  them.
 
 Outgoing dependencies:
 
@@ -127,6 +136,9 @@ Outgoing dependencies:
 - Text annotations use the same local PDF object writer, existing page-number
   validation, page-box rectangle validator, literal string escaping, and strict
   boolean validation; no dependency was added.
+- Highlight annotations use the same local PDF object writer, existing
+  page-number validation, page-box rectangle validator, literal string escaping,
+  and local RGB color validation; no dependency was added.
 
 Before/after edge changes:
 
@@ -183,6 +195,10 @@ Before/after edge changes:
   annotation list. Insertions and removals shift or delete annotation source
   pages. `to_pdf_bytes()` emits `/Subtype /Text` annotation objects in page
   `/Annots` arrays after URI, internal page, and named-destination links.
+- After the highlight annotation update, `DocumentPDF` owns a flat ordered
+  highlight annotation list. Insertions and removals shift or delete annotation
+  source pages. `to_pdf_bytes()` emits `/Subtype /Highlight` annotation objects
+  in page `/Annots` arrays after text annotations.
 
 Cycle/layer/coupling/redundancy result:
 
@@ -209,8 +225,8 @@ Cycle/layer/coupling/redundancy result:
 - Named destination metadata is local to `DocumentPDF`; generic non-text
   annotations, tagged PDF, and richer annotation appearances remain deferred
   until there is a concrete fixture need.
-- Text annotation metadata is local to `DocumentPDF`; file attachments, stamps,
-  highlights, widgets, replies, rich appearances, and other non-text annotation
+- Text and highlight annotation metadata is local to `DocumentPDF`; file
+  attachments, stamps, widgets, replies, rich appearances, and other annotation
   subtypes remain deferred until there is a concrete fixture need.
 
 ADR/rule impact:
@@ -233,6 +249,8 @@ ADR/rule impact:
   extends public API and serialized parameters.
 - ADR-0011 records the deep outline decision because this slice extends public
   outline hierarchy semantics without changing the serialized payload shape.
+- ADR-0013 records the highlight annotation decision because this slice adds
+  public API and serialized parameters.
 
 ## Domain Definitions
 
@@ -294,6 +312,17 @@ ADR/rule impact:
   URI links, internal page links, and named-destination links on that page.
 - Serialized text annotation entries must be rejected before rendering if
   malformed.
+- PDF highlight annotations are flat, insertion-ordered entries. Each entry has
+  an existing one-based page number, a finite positive-area rectangle inside the
+  page MediaBox, a strict RGB color accepted as a `#rrggbb` string or serialized
+  0.0-1.0 numeric triple, and optional non-empty Latin-1 contents.
+- Page `/Annots` arrays must include every highlight annotation on that page
+  after URI links, internal page links, named-destination links, and text
+  annotations on that page.
+- Highlight `/QuadPoints` must be derived deterministically from the annotation
+  rectangle and must stay inside the same rectangle.
+- Serialized highlight annotation entries must be rejected before rendering if
+  malformed.
 
 ## Comprehensiveness Matrix
 
@@ -332,6 +361,9 @@ ADR/rule impact:
 | Text annotations | Emit deterministic `/Subtype /Text` annotation objects and round-trip through parameters | PO-PDFDOC-025 | text annotation render/round-trip test | mutation target |
 | Text annotation page/index shifts | Insert/remove pages shift or delete text annotation pages with page indices | PO-PDFDOC-026 | text annotation page mutation test | mutation target |
 | Serialized text annotation metadata | Reject malformed text annotation payloads before rendering | PO-PDFDOC-027 | serialized text annotation rejection test | mutation target |
+| Highlight annotations | Emit deterministic `/Subtype /Highlight` annotation objects and round-trip through parameters | PO-PDFDOC-034 | highlight annotation render/round-trip test | mutation target |
+| Highlight annotation page/index shifts | Insert/remove pages shift or delete highlight annotation pages with page indices | PO-PDFDOC-035 | highlight annotation page mutation test | mutation target |
+| Serialized highlight annotation metadata | Reject malformed highlight annotation payloads before rendering | PO-PDFDOC-036 | serialized highlight annotation rejection test | mutation target |
 | Non-PDF group in a PDF page | Continue to fail loudly | Existing PDF generator test | killed |
 | Private layer storage mutation | Excluded from public contract | Explicit exclusion | Not applicable |
 
@@ -352,7 +384,7 @@ ADR/rule impact:
 | Golden artifact/visual | yes | PDF content stream is a generated artifact. | content-stream assertions |
 | Regression | yes | This closes the duplicate-label traversal regression. | dedicated tests |
 | Serialized payload | yes | Page labels and boxes are persisted in document parameters. | render/round-trip and malformed-payload tests |
-| Navigation metadata | yes | Flat/nested PDF outlines, URI links, internal page links, named destinations, and text annotations add document navigation/comment objects and page annotation arrays. | outline, URI link, page link, named destination, and text annotation render/round-trip tests |
+| Navigation metadata | yes | Flat/nested PDF outlines, URI links, internal page links, named destinations, text annotations, and highlight annotations add document navigation/comment objects and page annotation arrays. | outline, URI link, page link, named destination, text annotation, and highlight annotation render/round-trip tests |
 
 ## Mutation Testing Gate
 
@@ -641,6 +673,28 @@ Current result after the text annotation update:
     `strict=False`. `annotation_ids` is constructed from
     `len(page_annotations)`, so it has exactly the same length as the annotation
     sequence.
+- Gate result: pass with documented equivalent survivors.
+
+Current result after the highlight annotation update:
+
+- Tool: Cosmic Ray 8.4.6.
+- Config: `tests/mutation/pdf_document_highlight_annotation_cosmic_ray.toml`.
+- Filter:
+  `tests/mutation/filter_pdf_document_highlight_annotation_work_items.py`.
+- Test selection: focused PDF document, factory payload, and PDF generator tests.
+- Raw work items: 4780.
+- Proof-critical work items after filter: 162.
+- Killed mutants: 160.
+- Equivalent survivors: 2.
+- Surviving equivalent mutations:
+  - `_shift_pdf_page_metadata_for_removal()` line 2180 changed
+    `annotation.page_number > page_number` to `>=`. The comprehension filters
+    `annotation.page_number != page_number` before evaluating the output
+    expression, so equality is excluded from the expression domain.
+  - `_coerce_pdf_annotation_color()` line 515 changed the blue-channel slice
+    from `[5:7]` to `[5:8]`. The exact `len(value) != 7` guard guarantees the
+    admitted string ends at index 7, so both slices return the same two
+    characters for every admitted input.
 - Gate result: pass with documented equivalent survivors.
 
 ## PO-PDFDOC-001: PDF Rendering Traverses Every Stored Group
@@ -1419,4 +1473,84 @@ separate test proves missing optional title/open values hydrate with defaults.
 ### Conclusion
 
 Proven for serialized text annotations in the declared payload domain, with
+mutation verification documented above.
+
+## PO-PDFDOC-034: PDF Highlight Annotations Emit And Round Trip
+
+### Claim
+
+`DocumentPDF` emits deterministic PDF highlight annotations, stores every
+same-page highlight annotation in the page `/Annots` array after existing link
+and text annotations, derives `/QuadPoints` from the rectangle, preserves
+deterministic bytes, and round-trips highlight annotations through `parameters`
+and `create_from_dict()`.
+
+### Proof Method
+
+`add_highlight_annotation()` validates page number, rectangle bounds, color, and
+optional contents before storing a `_PDFHighlightAnnotation`. `to_pdf_bytes()`
+groups highlights by page, allocates one annotation object per entry, appends
+their IDs to page `/Annots` arrays after URI/page/named-destination links and
+text annotations, and emits `/Subtype /Highlight` dictionaries with `/Rect`,
+`/QuadPoints`, `/C`, and optional `/Contents`. Tests parse PDF objects, verify
+same-page annotation ordering, exact rectangle bytes, quad-point bytes, color
+bytes, escaped contents strings, deterministic repeated rendering, and
+serialization round-trip equality.
+
+### Counterexamples And Exclusions
+
+Multi-quad highlights, rich appearance streams, annotation replies, widgets,
+other annotation subtypes, and non-Latin-1 contents are excluded from this
+highlight annotation slice.
+
+### Conclusion
+
+Proven for rectangular Latin-1 PDF highlight annotations in the declared PDF
+document domain, with mutation verification documented above.
+
+## PO-PDFDOC-035: PDF Highlight Annotations Follow Page Mutations
+
+### Claim
+
+When pages are inserted or removed, highlight annotation source pages stay
+aligned with the same logical pages after the mutation, and annotations tied to
+removed pages are deleted.
+
+### Proof Method
+
+`DocumentPDF.add_page()` and `DocumentPDF.remove_page()` route through the PDF
+metadata shift helpers. The highlight annotation update extends those helpers to
+increment source pages at or after insertion points, decrement source pages
+after removed pages, and drop annotations whose source page matches the removed
+page. Tests include annotations before, on, and after the mutation point, plus a
+large page-number removal case to prove value equality rather than object
+identity.
+
+### Conclusion
+
+Proven for page indices admitted by the `DocumentPDF` public page mutation
+methods, with mutation verification documented above.
+
+## PO-PDFDOC-036: Serialized Highlight Annotation Metadata Fails Explicitly
+
+### Claim
+
+Malformed serialized `highlight_annotations` payloads are rejected during
+`DocumentPDF.create_from_dict()` before any rendered PDF can be produced from
+bad highlight annotation metadata.
+
+### Proof Method
+
+`create_from_dict()` reads optional highlight annotation sequences through
+`_pdf_optional_sequence()`, requires each entry to be a mapping, requires
+`page_number`, `rect`, and `color`, and delegates to
+`add_highlight_annotation()` for page, rectangle, color, and contents
+validation. Tests mutate a valid payload into non-sequence containers,
+non-mapping entries, missing required fields, missing pages, invalid rectangles,
+invalid colors, and empty contents. A separate test proves missing optional
+contents hydrate with defaults.
+
+### Conclusion
+
+Proven for serialized highlight annotations in the declared payload domain, with
 mutation verification documented above.

@@ -44,7 +44,7 @@ images with alpha, JPEG pass-through, ICC profile emission, Standard 14 fonts,
 named TrueType/OpenType font embedding, page labels, Crop/Bleed/Trim/Art page
 boxes, flat and arbitrary-depth nested outlines/bookmarks, URI links, internal
 page links, named destinations, named-destination links, text annotations,
-stroke/fill opacity through PDF ExtGState resources, and stroke
+highlight annotations, stroke/fill opacity through PDF ExtGState resources, and stroke
 dash/cap/join/miter operators.
 
 The remaining gaps that keep the backend from being a fully featured PDF
@@ -55,7 +55,7 @@ creation system are:
 | Text encoding | WinAnsi literal strings, installed-font embedding, and printable WinAnsi `/ToUnicode` CMaps | Unicode/CID fonts, glyph subsetting, and full complex-script text extraction maps |
 | Text layout | Positioned text components with explicit line-break output using `TextStyle.line_spacing` | Automatic wrapping, alignment across line boxes, tabs, columns, kerning, and complex-script shaping |
 | Graphics state | Basic stroke/fill primitives, stroke/fill alpha ExtGState resources, and stroke dash/cap/join/miter operators | Clipping paths, opacity groups, blend modes, gradients, and patterns |
-| Document structure | Pages, deterministic metadata, page labels, Crop/Bleed/Trim/Art boxes, flat and arbitrary-depth nested outlines/bookmarks, URI links, internal page links, named destinations, named-destination links, and text annotations | Generic non-text annotations and tagged PDF structure |
+| Document structure | Pages, deterministic metadata, page labels, Crop/Bleed/Trim/Art boxes, flat and arbitrary-depth nested outlines/bookmarks, URI links, internal page links, named destinations, named-destination links, text annotations, and highlight annotations | Other generic annotations and tagged PDF structure |
 | Color/profile support | Device RGB/CMYK and JPEG ICC profile objects | Broader calibrated color spaces and selectable PDF/A-style archival constraints |
 | Import/conversion | SVG input remains SVG-only | Arbitrary SVG-to-PDF conversion and external PDF embedding are out of scope until explicitly approved |
 | Optimization/security | Classic xref table and plain objects | Object streams, font/image subsetting, encryption, and signatures if those become product requirements |
@@ -127,8 +127,9 @@ Latin-1 PDF literal strings. Named destinations target existing pages with PDF
 deterministically by destination name, round-trip through
 `DocumentPDF.create_from_dict()`, and follow page insertions and removals. Links
 to named destinations are deterministic `/Subtype /Link` annotations with a
-literal-string `/Dest`. Generic PDF annotation types, rich annotation
-appearances, and tagged PDF structure are intentionally out of scope.
+literal-string `/Dest`. Generic PDF annotation types beyond the explicit text
+and highlight APIs, rich annotation appearances, and tagged PDF structure are
+intentionally out of scope.
 
 Text annotations can be added through `DocumentPDF.add_text_annotation()`. Each
 annotation has an existing source page, a finite positive-area rectangle inside
@@ -137,9 +138,18 @@ title, and a strict boolean `open` state. Text annotations are stored in documen
 parameters, round-trip through `DocumentPDF.create_from_dict()`, follow page
 insertions and removals, and are emitted as deterministic `/Subtype /Text`
 annotation objects after URI, internal page, and named-destination links on each
-page. Rich annotation appearance streams, comments/replies, file attachments,
-stamps, highlights, widgets, and other non-text annotation subtypes are
-intentionally out of scope.
+page.
+
+Highlight annotations can be added through
+`DocumentPDF.add_highlight_annotation()`. Each annotation has an existing source
+page, a finite positive-area rectangle inside that page's MediaBox, a strict RGB
+color accepted as `#rrggbb` or serialized 0.0-1.0 channel triple, and optional
+non-empty Latin-1 contents. Highlights emit deterministic `/Subtype /Highlight`
+objects with rectangle-derived `/QuadPoints`, are stored in document parameters,
+round-trip through `DocumentPDF.create_from_dict()`, follow page insertions and
+removals, and are emitted after text annotations on each page. Rich annotation
+appearance streams, comments/replies, file attachments, stamps, widgets, and
+other annotation subtypes remain intentionally out of scope.
 
 The PDF render path is intentionally closed. `DocumentPDF` renders exact
 `ComponentGroupPDF` groups, and `ComponentGroupPDF` accepts/renders only the
@@ -273,3 +283,6 @@ The PDF backend is covered by PDF-P1 tests for:
 - Named destinations and named-destination link annotations with serialization
   round trips, deterministic name-tree ordering, source/target validation,
   insertion/removal index shifts, and invalid metadata rejection
+- Text and highlight annotations with serialization round trips, source-page
+  validation, insertion/removal index shifts, deterministic page annotation
+  ordering, and invalid metadata rejection
