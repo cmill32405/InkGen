@@ -26,6 +26,7 @@ nav:
       - ADR-0007 PDF Named Destinations: adr/0007-pdf-named-destinations.md
       - ADR-0008 PDF Nested Outlines: adr/0008-pdf-nested-outlines.md
       - ADR-0009 PDF Text Annotations: adr/0009-pdf-text-annotations.md
+      - ADR-0010 PDF Outline Expansion State: adr/0010-pdf-outline-expansion-state.md
   - Proof Notes:
       - Grammar Truth: proofs/grammar-truth.md
       - Extraction Truth Contract: proofs/extraction-truth-contract.md

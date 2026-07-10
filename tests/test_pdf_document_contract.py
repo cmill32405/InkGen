@@ -993,6 +993,40 @@ def test_document_pdf_emits_nested_outlines_and_round_trips() -> None:
     assert recreated.to_pdf_bytes() == payload
 
 
+@pytest.mark.condition("PDF-DOC-OUTLINE-STATE-P3")
+def test_document_pdf_emits_collapsed_outline_state_and_round_trips() -> None:
+    """PDF-DOC-OUTLINE-STATE-P3: Collapsed outline parents emit negative child counts."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    document.add_page()
+    document.add_outline("Collapsed", 1, expanded=False)
+    document.add_outline("Child A", 2, parent="Collapsed")
+    document.add_outline("Child B", 2, parent="Collapsed")
+    document.add_outline("Expanded", 2)
+    document.add_outline("Child C", 2, parent="Expanded")
+
+    payload = document.to_pdf_bytes()
+    recreated = DocumentPDF.create_from_dict(document.parameters)
+    objects = _pdf_objects(payload)
+    outline_root_id = int(re.search(rb"/Outlines (?P<id>\d+) 0 R", payload).group("id"))  # type: ignore[union-attr]
+    first_id = int(re.search(rb"/First (?P<id>\d+) 0 R", objects[outline_root_id]).group("id"))  # type: ignore[union-attr]
+    expanded_id = first_id + 3
+
+    assert b"/Title (Collapsed)" in objects[first_id]
+    assert b"/Count -2" in objects[first_id]
+    assert b"/Title (Expanded)" in objects[expanded_id]
+    assert b"/Count 1" in objects[expanded_id]
+    assert document.outlines() == (
+        {"title": "Collapsed", "page_number": 1, "left": 0.0, "expanded": False},
+        {"title": "Child A", "page_number": 2, "left": 0.0, "parent": "Collapsed"},
+        {"title": "Child B", "page_number": 2, "left": 0.0, "parent": "Collapsed"},
+        {"title": "Expanded", "page_number": 2, "left": 0.0},
+        {"title": "Child C", "page_number": 2, "left": 0.0, "parent": "Expanded"},
+    )
+    assert recreated.parameters == document.parameters
+    assert recreated.to_pdf_bytes() == payload
+
+
 @pytest.mark.condition("PDF-DOC-OUTLINE-P3")
 def test_document_pdf_rejects_invalid_outline_metadata() -> None:
     """PDF-DOC-OUTLINE-P3: Outline metadata fails at explicit boundaries."""
@@ -1006,6 +1040,10 @@ def test_document_pdf_rejects_invalid_outline_metadata() -> None:
 
     with pytest.raises(ValueError, match="Position must correlate"):
         document.add_outline("missing", 2)
+    for expanded in [0, 1, "true", object()]:
+        with pytest.raises(TypeError):
+            document.add_outline("bad expanded", 1, expanded=expanded)  # type: ignore[arg-type]
+        assert document.outlines() == ()
 
     with pytest.raises(ValueError, match="outline parent"):
         document.add_outline("orphan", 1, parent="missing")
@@ -1050,7 +1088,7 @@ def test_document_pdf_outline_metadata_tracks_page_insertions_and_removals() -> 
     document.add_page()
     document.add_page()
     document.add_outline("front", 1)
-    document.add_outline("middle", 2)
+    document.add_outline("middle", 2, expanded=False)
     document.add_outline("tail", 3)
     document.add_outline("front child", 2, parent="front")
     document.add_outline("middle child", 1, parent="middle")
@@ -1060,7 +1098,7 @@ def test_document_pdf_outline_metadata_tracks_page_insertions_and_removals() -> 
 
     assert document.outlines() == (
         {"title": "front", "page_number": 1, "left": 0.0},
-        {"title": "middle", "page_number": 3, "left": 0.0},
+        {"title": "middle", "page_number": 3, "left": 0.0, "expanded": False},
         {"title": "tail", "page_number": 4, "left": 0.0},
         {"title": "front child", "page_number": 3, "left": 0.0, "parent": "front"},
         {"title": "middle child", "page_number": 1, "left": 0.0, "parent": "middle"},
@@ -1133,6 +1171,7 @@ def test_document_pdf_rejects_invalid_serialized_outline_metadata() -> None:
         lambda data: data["DocumentPDF"]["outlines"][0].__setitem__("zoom", True),
         lambda data: data["DocumentPDF"]["outlines"][0].__setitem__("parent", "missing"),
         lambda data: data["DocumentPDF"]["outlines"][0].__setitem__("parent", object()),
+        lambda data: data["DocumentPDF"]["outlines"][0].__setitem__("expanded", 1),
         lambda data: data["DocumentPDF"]["outlines"].extend(
             [
                 {"title": "child", "page_number": 1, "parent": "valid"},
@@ -1155,9 +1194,10 @@ def test_document_pdf_rejects_invalid_serialized_outline_metadata() -> None:
 
     missing_left_payload = deepcopy(document.parameters)
     missing_left_payload["DocumentPDF"]["outlines"][0].pop("left")
+    missing_left_payload["DocumentPDF"]["outlines"][0]["expanded"] = False
     recreated = DocumentPDF.create_from_dict(missing_left_payload)
 
-    assert recreated.outlines() == ({"title": "valid", "page_number": 1, "left": 0.0, "top": 2.0, "zoom": 1.0},)
+    assert recreated.outlines() == ({"title": "valid", "page_number": 1, "left": 0.0, "top": 2.0, "zoom": 1.0, "expanded": False},)
 
 
 @pytest.mark.condition("PDF-DOC-LINK-P3")

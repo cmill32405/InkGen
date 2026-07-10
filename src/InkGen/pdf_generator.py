@@ -84,6 +84,7 @@ class _PDFOutlineEntry:
     top: float | None
     zoom: float | None
     parent: str | None = None
+    expanded: bool = True
 
 
 @dataclass(frozen=True)
@@ -408,6 +409,13 @@ def _coerce_pdf_outline_title(title: object) -> str:
     except UnicodeEncodeError as exc:
         raise ValueError("outline title must be encodable as latin-1") from exc
     return title
+
+
+def _coerce_pdf_outline_expanded(expanded: object) -> bool:
+    """Return a strict PDF outline expansion-state flag."""
+    if not isinstance(expanded, bool):
+        raise TypeError("outline expanded must be a boolean")
+    return expanded
 
 
 def _coerce_pdf_destination_name(name: object) -> str:
@@ -1711,10 +1719,12 @@ class DocumentPDF(Document):
         top: float | int | None = None,
         zoom: float | int | None = None,
         parent: str | None = None,
+        expanded: bool = True,
     ) -> None:
         """Add a PDF outline entry that targets an existing page."""
         page_number = self._validate_existing_position(page_number)
         outline_title = _coerce_pdf_outline_title(title)
+        outline_expanded = _coerce_pdf_outline_expanded(expanded)
         parent_title = None
         if parent is not None:
             parent_title = _coerce_pdf_outline_title(parent)
@@ -1726,7 +1736,9 @@ class DocumentPDF(Document):
         left_value = _coerce_pdf_destination_number(left, "left")
         top_value = None if top is None else _coerce_pdf_destination_number(top, "top")
         zoom_value = None if zoom is None else _coerce_pdf_destination_number(zoom, "zoom")
-        self._pdf_outlines.append(_PDFOutlineEntry(outline_title, page_number, left_value, top_value, zoom_value, parent_title))
+        self._pdf_outlines.append(
+            _PDFOutlineEntry(outline_title, page_number, left_value, top_value, zoom_value, parent_title, outline_expanded)
+        )
 
     def clear_outlines(self) -> None:
         """Remove all PDF outline entries from the document."""
@@ -1909,6 +1921,7 @@ class DocumentPDF(Document):
                 outline.top,
                 outline.zoom,
                 outline.parent,
+                outline.expanded,
             )
             for outline in self._pdf_outlines
         ]
@@ -1976,6 +1989,7 @@ class DocumentPDF(Document):
                 outline.top,
                 outline.zoom,
                 outline.parent,
+                outline.expanded,
             )
             for outline in self._pdf_outlines
             if outline.page_number != page_number
@@ -2067,6 +2081,8 @@ class DocumentPDF(Document):
             payload["zoom"] = outline.zoom
         if outline.parent is not None:
             payload["parent"] = outline.parent
+        if not outline.expanded:
+            payload["expanded"] = outline.expanded
         return payload
 
     @staticmethod
@@ -2112,9 +2128,8 @@ class DocumentPDF(Document):
             next_link = f" /Next {object_ids_by_index[siblings[sibling_position + 1]]} 0 R" if sibling_position + 1 < len(siblings) else ""
             child_links = ""
             if children:
-                child_links = (
-                    f" /First {object_ids_by_index[children[0]]} 0 R /Last {object_ids_by_index[children[-1]]} 0 R /Count {len(children)}"
-                )
+                count = len(children) if outline.expanded else -len(children)
+                child_links = f" /First {object_ids_by_index[children[0]]} 0 R /Last {object_ids_by_index[children[-1]]} 0 R /Count {count}"
             destination = DocumentPDF._outline_destination(outline, page_ids_by_number)
             objects[object_id] = (
                 f"<< /Title ({_escape_pdf_string(outline.title)}) /Parent {parent_id} 0 R"
@@ -2579,7 +2594,8 @@ class DocumentPDF(Document):
             top = outline_payload.get("top")
             zoom = outline_payload.get("zoom")
             parent = outline_payload.get("parent")
-            document.add_outline(title, page_number, left=left, top=top, zoom=zoom, parent=parent)  # type: ignore[arg-type]
+            expanded = outline_payload.get("expanded", True)
+            document.add_outline(title, page_number, left=left, top=top, zoom=zoom, parent=parent, expanded=expanded)  # type: ignore[arg-type]
         for link_payload in _pdf_optional_sequence(payload, "uri_links", "DocumentPDF"):
             if not isinstance(link_payload, Mapping):
                 raise TypeError("DocumentPDF uri_links entries must be mappings")

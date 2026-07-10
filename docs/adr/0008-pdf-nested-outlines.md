@@ -8,8 +8,8 @@ Accepted.
 
 InkGen already supports deterministic top-level PDF outlines for synthetic PDF
 fixtures. Parser-facing document fixtures also need simple outline hierarchy, but
-the current PDF backend does not need arbitrary bookmark trees, open/closed
-outline state, remote destinations, or non-Latin-1 title encoding.
+the current PDF backend does not need arbitrary bookmark trees, remote
+destinations, or non-Latin-1 title encoding.
 
 ## Decision
 
@@ -36,7 +36,8 @@ outline state, remote destinations, or non-Latin-1 title encoding.
 ## Out Of Scope
 
 - Grandchildren and arbitrary-depth outline trees.
-- Open or closed outline state beyond emitted positive `/Count` values.
+- Arbitrary-depth expansion/collapse state beyond the one-level policy accepted
+  in ADR-0010.
 - Remote destinations.
 - Named destinations as outline targets.
 - Non-Latin-1 outline titles or parent names.
@@ -60,3 +61,4 @@ outline state, remote destinations, or non-Latin-1 title encoding.
 - ADR-0004: PDF flat outlines.
 - ADR-0006: PDF internal page links.
 - ADR-0007: PDF named destinations.
+- ADR-0010: PDF outline expansion state.

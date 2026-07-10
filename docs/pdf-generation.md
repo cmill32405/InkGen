@@ -91,11 +91,13 @@ has a Latin-1 title, targets an existing page, and may set PDF `/XYZ`
 destination `left`, `top`, and `zoom` values. Omitted `top` or `zoom` values are
 emitted as PDF `null` destination entries. Omit `parent` for a top-level outline.
 Use `parent="<top-level title>"` for a one-level child under an earlier unique
-top-level outline. Outlines are stored in document parameters, round-trip through
-`DocumentPDF.create_from_dict()`, follow page insertions and removals, prune
-orphaned children when a parent outline is removed, and are emitted as
-deterministic root, sibling, and child outline objects. Deeper outline trees are
-intentionally out of scope for the current backend.
+top-level outline. Use `expanded=False` on a parent outline to emit a collapsed
+bookmark state with a negative child `/Count`; expanded outlines are the default
+and omit the serialized flag. Outlines are stored in document parameters,
+round-trip through `DocumentPDF.create_from_dict()`, follow page insertions and
+removals, prune orphaned children when a parent outline is removed, and are
+emitted as deterministic root, sibling, and child outline objects. Deeper outline
+trees are intentionally out of scope for the current backend.
 
 URI link annotations can be added through `DocumentPDF.add_uri_link()`. Each
 link targets an existing source page, stores a finite positive-area rectangle
