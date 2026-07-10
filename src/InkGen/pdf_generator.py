@@ -869,6 +869,11 @@ def _quadratic_to_cubic(
     return c1, c2
 
 
+def _reflect_point(point: tuple[float, float], around: tuple[float, float]) -> tuple[float, float]:
+    """Return a control point reflected around the current path point."""
+    return (2.0 * around[0] - point[0], 2.0 * around[1] - point[1])
+
+
 def _drawing_pdf(
     style: DrawingStyle,
     path_operators: list[str],
@@ -1287,37 +1292,61 @@ class PathPDF(PathComponent, PDFGeneratorInterface):
     def _command_operators(self) -> list[str]:
         operators: list[str] = []
         current_point = (0.0, 0.0)
+        previous_cubic_control: tuple[float, float] | None = None
+        previous_quadratic_control: tuple[float, float] | None = None
         for command in self.commands:
             command_type = command.type.upper()
             points = list(command.points)
-            if command_type in {"S", "T"}:
-                raise ValueError(f"PathPDF does not support path command {command_type}.")
             if command_type == "C" and len(points) % 3:
                 raise ValueError("PathPDF command C requires points in groups of three.")
+            if command_type == "S" and len(points) % 2:
+                raise ValueError("PathPDF command S requires points in groups of two.")
             if command_type == "Q" and len(points) % 2:
                 raise ValueError("PathPDF command Q requires points in groups of two.")
+            if command_type == "T" and not points:
+                raise ValueError("PathPDF command T requires an endpoint.")
             if command_type == "A" and not points:
                 raise ValueError("PathPDF command A requires an endpoint.")
             if command_type == "M" and points:
                 current_point = points[-1]
+                previous_cubic_control = None
+                previous_quadratic_control = None
                 operators.append(f"{_number(current_point[0])} {_number(current_point[1])} m")
             elif command_type == "L":
                 for point in points:
                     current_point = point
                     operators.append(f"{_number(point[0])} {_number(point[1])} l")
+                previous_cubic_control = None
+                previous_quadratic_control = None
             elif command_type == "H":
                 for point in points:
                     current_point = (point[0], current_point[1])
                     operators.append(f"{_number(current_point[0])} {_number(current_point[1])} l")
+                previous_cubic_control = None
+                previous_quadratic_control = None
             elif command_type == "V":
                 for point in points:
                     current_point = (current_point[0], point[1])
                     operators.append(f"{_number(current_point[0])} {_number(current_point[1])} l")
+                previous_cubic_control = None
+                previous_quadratic_control = None
             elif command_type == "C":
                 for index in range(0, len(points), 3):
                     segment = points[index : index + 3]
                     c1, c2, end = segment
                     current_point = end
+                    previous_cubic_control = c2
+                    previous_quadratic_control = None
+                    operators.append(
+                        f"{_number(c1[0])} {_number(c1[1])} {_number(c2[0])} {_number(c2[1])} {_number(end[0])} {_number(end[1])} c"
+                    )
+            elif command_type == "S":
+                for index in range(0, len(points), 2):
+                    c2, end = points[index : index + 2]
+                    c1 = _reflect_point(previous_cubic_control, current_point) if previous_cubic_control is not None else current_point
+                    current_point = end
+                    previous_cubic_control = c2
+                    previous_quadratic_control = None
                     operators.append(
                         f"{_number(c1[0])} {_number(c1[1])} {_number(c2[0])} {_number(c2[1])} {_number(end[0])} {_number(end[1])} c"
                     )
@@ -1327,13 +1356,33 @@ class PathPDF(PathComponent, PDFGeneratorInterface):
                     control, end = segment
                     c1, c2 = _quadratic_to_cubic(current_point, control, end)
                     current_point = end
+                    previous_cubic_control = None
+                    previous_quadratic_control = control
+                    operators.append(
+                        f"{_number(c1[0])} {_number(c1[1])} {_number(c2[0])} {_number(c2[1])} {_number(end[0])} {_number(end[1])} c"
+                    )
+            elif command_type == "T":
+                for end in points:
+                    control = (
+                        _reflect_point(previous_quadratic_control, current_point)
+                        if previous_quadratic_control is not None
+                        else current_point
+                    )
+                    c1, c2 = _quadratic_to_cubic(current_point, control, end)
+                    current_point = end
+                    previous_cubic_control = None
+                    previous_quadratic_control = control
                     operators.append(
                         f"{_number(c1[0])} {_number(c1[1])} {_number(c2[0])} {_number(c2[1])} {_number(end[0])} {_number(end[1])} c"
                     )
             elif command_type == "A":
                 current_point = points[-1]
+                previous_cubic_control = None
+                previous_quadratic_control = None
                 operators.append(f"{_number(current_point[0])} {_number(current_point[1])} l")
             elif command_type == "Z":
+                previous_cubic_control = None
+                previous_quadratic_control = None
                 operators.append("h")
         return operators
 

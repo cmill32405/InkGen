@@ -154,6 +154,8 @@ def test_path_pdf_emits_supported_commands_as_exact_operators() -> None:
             PathCommand("V", [(0.0, 6.0)]),
             PathCommand("Q", [(7.0, 8.0), (9.0, 10.0), (10.0, 11.0), (12.0, 13.0)]),
             PathCommand("C", [(11.0, 12.0), (13.0, 14.0), (15.0, 16.0), (16.0, 17.0), (18.0, 19.0), (20.0, 21.0)]),
+            PathCommand("S", [(22.0, 23.0), (24.0, 25.0), (26.0, 27.0), (28.0, 29.0)]),
+            PathCommand("T", [(30.0, 31.0), (32.0, 33.0)]),
             PathCommand("A", [(17.0, 18.0), (19.0, 20.0), (21.0, 22.0)]),
             PathCommand("Z", []),
         ],
@@ -170,6 +172,10 @@ def test_path_pdf_emits_supported_commands_as_exact_operators() -> None:
     assert "9.666667 10.666667 10.666667 11.666667 12 13 c" in lines
     assert "11 12 13 14 15 16 c" in lines
     assert "16 17 18 19 20 21 c" in lines
+    assert "22 23 22 23 24 25 c" in lines
+    assert "26 27 26 27 28 29 c" in lines
+    assert "28 29 28.666667 29.666667 30 31 c" in lines
+    assert "31.333333 32.333333 32 33 32 33 c" in lines
     assert "21 22 l" in lines
     assert "h" in lines
     assert lines[-2:] == ["S", "Q"]
@@ -193,20 +199,52 @@ def test_path_pdf_renders_single_endpoint_arc_fallback() -> None:
     assert "7 8 l" in path.generate_pdf().splitlines()
 
 
-@pytest.mark.condition("PATH-P1")
-def test_path_pdf_rejects_commands_it_cannot_render() -> None:
-    """PATH-P1: PathPDF fails instead of silently dropping unsupported commands."""
-    for command_type in ("S", "T"):
-        path = PathPDF(
-            _style(),
-            commands=[
-                PathCommand("M", [(0.0, 0.0)]),
-                PathCommand(command_type, [(1.0, 1.0), (2.0, 2.0)]),
-            ],
-        )
+@pytest.mark.condition("PATH-SMOOTH-PDF-P3")
+def test_path_pdf_reflects_smooth_cubic_and_quadratic_controls() -> None:
+    """PATH-SMOOTH-PDF-P3: PathPDF converts SVG S/T commands with reflected controls."""
+    path = PathPDF(
+        _style(),
+        commands=[
+            PathCommand("M", [(0.0, 0.0)]),
+            PathCommand("C", [(1.0, 2.0), (3.0, 4.0), (5.0, 6.0)]),
+            PathCommand("S", [(7.0, 8.0), (9.0, 10.0), (11.0, 12.0), (13.0, 14.0)]),
+            PathCommand("L", [(14.0, 14.0)]),
+            PathCommand("S", [(15.0, 16.0), (17.0, 18.0)]),
+            PathCommand("Q", [(19.0, 20.0), (21.0, 22.0)]),
+            PathCommand("T", [(23.0, 24.0), (25.0, 26.0)]),
+            PathCommand("L", [(27.0, 28.0)]),
+            PathCommand("T", [(29.0, 30.0)]),
+        ],
+    )
 
-        with pytest.raises(ValueError, match=f"PathPDF does not support path command {command_type}"):
-            path.generate_pdf()
+    lines = path.generate_pdf().splitlines()
+
+    assert "7 8 7 8 9 10 c" in lines
+    assert "11 12 11 12 13 14 c" in lines
+    assert "14 14 15 16 17 18 c" in lines
+    assert "18.333333 19.333333 19.666667 20.666667 21 22 c" in lines
+    assert "22.333333 23.333333 23 24 23 24 c" in lines
+    assert "23 24 23.666667 24.666667 25 26 c" in lines
+    assert "27 28 27.666667 28.666667 29 30 c" in lines
+
+
+@pytest.mark.condition("PATH-SMOOTH-PDF-P3")
+def test_path_pdf_treats_empty_smooth_cubic_command_as_noop() -> None:
+    """PATH-SMOOTH-PDF-P3: Empty S commands do not fail or emit partial geometry."""
+    path = PathPDF(
+        _style(),
+        commands=[
+            PathCommand("M", [(1.0, 2.0)]),
+            PathCommand("S", []),
+            PathCommand("L", [(3.0, 4.0)]),
+        ],
+    )
+
+    lines = path.generate_pdf().splitlines()
+
+    assert "1 2 m" in lines
+    assert "3 4 l" in lines
+    assert not any(line.endswith(" c") for line in lines)
 
 
 @pytest.mark.condition("PATH-P1")
@@ -214,7 +252,9 @@ def test_path_pdf_rejects_commands_it_cannot_render() -> None:
     ("command", "message"),
     [
         (PathCommand("C", [(1.0, 1.0), (2.0, 2.0)]), "groups of three"),
+        (PathCommand("S", [(1.0, 1.0)]), "groups of two"),
         (PathCommand("Q", [(1.0, 1.0)]), "groups of two"),
+        (PathCommand("T", []), "requires an endpoint"),
         (PathCommand("A", []), "requires an endpoint"),
     ],
 )
@@ -227,8 +267,8 @@ def test_path_pdf_rejects_incomplete_curve_segments(command: PathCommand, messag
 
 
 @pytest.mark.condition("PATH-P1")
-def test_path_svg_preserves_smooth_commands_that_pdf_rejects() -> None:
-    """PATH-P1: SVG keeps valid smooth commands even when PDF cannot render them."""
+def test_path_svg_preserves_smooth_commands() -> None:
+    """PATH-P1: SVG keeps valid smooth commands as path data."""
     path = PathSVG(
         _style(),
         commands=[

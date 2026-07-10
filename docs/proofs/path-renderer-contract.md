@@ -2,9 +2,9 @@
 
 This note applies the InkGen Definition of Done to the PATH-P1 generic path
 renderer-contract slice and later path-boundary hardening slices. It focuses on
-command validation, deterministic PDF operator output, explicit failure for
-unsupported PDF path semantics, renderer-neutral materialization, SVG
-preservation, neutral/SVG command-payload hydration, and DXF polyline export.
+command validation, deterministic PDF operator output, smooth SVG path command
+conversion, renderer-neutral materialization, SVG preservation, neutral/SVG
+command-payload hydration, and DXF polyline export.
 
 ## Scope
 
@@ -48,7 +48,8 @@ Incoming dependencies:
 - Synthetic drawing fixtures rely on `PathCommand` accepting SVG-style commands
   while normalizing command names and coordinate precision.
 - PDF fixture consumers rely on `PathPDF.generate_pdf()` emitting deterministic
-  PDF path operators or failing when the command cannot be represented.
+  PDF path operators for the declared SVG-style command subset, including
+  smooth `S` and `T` commands.
 - SVG consumers rely on smooth SVG commands such as `S` and `T` remaining valid
   path data.
 - SVG serialized-payload consumers rely on `PathSVG.create_from_dict()`
@@ -67,8 +68,8 @@ Outgoing dependencies:
 
 - `PathCommand` depends on local `PRECISION` for coordinate rounding.
 - `Path` depends on `PathCommand` and shared `DrawingComponent` style handling.
-- `PathPDF` depends on `PathComponent`, `_quadratic_to_cubic()`, `_number()`,
-  and `_drawing_pdf()`.
+- `PathPDF` depends on `PathComponent`, `_quadratic_to_cubic()`,
+  `_reflect_point()`, `_number()`, and `_drawing_pdf()`.
 - `PathSVG` depends on shared SVG style serialization, command coordinate
   formatting, and `PathCommand` for hydrated command validation.
 - `PathDrawing` depends on `PathCommand`, validates its public command
@@ -80,10 +81,15 @@ Outgoing dependencies:
 Before/after edge changes:
 
 - Before this slice, `PathPDF` silently omitted valid SVG commands `S` and `T`.
+- Before `PATH-SMOOTH-PDF-P3`, `PathPDF` rejected smooth commands `S` and `T`
+  after the silent-omission regression was closed.
 - Before this slice, `PathPDF` silently truncated incomplete `C` and `Q`
   command point groups.
-- After this slice, those unsupported or incomplete PDF render cases raise
-  `ValueError` before emitting partial geometry.
+- After this slice, incomplete PDF render cases raise `ValueError` before
+  emitting partial geometry.
+- After `PATH-SMOOTH-PDF-P3`, `PathPDF` converts `S` and `T` to deterministic
+  cubic PDF operators using SVG reflected-control semantics. Malformed smooth
+  command point groups still fail before PDF bytes are emitted.
 - Before `PATH-DRAWING-COMMANDS-P2`, direct `PathDrawing` construction could
   store malformed command collections such as raw strings and fail later inside
   concrete renderers.
@@ -117,10 +123,10 @@ Cycle/layer/coupling/redundancy result:
   concrete renderers at module load time.
 - Layer check: concrete renderers and DXF output depend on neutral recipes
   according to `docs/dependency-map.md`.
-- Coupling check: PDF explicitly rejects smooth SVG commands until their
-  previous-control-point semantics are implemented.
-- Redundancy check: the slice avoids adding a second path parser or curve
-  engine.
+- Coupling check: PDF smooth command support is implemented locally in
+  `PathPDF._command_operators()` and does not add a path parser or curve engine.
+- Redundancy check: the slice reuses the existing quadratic-to-cubic conversion
+  helper and adds only a local reflection helper.
 
 Evidence source and freshness:
 
@@ -135,11 +141,9 @@ Evidence source and freshness:
 
 ADR/rule impact:
 
-- No new ADR is required because the slice preserves the existing closed PDF
-  renderer boundary from ADR-0002. Unsupported SVG smooth commands are rejected
-  rather than approximated by a new path engine.
-- A future change that implements full `S`/`T` PDF semantics should add or
-  update an ADR because it changes the PDF path capability boundary.
+- ADR-0012 records the PDF smooth path command decision because this slice
+  changes the PDF path capability boundary from rejection to deterministic
+  reflected-control rendering.
 
 ## Domain Definitions
 
@@ -148,12 +152,16 @@ ADR/rule impact:
 - Neutral `Path.create_from_dict()` accepts wrapped `Path` payloads, optional
   command sequences, and serialized command mappings with string `type` and
   optional `points`.
-- `PathPDF` supports `M`, `L`, `H`, `V`, `C`, `Q`, `A`, and `Z` with the
-  existing approximation rule that `A` is rendered as a line to the command end
-  point.
-- `PathPDF` does not support smooth commands `S` and `T`.
-- `PathPDF` requires `C` points in groups of three and `Q` points in groups of
-  two.
+- `PathPDF` supports `M`, `L`, `H`, `V`, `C`, `S`, `Q`, `T`, `A`, and `Z` with
+  the existing approximation rule that `A` is rendered as a line to the command
+  end point.
+- `PathPDF` requires `C` points in groups of three, `S` points in groups of two,
+  `Q` points in groups of two, and `T` commands to contain at least one
+  endpoint.
+- `S` reflects the previous `C` or `S` cubic control point around the current
+  point; otherwise its first control is the current point.
+- `T` reflects the previous `Q` or `T` quadratic control point around the
+  current point; otherwise its quadratic control is the current point.
 - `PathSVG` preserves the supported SVG path command strings.
 - `PathSVG.create_from_dict()` accepts wrapped `PathSVG` payloads, optional
   command sequences, and serialized command mappings with string `type`,
@@ -170,8 +178,10 @@ ADR/rule impact:
 
 ## Fix Log
 
-- `PathPDF._command_operators()` now raises `ValueError` for unsupported
+- `PathPDF._command_operators()` now emits deterministic cubic operators for
   smooth commands `S` and `T`.
+- `PathPDF._command_operators()` now raises `ValueError` for malformed smooth
+  command point groups.
 - `PathPDF._command_operators()` now raises `ValueError` for incomplete `C`
   and `Q` curve point groups instead of silently truncating the command.
 - `PathPDF._command_operators()` now raises `ValueError` for `A` commands
@@ -196,17 +206,17 @@ ADR/rule impact:
 | Invalid command names and non-string types | Reject at command construction | PO-PATH-001 | `test_path_command_normalizes_and_rejects_invalid_inputs` | Must be killed or proven equivalent |
 | Malformed coordinate arity | Reject at command construction or point append | PO-PATH-001 | `test_path_command_normalizes_and_rejects_invalid_inputs` | Must be killed or proven equivalent |
 | Path point aggregation | Preserve command order and reject bad additions | PO-PATH-002 | `test_path_collects_command_points_and_rejects_bad_additions` | Must be killed or proven equivalent |
-| Supported PDF commands | Emit exact PDF operators for `M/L/H/V/Q/C/A/Z` | PO-PATH-003 | `test_path_pdf_emits_supported_commands_as_exact_operators` | Must be killed or proven equivalent |
-| Unsupported PDF commands | Reject `S/T` instead of losing geometry | PO-PATH-004 | `test_path_pdf_rejects_commands_it_cannot_render` | Must be killed or proven equivalent |
-| Incomplete curve groups | Reject incomplete `C/Q` groups instead of partial output | PO-PATH-005 | `test_path_pdf_rejects_incomplete_curve_segments` | Must be killed or proven equivalent |
-| SVG smooth commands | Preserve `S/T` as valid SVG path data | PO-PATH-006 | `test_path_svg_preserves_smooth_commands_that_pdf_rejects` | Must be killed or proven equivalent |
+| Supported PDF commands | Emit exact PDF operators for `M/L/H/V/Q/C/S/T/A/Z` | PO-PATH-003 | `test_path_pdf_emits_supported_commands_as_exact_operators` | Must be killed or proven equivalent |
+| Smooth PDF commands | Reflect previous cubic/quadratic controls for `S/T` | PO-PATH-013 | `test_path_pdf_reflects_smooth_cubic_and_quadratic_controls` | mutation target |
+| Incomplete curve groups | Reject incomplete `C/S/Q/T` groups instead of partial output | PO-PATH-005 and PO-PATH-014 | `test_path_pdf_rejects_incomplete_curve_segments` | Must be killed or proven equivalent |
+| SVG smooth commands | Preserve `S/T` as valid SVG path data | PO-PATH-006 | `test_path_svg_preserves_smooth_commands` | Must be killed or proven equivalent |
 | Neutral path materialization | Materialize to `PathSVG` or `PathPDF` with matching commands | PO-PATH-007 | `test_path_drawing_materializes_svg_and_pdf_components` | Must be killed or proven equivalent |
 | DXF path output | Emit `LWPOLYLINE` vertices and closure flag through live document path | PO-PATH-008 | `test_dxf_path_drawing_reuses_pdf_points_and_closure_flag` | Must be killed or proven equivalent |
 | Neutral path command collection boundary | Accept `None` or non-string sequences of `PathCommand`; reject raw strings, bytes, non-sequences, and non-command members before renderer materialization | PO-PATH-009 | `test_path_drawing_accepts_command_sequences_before_materialization`; `test_path_drawing_rejects_malformed_command_collections` | 7 validation mutants killed; 0 validation survivors |
 | Live mutated `PathDrawing.commands` list | Reject non-command values before SVG/PDF materialization | PO-PATH-012 | `test_path_drawing_revalidates_mutated_commands_before_materialization`; `test_path_group_materialization_revalidates_mutated_path_commands` | mutation target |
 | SVG path command payload boundary | Preserve valid serialized command payloads and flags; reject malformed roots, command collections, command entries, missing command types, and non-string command types | PO-PATH-010 | `test_path_svg_factory_preserves_valid_command_payloads_and_flags`; `test_path_svg_factory_rejects_malformed_payload_roots`; `test_path_svg_factory_rejects_malformed_command_payloads` | 14 validation mutants killed; 0 survivors |
 | Neutral path command payload boundary | Preserve valid dictionary-sourced commands; reject malformed serialized command collections, command entries, missing command types, and non-string command types | PO-PATH-011 | `test_path_preserves_valid_command_dictionary_payloads`; `test_path_factory_rejects_malformed_command_payloads`; `test_path_add_command_rejects_malformed_command_dictionaries` | 7 validation mutants killed; 0 survivors |
-| Full SVG arc geometry, smooth-control reflection, fill-rule semantics, and Bézier-to-DXF curve fidelity | Excluded from proven domain | Explicit exclusions in PO-PATH-003 through PO-PATH-008 | existing tests only | Out of scope |
+| Full SVG arc geometry, fill-rule semantics, and Bézier-to-DXF curve fidelity | Excluded from proven domain | Explicit exclusions in PO-PATH-003 through PO-PATH-008 | existing tests only | Out of scope |
 
 ## Test Applicability Matrix
 
@@ -214,9 +224,9 @@ ADR/rule impact:
 |---|---|---|---|
 | Unit | yes | Command validation and PDF operator generation are deterministic. | PATH-P1 tests named above |
 | Behavioral/condition | yes | PATH-P1 defines expected path behavior across command, SVG, PDF, and DXF paths. PATH-DRAWING-COMMANDS-P2 defines the neutral path command collection boundary. PATH-DRAWING-LIVE-COMMANDS-P2 defines the live mutated command-list boundary. SVG-PATH-COMMAND-PAYLOAD-P2 defines the concrete SVG command hydration boundary. PATH-COMMAND-PAYLOAD-P2 defines the neutral `Path` command dictionary/hydration boundary. | Tests are marked `@pytest.mark.condition("PATH-P1")`, `@pytest.mark.condition("PATH-DRAWING-COMMANDS-P2")`, `@pytest.mark.condition("PATH-DRAWING-LIVE-COMMANDS-P2")`, `@pytest.mark.condition("SVG-PATH-COMMAND-PAYLOAD-P2")`, or `@pytest.mark.condition("PATH-COMMAND-PAYLOAD-P2")`. |
-| Failure-mode | yes | Unsupported smooth commands, incomplete curve groups, malformed direct `PathDrawing` command collections, mutated live `PathDrawing.commands`, malformed `PathSVG` command payloads, and malformed neutral `Path` command payloads must fail loudly. | `test_path_pdf_rejects_commands_it_cannot_render`; `test_path_pdf_rejects_incomplete_curve_segments`; `test_path_drawing_rejects_malformed_command_collections`; `test_path_drawing_revalidates_mutated_commands_before_materialization`; `test_path_svg_factory_rejects_malformed_payload_roots`; `test_path_svg_factory_rejects_malformed_command_payloads`; `test_path_factory_rejects_malformed_command_payloads`; `test_path_add_command_rejects_malformed_command_dictionaries` |
+| Failure-mode | yes | Incomplete curve groups, malformed direct `PathDrawing` command collections, mutated live `PathDrawing.commands`, malformed `PathSVG` command payloads, and malformed neutral `Path` command payloads must fail loudly. | `test_path_pdf_rejects_incomplete_curve_segments`; `test_path_drawing_rejects_malformed_command_collections`; `test_path_drawing_revalidates_mutated_commands_before_materialization`; `test_path_svg_factory_rejects_malformed_payload_roots`; `test_path_svg_factory_rejects_malformed_command_payloads`; `test_path_factory_rejects_malformed_command_payloads`; `test_path_add_command_rejects_malformed_command_dictionaries` |
 | Integration/live-path | yes | DXF must exercise the public neutral group path, not just `_lwpolyline_entity()`. Mutated neutral path commands must also fail through `DrawingComponentGroup.to_group()`, not only direct helper calls. | `test_dxf_path_drawing_reuses_pdf_points_and_closure_flag` calls `DXFDocument.add_group()`; `test_path_group_materialization_revalidates_mutated_path_commands` calls `DrawingComponentGroup.to_group()`. |
-| Contract/API compatibility | yes | SVG keeps smooth commands while PDF rejects commands it cannot faithfully render. | `test_path_svg_preserves_smooth_commands_that_pdf_rejects`; `test_path_pdf_rejects_commands_it_cannot_render` |
+| Contract/API compatibility | yes | SVG preserves smooth commands and PDF renders equivalent smooth-command geometry in cubic form. | `test_path_svg_preserves_smooth_commands`; `test_path_pdf_reflects_smooth_cubic_and_quadratic_controls` |
 | Property/fuzz | limited | This slice proves representative command classes rather than arbitrary SVG path grammar. | Exact operator and failure tests over declared command partitions. |
 | Mutation | yes | Validation, failure branches, operator output, materialization, and DXF closure are proof-critical. | Mutation run result recorded below. |
 | Security/adversarial | no | The slice adds no file path, network, subprocess, auth, secrets, SQL, template, deserialization, font, image, or active-content surface. | Not applicable. |
@@ -236,8 +246,9 @@ Invariants:
 - `Path.points` preserves command order.
 - `Path.create_from_dict()` and dictionary-sourced `Path.add_command()` accept
   only mapping command payloads with string command types.
-- `PathPDF` never silently drops `S` or `T`.
-- `PathPDF` never silently truncates incomplete `C` or `Q` point groups.
+- `PathPDF` never silently drops `S` or `T`; it emits reflected cubic operators.
+- `PathPDF` never silently truncates incomplete `C`, `S`, `Q`, or `T` point
+  groups.
 - `PathSVG` preserves `S` and `T` command data.
 - `PathSVG.create_from_dict()` accepts only mapping roots and mapping command
   payloads with string command types.
@@ -258,15 +269,15 @@ Preconditions:
   dictionary payloads must be converted before construction.
 - Serialized `PathSVG` callers provide a `PathSVG` mapping payload; command
   entries are mappings whose `type` values are real strings.
-- PDF callers use only the declared supported PDF path command subset.
+- PDF callers use the declared supported PDF path command subset.
 - Callers do not monkey-patch renderer classes or mutate inherited private
   fields.
 
 Postconditions:
 
-- `PathPDF.generate_pdf()` emits deterministic operators for supported commands.
-- `PathPDF.generate_pdf()` raises `ValueError` for unsupported smooth commands
-  and incomplete curve groups.
+- `PathPDF.generate_pdf()` emits deterministic operators for supported commands,
+  including reflected smooth `S` and `T` commands.
+- `PathPDF.generate_pdf()` raises `ValueError` for incomplete curve groups.
 - `PathSVG.generate_svg()` serializes the path command list as SVG path data.
 - `PathSVG.create_from_dict()` hydrates valid serialized commands and flags
   into `PathCommand` objects.
@@ -295,8 +306,8 @@ Proof-critical mutation targets:
 - Changing command point aggregation should fail path point tests.
 - Changing PDF coordinate operators, quadratic conversion output, close-path
   output, or paint output should fail PDF operator tests.
-- Removing unsupported-command or incomplete-curve validation should fail
-  failure-mode tests.
+- Removing incomplete-curve validation should fail failure-mode tests.
+- Changing smooth-control reflection should fail smooth PDF operator tests.
 - Weakening `PathDrawing` command collection validation should fail direct
   constructor failure-mode tests.
 - Weakening live `PathDrawing.commands` revalidation should fail direct
@@ -462,6 +473,22 @@ Additional `PATH-DRAWING-LIVE-COMMANDS-P2` mutation result:
 - Gate result: passed for the declared `PATH-DRAWING-LIVE-COMMANDS-P2`
   runtime-validation domain.
 
+Additional `PATH-SMOOTH-PDF-P3` mutation result:
+
+- Tool and version: Cosmic Ray 8.4.6 in WSL.
+- Mutated source path: `src/InkGen/pdf_generator.py`.
+- Config: `tests/mutation/path_smooth_pdf_cosmic_ray.toml`.
+- Filter: `tests/mutation/filter_path_smooth_pdf_work_items.py`.
+- Test selection:
+  `python -m pytest -x tests/test_path_contract.py tests/test_pdf_generator.py`
+  through the mutation venv interpreter.
+- Raw work items: 4473.
+- Proof-critical work items after filtering: 110.
+- Mutants killed: 110.
+- Mutants survived: 0.
+- Gate result: passed for the declared `PATH-SMOOTH-PDF-P3` smooth-command
+  rendering and malformed-smooth-command validation domain.
+
 ## PO-PATH-001: Command Validation
 
 ### Claim
@@ -513,12 +540,12 @@ Proven for the stated domain.
 ### Claim
 
 `PathPDF.generate_pdf()` emits exact PDF path operators for supported commands
-`M`, `L`, `H`, `V`, `Q`, `C`, `A`, and `Z`.
+`M`, `L`, `H`, `V`, `Q`, `T`, `C`, `S`, `A`, and `Z`.
 
 ### Domain
 
 All `PathPDF` instances whose commands use the supported command subset and
-whose `C` and `Q` point counts are complete groups.
+whose `C`, `S`, `Q`, and `T` point counts are complete groups.
 
 ### Proof Method
 
@@ -530,61 +557,93 @@ Static path proof over `PathPDF._command_operators()`:
 4. `V` emits one `l` operator using current x and the new y-coordinate.
 5. `Q` converts each control/end pair to one cubic `c` operator through
    `_quadratic_to_cubic()`.
-6. `C` emits one cubic `c` operator for each control/control/end triple.
-7. `A` emits one line to the command end point under the current approximation
+6. `T` reflects the previous quadratic control when the previous segment was
+   `Q` or `T`, then converts the reflected control/end pair to cubic controls.
+7. `C` emits one cubic `c` operator for each control/control/end triple.
+8. `S` reflects the previous cubic second control when the previous segment was
+   `C` or `S`, then emits one cubic `c` operator for each control/end pair.
+9. `A` emits one line to the command end point under the current approximation
    contract.
-8. `Z` emits `h`.
-9. `generate_pdf()` wraps those operators with `_drawing_pdf()`.
+10. `Z` emits `h`.
+11. `generate_pdf()` wraps those operators with `_drawing_pdf()`.
 
 ### Conclusion
 
 Proven for the stated domain.
 
-## PO-PATH-004: Unsupported PDF Smooth Commands Fail
+## PO-PATH-013: PDF Smooth Commands Reflect Controls
 
 ### Claim
 
-`PathPDF.generate_pdf()` raises `ValueError` for `S` and `T` commands instead
-of silently omitting their geometry.
+`PathPDF.generate_pdf()` emits deterministic cubic operators for SVG smooth
+commands `S` and `T` by reflecting the previous applicable control point.
 
 ### Domain
 
-All `PathPDF` instances containing `S` or `T` commands.
+All `PathPDF` instances containing complete `S` or `T` command point groups.
 
 ### Proof Method
 
-At the start of each command loop, `_command_operators()` checks
-`command_type in {"S", "T"}` and raises `ValueError`. No path operator is
-returned for unsupported smooth commands.
+`PathPDF._command_operators()` tracks the previous command type, previous cubic
+second control, and previous quadratic control. `S` reflects the previous cubic
+control only after `C` or `S`, otherwise it uses the current point as the first
+cubic control. `T` reflects the previous quadratic control only after `Q` or
+`T`, otherwise it uses the current point as the quadratic control. Tests assert
+exact cubic operators for reflected controls, reset-after-line controls, and
+multiple smooth segments inside one command.
 
 ### Conclusion
 
-Proven for the stated domain.
+Proven for the stated smooth command domain.
 
 ## PO-PATH-005: Incomplete Curve Groups Fail
 
 ### Claim
 
-`PathPDF.generate_pdf()` raises `ValueError` for incomplete `C` and `Q` point
-groups, and for `A` commands without an endpoint, instead of emitting partial
-or missing geometry.
+`PathPDF.generate_pdf()` raises `ValueError` for incomplete `C`, `S`, `Q`, and
+`T` point groups, and for `A` commands without an endpoint, instead of emitting
+partial or missing geometry.
 
 ### Domain
 
 All `PathPDF` instances containing `C` commands whose point count is not a
-multiple of three, `Q` commands whose point count is not a multiple of two, or
-`A` commands without an endpoint.
+multiple of three, `S` commands whose point count is not a multiple of two, `Q`
+commands whose point count is not a multiple of two, `T` commands with no
+endpoints, or `A` commands without an endpoint.
 
 ### Proof Method
 
 At the start of each command loop, `_command_operators()` checks `C` point
-counts modulo three, `Q` point counts modulo two, and whether `A` has an
-endpoint. Any incomplete point group or missing arc endpoint raises
-`ValueError` before operator generation.
+counts modulo three, `S` point counts modulo two, `Q` point counts modulo two,
+whether `T` has an endpoint, and whether `A` has an endpoint. Any incomplete
+point group or missing endpoint raises `ValueError` before operator generation.
 
 ### Conclusion
 
 Proven for the stated domain.
+
+## PO-PATH-014: Malformed Smooth Commands Fail Explicitly
+
+### Claim
+
+Malformed smooth `S` and `T` commands fail before `PathPDF` emits partial PDF
+geometry.
+
+### Domain
+
+All `PathPDF` instances containing `S` commands with an odd number of points or
+`T` commands without endpoints.
+
+### Proof Method
+
+`PathPDF._command_operators()` validates `S` point counts modulo two before
+forming `(control_2, end)` pairs and validates that `T` has at least one
+endpoint before reflecting a quadratic control. The failure-mode test includes
+both malformed smooth partitions and asserts `ValueError` before output.
+
+### Conclusion
+
+Proven for the declared malformed smooth command partitions.
 
 ## PO-PATH-006: SVG Preserves Smooth Commands
 
