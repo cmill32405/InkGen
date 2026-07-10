@@ -993,6 +993,68 @@ def test_document_pdf_emits_nested_outlines_and_round_trips() -> None:
     assert recreated.to_pdf_bytes() == payload
 
 
+@pytest.mark.condition("PDF-DOC-DEEP-OUTLINE-P3")
+def test_document_pdf_emits_deep_outline_trees_and_round_trips() -> None:
+    """PDF-DOC-DEEP-OUTLINE-P3: Deep PDF outline trees render recursively."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    document.add_page()
+    document.add_page()
+    document.add_outline("Root", 1)
+    document.add_outline("Section", 2, parent="Root")
+    document.add_outline("Topic", 3, parent="Section", expanded=False)
+    document.add_outline("Leaf", 3, parent="Topic")
+    document.add_outline("Sibling", 2, parent="Root")
+    document.add_outline("Appendix", 3)
+
+    payload = document.to_pdf_bytes()
+    recreated = DocumentPDF.create_from_dict(document.parameters)
+    objects = _pdf_objects(payload)
+    outline_root_id = int(re.search(rb"/Outlines (?P<id>\d+) 0 R", payload).group("id"))  # type: ignore[union-attr]
+    outline_root = objects[outline_root_id]
+    root_id = int(re.search(rb"/First (?P<id>\d+) 0 R", outline_root).group("id"))  # type: ignore[union-attr]
+    section_id = root_id + 1
+    topic_id = root_id + 2
+    leaf_id = root_id + 3
+    sibling_id = root_id + 4
+    appendix_id = root_id + 5
+
+    assert payload == document.to_pdf_bytes()
+    assert f"/Last {appendix_id} 0 R".encode("ascii") in outline_root
+    assert b"/Count 6" in outline_root
+    assert f"/Parent {outline_root_id} 0 R".encode("ascii") in objects[root_id]
+    assert f"/Next {appendix_id} 0 R".encode("ascii") in objects[root_id]
+    assert f"/First {section_id} 0 R".encode("ascii") in objects[root_id]
+    assert f"/Last {sibling_id} 0 R".encode("ascii") in objects[root_id]
+    assert b"/Count 4" in objects[root_id]
+    assert f"/Parent {root_id} 0 R".encode("ascii") in objects[section_id]
+    assert f"/Next {sibling_id} 0 R".encode("ascii") in objects[section_id]
+    assert f"/First {topic_id} 0 R".encode("ascii") in objects[section_id]
+    assert f"/Last {topic_id} 0 R".encode("ascii") in objects[section_id]
+    assert b"/Count 2" in objects[section_id]
+    assert f"/Parent {section_id} 0 R".encode("ascii") in objects[topic_id]
+    assert f"/First {leaf_id} 0 R".encode("ascii") in objects[topic_id]
+    assert f"/Last {leaf_id} 0 R".encode("ascii") in objects[topic_id]
+    assert b"/Count -1" in objects[topic_id]
+    assert f"/Parent {topic_id} 0 R".encode("ascii") in objects[leaf_id]
+    assert b"/First" not in objects[leaf_id]
+    assert f"/Parent {root_id} 0 R".encode("ascii") in objects[sibling_id]
+    assert f"/Prev {section_id} 0 R".encode("ascii") in objects[sibling_id]
+    assert b"/Next" not in objects[sibling_id]
+    assert f"/Prev {root_id} 0 R".encode("ascii") in objects[appendix_id]
+    assert b"/Next" not in objects[appendix_id]
+    assert document.outlines() == (
+        {"title": "Root", "page_number": 1, "left": 0.0},
+        {"title": "Section", "page_number": 2, "left": 0.0, "parent": "Root"},
+        {"title": "Topic", "page_number": 3, "left": 0.0, "parent": "Section", "expanded": False},
+        {"title": "Leaf", "page_number": 3, "left": 0.0, "parent": "Topic"},
+        {"title": "Sibling", "page_number": 2, "left": 0.0, "parent": "Root"},
+        {"title": "Appendix", "page_number": 3, "left": 0.0},
+    )
+    assert recreated.parameters == document.parameters
+    assert recreated.to_pdf_bytes() == payload
+
+
 @pytest.mark.condition("PDF-DOC-OUTLINE-STATE-P3")
 def test_document_pdf_emits_collapsed_outline_state_and_round_trips() -> None:
     """PDF-DOC-OUTLINE-STATE-P3: Collapsed outline parents emit negative child counts."""
@@ -1055,6 +1117,18 @@ def test_document_pdf_rejects_invalid_outline_metadata() -> None:
     document.add_outline("duplicate", 1)
     with pytest.raises(ValueError, match="outline parent"):
         document.add_outline("ambiguous", 1, parent="duplicate")
+    document.clear_outlines()
+    document.add_outline("root", 1)
+    document.add_outline("branch", 1, parent="root")
+    document.add_outline("branch", 1)
+    with pytest.raises(ValueError, match="outline parent"):
+        document.add_outline("leaf", 1, parent="branch")
+    document.clear_outlines()
+    document.add_outline("root", 1)
+    document.add_outline("branch", 1, parent="root")
+    document.add_outline("leaf", 1, parent="branch")
+    with pytest.raises(ValueError, match="conflicts"):
+        document.add_outline("branch", 1)
     with pytest.raises((TypeError, ValueError)):
         document.add_outline("bad parent", 1, parent=object())  # type: ignore[arg-type]
     document.clear_outlines()
@@ -1118,6 +1192,26 @@ def test_document_pdf_outline_metadata_tracks_page_insertions_and_removals() -> 
     assert document.outlines() == (
         {"title": "tail", "page_number": 2, "left": 0.0},
         {"title": "tail child", "page_number": 2, "left": 0.0, "parent": "tail"},
+    )
+
+
+@pytest.mark.condition("PDF-DOC-DEEP-OUTLINE-P3")
+def test_document_pdf_deep_outline_page_removal_prunes_descendants() -> None:
+    """PDF-DOC-DEEP-OUTLINE-P3: Removing a nested parent prunes its descendants."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    document.add_page()
+    document.add_page()
+    document.add_outline("root", 1)
+    document.add_outline("branch", 2, parent="root")
+    document.add_outline("leaf", 3, parent="branch")
+    document.add_outline("sibling", 3, parent="root")
+
+    document.remove_page(2)
+
+    assert document.outlines() == (
+        {"title": "root", "page_number": 1, "left": 0.0},
+        {"title": "sibling", "page_number": 2, "left": 0.0, "parent": "root"},
     )
 
 

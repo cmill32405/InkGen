@@ -6,7 +6,7 @@ Accepted.
 
 ## Context
 
-InkGen supports deterministic top-level and one-level nested PDF outlines.
+InkGen supports deterministic top-level and nested PDF outlines.
 Synthetic fixtures need to represent whether a parent bookmark is initially
 expanded or collapsed because PDF parsers and viewers expose this through the
 sign of the outline item's `/Count` value. This can be added inside the existing
@@ -26,13 +26,12 @@ component architecture.
 - `DocumentPDF.create_from_dict()` restores missing `expanded` values as `True`
   and validates provided values through the public boundary.
 - Page insertion/removal preserves each outline's expansion state.
-- `DocumentPDF.to_pdf_bytes()` emits positive child `/Count` values for expanded
-  one-level parents and negative child `/Count` values for collapsed one-level
+- `DocumentPDF.to_pdf_bytes()` emits positive descendant `/Count` values for
+  expanded parents and negative descendant `/Count` values for collapsed
   parents.
 
 ## Out Of Scope
 
-- Arbitrary-depth outline trees.
 - Viewer-specific bookmark UI behavior beyond the PDF `/Count` sign.
 - Remote destinations.
 - Named destinations as outline targets.
@@ -55,3 +54,4 @@ component architecture.
 
 - ADR-0004: PDF flat outlines.
 - ADR-0008: PDF nested outlines.
+- ADR-0011: PDF deep outline trees.

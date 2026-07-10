@@ -13,7 +13,9 @@ destinations, or non-Latin-1 title encoding.
 
 ## Decision
 
-`DocumentPDF.add_outline()` accepts an optional `parent` argument:
+`DocumentPDF.add_outline()` accepts an optional `parent` argument for one-level
+children. ADR-0011 extends the same title-based model to arbitrary-depth outline
+trees.
 
 - `parent=None` creates a top-level outline.
 - `parent="<top-level title>"` creates a one-level child under an earlier unique
@@ -35,9 +37,10 @@ destinations, or non-Latin-1 title encoding.
 
 ## Out Of Scope
 
-- Grandchildren and arbitrary-depth outline trees.
-- Arbitrary-depth expansion/collapse state beyond the one-level policy accepted
-  in ADR-0010.
+- Grandchildren and arbitrary-depth outline trees were out of scope for this
+  decision and are covered by ADR-0011.
+- Arbitrary-depth expansion/collapse state was out of scope for this decision
+  and is covered by ADR-0011.
 - Remote destinations.
 - Named destinations as outline targets.
 - Non-Latin-1 outline titles or parent names.
@@ -62,3 +65,4 @@ destinations, or non-Latin-1 title encoding.
 - ADR-0006: PDF internal page links.
 - ADR-0007: PDF named destinations.
 - ADR-0010: PDF outline expansion state.
+- ADR-0011: PDF deep outline trees.

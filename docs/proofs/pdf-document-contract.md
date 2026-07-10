@@ -75,6 +75,8 @@ Affected surface:
   contract.
 - `docs/adr/0010-pdf-outline-expansion-state.md`: accepted ADR for the outline
   expansion-state contract.
+- `docs/adr/0011-pdf-deep-outline-trees.md`: accepted ADR for the arbitrary-depth
+  outline tree contract.
 
 Incoming dependencies:
 
@@ -90,7 +92,7 @@ Incoming dependencies:
   `DocumentPDF.parameters` plus `DocumentPDF.create_from_dict()` to preserve that
   metadata.
 - Callers can depend on `DocumentPDF.add_outline()` to create top-level or
-  one-level child PDF outline entries that target existing pages, and on
+  arbitrary-depth child PDF outline entries that target existing pages, and on
   serialization to preserve target, parent, and expansion state.
 - Callers can depend on `DocumentPDF.add_uri_link()` to create PDF URI link
   annotations on existing pages, and on serialization to preserve them.
@@ -148,17 +150,20 @@ Before/after edge changes:
   Insertions and removals shift or delete outline targets with affected page
   indices. `to_pdf_bytes()` emits a PDF `/Outlines` root, linked flat item
   objects, `/Dest` arrays, and `/PageMode /UseOutlines` in the catalog.
-- After the nested outline update, `DocumentPDF.add_outline(parent=...)` stores
-  one-level child outline relationships under an earlier unique top-level title.
+- After the nested outline update, `DocumentPDF.add_outline(parent=...)` added
+  title-based child outline relationships.
   Insertions and removals preserve parent metadata and prune orphan children when
   their parent outline is removed. `to_pdf_bytes()` emits deterministic
   root-level links, parent child links, child sibling links, and item `/Dest`
   arrays.
 - After the outline expansion update, `DocumentPDF.add_outline(expanded=...)`
   stores strict boolean expansion state. Insertions and removals preserve the
-  flag. `to_pdf_bytes()` emits positive child `/Count` values for expanded
-  one-level parents and negative child `/Count` values for collapsed one-level
-  parents.
+  flag. `to_pdf_bytes()` emits positive descendant `/Count` values for expanded
+  parents and negative descendant `/Count` values for collapsed parents.
+- After the deep outline update, parent lookup spans all existing outlines and
+  still requires exactly one matching title. `to_pdf_bytes()` emits recursive
+  parent, sibling, and child links at every depth, and parent `/Count` magnitude
+  is the number of descendant outline items.
 - After the URI link update, `DocumentPDF` owns a flat ordered URI link list.
   Insertions and removals shift or delete link page targets with affected page
   indices. `to_pdf_bytes()` emits page `/Annots` arrays and `/Subtype /Link`
@@ -191,11 +196,11 @@ Cycle/layer/coupling/redundancy result:
 - Page metadata is intentionally local to `DocumentPDF`; flow documents and
   renderer-neutral drawing components consume drawing primitives and do not own
   PDF page dictionary rendering.
-- Outline metadata is also local to `DocumentPDF`; deeper outline trees remain
-  deferred to avoid adding arbitrary hierarchy semantics before a concrete
-  parser-fixture need exists.
-- Outline expansion state is limited to one-level parent outlines; arbitrary
-  depth expansion semantics remain deferred with deeper outline trees.
+- Outline metadata is also local to `DocumentPDF`; arbitrary-depth hierarchy
+  semantics use the existing flat serialized outline list and title-based parent
+  references.
+- Outline expansion state applies at every outline depth; the PDF `/Count`
+  magnitude is computed from recursive descendants.
 - URI link metadata is local to `DocumentPDF`; generic annotations and richer
   annotation appearances remain deferred until there is a concrete fixture need.
 - Internal page link metadata is local to `DocumentPDF`; generic annotations and
@@ -226,6 +231,8 @@ ADR/rule impact:
   API and serialized parameters.
 - ADR-0010 records the outline expansion-state decision because this slice
   extends public API and serialized parameters.
+- ADR-0011 records the deep outline decision because this slice extends public
+  outline hierarchy semantics without changing the serialized payload shape.
 
 ## Domain Definitions
 
@@ -248,12 +255,12 @@ ADR/rule impact:
 - PDF outlines are insertion-ordered entries. Each entry has a non-empty
   Latin-1 title, targets an existing one-based page number, and has finite
   destination numbers when `left`, `top`, or `zoom` are provided.
-- A child outline may name one earlier unique top-level parent by exact title
-  value. Grandchildren and arbitrary-depth outline trees are intentionally out
-  of scope.
+- A child outline may name one earlier unique parent at any depth by exact title
+  value. Duplicate flat titles remain valid until the duplicate title is used as
+  a parent, at which point the parent reference is rejected as ambiguous.
 - Outline `expanded` state is a strict boolean. Expanded outlines are the
   default and omit `expanded` from serialized payloads. Collapsed outlines store
-  `expanded: false` and emit negative child `/Count` values when they have
+  `expanded: false` and emit negative descendant `/Count` values when they have
   children.
 - Omitted outline `top` and `zoom` values emit PDF `null` destination tokens.
 - Serialized outline entries must be rejected before rendering if malformed.
@@ -304,12 +311,15 @@ ADR/rule impact:
 | Flat outlines | Emit deterministic flat `/Outlines` root and linked item objects | PO-PDFDOC-010 | outline render/round-trip test | mutation target |
 | Outline target index shifts | Insert/remove pages shift or delete outline targets with page indices | PO-PDFDOC-011 | outline page mutation test | mutation target |
 | Serialized outline metadata | Reject malformed outline payloads before rendering | PO-PDFDOC-012 | serialized outline rejection test | mutation target |
-| Nested outlines | Emit deterministic one-level outline child chains and prune orphaned children | PO-PDFDOC-022 | nested outline render/round-trip and page mutation tests | mutation target |
+| Nested outlines | Emit deterministic outline child chains and prune orphaned children | PO-PDFDOC-022 | nested outline render/round-trip and page mutation tests | mutation target |
 | Nested outline parent validation | Reject missing, ambiguous, non-Latin-1, and non-string parents | PO-PDFDOC-023 | invalid parent and serialized parent tests | mutation target |
 | Nested outline serialization | Preserve child parent metadata through parameters and hydration | PO-PDFDOC-024 | nested outline round-trip test | mutation target |
 | Outline expansion state | Emit positive child counts for expanded parents and negative child counts for collapsed parents | PO-PDFDOC-028 | collapsed outline render/round-trip test | mutation target |
 | Outline expansion page shifts | Insert/remove pages preserve expansion state while shifting outline targets | PO-PDFDOC-029 | outline page mutation test | mutation target |
 | Serialized outline expansion state | Reject non-boolean expansion state and default missing values to expanded | PO-PDFDOC-030 | invalid serialized expanded test | mutation target |
+| Deep outline trees | Emit recursive parent, sibling, and child links at every depth | PO-PDFDOC-031 | deep outline render/round-trip test | mutation target |
+| Deep outline parent ambiguity | Reject ambiguous deep parent references before rendering | PO-PDFDOC-032 | invalid deep parent tests | mutation target |
+| Deep outline orphan pruning | Remove descendants whose parent chain no longer resolves | PO-PDFDOC-033 | deep page removal test | mutation target |
 | URI link annotations | Emit deterministic page `/Annots` arrays and `/Subtype /Link` URI action objects | PO-PDFDOC-013 | URI link render/round-trip test | mutation target |
 | URI link target index shifts | Insert/remove pages shift or delete URI link page targets with page indices | PO-PDFDOC-014 | URI link page mutation test | mutation target |
 | Serialized URI link metadata | Reject malformed URI link payloads before rendering | PO-PDFDOC-015 | serialized URI link rejection test | mutation target |
@@ -573,6 +583,40 @@ Current result after the outline expansion-state update:
 - Killed mutants: 12.
 - Surviving mutants: 0.
 - Gate result: pass.
+
+Current result after the deep outline tree update:
+
+- Tool: Cosmic Ray 8.4.6.
+- Config: `tests/mutation/pdf_document_deep_outline_cosmic_ray.toml`.
+- Filter: `tests/mutation/filter_pdf_document_deep_outline_work_items.py`.
+- Test selection: focused PDF document, factory payload, and PDF generator tests.
+- Raw work items: 4325.
+- Proof-critical work items after filter: 89.
+- Killed mutants: 82.
+- Equivalent survivors: 7.
+- Surviving equivalent mutations:
+  - `_outline_objects()` line 2126 changed the private defensive parent-count
+    check from `len(parent_indices) != 1` to `> 1` and `< 1`. The public
+    `add_outline(parent=...)` boundary admits only exactly-one parent matches,
+    and `DocumentPDF.create_from_dict()` delegates to that same boundary, so the
+    malformed internal states are outside the live public domain.
+  - `_outline_objects()` line 2128 changed `parent_indices[0]` to
+    `parent_indices[-1]` while the same public invariant guarantees the list has
+    exactly one element.
+  - `_outline_objects()` line 2132 changed `zip(..., strict=True)` to
+    `strict=False`. `outline_item_ids` is constructed from the outline count, so
+    it has exactly the same length as the outline sequence.
+  - `_outline_objects()` line 2138 changed `outline_indices_by_title[parent][0]`
+    to `[-1]`. Public parent validation guarantees one matching parent index.
+  - `_outline_objects()` line 2143 changed `sibling_position > 0` to
+    `sibling_position != 0`. `list.index()` returns non-negative indices, so the
+    predicates are equivalent for every sibling position.
+  - `_outline_objects()` line 2144 changed
+    `sibling_position + 1 < len(siblings)` to
+    `sibling_position + 1 != len(siblings)`. In the loop domain,
+    `sibling_position + 1 <= len(siblings)` always holds, so the predicates are
+    equivalent.
+- Gate result: pass with documented equivalent survivors.
 
 Current result after the text annotation update:
 
@@ -865,16 +909,16 @@ Proven for serialized top-level outlines in the declared payload domain.
 
 ### Claim
 
-`DocumentPDF` emits deterministic one-level nested PDF outlines with root-level
-sibling links, parent child links, child sibling links, and valid `/Dest` arrays.
-When page removal deletes a parent outline, surviving children of that parent are
+`DocumentPDF` emits deterministic nested PDF outlines with root-level sibling
+links, parent child links, child sibling links, and valid `/Dest` arrays. When
+page removal deletes a parent outline, surviving children of that parent are
 pruned rather than emitted as orphaned outline objects.
 
 ### Proof Method
 
 `add_outline(parent=...)` stores an optional parent title after validating that
-the parent is exactly one earlier top-level outline, and rejects later top-level
-duplicates that would make existing child relationships ambiguous.
+the parent is exactly one earlier outline, and rejects later duplicates that
+would make existing child relationships ambiguous.
 `_outline_objects()` derives top-level and child sibling chains from the ordered
 outline list, emits
 `/First`, `/Last`, `/Prev`, `/Next`, `/Parent`, and `/Count` relationships, and
@@ -883,15 +927,15 @@ whose page survives while the parent page is removed, proving orphan pruning.
 
 ### Counterexamples And Exclusions
 
-Grandchildren, arbitrary-depth outline trees, remote destinations, and named
-destination outline targets are excluded from this one-level nested outline
-slice. One-level expansion state is covered by PO-PDFDOC-028 through
+Remote destinations and named destination outline targets are excluded from this
+nested outline slice. Deep outline recursion is covered by PO-PDFDOC-031 through
+PO-PDFDOC-033. Expansion state is covered by PO-PDFDOC-028 through
 PO-PDFDOC-030.
 
 ### Conclusion
 
-Proven for one-level nested Latin-1 outlines in the declared PDF document domain,
-with the equivalent mutation survivors documented above.
+Proven for nested Latin-1 outlines in the declared PDF document domain, with the
+equivalent mutation survivors documented above.
 
 ## PO-PDFDOC-023: Nested Outline Parents Fail Explicitly
 
@@ -905,12 +949,12 @@ ambiguous.
 ### Proof Method
 
 The public boundary coerces parent titles through the same Latin-1 outline-title
-validator used for outline titles, then matches only top-level outlines by title
-value. Tests cover missing parents, duplicate top-level parent titles, value
-equality for an independently constructed matching string, and invalid object
-parents. Tests also cover a later top-level duplicate after a child exists.
-Serialized-payload tests cover malformed `parent` values and serialized
-duplicate-after-child ambiguity through `DocumentPDF.create_from_dict()`.
+validator used for outline titles, then matches all existing outlines by title
+value. Tests cover missing parents, duplicate parent titles, value equality for
+an independently constructed matching string, and invalid object parents. Tests
+also cover a later duplicate after a child exists. Serialized-payload tests cover
+malformed `parent` values and serialized duplicate-after-child ambiguity through
+`DocumentPDF.create_from_dict()`.
 
 ### Conclusion
 
@@ -933,35 +977,33 @@ between the original document and a document recreated from parameters.
 
 ### Conclusion
 
-Proven for serialized one-level nested outlines in the declared payload domain.
+Proven for serialized nested outlines in the declared payload domain.
 
 ## PO-PDFDOC-028: Collapsed PDF Outline Parents Emit Negative Child Counts
 
 ### Claim
 
-`DocumentPDF` emits positive child `/Count` values for expanded one-level parent
-outlines and negative child `/Count` values for collapsed one-level parent
-outlines.
+`DocumentPDF` emits positive descendant `/Count` values for expanded parent
+outlines and negative descendant `/Count` values for collapsed parent outlines.
 
 ### Proof Method
 
 `add_outline(expanded=...)` validates a strict boolean and stores it on
-`_PDFOutlineEntry`. `_outline_objects()` derives each parent's immediate child
-list and emits `/Count len(children)` for expanded parents or
-`/Count -len(children)` for collapsed parents. The behavioral test renders both
-an expanded and collapsed parent, parses the outline objects, asserts exact
-positive and negative count bytes, and verifies deterministic serialization
-round-trip equality.
+`_PDFOutlineEntry`. `_outline_objects()` derives each parent's child list and
+uses `_outline_descendant_count()` to compute `/Count` magnitude recursively.
+Expanded parents emit positive counts and collapsed parents emit negative counts.
+Behavioral tests render expanded and collapsed parents, parse the outline
+objects, assert exact positive and negative count bytes, and verify deterministic
+serialization round-trip equality.
 
 ### Counterexamples And Exclusions
 
 Leaf outline items do not emit `/Count` because they have no children.
-Arbitrary-depth expansion state is excluded with deeper outline trees.
 
 ### Conclusion
 
-Proven for one-level Latin-1 outline parents in the declared PDF document domain,
-with mutation verification documented above.
+Proven for Latin-1 outline parents in the declared PDF document domain, with
+mutation verification documented above.
 
 ## PO-PDFDOC-029: Outline Expansion State Follows Page Mutations
 
@@ -1002,8 +1044,72 @@ existing default-left behavior and collapsed-state preservation.
 
 ### Conclusion
 
-Proven for serialized one-level outline expansion state in the declared payload
-domain, with mutation verification documented above.
+Proven for serialized outline expansion state in the declared payload domain,
+with mutation verification documented above.
+
+## PO-PDFDOC-031: Deep PDF Outlines Emit Recursive Links
+
+### Claim
+
+`DocumentPDF` emits deterministic recursive outline dictionaries for children at
+any depth, including parent links, sibling links, child links, and descendant
+`/Count` values.
+
+### Proof Method
+
+`_outline_objects()` maps outline titles to insertion indices, resolves each
+child's parent to exactly one existing outline, builds child lists by parent
+index, and emits `/Parent`, `/Prev`, `/Next`, `/First`, `/Last`, and `/Count`
+links from those lists. The deep-outline behavioral test renders a root,
+section, collapsed topic, leaf, sibling, and second top-level outline; it parses
+object ids and asserts exact recursive links, descendant counts, collapsed
+counts, deterministic bytes, and serialized round-trip equality.
+
+### Conclusion
+
+Proven for arbitrary-depth Latin-1 outline trees admitted by the public
+`DocumentPDF.add_outline()` boundary.
+
+## PO-PDFDOC-032: Deep Outline Parent Ambiguity Fails Explicitly
+
+### Claim
+
+Deep outline parent references fail before mutation or rendering when the parent
+title is missing, malformed, or ambiguous.
+
+### Proof Method
+
+`add_outline(parent=...)` validates parent titles and requires exactly one
+existing outline with the requested title. Tests create duplicate candidate
+parents and prove a deeper child cannot select between them. Tests also prove a
+later duplicate of a title already used as a parent is rejected so stored child
+relationships remain deterministic.
+
+### Conclusion
+
+Proven for title-based deep parent references at the public API and serialized
+payload boundary.
+
+## PO-PDFDOC-033: Deep Outline Page Removal Prunes Descendants
+
+### Claim
+
+When page removal deletes an outline in the middle of a hierarchy, descendants
+whose parent chain no longer resolves are pruned.
+
+### Proof Method
+
+`_shift_pdf_page_metadata_for_removal()` first removes outlines targeting the
+deleted page, then calls `_outlines_with_valid_parent_chains()`. That helper
+retains only outlines whose parent is absent or already retained earlier in the
+serialized insertion order. The deep page-removal test deletes a nested branch
+and proves its surviving grandchild is pruned while a sibling with a still-valid
+parent remains and shifts page number.
+
+### Conclusion
+
+Proven for deep outline hierarchies whose page targets are admitted by
+`DocumentPDF.remove_page()`.
 
 ## PO-PDFDOC-013: URI Link Annotations Emit And Round Trip
 

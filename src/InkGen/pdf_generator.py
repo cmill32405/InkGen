@@ -1728,9 +1728,9 @@ class DocumentPDF(Document):
         parent_title = None
         if parent is not None:
             parent_title = _coerce_pdf_outline_title(parent)
-            matches = [outline for outline in self._pdf_outlines if outline.parent is None and outline.title == parent_title]
+            matches = [outline for outline in self._pdf_outlines if outline.title == parent_title]
             if len(matches) != 1:
-                raise ValueError("outline parent must match exactly one existing top-level outline")
+                raise ValueError("outline parent must match exactly one existing outline")
         elif any(outline.parent == outline_title for outline in self._pdf_outlines):
             raise ValueError("outline title conflicts with an existing child outline parent")
         left_value = _coerce_pdf_destination_number(left, "left")
@@ -1994,8 +1994,7 @@ class DocumentPDF(Document):
             for outline in self._pdf_outlines
             if outline.page_number != page_number
         ]
-        top_level_titles = {outline.title for outline in self._pdf_outlines if outline.parent is None}
-        self._pdf_outlines = [outline for outline in self._pdf_outlines if outline.parent is None or outline.parent in top_level_titles]
+        self._pdf_outlines = self._outlines_with_valid_parent_chains(self._pdf_outlines)
         self._pdf_uri_links = [
             _PDFUriLinkAnnotation(
                 link.page_number - 1 if link.page_number > page_number else link.page_number,
@@ -2086,6 +2085,17 @@ class DocumentPDF(Document):
         return payload
 
     @staticmethod
+    def _outlines_with_valid_parent_chains(outlines: Sequence[_PDFOutlineEntry]) -> list[_PDFOutlineEntry]:
+        """Return outlines whose parent chain still resolves in insertion order."""
+        retained: list[_PDFOutlineEntry] = []
+        valid_parent_titles: set[str] = set()
+        for outline in outlines:
+            if outline.parent is None or outline.parent in valid_parent_titles:
+                retained.append(outline)
+                valid_parent_titles.add(outline.title)
+        return retained
+
+    @staticmethod
     def _outline_destination(outline: _PDFOutlineEntry, page_ids_by_number: Mapping[int, int]) -> str:
         """Return a PDF outline destination array."""
         page_id = page_ids_by_number[outline.page_number]
@@ -2106,29 +2116,36 @@ class DocumentPDF(Document):
         objects: dict[int, str] = {}
         object_ids_by_index = dict(enumerate(outline_item_ids))
         top_level_indices = [index for index, outline in enumerate(outlines) if outline.parent is None]
-        child_indices_by_parent: dict[str, list[int]] = {}
+        outline_indices_by_title: dict[str, list[int]] = {}
+        for index, outline in enumerate(outlines):
+            outline_indices_by_title.setdefault(outline.title, []).append(index)
+        child_indices_by_parent_index: dict[int, list[int]] = {}
         for index, outline in enumerate(outlines):
             if outline.parent is not None:
-                child_indices_by_parent.setdefault(outline.parent, []).append(index)
+                parent_indices = outline_indices_by_title.get(outline.parent, [])
+                if len(parent_indices) != 1:
+                    raise ValueError("outline parent must match exactly one existing outline")
+                child_indices_by_parent_index.setdefault(parent_indices[0], []).append(index)
         first_id = object_ids_by_index[top_level_indices[0]]
         last_id = object_ids_by_index[top_level_indices[-1]]
         objects[outline_root_id] = f"<< /Type /Outlines /First {first_id} 0 R /Last {last_id} 0 R /Count {len(outlines)} >>"
-        top_index_by_title = {outlines[index].title: index for index in top_level_indices}
         for index, (object_id, outline) in enumerate(zip(outline_item_ids, outlines, strict=True)):
             if outline.parent is None:
                 siblings = top_level_indices
                 parent_id = outline_root_id
-                children = child_indices_by_parent.get(outline.title, [])
+                children = child_indices_by_parent_index.get(index, [])
             else:
-                siblings = child_indices_by_parent[outline.parent]
-                parent_id = object_ids_by_index[top_index_by_title[outline.parent]]
-                children = []
+                parent_index = outline_indices_by_title[outline.parent][0]
+                siblings = child_indices_by_parent_index[parent_index]
+                parent_id = object_ids_by_index[parent_index]
+                children = child_indices_by_parent_index.get(index, [])
             sibling_position = siblings.index(index)
             prev_link = f" /Prev {object_ids_by_index[siblings[sibling_position - 1]]} 0 R" if sibling_position > 0 else ""
             next_link = f" /Next {object_ids_by_index[siblings[sibling_position + 1]]} 0 R" if sibling_position + 1 < len(siblings) else ""
             child_links = ""
             if children:
-                count = len(children) if outline.expanded else -len(children)
+                descendant_count = DocumentPDF._outline_descendant_count(index, child_indices_by_parent_index)
+                count = descendant_count if outline.expanded else -descendant_count
                 child_links = f" /First {object_ids_by_index[children[0]]} 0 R /Last {object_ids_by_index[children[-1]]} 0 R /Count {count}"
             destination = DocumentPDF._outline_destination(outline, page_ids_by_number)
             objects[object_id] = (
@@ -2136,6 +2153,12 @@ class DocumentPDF(Document):
                 f"{prev_link}{next_link}{child_links} /Dest {destination} >>"
             )
         return objects
+
+    @staticmethod
+    def _outline_descendant_count(index: int, child_indices_by_parent_index: Mapping[int, Sequence[int]]) -> int:
+        """Return the number of descendant outline items below one outline index."""
+        children = child_indices_by_parent_index.get(index, ())
+        return len(children) + sum(DocumentPDF._outline_descendant_count(child, child_indices_by_parent_index) for child in children)
 
     @staticmethod
     def _uri_link_payload(link: _PDFUriLinkAnnotation) -> dict[str, object]:

@@ -42,8 +42,8 @@ parser-facing technical drawings because it supports pages, vector primitives,
 closed renderer domains, deterministic bytes, extraction/grammar truth, raster
 images with alpha, JPEG pass-through, ICC profile emission, Standard 14 fonts,
 named TrueType/OpenType font embedding, page labels, Crop/Bleed/Trim/Art page
-boxes, flat and one-level nested outlines/bookmarks, URI links, internal page
-links, named destinations, named-destination links, text annotations,
+boxes, flat and arbitrary-depth nested outlines/bookmarks, URI links, internal
+page links, named destinations, named-destination links, text annotations,
 stroke/fill opacity through PDF ExtGState resources, and stroke
 dash/cap/join/miter operators.
 
@@ -55,7 +55,7 @@ creation system are:
 | Text encoding | WinAnsi literal strings, installed-font embedding, and printable WinAnsi `/ToUnicode` CMaps | Unicode/CID fonts, glyph subsetting, and full complex-script text extraction maps |
 | Text layout | Single positioned text components | Multi-line wrapping, alignment, tabs, columns, kerning, and complex-script shaping |
 | Graphics state | Basic stroke/fill primitives, stroke/fill alpha ExtGState resources, and stroke dash/cap/join/miter operators | Clipping paths, opacity groups, blend modes, gradients, and patterns |
-| Document structure | Pages, deterministic metadata, page labels, Crop/Bleed/Trim/Art boxes, flat and one-level nested outlines/bookmarks, URI links, internal page links, named destinations, named-destination links, and text annotations | Generic non-text annotations, deeper outline trees, and tagged PDF structure |
+| Document structure | Pages, deterministic metadata, page labels, Crop/Bleed/Trim/Art boxes, flat and arbitrary-depth nested outlines/bookmarks, URI links, internal page links, named destinations, named-destination links, and text annotations | Generic non-text annotations and tagged PDF structure |
 | Color/profile support | Device RGB/CMYK and JPEG ICC profile objects | Broader calibrated color spaces and selectable PDF/A-style archival constraints |
 | Import/conversion | SVG input remains SVG-only | Arbitrary SVG-to-PDF conversion and external PDF embedding are out of scope until explicitly approved |
 | Optimization/security | Classic xref table and plain objects | Object streams, font/image subsetting, encryption, and signatures if those become product requirements |
@@ -89,15 +89,16 @@ names, and box coordinates fail at the `DocumentPDF` boundary before rendering.
 `DocumentPDF` also supports PDF outlines through `add_outline()`. Each outline
 has a Latin-1 title, targets an existing page, and may set PDF `/XYZ`
 destination `left`, `top`, and `zoom` values. Omitted `top` or `zoom` values are
-emitted as PDF `null` destination entries. Omit `parent` for a top-level outline.
-Use `parent="<top-level title>"` for a one-level child under an earlier unique
-top-level outline. Use `expanded=False` on a parent outline to emit a collapsed
-bookmark state with a negative child `/Count`; expanded outlines are the default
-and omit the serialized flag. Outlines are stored in document parameters,
-round-trip through `DocumentPDF.create_from_dict()`, follow page insertions and
-removals, prune orphaned children when a parent outline is removed, and are
-emitted as deterministic root, sibling, and child outline objects. Deeper outline
-trees are intentionally out of scope for the current backend.
+emitted as PDF `null` destination entries. Omit `parent` for a top-level
+outline. Use `parent="<title>"` for a child under an earlier outline whose title
+matches exactly one existing outline. Duplicate flat titles remain valid until a
+caller tries to use that title as a parent. Use `expanded=False` on a parent
+outline to emit a collapsed bookmark state with a negative descendant `/Count`;
+expanded outlines are the default and omit the serialized flag. Outlines are
+stored in document parameters, round-trip through
+`DocumentPDF.create_from_dict()`, follow page insertions and removals, prune
+orphaned descendants when a parent outline is removed, and are emitted as
+deterministic root, sibling, and recursive child outline objects.
 
 URI link annotations can be added through `DocumentPDF.add_uri_link()`. Each
 link targets an existing source page, stores a finite positive-area rectangle
@@ -127,8 +128,7 @@ deterministically by destination name, round-trip through
 `DocumentPDF.create_from_dict()`, and follow page insertions and removals. Links
 to named destinations are deterministic `/Subtype /Link` annotations with a
 literal-string `/Dest`. Generic PDF annotation types, rich annotation
-appearances, deeper outline trees, and tagged PDF structure are intentionally out of
-scope.
+appearances, and tagged PDF structure are intentionally out of scope.
 
 Text annotations can be added through `DocumentPDF.add_text_annotation()`. Each
 annotation has an existing source page, a finite positive-area rectangle inside
