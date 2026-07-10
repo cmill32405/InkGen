@@ -746,7 +746,9 @@ def test_text_pdf_escapes_literal_string_control_characters(text_style: TextStyl
     """PDF-P1: TextPDF escapes literal-string delimiter and control characters."""
     content = TextPDF("A\\B(C)\r\nD", (1.0, 2.0), text_style).generate_pdf()
 
-    assert r"(A\\B\(C\)\r\nD) Tj" in content
+    assert r"(A\\B\(C\)) Tj" in content
+    assert "(D) Tj" in content
+    assert r"\r\n" not in content
 
 
 @pytest.mark.condition("PDF-P1")

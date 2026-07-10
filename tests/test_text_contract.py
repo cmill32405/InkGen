@@ -110,11 +110,31 @@ def test_text_pdf_emits_exact_text_object_and_escapes_string(text_style: TextSty
             "BT",
             "/F1 12 Tf",
             "1 0 0 -1 12.5 7.5 Tm",
-            r"(A\\B\(C\)\nD) Tj",
+            r"(A\\B\(C\)) Tj",
+            "1 0 0 -1 12.5 19.5 Tm",
+            "(D) Tj",
             "ET",
             "Q",
         ]
     )
+
+
+@pytest.mark.condition("TEXT-P1")
+def test_text_pdf_multiline_uses_line_spacing_and_normalizes_line_breaks(text_style: TextStyle) -> None:
+    """TEXT-P1: TextPDF emits one positioned text operation per normalized line."""
+    text_style.line_spacing = 1.25
+
+    operators = TextPDF("Top\r\nMiddle\rBottom", (3.0, 4.0), text_style).generate_pdf().splitlines()
+
+    assert operators[4:10] == [
+        "1 0 0 -1 3 4 Tm",
+        "(Top) Tj",
+        "1 0 0 -1 3 19 Tm",
+        "(Middle) Tj",
+        "1 0 0 -1 3 34 Tm",
+        "(Bottom) Tj",
+    ]
+    assert all("\\r" not in operator and "\\n" not in operator for operator in operators if operator.endswith("Tj"))
 
 
 @pytest.mark.condition("TEXT-P1")

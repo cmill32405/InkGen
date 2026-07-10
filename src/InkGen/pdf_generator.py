@@ -1544,7 +1544,13 @@ class TextPDF(TextComponent, PDFGeneratorInterface):
         color = _color_components(getattr(self.style, "color", "#000000")) or (0.0, 0.0, 0.0)
         size = float(getattr(self.style.font, "size", 10.0))
         x, y = self.position
-        escaped = _escape_pdf_string(self.text)
+        line_spacing = float(getattr(self.style, "line_spacing", 1.0))
+        lines = self.text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        text_operators: list[str] = []
+        for index, line in enumerate(lines):
+            line_y = y + (index * size * line_spacing)
+            text_operators.append(f"1 0 0 -1 {_number(x)} {_number(line_y)} Tm")
+            text_operators.append(f"({_escape_pdf_string(line)}) Tj")
         font_resource = context.font_resource_name(self.style) if context is not None else "F1"
         return "\n".join(
             [
@@ -1552,8 +1558,7 @@ class TextPDF(TextComponent, PDFGeneratorInterface):
                 f"{_number(color[0])} {_number(color[1])} {_number(color[2])} rg",
                 "BT",
                 f"/{font_resource} {_number(size)} Tf",
-                f"1 0 0 -1 {_number(x)} {_number(y)} Tm",
-                f"({escaped}) Tj",
+                *text_operators,
                 "ET",
                 "Q",
             ]

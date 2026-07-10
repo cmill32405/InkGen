@@ -142,6 +142,8 @@ ADR/rule impact:
   black/10-point fallback constants.
 - `TextPDF.generate_pdf()` now asks `PDFRenderContext` for its font resource
   when rendered inside `DocumentPDF`.
+- `TextPDF.generate_pdf()` now normalizes CRLF/CR/LF line breaks and emits one
+  positioned PDF text-showing operation per line using `TextStyle.line_spacing`.
 - `DocumentPDF.to_pdf_bytes()` now emits built-in PDF Standard font resources
   for Helvetica, Times, and Courier family classes, including bold and italic
   variants, instead of always binding `/F1` to Helvetica.
@@ -167,7 +169,7 @@ ADR/rule impact:
 | Malformed, boolean, or non-finite anchor | Reject at boundary | PO-TEXT-002 | `test_text_component_rejects_invalid_position_boundaries` | killed/equivalent |
 | Negative text anchor | Preserve as valid text placement | PO-TEXT-001 | valid-position tests and policy note | killed/equivalent |
 | SVG output | Emit exact escaped text element | PO-TEXT-003 | `test_text_svg_emits_exact_escaped_text` | killed/equivalent |
-| PDF output | Emit exact escaped text object | PO-TEXT-004 | `test_text_pdf_emits_exact_text_object_and_escapes_string` | killed/equivalent |
+| PDF output | Emit exact escaped text object and one positioned text operation per normalized line | PO-TEXT-004 | `test_text_pdf_emits_exact_text_object_and_escapes_string`, `test_text_pdf_multiline_uses_line_spacing_and_normalizes_line_breaks` | killed/equivalent |
 | PDF defensive defaults | Use black and 10-point defaults for incomplete internals | PO-TEXT-004 | `test_text_pdf_uses_black_and_ten_point_defensive_defaults` | killed |
 | PDF Standard font resources | Map built-in family/style/weight classes to deterministic page resources | PO-TEXT-010 | `test_document_pdf_maps_text_styles_to_standard_font_resources`, `test_document_pdf_maps_standard_font_variants`, `test_document_pdf_numeric_weight_threshold_keeps_599_regular`, `test_document_pdf_empty_page_has_no_font_resource_dictionary` | killed |
 | PDF embedded named font resources | Embed named installed fonts with widths, descriptors, font-file streams, and deterministic reuse | PO-TEXT-011 | `test_document_pdf_embeds_named_installed_font_resources`, `test_document_pdf_reuses_embedded_font_resources_across_sizes`, `test_pdf_embedded_font_helpers_cover_missing_glyphs_and_open_type_streams`, `test_pdf_embedded_font_lookup_falls_back_for_missing_font_files`, `test_font_preserves_requested_family_for_renderer_policy` | killed/equivalent |
@@ -178,7 +180,7 @@ ADR/rule impact:
 | Non-scalar neutral text payloads | Reject at `TextDrawing` construction and FlowDocument hydration | PO-TEXT-008 | `test_text_drawing_rejects_non_scalar_text_payloads`, `test_flow_document_hydration_rejects_malformed_text_drawing_payloads` | killed |
 | Neutral text anchors | Normalize finite pairs and reject malformed anchors before public state is exposed | PO-TEXT-009 | `test_text_drawing_normalizes_valid_position_before_materialization`, `test_text_drawing_rejects_malformed_positions_before_materialization`, `test_flow_document_hydration_rejects_malformed_text_drawing_positions` | killed/equivalent |
 | DXF output | Emit `TEXT` entity with transformed anchor | PO-TEXT-007 | `test_dxf_text_drawing_exports_text_entity_with_canvas_transform` | killed/equivalent |
-| Multiline text layout, rich text runs, Unicode/CID font encoding, complex shaping in PDF operators, and glyph subsetting | Excluded from proven domain | Explicit exclusion | Not applicable | Out of scope |
+| Rich text runs, Unicode/CID font encoding, complex shaping in PDF operators, and glyph subsetting | Excluded from proven domain | Explicit exclusion | Not applicable | Out of scope |
 
 ## Test Applicability Matrix
 
@@ -207,6 +209,8 @@ Proof-critical mutation targets:
   tests.
 - Changing PDF color, font-size, matrix, escaping, font resource selection, or
   text operators should fail exact output tests.
+- Changing PDF line-break normalization, line-spacing offsets, or per-line
+  escaping should fail multiline PDF output tests.
 - Removing or misrouting PDF `/ToUnicode` CMaps should fail font-resource
   extraction-map tests.
 - Redirecting `TextDrawing.to_component()` should fail materialization tests.
@@ -236,6 +240,11 @@ Current result:
   `tests/mutation/pdf_tounicode_cosmic_ray.toml`, filtered by
   `tests/mutation/filter_pdf_tounicode_work_items.py`: 50 work items, 50
   killed, and 0 survived.
+- PDF multiline text continuation:
+  `tests/mutation/pdf_text_multiline_cosmic_ray.toml`, filtered by
+  `tests/mutation/filter_pdf_text_multiline_work_items.py`: 4,509 raw work
+  items filtered to 15 proof-critical items; 13 killed and 2 survived as
+  documented equivalents.
 - Equivalent survivor classes:
   - Embedded-font fallback exception replacements still return `None` for the
     tested missing-file and invalid-font paths, preserving Standard 14 fallback.
@@ -247,6 +256,10 @@ Current result:
     domain.
   - Font-file subtype comparisons for the literal `FontFile3` are equivalent
     for the tested TrueType and OpenType resource objects.
+  - `TextPDF.generate_pdf()` fallback `line_spacing` default mutations from
+    `1.0` to `0.0` or `2.0` are equivalent for the valid `TextStyle` domain
+    because `TextStyle` construction always exposes a validated
+    `line_spacing` attribute.
 - Incompetent mutants were invalid boolean/exception/subtype mutations that
   could not run as viable behavioral alternatives.
 - Equivalent survivors:
@@ -337,23 +350,35 @@ Proven for the stated domain after tests and mutation pass.
 ### Claim
 
 `TextPDF.generate_pdf()` emits deterministic PDF text operators, escaped literal
-string content, color, font size, and text matrix.
+string content, color, font size, text matrices, and one text-showing operation
+per normalized text line.
 
 ### Domain
 
-All `TextPDF` instances with valid text anchors and text styles. The defensive
-default branch is also proven for incomplete style internals.
+All `TextPDF` instances with valid text anchors and text styles. The multiline
+domain covers LF, CRLF, and CR line breaks and uses `TextStyle.line_spacing` as
+the line advance multiplier. The defensive default branch is also proven for
+incomplete style internals.
 
 ### Proof Method
 
 The exact PDF output assertion checks graphics-state save/restore, color,
 `BT`/`ET`, font selection, text matrix, escaped literal text, and `Tj`.
-The fallback assertion checks black color and 10-point defaults when style
-internals are incomplete.
+The multiline assertion checks CRLF/CR/LF normalization, per-line `Tm`/`Tj`
+operators, line-spacing y offsets, and absence of raw line-break escape text in
+PDF literals. The fallback assertion checks black color and 10-point defaults
+when style internals are incomplete.
+
+### Counterexamples And Exclusions
+
+This obligation handles explicit line breaks only. Automatic wrapping,
+alignment across line boxes, tabs, rich text runs, Unicode/CID font encoding,
+complex shaping, vertical text, and glyph subsetting remain out of scope.
 
 ### Conclusion
 
-Proven for the stated domain after tests and mutation pass.
+Proven for the stated domain after focused tests and scoped mutation, with
+equivalent default-fallback survivors documented above.
 
 ## PO-TEXT-010: PDF Uses Standard Font Resources From TextStyle
 
