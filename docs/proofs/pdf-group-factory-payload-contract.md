@@ -11,12 +11,14 @@ The slice covers:
 
 - `ComponentGroupPDF.create_from_dict()`
 - `ComponentGroupPDF.set_clip_rect()`, `clear_clip_rect()`, and `clip_rect()`.
+- `ComponentGroupPDF.set_clip_path()`, `clear_clip_path()`, and `clip_path()`.
 - `ComponentGroupPDF.set_blend_mode()`, `clear_blend_mode()`, and
   `blend_mode()`.
 - PDF child component envelope validation.
 - PDF child style envelope validation.
 - Closed PDF component type dispatch.
 - Rectangular PDF group clip serialization, hydration, and render output.
+- Closed PDF group clip-path serialization, hydration, and render output.
 - Standard PDF group blend-mode serialization, hydration, and render output.
 
 Out of scope:
@@ -54,17 +56,21 @@ Public contract:
 - Valid `ComponentGroupPDF` payloads hydrate to equivalent groups.
 - Optional `clip_rect` payloads hydrate to finite positive rectangular PDF
   group clipping state.
+- Optional `clip_path` payloads hydrate to closed `PathCommand`-based PDF group
+  clipping state.
 - Optional `blend_mode` payloads hydrate to a supported standard PDF blend
   mode or clear the setting for `Normal`.
 - Malformed roots, missing `group_label`, missing or malformed `components`,
-  malformed `clip_rect`, malformed `blend_mode`, malformed child entries,
-  malformed style envelopes, and unsupported child or style types fail
+  malformed `clip_rect`, malformed `clip_path`, malformed `blend_mode`,
+  malformed child entries, malformed style envelopes, and unsupported child or style types fail
   explicitly before dynamic dispatch or rendering.
 - Child payloads still flow through the concrete child factory contract.
 
 Serialized/artifact contract:
 
 - `ComponentGroupPDF.parameters` adds `clip_rect` only when a group clip is
+  configured.
+- `ComponentGroupPDF.parameters` adds `clip_path` only when a group clip path is
   configured.
 - `ComponentGroupPDF.parameters` adds `blend_mode` only when a non-default
   group blend mode is configured.
@@ -84,6 +90,7 @@ ADR/rule impact:
 
 - ADR-0014 records the bounded PDF group clipping decision.
 - ADR-0015 records the bounded PDF group blend-mode decision.
+- ADR-0017 records the bounded PDF group clip-path decision.
 - The slices preserve the dependency-free PDF renderer policy and add no
   library.
 
@@ -98,6 +105,12 @@ ADR/rule impact:
   document coordinates: `(x, y, width, height)`.
 - Clip rectangle values must be finite non-boolean numbers, and width and
   height must be positive.
+- `clip_path`, when present, is a non-empty sequence of `PathCommand` objects or
+  serialized path command mappings in InkGen document coordinates.
+- Clip paths must start with `M`, end with `Z`, and pass the existing
+  `PathPDF` command arity rules before state mutation.
+- Clip path commands are cloned before storage and when returned through
+  `clip_path()`.
 - `blend_mode`, when present, is a string naming a standard PDF blend mode.
 - `Normal` and `None` clear blend state and are not serialized.
 - Non-default blend mode spellings normalize to canonical PDF names after
@@ -128,6 +141,10 @@ ADR/rule impact:
 | Serialized blend mode | Preserve through parameters/hydration | PO-PDFGROUP-013 | blend round-trip test | mutation target |
 | Malformed blend mode | Reject before public state mutation or hydration return | PO-PDFGROUP-014 | malformed blend tests | mutation target |
 | Blend plus clip | Share one group graphics-state wrapper | PO-PDFGROUP-015 | blend+clip live-path test | mutation target |
+| Configured clip path | Emit path operators plus `W n` before children | PO-PDFGROUP-016 | clip-path render test | mutation target |
+| Serialized clip path | Preserve through parameters/hydration and avoid aliasing | PO-PDFGROUP-017 | clip-path round-trip/copy test | mutation target |
+| Malformed clip path | Reject before public state mutation or hydration return | PO-PDFGROUP-018 | malformed clip-path tests | mutation target |
+| Blend plus rectangle and path clips | Share one group graphics-state wrapper | PO-PDFGROUP-019 | blend+rect+path live-path test | mutation target |
 
 ## Test Applicability Matrix
 
@@ -193,6 +210,43 @@ Current result:
 - Gate result: pass.
 - Mutation exposed missing proof pressure for blend resource object-id
   continuity; the live-path test now asserts contiguous object ids.
+
+`PDF-GROUP-CLIP-PATH-P3` mutation result:
+
+- Tool: Cosmic Ray 8.4.6.
+- Environment: WSL Python 3.12 virtualenv.
+- Config: `tests/mutation/pdf_group_clip_path_cosmic_ray.toml`.
+- Filter:
+  `tests/mutation/filter_pdf_group_clip_path_work_items.py`.
+- Test selection: PDF generator, PDF group factory payload, PDF render contract,
+  PDF component factory payload, and path contract tests.
+- Raw work items: 5226.
+- Proof-critical work items after filter: 334.
+- Killed mutants: 327.
+- Equivalent survivors: 7.
+- Surviving equivalent mutations:
+  - `_coerce_pdf_clip_path()` line 640 changed the final command check from
+    `!= "Z"` to `< "Z"`. `PathCommand` admits only the fixed command alphabet,
+    and `Z` is the maximum command in that alphabet, so for every admitted
+    command `command != "Z"` is equivalent to `command < "Z"`.
+  - `_pdf_path_command_operators()` line 1053 changed `commands` from
+    keyword-capable to positional-only. All proof-domain callers pass
+    `commands` positionally and `owner` by keyword.
+  - `_pdf_path_command_operators()` line 1070 changed the empty-arc guard from
+    `command_type == "A"` to `command_type <= "A"`. In the admitted command
+    alphabet, no command sorts below `A`, so the predicates are equivalent.
+  - `_pdf_path_command_operators()` line 1136 changed the arc branch from
+    `command_type == "A"` to `command_type <= "A"`. In the admitted command
+    alphabet, no command sorts below `A`, so the predicates are equivalent.
+  - `_pdf_path_command_operators()` line 1141 changed the close-path branch
+    from `command_type == "Z"` to `>= "Z"`, `is not "Z"`, and `<= "Z"` in
+    three separate mutants. All other admitted commands are handled by earlier
+    branches before this `elif`; only `Z` can reach the close-path branch.
+- Gate result: pass with documented equivalent survivors.
+- Mutation exposed missing proof pressure for command flag cloning, string
+  boundary errors, start-command ordering, and the shared path-command
+  `points` sequence guard; those tests and the guard were added before the
+  passing mutation run.
 
 ## PO-PDFGROUP-001: PDF Group Roots And Required Fields Are Validated
 
@@ -458,3 +512,81 @@ wrapper sequence with `/GSx gs`, `re`, `W`, `n`, and then child operators.
 
 Proven for group blend plus rectangular clip composition after tests and
 mutation pass.
+
+## PO-PDFGROUP-016: Group Clip Paths Emit Deterministic Operators
+
+### Claim
+
+`ComponentGroupPDF.generate_pdf()` emits a configured closed clip path before
+child component operators and restores graphics state after the group.
+
+### Proof Method
+
+`set_clip_path()` clones and validates path commands before storing them.
+`generate_pdf()` inserts `q`, the converted path operators, `W`, `n`, existing
+child operators, and `Q`. The condition test asserts operator ordering relative
+to a child rectangle.
+
+### Conclusion
+
+Proven for closed path group clipping after tests and mutation pass.
+
+## PO-PDFGROUP-017: Group Clip Paths Round Trip Through Parameters
+
+### Claim
+
+A configured clip path is serialized only when present, hydrates back to
+equivalent group state and generated PDF operators, and cannot be mutated by
+caller-held command objects.
+
+### Proof Method
+
+`parameters` writes `clip_path` as a list of path command payloads.
+`create_from_dict()` calls `set_clip_path()` when the field is present.
+`set_clip_path()` and `clip_path()` clone `PathCommand` objects. The round-trip
+condition test mutates both the original caller commands and returned commands,
+then verifies stored parameters remain unchanged.
+
+### Conclusion
+
+Proven for serialized closed clip-path state after tests and mutation pass.
+
+## PO-PDFGROUP-018: Malformed Clip Paths Fail Explicitly
+
+### Claim
+
+Malformed direct and serialized clip paths fail before public group state is
+mutated or a hydrated group is returned.
+
+### Proof Method
+
+`_coerce_pdf_clip_path()` rejects strings, non-sequences, empty sequences,
+non-command entries, paths that do not start with `M`, paths that do not end
+with `Z`, malformed command mappings, non-sequence command points, and command
+arity violations before assigning `_pdf_clip_path`. Condition tests cover direct
+state mutation and serialized hydration.
+
+### Conclusion
+
+Proven for declared malformed clip-path partitions after tests and mutation
+pass.
+
+## PO-PDFGROUP-019: Clip Paths Compose With Rectangular Clips And Blend Modes
+
+### Claim
+
+A group configured with a blend mode, clip rectangle, and clip path emits one
+group graphics-state wrapper, applies blend state first, applies the rectangle
+clip, applies the path clip, and then emits child operators.
+
+### Proof Method
+
+The blend+rectangle+path condition test adds all three controls to one exact
+`ComponentGroupPDF` and asserts the live page content stream contains one group
+wrapper sequence with `/GSx gs`, rectangle `re W n`, path operators `W n`, and
+then child operators.
+
+### Conclusion
+
+Proven for group blend plus rectangular and closed path clip composition after
+tests and mutation pass.

@@ -44,7 +44,7 @@ images with alpha, JPEG pass-through, ICC profile emission, Standard 14 fonts,
 named TrueType/OpenType font embedding, page labels, Crop/Bleed/Trim/Art page
 boxes, flat and arbitrary-depth nested outlines/bookmarks, URI links, internal
 page links, named destinations, named-destination links, text annotations,
-highlight annotations, square annotations, rectangular group clipping,
+highlight annotations, square annotations, rectangular and closed path group clipping,
 stroke/fill opacity through PDF ExtGState resources, group blend modes through
 PDF ExtGState resources, and stroke dash/cap/join/miter operators.
 
@@ -55,7 +55,7 @@ creation system are:
 |---|---|---|
 | Text encoding | WinAnsi literal strings, installed-font embedding, and printable WinAnsi `/ToUnicode` CMaps | Unicode/CID fonts, glyph subsetting, and full complex-script text extraction maps |
 | Text layout | Positioned text components with explicit line-break output using `TextStyle.line_spacing` | Automatic wrapping, alignment across line boxes, tabs, columns, kerning, and complex-script shaping |
-| Graphics state | Basic stroke/fill primitives, rectangular group clipping paths, group blend modes, stroke/fill alpha ExtGState resources, and stroke dash/cap/join/miter operators | Arbitrary clipping paths, opacity groups, gradients, and patterns |
+| Graphics state | Basic stroke/fill primitives, rectangular and closed path group clipping, group blend modes, stroke/fill alpha ExtGState resources, and stroke dash/cap/join/miter operators | Fill-rule clipping variants, opacity groups, gradients, and patterns |
 | Document structure | Pages, deterministic metadata, page labels, Crop/Bleed/Trim/Art boxes, flat and arbitrary-depth nested outlines/bookmarks, URI links, internal page links, named destinations, named-destination links, text annotations, highlight annotations, and square annotations | Other generic annotations and tagged PDF structure |
 | Color/profile support | Device RGB/CMYK and JPEG ICC profile objects | Broader calibrated color spaces and selectable PDF/A-style archival constraints |
 | Import/conversion | SVG input remains SVG-only | Arbitrary SVG-to-PDF conversion and external PDF embedding are out of scope until explicitly approved |
@@ -75,6 +75,17 @@ in group parameters, round-trip through `ComponentGroupPDF.create_from_dict()`,
 and render as `q`, `re`, `W`, `n`, child operators, and `Q`. Arbitrary path
 clipping and style-owned clipping are intentionally outside the current closed
 renderer contract.
+
+`ComponentGroupPDF` also supports closed path clipping through
+`set_clip_path(commands)`. Clip paths use the same `PathCommand` command model
+as `PathPDF`, must be non-empty, must start with `M`, must end with `Z`, are
+cloned before storage, and are validated before group state changes. They are
+stored as `clip_path` in group parameters, hydrate through
+`ComponentGroupPDF.create_from_dict()`, and render as path operators followed by
+`W` and `n`. Rectangular and path clips can be configured together; PDF applies
+them as intersecting clipping paths inside the same group graphics-state wrapper.
+Raw PDF clipping operators, open paths, even-odd fill rules, text clipping, and
+renderer-neutral clipping state remain intentionally out of scope.
 
 `ComponentGroupPDF` also supports standard PDF blend modes through
 `set_blend_mode(mode)`. Supported non-default modes are the standard PDF blend

@@ -33,6 +33,7 @@ nav:
       - ADR-0014 PDF Group Clip Rectangles: adr/0014-pdf-group-clip-rectangles.md
       - ADR-0015 PDF Group Blend Modes: adr/0015-pdf-group-blend-modes.md
       - ADR-0016 PDF Square Annotations: adr/0016-pdf-square-annotations.md
+      - ADR-0017 PDF Group Clip Paths: adr/0017-pdf-group-clip-paths.md
   - Proof Notes:
       - Grammar Truth: proofs/grammar-truth.md
       - Extraction Truth Contract: proofs/extraction-truth-contract.md

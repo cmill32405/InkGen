@@ -599,6 +599,50 @@ def _coerce_pdf_clip_rect(rect: object) -> tuple[float, float, float, float]:
     return left, top, width, height
 
 
+def _path_command_payload(command: PathCommand) -> dict[str, object]:
+    """Return a serializable path command payload including optional flags."""
+    payload = dict(command.parameters)
+    flags = getattr(command, "flags", None)
+    if flags is not None:
+        payload["flags"] = flags
+    return payload
+
+
+def _clone_path_command(command: PathCommand) -> PathCommand:
+    """Return a detached copy of a path command."""
+    cloned = PathCommand(command.type, command.points)
+    flags = getattr(command, "flags", None)
+    if flags is not None:
+        cloned.flags = flags
+    return cloned
+
+
+def _coerce_pdf_clip_path(commands: object) -> tuple[PathCommand, ...]:
+    """Return validated PDF clipping path commands in document coordinates."""
+    if isinstance(commands, (str, bytes)) or not isinstance(commands, Sequence):
+        raise TypeError("PDF clip path commands must be a non-empty sequence")
+    if not commands:
+        raise ValueError("PDF clip path commands must be non-empty")
+    normalized: list[PathCommand] = []
+    for command in commands:
+        if isinstance(command, PathCommand):
+            normalized.append(_clone_path_command(command))
+        elif isinstance(command, Mapping):
+            try:
+                normalized.append(_path_command_from_dict(command))
+            except (TypeError, ValueError) as exc:
+                message = str(exc).replace("PathPDF command", "PDF clip path command")
+                raise type(exc)(message) from exc
+        else:
+            raise TypeError("PDF clip path commands must contain PathCommand objects or command mappings")
+    if normalized[0].type != "M":
+        raise ValueError("PDF clip path must start with an M command")
+    if normalized[-1].type != "Z":
+        raise ValueError("PDF clip path must end with a Z command")
+    _pdf_path_command_operators(normalized, owner="PDF clip path")
+    return tuple(normalized)
+
+
 def _coerce_pdf_blend_mode(blend_mode: object) -> str | None:
     """Return a supported PDF blend mode name or None for the default mode."""
     if blend_mode is None:
@@ -1006,6 +1050,101 @@ def _reflect_point(point: tuple[float, float], around: tuple[float, float]) -> t
     return (2.0 * around[0] - point[0], 2.0 * around[1] - point[1])
 
 
+def _pdf_path_command_operators(commands: Sequence[PathCommand], *, owner: str) -> list[str]:
+    """Convert validated path commands into PDF path operators."""
+    operators: list[str] = []
+    current_point = (0.0, 0.0)
+    previous_cubic_control: tuple[float, float] | None = None
+    previous_quadratic_control: tuple[float, float] | None = None
+    for command in commands:
+        command_type = command.type.upper()
+        points = list(command.points)
+        if command_type == "C" and len(points) % 3:
+            raise ValueError(f"{owner} command C requires points in groups of three.")
+        if command_type == "S" and len(points) % 2:
+            raise ValueError(f"{owner} command S requires points in groups of two.")
+        if command_type == "Q" and len(points) % 2:
+            raise ValueError(f"{owner} command Q requires points in groups of two.")
+        if command_type == "T" and not points:
+            raise ValueError(f"{owner} command T requires an endpoint.")
+        if command_type == "A" and not points:
+            raise ValueError(f"{owner} command A requires an endpoint.")
+        if command_type == "M" and points:
+            current_point = points[-1]
+            previous_cubic_control = None
+            previous_quadratic_control = None
+            operators.append(f"{_number(current_point[0])} {_number(current_point[1])} m")
+        elif command_type == "L":
+            for point in points:
+                current_point = point
+                operators.append(f"{_number(point[0])} {_number(point[1])} l")
+            previous_cubic_control = None
+            previous_quadratic_control = None
+        elif command_type == "H":
+            for point in points:
+                current_point = (point[0], current_point[1])
+                operators.append(f"{_number(current_point[0])} {_number(current_point[1])} l")
+            previous_cubic_control = None
+            previous_quadratic_control = None
+        elif command_type == "V":
+            for point in points:
+                current_point = (current_point[0], point[1])
+                operators.append(f"{_number(current_point[0])} {_number(current_point[1])} l")
+            previous_cubic_control = None
+            previous_quadratic_control = None
+        elif command_type == "C":
+            for index in range(0, len(points), 3):
+                c1, c2, end = points[index : index + 3]
+                current_point = end
+                previous_cubic_control = c2
+                previous_quadratic_control = None
+                operators.append(
+                    f"{_number(c1[0])} {_number(c1[1])} {_number(c2[0])} {_number(c2[1])} {_number(end[0])} {_number(end[1])} c"
+                )
+        elif command_type == "S":
+            for index in range(0, len(points), 2):
+                c2, end = points[index : index + 2]
+                c1 = _reflect_point(previous_cubic_control, current_point) if previous_cubic_control is not None else current_point
+                current_point = end
+                previous_cubic_control = c2
+                previous_quadratic_control = None
+                operators.append(
+                    f"{_number(c1[0])} {_number(c1[1])} {_number(c2[0])} {_number(c2[1])} {_number(end[0])} {_number(end[1])} c"
+                )
+        elif command_type == "Q":
+            for index in range(0, len(points), 2):
+                control, end = points[index : index + 2]
+                c1, c2 = _quadratic_to_cubic(current_point, control, end)
+                current_point = end
+                previous_cubic_control = None
+                previous_quadratic_control = control
+                operators.append(
+                    f"{_number(c1[0])} {_number(c1[1])} {_number(c2[0])} {_number(c2[1])} {_number(end[0])} {_number(end[1])} c"
+                )
+        elif command_type == "T":
+            for end in points:
+                control = (
+                    _reflect_point(previous_quadratic_control, current_point) if previous_quadratic_control is not None else current_point
+                )
+                c1, c2 = _quadratic_to_cubic(current_point, control, end)
+                current_point = end
+                previous_cubic_control = None
+                previous_quadratic_control = control
+                operators.append(
+                    f"{_number(c1[0])} {_number(c1[1])} {_number(c2[0])} {_number(c2[1])} {_number(end[0])} {_number(end[1])} c"
+                )
+        elif command_type == "A":
+            current_point = points[-1]
+            previous_cubic_control = None
+            previous_quadratic_control = None
+            operators.append(f"{_number(current_point[0])} {_number(current_point[1])} l")
+        elif command_type == "Z":
+            previous_cubic_control = None
+            previous_quadratic_control = None
+            operators.append("h")
+    return operators
+
+
 def _drawing_pdf(
     style: DrawingStyle,
     path_operators: list[str],
@@ -1130,7 +1269,10 @@ def _path_command_from_dict(data: object) -> PathCommand:
     command_type = _pdf_required_field(data, "type", "PathPDF command")
     if not isinstance(command_type, str):
         raise TypeError("PathPDF command type must be a string")
-    command = PathCommand(command_type, data.get("points", []))
+    points = data.get("points", [])
+    if isinstance(points, (str, bytes)) or not isinstance(points, Sequence):
+        raise TypeError("PathPDF command points must be a sequence")
+    command = PathCommand(command_type, points)
     flags = data.get("flags")
     if flags:
         command.flags = flags
@@ -1412,111 +1554,11 @@ class PathPDF(PathComponent, PDFGeneratorInterface):
     @property
     def parameters(self) -> dict[str, dict[str, object]]:
         """Return serialized geometry/style information."""
-        serialized = []
-        for command in self.commands:
-            entry = dict(command.parameters)
-            flags = getattr(command, "flags", None)
-            if flags is not None:
-                entry["flags"] = flags
-            serialized.append(entry)
+        serialized = [_path_command_payload(command) for command in self.commands]
         return _primitive_parameters("PathPDF", values={"commands": serialized}, style=self.style)
 
     def _command_operators(self) -> list[str]:
-        operators: list[str] = []
-        current_point = (0.0, 0.0)
-        previous_cubic_control: tuple[float, float] | None = None
-        previous_quadratic_control: tuple[float, float] | None = None
-        for command in self.commands:
-            command_type = command.type.upper()
-            points = list(command.points)
-            if command_type == "C" and len(points) % 3:
-                raise ValueError("PathPDF command C requires points in groups of three.")
-            if command_type == "S" and len(points) % 2:
-                raise ValueError("PathPDF command S requires points in groups of two.")
-            if command_type == "Q" and len(points) % 2:
-                raise ValueError("PathPDF command Q requires points in groups of two.")
-            if command_type == "T" and not points:
-                raise ValueError("PathPDF command T requires an endpoint.")
-            if command_type == "A" and not points:
-                raise ValueError("PathPDF command A requires an endpoint.")
-            if command_type == "M" and points:
-                current_point = points[-1]
-                previous_cubic_control = None
-                previous_quadratic_control = None
-                operators.append(f"{_number(current_point[0])} {_number(current_point[1])} m")
-            elif command_type == "L":
-                for point in points:
-                    current_point = point
-                    operators.append(f"{_number(point[0])} {_number(point[1])} l")
-                previous_cubic_control = None
-                previous_quadratic_control = None
-            elif command_type == "H":
-                for point in points:
-                    current_point = (point[0], current_point[1])
-                    operators.append(f"{_number(current_point[0])} {_number(current_point[1])} l")
-                previous_cubic_control = None
-                previous_quadratic_control = None
-            elif command_type == "V":
-                for point in points:
-                    current_point = (current_point[0], point[1])
-                    operators.append(f"{_number(current_point[0])} {_number(current_point[1])} l")
-                previous_cubic_control = None
-                previous_quadratic_control = None
-            elif command_type == "C":
-                for index in range(0, len(points), 3):
-                    segment = points[index : index + 3]
-                    c1, c2, end = segment
-                    current_point = end
-                    previous_cubic_control = c2
-                    previous_quadratic_control = None
-                    operators.append(
-                        f"{_number(c1[0])} {_number(c1[1])} {_number(c2[0])} {_number(c2[1])} {_number(end[0])} {_number(end[1])} c"
-                    )
-            elif command_type == "S":
-                for index in range(0, len(points), 2):
-                    c2, end = points[index : index + 2]
-                    c1 = _reflect_point(previous_cubic_control, current_point) if previous_cubic_control is not None else current_point
-                    current_point = end
-                    previous_cubic_control = c2
-                    previous_quadratic_control = None
-                    operators.append(
-                        f"{_number(c1[0])} {_number(c1[1])} {_number(c2[0])} {_number(c2[1])} {_number(end[0])} {_number(end[1])} c"
-                    )
-            elif command_type == "Q":
-                for index in range(0, len(points), 2):
-                    segment = points[index : index + 2]
-                    control, end = segment
-                    c1, c2 = _quadratic_to_cubic(current_point, control, end)
-                    current_point = end
-                    previous_cubic_control = None
-                    previous_quadratic_control = control
-                    operators.append(
-                        f"{_number(c1[0])} {_number(c1[1])} {_number(c2[0])} {_number(c2[1])} {_number(end[0])} {_number(end[1])} c"
-                    )
-            elif command_type == "T":
-                for end in points:
-                    control = (
-                        _reflect_point(previous_quadratic_control, current_point)
-                        if previous_quadratic_control is not None
-                        else current_point
-                    )
-                    c1, c2 = _quadratic_to_cubic(current_point, control, end)
-                    current_point = end
-                    previous_cubic_control = None
-                    previous_quadratic_control = control
-                    operators.append(
-                        f"{_number(c1[0])} {_number(c1[1])} {_number(c2[0])} {_number(c2[1])} {_number(end[0])} {_number(end[1])} c"
-                    )
-            elif command_type == "A":
-                current_point = points[-1]
-                previous_cubic_control = None
-                previous_quadratic_control = None
-                operators.append(f"{_number(current_point[0])} {_number(current_point[1])} l")
-            elif command_type == "Z":
-                previous_cubic_control = None
-                previous_quadratic_control = None
-                operators.append("h")
-        return operators
+        return _pdf_path_command_operators(self.commands, owner="PathPDF")
 
     def generate_pdf(self, context: PDFRenderContext | None = None) -> str:
         """Generate PDF operators for this path."""
@@ -1778,6 +1820,7 @@ class ComponentGroupPDF(ComponentGroup, LabelGenerator, SegmentGenerator):
         """Create a PDF component group with optional PDF graphics-state controls."""
         super().__init__(group_label)
         self._pdf_clip_rect: tuple[float, float, float, float] | None = None
+        self._pdf_clip_path: tuple[PathCommand, ...] | None = None
         self._pdf_blend_mode: str | None = None
 
     def add_component(self, component: Component) -> None:
@@ -1804,6 +1847,23 @@ class ComponentGroupPDF(ComponentGroup, LabelGenerator, SegmentGenerator):
         """Return the group's PDF clipping rectangle, if one is configured."""
         return self._pdf_clip_rect
 
+    def set_clip_path(self, commands: Sequence[PathCommand | Mapping[str, object]] | None) -> None:
+        """Set or clear an arbitrary closed PDF clipping path for this group."""
+        if commands is None:
+            self.clear_clip_path()
+            return
+        self._pdf_clip_path = _coerce_pdf_clip_path(commands)
+
+    def clear_clip_path(self) -> None:
+        """Clear the group's PDF clipping path."""
+        self._pdf_clip_path = None
+
+    def clip_path(self) -> tuple[PathCommand, ...] | None:
+        """Return a detached copy of the group's PDF clipping path, if configured."""
+        if self._pdf_clip_path is None:
+            return None
+        return tuple(_clone_path_command(command) for command in self._pdf_clip_path)
+
     def set_blend_mode(self, blend_mode: str | None) -> None:
         """Set or clear a standard PDF blend mode for this group."""
         self._pdf_blend_mode = _coerce_pdf_blend_mode(blend_mode)
@@ -1823,6 +1883,8 @@ class ComponentGroupPDF(ComponentGroup, LabelGenerator, SegmentGenerator):
         group = cls(_pdf_required_field(payload, "group_label", "ComponentGroupPDF"))
         if "clip_rect" in payload:
             group.set_clip_rect(payload["clip_rect"])
+        if "clip_path" in payload:
+            group.set_clip_path(payload["clip_path"])
         if "blend_mode" in payload:
             group.set_blend_mode(payload["blend_mode"])
         restore_extraction_truth_annotations(group, payload.get("extraction_truth", []))
@@ -1860,6 +1922,8 @@ class ComponentGroupPDF(ComponentGroup, LabelGenerator, SegmentGenerator):
         }
         if self._pdf_clip_rect is not None:
             group_payload["clip_rect"] = list(self._pdf_clip_rect)
+        if self._pdf_clip_path is not None:
+            group_payload["clip_path"] = [_path_command_payload(command) for command in self._pdf_clip_path]
         if self._pdf_blend_mode is not None:
             group_payload["blend_mode"] = self._pdf_blend_mode
         annotations = serialize_extraction_truth_annotations(self)
@@ -1887,7 +1951,7 @@ class ComponentGroupPDF(ComponentGroup, LabelGenerator, SegmentGenerator):
             )
             operators.append(component.generate_pdf(context))
         blend_resource = context.blend_mode_resource_name(self._pdf_blend_mode) if context is not None else None
-        if self._pdf_clip_rect is not None or blend_resource is not None:
+        if self._pdf_clip_rect is not None or self._pdf_clip_path is not None or blend_resource is not None:
             operators = [
                 "q",
                 *operators,
@@ -1901,6 +1965,14 @@ class ComponentGroupPDF(ComponentGroup, LabelGenerator, SegmentGenerator):
                 left, top, width, height = self._pdf_clip_rect
                 operators[insert_at:insert_at] = [
                     f"{_number(left)} {_number(top)} {_number(width)} {_number(height)} re",
+                    "W",
+                    "n",
+                ]
+                insert_at += 3
+            if self._pdf_clip_path is not None:
+                clip_operators = _pdf_path_command_operators(self._pdf_clip_path, owner="PDF clip path")
+                operators[insert_at:insert_at] = [
+                    *clip_operators,
                     "W",
                     "n",
                 ]

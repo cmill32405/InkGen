@@ -211,6 +211,8 @@ def test_pdf_component_factories_preserve_explicit_style_compact_payloads() -> N
         ({"PathPDF": {"commands": [{"type": object()}]}}, TypeError, "PathPDF command type must be a string"),
         ({"PathPDF": {"commands": [{"type": 1}]}}, TypeError, "PathPDF command type must be a string"),
         ({"PathPDF": {"commands": [{"type": True}]}}, TypeError, "PathPDF command type must be a string"),
+        ({"PathPDF": {"commands": [{"type": "M", "points": object()}]}}, TypeError, "PathPDF command points must be a sequence"),
+        ({"PathPDF": {"commands": [{"type": "M", "points": "0 0"}]}}, TypeError, "PathPDF command points must be a sequence"),
     ],
 )
 def test_path_pdf_factory_rejects_malformed_command_payloads(

@@ -227,8 +227,8 @@ entries before incidental iteration or subscription errors.
 ### Proof Method
 
 `PathPDF` validates optional `commands` as a non-string sequence and validates
-each command as a mapping with a required `type` field before constructing
-`PathCommand`.
+each command as a mapping with a required string `type` field and sequence
+`points` field before constructing `PathCommand`.
 
 ### Conclusion
 

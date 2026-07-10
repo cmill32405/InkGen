@@ -785,6 +785,105 @@ def test_component_group_pdf_clip_rect_round_trips(drawing_style: DrawingStyle) 
 
 
 @pytest.mark.condition("PDF-GROUP-CLIP-P3")
+def test_component_group_pdf_emits_arbitrary_clip_path(drawing_style: DrawingStyle) -> None:
+    """PDF-GROUP-CLIP-P3: ComponentGroupPDF emits a closed path clipping operator."""
+    group = ComponentGroupPDF("clip-path")
+    group.set_clip_path(
+        [
+            PathCommand("M", [(1.0, 2.0)]),
+            PathCommand("L", [(31.0, 2.0), (16.0, 42.0)]),
+            PathCommand("Z", []),
+        ]
+    )
+    group.add_component(RectanglePDF((10.0, 20.0), 3.0, 4.0, 0.0, drawing_style))
+
+    content = group.generate_pdf()
+
+    assert content.startswith("q\n1 2 m\n31 2 l\n16 42 l\nh\nW\nn\n")
+    assert content.endswith("\nQ")
+    assert content.index("W\nn") < content.index("10 20 3 4 re")
+
+
+@pytest.mark.condition("PDF-GROUP-CLIP-P3")
+def test_document_pdf_consumes_group_clip_path_with_rect_and_blend_live(drawing_style: DrawingStyle) -> None:
+    """PDF-GROUP-CLIP-P3: Path clipping composes with rectangle clipping and blend state."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    group = ComponentGroupPDF("clip-path-live")
+    group.set_blend_mode("Screen")
+    group.set_clip_rect((1.0, 2.0, 30.0, 40.0))
+    group.set_clip_path(
+        [
+            PathCommand("M", [(2.0, 3.0)]),
+            PathCommand("L", [(20.0, 3.0), (20.0, 30.0)]),
+            PathCommand("Z", []),
+        ]
+    )
+    group.add_component(RectanglePDF((10.0, 20.0), 3.0, 4.0, 0.0, drawing_style))
+    document.page(1).layer("base").add_component_group(group)
+
+    content = _stream(document.to_pdf_bytes())
+
+    expected = "q\n1 0 0 -1 0 80 cm\nq\n/GS1 gs\n1 2 30 40 re\nW\nn\n2 3 m\n20 3 l\n20 30 l\nh\nW\nn"
+    assert expected in content
+    assert content.index("/GS1 gs") < content.index("1 2 30 40 re")
+    assert content.index("1 2 30 40 re") < content.index("2 3 m")
+    assert content.index("2 3 m") < content.index("10 20 3 4 re")
+
+
+@pytest.mark.condition("PDF-GROUP-CLIP-P3")
+def test_component_group_pdf_clip_path_round_trips_and_returns_detached_commands(drawing_style: DrawingStyle) -> None:
+    """PDF-GROUP-CLIP-P3: Group clip paths serialize, hydrate, and avoid aliasing."""
+    commands = [
+        PathCommand("M", [(1.0, 2.0)]),
+        PathCommand("Q", [(5.0, 8.0), (9.0, 2.0)]),
+        PathCommand("Z", []),
+    ]
+    group = ComponentGroupPDF("clip-path-roundtrip")
+    group.set_clip_path(commands)
+    group.add_component(RectanglePDF((10.0, 20.0), 3.0, 4.0, 0.0, drawing_style))
+    commands[0].add_point((99.0, 99.0))
+
+    recreated = ComponentGroupPDF.create_from_dict(group.parameters, {drawing_style.name: drawing_style})
+    returned = group.clip_path()
+    assert returned is not None
+    returned[0].add_point((50.0, 50.0))
+
+    assert group.parameters["ComponentGroupPDF"]["clip_path"] == [
+        {"type": "M", "points": [(1.0, 2.0)]},
+        {"type": "Q", "points": [(5.0, 8.0), (9.0, 2.0)]},
+        {"type": "Z", "points": []},
+    ]
+    assert [command.parameters for command in recreated.clip_path() or ()] == group.parameters["ComponentGroupPDF"]["clip_path"]
+    assert recreated.parameters == group.parameters
+    assert recreated.generate_pdf() == group.generate_pdf()
+
+    group.set_clip_path(None)
+    assert group.clip_path() is None
+    assert "clip_path" not in group.parameters["ComponentGroupPDF"]
+
+
+@pytest.mark.condition("PDF-GROUP-CLIP-P3")
+def test_component_group_pdf_clip_path_preserves_command_flags(drawing_style: DrawingStyle) -> None:
+    """PDF-GROUP-CLIP-P3: Clip path command cloning preserves serialized flags."""
+    arc = PathCommand("A", [(10.0, 20.0)])
+    arc.flags = {"large_arc": False, "sweep": True}
+    group = ComponentGroupPDF("clip-path-flags")
+    group.set_clip_path([PathCommand("M", [(1.0, 2.0)]), arc, PathCommand("Z", [])])
+    arc.flags = {"large_arc": True, "sweep": False}
+
+    returned = group.clip_path()
+    assert returned is not None
+    returned[1].flags = {"large_arc": True}
+
+    assert group.parameters["ComponentGroupPDF"]["clip_path"] == [
+        {"type": "M", "points": [(1.0, 2.0)]},
+        {"type": "A", "points": [(10.0, 20.0)], "flags": {"large_arc": False, "sweep": True}},
+        {"type": "Z", "points": []},
+    ]
+
+
+@pytest.mark.condition("PDF-GROUP-CLIP-P3")
 def test_component_group_pdf_accepts_fractional_positive_clip_dimensions() -> None:
     """PDF-GROUP-CLIP-P3: Clip rectangles accept any finite positive dimensions."""
     group = ComponentGroupPDF("clip-small")
@@ -827,6 +926,62 @@ def test_component_group_pdf_factory_rejects_malformed_clip_rectangles() -> None
     payload = {"ComponentGroupPDF": {"group_label": "clip-invalid", "components": [], "clip_rect": [1.0, 2.0, 0.0, 4.0]}}
 
     with pytest.raises(ValueError, match="PDF clip rectangle width and height must be positive"):
+        ComponentGroupPDF.create_from_dict(payload)
+
+
+@pytest.mark.condition("PDF-GROUP-CLIP-P3")
+@pytest.mark.parametrize(
+    "clip_path",
+    [
+        "M 0 0",
+        [],
+        [object()],
+        [PathCommand("L", [(1.0, 2.0)]), PathCommand("Z", [])],
+        [PathCommand("M", [(1.0, 2.0)]), PathCommand("L", [(3.0, 4.0)])],
+        [PathCommand("M", [(1.0, 2.0)]), PathCommand("C", [(3.0, 4.0)]), PathCommand("Z", [])],
+        [{"points": [(1.0, 2.0)]}, {"type": "Z", "points": []}],
+        [{"type": "M", "points": [(1.0, 2.0)]}, {"type": "Z", "points": object()}],
+    ],
+)
+def test_component_group_pdf_rejects_malformed_clip_paths(clip_path: object) -> None:
+    """PDF-GROUP-CLIP-P3: Malformed PDF group clip paths fail before state mutation."""
+    group = ComponentGroupPDF("clip-path-invalid")
+    group.set_clip_path([PathCommand("M", [(0.0, 0.0)]), PathCommand("L", [(1.0, 0.0)]), PathCommand("Z", [])])
+
+    with pytest.raises((TypeError, ValueError), match="PDF clip path|PathPDF command"):
+        group.set_clip_path(clip_path)  # type: ignore[arg-type]
+
+    assert group.parameters["ComponentGroupPDF"]["clip_path"] == [
+        {"type": "M", "points": [(0.0, 0.0)]},
+        {"type": "L", "points": [(1.0, 0.0)]},
+        {"type": "Z", "points": []},
+    ]
+
+
+@pytest.mark.condition("PDF-GROUP-CLIP-P3")
+def test_component_group_pdf_rejects_string_clip_path_with_boundary_error() -> None:
+    """PDF-GROUP-CLIP-P3: String clip paths fail at the clip-path boundary."""
+    group = ComponentGroupPDF("clip-path-string")
+
+    with pytest.raises(TypeError, match="PDF clip path commands must be a non-empty sequence"):
+        group.set_clip_path("M 0 0")  # type: ignore[arg-type]
+
+
+@pytest.mark.condition("PDF-GROUP-CLIP-P3")
+def test_component_group_pdf_rejects_clip_path_start_after_m_command() -> None:
+    """PDF-GROUP-CLIP-P3: Non-M starts fail regardless of command sort order."""
+    group = ComponentGroupPDF("clip-path-start")
+
+    with pytest.raises(ValueError, match="PDF clip path must start with an M command"):
+        group.set_clip_path([PathCommand("Q", [(1.0, 2.0), (3.0, 4.0)]), PathCommand("Z", [])])
+
+
+@pytest.mark.condition("PDF-GROUP-CLIP-P3")
+def test_component_group_pdf_factory_rejects_malformed_clip_paths() -> None:
+    """PDF-GROUP-CLIP-P3: Group hydration rejects malformed serialized clip paths."""
+    payload = {"ComponentGroupPDF": {"group_label": "clip-path-invalid", "components": [], "clip_path": [{"type": "L", "points": []}]}}
+
+    with pytest.raises(ValueError, match="PDF clip path must start with an M command"):
         ComponentGroupPDF.create_from_dict(payload)
 
 
