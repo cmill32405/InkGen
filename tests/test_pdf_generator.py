@@ -646,6 +646,97 @@ def test_component_group_pdf_round_trips_pdf_children(drawing_style: DrawingStyl
     assert recreated.generate_pdf() == group.generate_pdf()
 
 
+@pytest.mark.condition("PDF-GROUP-CLIP-P3")
+def test_component_group_pdf_emits_rectangular_clip_path(drawing_style: DrawingStyle) -> None:
+    """PDF-GROUP-CLIP-P3: ComponentGroupPDF wraps children in a rectangular clip path."""
+    group = ComponentGroupPDF("clip")
+    group.set_clip_rect((1.0, 2.0, 30.0, 40.0))
+    group.add_component(RectanglePDF((10.0, 20.0), 3.0, 4.0, 0.0, drawing_style))
+
+    content = group.generate_pdf()
+
+    assert content.startswith("q\n1 2 30 40 re\nW\nn\n")
+    assert content.endswith("\nQ")
+    assert content.index("W\nn") < content.index("10 20 3 4 re")
+
+
+@pytest.mark.condition("PDF-GROUP-CLIP-P3")
+def test_document_pdf_consumes_group_clip_path_live(drawing_style: DrawingStyle) -> None:
+    """PDF-GROUP-CLIP-P3: DocumentPDF emits configured group clipping in page content."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    group = ComponentGroupPDF("clip-live")
+    group.set_clip_rect((1.0, 2.0, 30.0, 40.0))
+    group.add_component(RectanglePDF((10.0, 20.0), 3.0, 4.0, 0.0, drawing_style))
+    document.page(1).layer("base").add_component_group(group)
+
+    content = _stream(document.to_pdf_bytes())
+
+    assert "1 0 0 -1 0 80 cm\nq\n1 2 30 40 re\nW\nn" in content
+    assert content.index("W\nn") < content.index("10 20 3 4 re")
+
+
+@pytest.mark.condition("PDF-GROUP-CLIP-P3")
+def test_component_group_pdf_clip_rect_round_trips(drawing_style: DrawingStyle) -> None:
+    """PDF-GROUP-CLIP-P3: Group clip rectangles serialize and hydrate deterministically."""
+    group = ComponentGroupPDF("clip-roundtrip")
+    group.set_clip_rect((1.0, 2.0, 30.0, 40.0))
+    group.add_component(RectanglePDF((10.0, 20.0), 3.0, 4.0, 0.0, drawing_style))
+
+    recreated = ComponentGroupPDF.create_from_dict(group.parameters, {drawing_style.name: drawing_style})
+
+    assert group.parameters["ComponentGroupPDF"]["clip_rect"] == [1.0, 2.0, 30.0, 40.0]
+    assert recreated.clip_rect() == (1.0, 2.0, 30.0, 40.0)
+    assert recreated.parameters == group.parameters
+    assert recreated.generate_pdf() == group.generate_pdf()
+
+
+@pytest.mark.condition("PDF-GROUP-CLIP-P3")
+def test_component_group_pdf_accepts_fractional_positive_clip_dimensions() -> None:
+    """PDF-GROUP-CLIP-P3: Clip rectangles accept any finite positive dimensions."""
+    group = ComponentGroupPDF("clip-small")
+
+    group.set_clip_rect((0.0, 0.0, 0.5, 0.25))
+
+    assert group.clip_rect() == (0.0, 0.0, 0.5, 0.25)
+
+
+@pytest.mark.condition("PDF-GROUP-CLIP-P3")
+@pytest.mark.parametrize(
+    "clip_rect",
+    [
+        "1 2 3 4",
+        [1.0, 2.0, 3.0],
+        [1.0, 2.0, 3.0, 4.0, 5.0],
+        [True, 2.0, 3.0, 4.0],
+        [1.0, 2.0, float("nan"), 4.0],
+        [1.0, 2.0, 0.0, 4.0],
+        [1.0, 2.0, -0.5, 4.0],
+        [1.0, 2.0, 3.0, 0.0],
+        [1.0, 2.0, 3.0, -0.5],
+        [1.0, 2.0, 3.0, -1.0],
+        object(),
+    ],
+)
+def test_component_group_pdf_rejects_malformed_clip_rectangles(clip_rect: object) -> None:
+    """PDF-GROUP-CLIP-P3: Malformed PDF group clip rectangles fail before state mutation."""
+    group = ComponentGroupPDF("clip-invalid")
+
+    with pytest.raises((TypeError, ValueError), match="PDF clip rectangle"):
+        group.set_clip_rect(clip_rect)
+
+    assert group.clip_rect() is None
+
+
+@pytest.mark.condition("PDF-GROUP-CLIP-P3")
+def test_component_group_pdf_factory_rejects_malformed_clip_rectangles() -> None:
+    """PDF-GROUP-CLIP-P3: Group hydration rejects malformed serialized clip rectangles."""
+    payload = {"ComponentGroupPDF": {"group_label": "clip-invalid", "components": [], "clip_rect": [1.0, 2.0, 0.0, 4.0]}}
+
+    with pytest.raises(ValueError, match="PDF clip rectangle width and height must be positive"):
+        ComponentGroupPDF.create_from_dict(payload)
+
+
 @pytest.mark.condition("PDF-P1")
 def test_component_group_pdf_exposes_renderer_agnostic_truth(drawing_style: DrawingStyle) -> None:
     """PDF-P1: ComponentGroupPDF exposes labels and masks using shared geometry."""

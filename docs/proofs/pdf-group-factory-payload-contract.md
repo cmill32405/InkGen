@@ -10,9 +10,11 @@ component/style dispatch.
 The slice covers:
 
 - `ComponentGroupPDF.create_from_dict()`
+- `ComponentGroupPDF.set_clip_rect()`, `clear_clip_rect()`, and `clip_rect()`.
 - PDF child component envelope validation.
 - PDF child style envelope validation.
 - Closed PDF component type dispatch.
+- Rectangular PDF group clip serialization, hydration, and render output.
 
 Out of scope:
 
@@ -47,14 +49,18 @@ Outgoing dependencies:
 Public contract:
 
 - Valid `ComponentGroupPDF` payloads hydrate to equivalent groups.
+- Optional `clip_rect` payloads hydrate to finite positive rectangular PDF
+  group clipping state.
 - Malformed roots, missing `group_label`, missing or malformed `components`,
-  malformed child entries, malformed style envelopes, and unsupported child or
-  style types fail explicitly before dynamic dispatch.
+  malformed `clip_rect`, malformed child entries, malformed style envelopes,
+  and unsupported child or style types fail explicitly before dynamic dispatch
+  or rendering.
 - Child payloads still flow through the concrete child factory contract.
 
 Serialized/artifact contract:
 
-- `ComponentGroupPDF.parameters` output remains unchanged.
+- `ComponentGroupPDF.parameters` adds `clip_rect` only when a group clip is
+  configured.
 - Valid group hydration preserves generated PDF operators.
 - `DocumentPDF.create_from_dict()` remains compatible with valid nested groups.
 
@@ -69,8 +75,8 @@ Cycle/layer/coupling/redundancy result:
 
 ADR/rule impact:
 
-- No ADR is required. The slice preserves the dependency-free PDF renderer
-  policy and adds no library.
+- ADR-0014 records the bounded PDF group clipping decision. The slice preserves
+  the dependency-free PDF renderer policy and adds no library.
 
 ## Domain Definitions
 
@@ -79,6 +85,10 @@ ADR/rule impact:
 - `group_label` is required and remains validated by the base `ComponentGroup`
   constructor.
 - `components` is a required non-string sequence.
+- `clip_rect`, when present, is a four-number non-string sequence in InkGen
+  document coordinates: `(x, y, width, height)`.
+- Clip rectangle values must be finite non-boolean numbers, and width and
+  height must be positive.
 - Every child component entry is a single-key mapping with a string PDF
   component type and mapping payload.
 - Supported child component types are exactly `PDF_RENDER_COMPONENT_TYPES`.
@@ -97,21 +107,25 @@ ADR/rule impact:
 | Malformed style envelope | Reject explicitly | PO-PDFGROUP-005 | style-envelope tests | killed |
 | Valid PDF group hydration | Preserve compatibility | PO-PDFGROUP-006 | round-trip test | killed |
 | Document nested group hydration | Contract remains live | PO-PDFGROUP-007 | document-path test | killed |
+| Configured clip rectangle | Emit `re W n` before children | PO-PDFGROUP-008 | clip render test | mutation target |
+| Serialized clip rectangle | Preserve through parameters/hydration | PO-PDFGROUP-009 | clip round-trip test | mutation target |
+| Malformed clip rectangle | Reject before public state mutation or hydration return | PO-PDFGROUP-010 | malformed clip tests | mutation target |
+| Document live clip path | Emit clipping through `DocumentPDF` page stream | PO-PDFGROUP-011 | document live-path test | mutation target |
 
 ## Test Applicability Matrix
 
 | Test class | Applicable? | Reason | Evidence |
 |---|---|---|---|
 | Unit | yes | Payload helpers and dispatch checks are deterministic. | Direct group factory tests |
-| Behavioral/condition | yes | The slice defines `PDF-GROUP-FACTORY-PAYLOAD-P2`. | Condition-marked tests |
+| Behavioral/condition | yes | The proof note covers `PDF-GROUP-FACTORY-PAYLOAD-P2` and `PDF-GROUP-CLIP-P3`. | Condition-marked tests |
 | Failure-mode | yes | Old behavior failed through incidental lookup, subscription, or dynamic dispatch errors. | Malformed payload tests |
-| Integration/live-path | yes | `DocumentPDF.create_from_dict()` consumes nested PDF groups. | Document hydration test |
+| Integration/live-path | yes | `DocumentPDF.create_from_dict()` consumes nested PDF groups and `DocumentPDF.to_pdf_bytes()` emits clipped groups. | Document hydration and live clipping tests |
 | Contract/API compatibility | yes | Existing valid group/document round trips must remain. | Existing and new round-trip tests |
 | Property/fuzz | no | The envelope domain is finite shape validation. | Explicit partitions |
 | Mutation | yes | Validation guards and closed dispatch are proof-critical. | Cosmic Ray gate |
-| Security/adversarial | limited yes | Serialized payloads can be untrusted but do not trigger file, network, subprocess, SQL, archive, or active content behavior. | Malformed payload tests |
+| Security/adversarial | limited yes | Serialized payloads can be untrusted but do not trigger file, network, subprocess, SQL, archive, or active content behavior. | Malformed payload and clip tests |
 | Performance/resource | no | Adds constant-time envelope checks and one linear component loop. | Not applicable |
-| Golden artifact/visual | limited yes | Valid group hydration preserves generated PDF operators. | `generate_pdf()` equality |
+| Golden artifact/visual | limited yes | Valid group hydration preserves generated PDF operators, and clipped groups emit deterministic PDF operators. | `generate_pdf()` equality and stream assertions |
 | Regression | yes | Prevents arbitrary module dispatch from group payloads. | Unsupported-type tests |
 
 ## Mutation Testing Gate
@@ -129,6 +143,23 @@ Current result:
 - Killed mutants: 42.
 - Surviving mutants: 0.
 - Gate result: pass.
+
+`PDF-GROUP-CLIP-P3` mutation result:
+
+- Tool: Cosmic Ray 8.4.6.
+- Environment: WSL Python 3.12 virtualenv.
+- Config: `tests/mutation/pdf_group_clip_cosmic_ray.toml`.
+- Filter: `tests/mutation/filter_pdf_group_clip_work_items.py`.
+- Test selection: PDF generator, PDF group factory payload, and PDF render
+  contract tests.
+- Raw work items: 4864.
+- Proof-critical work items after filter: 43.
+- Killed mutants: 43.
+- Surviving mutants: 0.
+- Gate result: pass.
+- Mutation exposed missing boundary partitions for long clip sequences,
+  negative width, zero height, and fractional negative height; those tests were
+  added before the passing mutation run.
 
 ## PO-PDFGROUP-001: PDF Group Roots And Required Fields Are Validated
 
@@ -248,3 +279,74 @@ factory sequence error.
 ### Conclusion
 
 Proven for nested group hydration through `DocumentPDF.create_from_dict()`.
+
+## PO-PDFGROUP-008: Group Clip Rectangles Emit Deterministic Operators
+
+### Claim
+
+`ComponentGroupPDF.generate_pdf()` emits a configured rectangular clip path
+before child component operators and restores graphics state after the group.
+
+### Proof Method
+
+`set_clip_rect()` stores a validated rectangle. `generate_pdf()` inserts `q`,
+the rectangle `re` path, `W`, `n`, existing child operators, and `Q`. The
+condition test asserts operator ordering relative to a child rectangle.
+
+### Conclusion
+
+Proven for rectangular group clipping after tests and mutation pass.
+
+## PO-PDFGROUP-009: Group Clip Rectangles Round Trip Through Parameters
+
+### Claim
+
+A configured clip rectangle is serialized only when present and hydrates back to
+equivalent group state and generated PDF operators.
+
+### Proof Method
+
+`parameters` writes `clip_rect` as a numeric list. `create_from_dict()` calls
+`set_clip_rect()` when the field is present. The round-trip condition test
+compares serialized parameters and generated PDF operators.
+
+### Conclusion
+
+Proven for serialized rectangular clip state after tests and mutation pass.
+
+## PO-PDFGROUP-010: Malformed Clip Rectangles Fail Explicitly
+
+### Claim
+
+Malformed direct and serialized clip rectangles fail before public group state
+is mutated or a hydrated group is returned.
+
+### Proof Method
+
+`_coerce_pdf_clip_rect()` rejects strings, non-sequences, wrong lengths,
+boolean values, nonnumeric values, non-finite values, and non-positive width or
+height. Condition tests cover representative partitions and assert failed
+direct calls leave `clip_rect()` unset.
+
+### Conclusion
+
+Proven for declared malformed clip rectangle partitions after tests and
+mutation pass.
+
+## PO-PDFGROUP-011: DocumentPDF Consumes Group Clips On The Live Path
+
+### Claim
+
+`DocumentPDF.to_pdf_bytes()` emits clipped `ComponentGroupPDF` content on the
+page content-stream path without relaxing closed group/component guards.
+
+### Proof Method
+
+The document live-path condition test adds a clipped exact `ComponentGroupPDF`
+to a page layer and asserts the page content stream contains the page transform
+followed by the group clipping operators before child operators. Existing
+PDF-GUARD-P3 tests continue to prove closed group/component dispatch.
+
+### Conclusion
+
+Proven for the document live path after tests and mutation pass.

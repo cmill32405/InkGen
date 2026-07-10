@@ -30,6 +30,7 @@ nav:
       - ADR-0011 PDF Deep Outline Trees: adr/0011-pdf-deep-outline-trees.md
       - ADR-0012 PDF Smooth Path Commands: adr/0012-pdf-smooth-path-commands.md
       - ADR-0013 PDF Highlight Annotations: adr/0013-pdf-highlight-annotations.md
+      - ADR-0014 PDF Group Clip Rectangles: adr/0014-pdf-group-clip-rectangles.md
   - Proof Notes:
       - Grammar Truth: proofs/grammar-truth.md
       - Extraction Truth Contract: proofs/extraction-truth-contract.md

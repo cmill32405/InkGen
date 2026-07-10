@@ -44,8 +44,8 @@ images with alpha, JPEG pass-through, ICC profile emission, Standard 14 fonts,
 named TrueType/OpenType font embedding, page labels, Crop/Bleed/Trim/Art page
 boxes, flat and arbitrary-depth nested outlines/bookmarks, URI links, internal
 page links, named destinations, named-destination links, text annotations,
-highlight annotations, stroke/fill opacity through PDF ExtGState resources, and stroke
-dash/cap/join/miter operators.
+highlight annotations, rectangular group clipping, stroke/fill opacity through
+PDF ExtGState resources, and stroke dash/cap/join/miter operators.
 
 The remaining gaps that keep the backend from being a fully featured PDF
 creation system are:
@@ -54,7 +54,7 @@ creation system are:
 |---|---|---|
 | Text encoding | WinAnsi literal strings, installed-font embedding, and printable WinAnsi `/ToUnicode` CMaps | Unicode/CID fonts, glyph subsetting, and full complex-script text extraction maps |
 | Text layout | Positioned text components with explicit line-break output using `TextStyle.line_spacing` | Automatic wrapping, alignment across line boxes, tabs, columns, kerning, and complex-script shaping |
-| Graphics state | Basic stroke/fill primitives, stroke/fill alpha ExtGState resources, and stroke dash/cap/join/miter operators | Clipping paths, opacity groups, blend modes, gradients, and patterns |
+| Graphics state | Basic stroke/fill primitives, rectangular group clipping paths, stroke/fill alpha ExtGState resources, and stroke dash/cap/join/miter operators | Arbitrary clipping paths, opacity groups, blend modes, gradients, and patterns |
 | Document structure | Pages, deterministic metadata, page labels, Crop/Bleed/Trim/Art boxes, flat and arbitrary-depth nested outlines/bookmarks, URI links, internal page links, named destinations, named-destination links, text annotations, and highlight annotations | Other generic annotations and tagged PDF structure |
 | Color/profile support | Device RGB/CMYK and JPEG ICC profile objects | Broader calibrated color spaces and selectable PDF/A-style archival constraints |
 | Import/conversion | SVG input remains SVG-only | Arbitrary SVG-to-PDF conversion and external PDF embedding are out of scope until explicitly approved |
@@ -64,6 +64,16 @@ creation system are:
 The highest-value PDF hardening target for Document Intelligence remains full
 Unicode/CID font support because parser extraction quality depends on
 recoverable text, especially for hostile or unusual font encodings.
+
+`ComponentGroupPDF` supports rectangular clipping paths through
+`set_clip_rect((x, y, width, height))`. Clip rectangles use the same top-left
+InkGen document coordinates as PDF primitives because `DocumentPDF` applies the
+page-level coordinate flip before group operators are emitted. Clip rectangles
+must be finite four-number sequences with positive width and height, are stored
+in group parameters, round-trip through `ComponentGroupPDF.create_from_dict()`,
+and render as `q`, `re`, `W`, `n`, child operators, and `Q`. Arbitrary path
+clipping and style-owned clipping are intentionally outside the current closed
+renderer contract.
 
 PDF raster images use `RasterImageAsset` and `ImagePDF`. InkGen accepts
 Pillow-decodable raster inputs at the asset boundary, applies EXIF orientation

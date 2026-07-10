@@ -528,6 +528,24 @@ def _coerce_pdf_link_rect(
     return _coerce_pdf_page_box(rect, canvas_width=canvas_width, canvas_height=canvas_height)
 
 
+def _coerce_pdf_clip_rect(rect: object) -> tuple[float, float, float, float]:
+    """Return a validated PDF clipping rectangle in document coordinates."""
+    if isinstance(rect, (str, bytes)) or not isinstance(rect, Sequence) or len(rect) != 4:
+        raise TypeError("PDF clip rectangle must be a four-number sequence")
+    values = []
+    for value in rect:
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise TypeError("PDF clip rectangle values must be finite numbers")
+        number = float(value)
+        if not math.isfinite(number):
+            raise ValueError("PDF clip rectangle values must be finite numbers")
+        values.append(number)
+    left, top, width, height = values
+    if width <= 0.0 or height <= 0.0:
+        raise ValueError("PDF clip rectangle width and height must be positive")
+    return left, top, width, height
+
+
 def _color_components(color: str) -> tuple[float, float, float] | None:
     """Convert an InkGen color into RGB values in PDF's 0-1 range."""
     if not color or color.lower() == "none":
@@ -1679,6 +1697,11 @@ def _pdf_component_class(component_type: str) -> type:
 class ComponentGroupPDF(ComponentGroup, LabelGenerator, SegmentGenerator):
     """Component group that serializes child PDF components."""
 
+    def __init__(self, group_label: str) -> None:
+        """Create a PDF component group with optional PDF clip state."""
+        super().__init__(group_label)
+        self._pdf_clip_rect: tuple[float, float, float, float] | None = None
+
     def add_component(self, component: Component) -> None:
         """Add a built-in PDF component to the group."""
         ensure_builtin_pdf_component(
@@ -1688,11 +1711,28 @@ class ComponentGroupPDF(ComponentGroup, LabelGenerator, SegmentGenerator):
         )
         super().add_component(component)
 
+    def set_clip_rect(self, rect: Sequence[float | int] | None) -> None:
+        """Set or clear a rectangular PDF clipping path for this group."""
+        if rect is None:
+            self.clear_clip_rect()
+            return
+        self._pdf_clip_rect = _coerce_pdf_clip_rect(rect)
+
+    def clear_clip_rect(self) -> None:
+        """Clear the group's PDF clipping path."""
+        self._pdf_clip_rect = None
+
+    def clip_rect(self) -> tuple[float, float, float, float] | None:
+        """Return the group's PDF clipping rectangle, if one is configured."""
+        return self._pdf_clip_rect
+
     @classmethod
     def create_from_dict(cls, data: dict, styles: dict | None = None) -> ComponentGroupPDF:
         """Recreate a ComponentGroupPDF from serialized parameters."""
         payload = _pdf_payload(data, "ComponentGroupPDF")
         group = cls(_pdf_required_field(payload, "group_label", "ComponentGroupPDF"))
+        if "clip_rect" in payload:
+            group.set_clip_rect(payload["clip_rect"])
         restore_extraction_truth_annotations(group, payload.get("extraction_truth", []))
         restore_grammar_truth_annotations(group, payload.get("grammar_truth", []))
         if styles is None:
@@ -1726,6 +1766,8 @@ class ComponentGroupPDF(ComponentGroup, LabelGenerator, SegmentGenerator):
             "group_label": self.group_label,
             "components": [component.parameters for component in components],
         }
+        if self._pdf_clip_rect is not None:
+            group_payload["clip_rect"] = list(self._pdf_clip_rect)
         annotations = serialize_extraction_truth_annotations(self)
         if annotations:
             group_payload["extraction_truth"] = annotations
@@ -1750,6 +1792,16 @@ class ComponentGroupPDF(ComponentGroup, LabelGenerator, SegmentGenerator):
                 message="ComponentGroupPDF only renders built-in PDF components.",
             )
             operators.append(component.generate_pdf(context))
+        if self._pdf_clip_rect is not None:
+            left, top, width, height = self._pdf_clip_rect
+            operators = [
+                "q",
+                f"{_number(left)} {_number(top)} {_number(width)} {_number(height)} re",
+                "W",
+                "n",
+                *operators,
+                "Q",
+            ]
         return "\n".join(operators)
 
     def generate_label(self) -> dict[str, list[tuple[float, float]]]:
