@@ -45,7 +45,8 @@ named TrueType/OpenType font embedding, page labels, Crop/Bleed/Trim/Art page
 boxes, flat and arbitrary-depth nested outlines/bookmarks, URI links, internal
 page links, named destinations, named-destination links, text annotations,
 highlight annotations, rectangular group clipping, stroke/fill opacity through
-PDF ExtGState resources, and stroke dash/cap/join/miter operators.
+PDF ExtGState resources, group blend modes through PDF ExtGState resources, and
+stroke dash/cap/join/miter operators.
 
 The remaining gaps that keep the backend from being a fully featured PDF
 creation system are:
@@ -54,7 +55,7 @@ creation system are:
 |---|---|---|
 | Text encoding | WinAnsi literal strings, installed-font embedding, and printable WinAnsi `/ToUnicode` CMaps | Unicode/CID fonts, glyph subsetting, and full complex-script text extraction maps |
 | Text layout | Positioned text components with explicit line-break output using `TextStyle.line_spacing` | Automatic wrapping, alignment across line boxes, tabs, columns, kerning, and complex-script shaping |
-| Graphics state | Basic stroke/fill primitives, rectangular group clipping paths, stroke/fill alpha ExtGState resources, and stroke dash/cap/join/miter operators | Arbitrary clipping paths, opacity groups, blend modes, gradients, and patterns |
+| Graphics state | Basic stroke/fill primitives, rectangular group clipping paths, group blend modes, stroke/fill alpha ExtGState resources, and stroke dash/cap/join/miter operators | Arbitrary clipping paths, opacity groups, gradients, and patterns |
 | Document structure | Pages, deterministic metadata, page labels, Crop/Bleed/Trim/Art boxes, flat and arbitrary-depth nested outlines/bookmarks, URI links, internal page links, named destinations, named-destination links, text annotations, and highlight annotations | Other generic annotations and tagged PDF structure |
 | Color/profile support | Device RGB/CMYK and JPEG ICC profile objects | Broader calibrated color spaces and selectable PDF/A-style archival constraints |
 | Import/conversion | SVG input remains SVG-only | Arbitrary SVG-to-PDF conversion and external PDF embedding are out of scope until explicitly approved |
@@ -74,6 +75,17 @@ in group parameters, round-trip through `ComponentGroupPDF.create_from_dict()`,
 and render as `q`, `re`, `W`, `n`, child operators, and `Q`. Arbitrary path
 clipping and style-owned clipping are intentionally outside the current closed
 renderer contract.
+
+`ComponentGroupPDF` also supports standard PDF blend modes through
+`set_blend_mode(mode)`. Supported non-default modes are the standard PDF blend
+mode names such as `Multiply`, `Screen`, `Overlay`, `Darken`, `Lighten`,
+`ColorDodge`, `ColorBurn`, `HardLight`, `SoftLight`, `Difference`, `Exclusion`,
+`Hue`, `Saturation`, `Color`, and `Luminosity`; `Normal` and `None` clear the
+setting. Blend modes are stored in group parameters, hydrate through
+`ComponentGroupPDF.create_from_dict()`, and render through deterministic
+`/ExtGState` resources on the `DocumentPDF` live path. They remain group-local
+PDF renderer state and do not change neutral drawing recipes or shared
+`DrawingStyle`.
 
 PDF raster images use `RasterImageAsset` and `ImagePDF`. InkGen accepts
 Pillow-decodable raster inputs at the asset boundary, applies EXIF orientation

@@ -11,10 +11,13 @@ The slice covers:
 
 - `ComponentGroupPDF.create_from_dict()`
 - `ComponentGroupPDF.set_clip_rect()`, `clear_clip_rect()`, and `clip_rect()`.
+- `ComponentGroupPDF.set_blend_mode()`, `clear_blend_mode()`, and
+  `blend_mode()`.
 - PDF child component envelope validation.
 - PDF child style envelope validation.
 - Closed PDF component type dispatch.
 - Rectangular PDF group clip serialization, hydration, and render output.
+- Standard PDF group blend-mode serialization, hydration, and render output.
 
 Out of scope:
 
@@ -51,16 +54,20 @@ Public contract:
 - Valid `ComponentGroupPDF` payloads hydrate to equivalent groups.
 - Optional `clip_rect` payloads hydrate to finite positive rectangular PDF
   group clipping state.
+- Optional `blend_mode` payloads hydrate to a supported standard PDF blend
+  mode or clear the setting for `Normal`.
 - Malformed roots, missing `group_label`, missing or malformed `components`,
-  malformed `clip_rect`, malformed child entries, malformed style envelopes,
-  and unsupported child or style types fail explicitly before dynamic dispatch
-  or rendering.
+  malformed `clip_rect`, malformed `blend_mode`, malformed child entries,
+  malformed style envelopes, and unsupported child or style types fail
+  explicitly before dynamic dispatch or rendering.
 - Child payloads still flow through the concrete child factory contract.
 
 Serialized/artifact contract:
 
 - `ComponentGroupPDF.parameters` adds `clip_rect` only when a group clip is
   configured.
+- `ComponentGroupPDF.parameters` adds `blend_mode` only when a non-default
+  group blend mode is configured.
 - Valid group hydration preserves generated PDF operators.
 - `DocumentPDF.create_from_dict()` remains compatible with valid nested groups.
 
@@ -75,8 +82,10 @@ Cycle/layer/coupling/redundancy result:
 
 ADR/rule impact:
 
-- ADR-0014 records the bounded PDF group clipping decision. The slice preserves
-  the dependency-free PDF renderer policy and adds no library.
+- ADR-0014 records the bounded PDF group clipping decision.
+- ADR-0015 records the bounded PDF group blend-mode decision.
+- The slices preserve the dependency-free PDF renderer policy and add no
+  library.
 
 ## Domain Definitions
 
@@ -89,6 +98,10 @@ ADR/rule impact:
   document coordinates: `(x, y, width, height)`.
 - Clip rectangle values must be finite non-boolean numbers, and width and
   height must be positive.
+- `blend_mode`, when present, is a string naming a standard PDF blend mode.
+- `Normal` and `None` clear blend state and are not serialized.
+- Non-default blend mode spellings normalize to canonical PDF names after
+  removing spaces, hyphens, and underscores.
 - Every child component entry is a single-key mapping with a string PDF
   component type and mapping payload.
 - Supported child component types are exactly `PDF_RENDER_COMPONENT_TYPES`.
@@ -111,6 +124,10 @@ ADR/rule impact:
 | Serialized clip rectangle | Preserve through parameters/hydration | PO-PDFGROUP-009 | clip round-trip test | mutation target |
 | Malformed clip rectangle | Reject before public state mutation or hydration return | PO-PDFGROUP-010 | malformed clip tests | mutation target |
 | Document live clip path | Emit clipping through `DocumentPDF` page stream | PO-PDFGROUP-011 | document live-path test | mutation target |
+| Configured blend mode | Emit `/ExtGState` resource and group `gs` operator | PO-PDFGROUP-012 | blend render test | mutation target |
+| Serialized blend mode | Preserve through parameters/hydration | PO-PDFGROUP-013 | blend round-trip test | mutation target |
+| Malformed blend mode | Reject before public state mutation or hydration return | PO-PDFGROUP-014 | malformed blend tests | mutation target |
+| Blend plus clip | Share one group graphics-state wrapper | PO-PDFGROUP-015 | blend+clip live-path test | mutation target |
 
 ## Test Applicability Matrix
 
@@ -119,13 +136,13 @@ ADR/rule impact:
 | Unit | yes | Payload helpers and dispatch checks are deterministic. | Direct group factory tests |
 | Behavioral/condition | yes | The proof note covers `PDF-GROUP-FACTORY-PAYLOAD-P2` and `PDF-GROUP-CLIP-P3`. | Condition-marked tests |
 | Failure-mode | yes | Old behavior failed through incidental lookup, subscription, or dynamic dispatch errors. | Malformed payload tests |
-| Integration/live-path | yes | `DocumentPDF.create_from_dict()` consumes nested PDF groups and `DocumentPDF.to_pdf_bytes()` emits clipped groups. | Document hydration and live clipping tests |
+| Integration/live-path | yes | `DocumentPDF.create_from_dict()` consumes nested PDF groups and `DocumentPDF.to_pdf_bytes()` emits clipped/blended groups. | Document hydration, live clipping, and live blend tests |
 | Contract/API compatibility | yes | Existing valid group/document round trips must remain. | Existing and new round-trip tests |
 | Property/fuzz | no | The envelope domain is finite shape validation. | Explicit partitions |
 | Mutation | yes | Validation guards and closed dispatch are proof-critical. | Cosmic Ray gate |
 | Security/adversarial | limited yes | Serialized payloads can be untrusted but do not trigger file, network, subprocess, SQL, archive, or active content behavior. | Malformed payload and clip tests |
 | Performance/resource | no | Adds constant-time envelope checks and one linear component loop. | Not applicable |
-| Golden artifact/visual | limited yes | Valid group hydration preserves generated PDF operators, and clipped groups emit deterministic PDF operators. | `generate_pdf()` equality and stream assertions |
+| Golden artifact/visual | limited yes | Valid group hydration preserves generated PDF operators, and clipped/blended groups emit deterministic PDF operators. | `generate_pdf()` equality and stream assertions |
 | Regression | yes | Prevents arbitrary module dispatch from group payloads. | Unsupported-type tests |
 
 ## Mutation Testing Gate
@@ -160,6 +177,22 @@ Current result:
 - Mutation exposed missing boundary partitions for long clip sequences,
   negative width, zero height, and fractional negative height; those tests were
   added before the passing mutation run.
+
+`PDF-GROUP-BLEND-P3` mutation result:
+
+- Tool: Cosmic Ray 8.4.6.
+- Environment: WSL Python 3.12 virtualenv.
+- Config: `tests/mutation/pdf_group_blend_cosmic_ray.toml`.
+- Filter: `tests/mutation/filter_pdf_group_blend_work_items.py`.
+- Test selection: PDF generator, PDF group factory payload, and PDF render
+  contract tests.
+- Raw work items: 4994.
+- Proof-critical work items after filter: 47.
+- Killed mutants: 47.
+- Surviving mutants: 0.
+- Gate result: pass.
+- Mutation exposed missing proof pressure for blend resource object-id
+  continuity; the live-path test now asserts contiguous object ids.
 
 ## PO-PDFGROUP-001: PDF Group Roots And Required Fields Are Validated
 
@@ -350,3 +383,78 @@ PDF-GUARD-P3 tests continue to prove closed group/component dispatch.
 ### Conclusion
 
 Proven for the document live path after tests and mutation pass.
+
+## PO-PDFGROUP-012: Group Blend Modes Emit Deterministic ExtGState Operators
+
+### Claim
+
+`DocumentPDF.to_pdf_bytes()` emits deterministic PDF `/ExtGState` resources for
+configured non-default group blend modes, then applies the resource before group
+child operators.
+
+### Proof Method
+
+`ComponentGroupPDF.generate_pdf()` requests a blend-mode resource from
+`PDFRenderContext`. `DocumentPDF.to_pdf_bytes()` writes the resource as a
+deterministic ExtGState object and includes it in the page resource dictionary.
+The live-path condition test asserts the resource object and content-stream
+operator placement.
+
+### Conclusion
+
+Proven for supported non-default group blend modes after tests and mutation
+pass.
+
+## PO-PDFGROUP-013: Group Blend Modes Round Trip Through Parameters
+
+### Claim
+
+A configured non-default blend mode is serialized only when present and hydrates
+back to equivalent canonical group state.
+
+### Proof Method
+
+`parameters` writes `blend_mode` as the canonical PDF name. `create_from_dict()`
+calls `set_blend_mode()` when the field is present. The round-trip condition
+test compares serialized parameters and hydrated state.
+
+### Conclusion
+
+Proven for serialized group blend state after tests and mutation pass.
+
+## PO-PDFGROUP-014: Malformed Blend Modes Fail Explicitly
+
+### Claim
+
+Malformed direct and serialized blend modes fail before public group state is
+mutated or a hydrated group is returned.
+
+### Proof Method
+
+`_coerce_pdf_blend_mode()` rejects non-string values, empty strings, and names
+outside the supported standard PDF blend-mode set. Condition tests cover direct
+state mutation and serialized hydration.
+
+### Conclusion
+
+Proven for declared malformed blend mode partitions after tests and mutation
+pass.
+
+## PO-PDFGROUP-015: Blend Modes Compose With Group Clipping
+
+### Claim
+
+A group configured with both a blend mode and a clip rectangle emits one group
+graphics-state wrapper, applies the blend mode before the clip path, and then
+emits child operators.
+
+### Proof Method
+
+The blend+clip condition test adds both controls to one exact
+`ComponentGroupPDF` and asserts the live page content stream contains one group
+wrapper sequence with `/GSx gs`, `re`, `W`, `n`, and then child operators.
+
+### Conclusion
+
+Proven for group blend plus rectangular clip composition after tests and
+mutation pass.

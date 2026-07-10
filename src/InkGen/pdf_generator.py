@@ -72,6 +72,24 @@ PDF_PAGE_BOX_NAMES = {
     "art": "ArtBox",
     "artbox": "ArtBox",
 }
+PDF_BLEND_MODES = {
+    "normal": "Normal",
+    "multiply": "Multiply",
+    "screen": "Screen",
+    "overlay": "Overlay",
+    "darken": "Darken",
+    "lighten": "Lighten",
+    "colordodge": "ColorDodge",
+    "colorburn": "ColorBurn",
+    "hardlight": "HardLight",
+    "softlight": "SoftLight",
+    "difference": "Difference",
+    "exclusion": "Exclusion",
+    "hue": "Hue",
+    "saturation": "Saturation",
+    "color": "Color",
+    "luminosity": "Luminosity",
+}
 
 
 @dataclass(frozen=True)
@@ -190,6 +208,12 @@ class PDFRenderContext:
             return None
         return self.graphics_state_registry.resource_name_for_opacity(stroke_opacity=stroke_opacity, fill_opacity=fill_opacity)
 
+    def blend_mode_resource_name(self, blend_mode: str | None) -> str | None:
+        """Return a PDF ExtGState resource name for a non-default blend mode."""
+        if self.graphics_state_registry is None:
+            return None
+        return self.graphics_state_registry.resource_name_for_blend_mode(blend_mode)
+
 
 @dataclass(frozen=True)
 class _PDFImagePayload:
@@ -296,6 +320,11 @@ class _PDFGraphicsStateRegistry:
 
     def __init__(self) -> None:
         self._resource_by_opacity: dict[tuple[float, float], str] = {}
+        self._resource_by_blend_mode: dict[str, str] = {}
+
+    def _next_resource_name(self) -> str:
+        """Return the next ExtGState resource name in insertion order."""
+        return f"GS{len(self._resource_by_opacity) + len(self._resource_by_blend_mode) + 1}"
 
     def resource_name_for_opacity(self, *, stroke_opacity: float = 1.0, fill_opacity: float = 1.0) -> str | None:
         """Return a resource name for non-default stroke/fill opacity values."""
@@ -305,13 +334,27 @@ class _PDFGraphicsStateRegistry:
             return None
         key = (stroke_alpha, fill_alpha)
         if key not in self._resource_by_opacity:
-            self._resource_by_opacity[key] = f"GS{len(self._resource_by_opacity) + 1}"
+            self._resource_by_opacity[key] = self._next_resource_name()
         return self._resource_by_opacity[key]
+
+    def resource_name_for_blend_mode(self, blend_mode: str | None) -> str | None:
+        """Return a resource name for a non-default PDF blend mode."""
+        mode = _coerce_pdf_blend_mode(blend_mode)
+        if mode is None:
+            return None
+        if mode not in self._resource_by_blend_mode:
+            self._resource_by_blend_mode[mode] = self._next_resource_name()
+        return self._resource_by_blend_mode[mode]
 
     def resources(self) -> tuple[tuple[str, float, float], ...]:
         """Return graphics-state resource definitions in deterministic order."""
         by_name = {name: key for key, name in self._resource_by_opacity.items()}
         return tuple((name, by_name[name][0], by_name[name][1]) for name in sorted(by_name, key=lambda value: int(value[2:])))
+
+    def blend_mode_resources(self) -> tuple[tuple[str, str], ...]:
+        """Return blend-mode resource definitions in deterministic order."""
+        by_name = {name: mode for mode, name in self._resource_by_blend_mode.items()}
+        return tuple((name, by_name[name]) for name in sorted(by_name, key=lambda value: int(value[2:])))
 
 
 class _PDFObjectWriter:
@@ -546,6 +589,22 @@ def _coerce_pdf_clip_rect(rect: object) -> tuple[float, float, float, float]:
     return left, top, width, height
 
 
+def _coerce_pdf_blend_mode(blend_mode: object) -> str | None:
+    """Return a supported PDF blend mode name or None for the default mode."""
+    if blend_mode is None:
+        return None
+    if not isinstance(blend_mode, str):
+        raise TypeError("PDF blend mode must be a string or None")
+    key = blend_mode.replace("-", "").replace("_", "").replace(" ", "").lower()
+    if not key:
+        raise ValueError("PDF blend mode must not be empty")
+    if key not in PDF_BLEND_MODES:
+        raise ValueError("PDF blend mode must be a standard PDF blend mode")
+    if key == "normal":
+        return None
+    return PDF_BLEND_MODES[key]
+
+
 def _color_components(color: str) -> tuple[float, float, float] | None:
     """Convert an InkGen color into RGB values in PDF's 0-1 range."""
     if not color or color.lower() == "none":
@@ -573,6 +632,14 @@ def _pdf_extgstate_object(*, stroke_opacity: float, fill_opacity: float) -> str:
     stroke_alpha = _opacity_value(stroke_opacity, "stroke_opacity")
     fill_alpha = _opacity_value(fill_opacity, "fill_opacity")
     return f"<< /Type /ExtGState /CA {_number(stroke_alpha)} /ca {_number(fill_alpha)} >>"
+
+
+def _pdf_blend_mode_extgstate_object(blend_mode: str) -> str:
+    """Build a PDF ExtGState dictionary for a standard blend mode."""
+    mode = _coerce_pdf_blend_mode(blend_mode)
+    if mode is None:
+        raise ValueError("PDF blend ExtGState requires a non-default blend mode")
+    return f"<< /Type /ExtGState /BM /{mode} >>"
 
 
 def _pdf_stroke_presentation_operators(style: DrawingStyle) -> list[str]:
@@ -1698,9 +1765,10 @@ class ComponentGroupPDF(ComponentGroup, LabelGenerator, SegmentGenerator):
     """Component group that serializes child PDF components."""
 
     def __init__(self, group_label: str) -> None:
-        """Create a PDF component group with optional PDF clip state."""
+        """Create a PDF component group with optional PDF graphics-state controls."""
         super().__init__(group_label)
         self._pdf_clip_rect: tuple[float, float, float, float] | None = None
+        self._pdf_blend_mode: str | None = None
 
     def add_component(self, component: Component) -> None:
         """Add a built-in PDF component to the group."""
@@ -1726,6 +1794,18 @@ class ComponentGroupPDF(ComponentGroup, LabelGenerator, SegmentGenerator):
         """Return the group's PDF clipping rectangle, if one is configured."""
         return self._pdf_clip_rect
 
+    def set_blend_mode(self, blend_mode: str | None) -> None:
+        """Set or clear a standard PDF blend mode for this group."""
+        self._pdf_blend_mode = _coerce_pdf_blend_mode(blend_mode)
+
+    def clear_blend_mode(self) -> None:
+        """Clear the group's PDF blend mode."""
+        self._pdf_blend_mode = None
+
+    def blend_mode(self) -> str | None:
+        """Return the group's PDF blend mode, if one is configured."""
+        return self._pdf_blend_mode
+
     @classmethod
     def create_from_dict(cls, data: dict, styles: dict | None = None) -> ComponentGroupPDF:
         """Recreate a ComponentGroupPDF from serialized parameters."""
@@ -1733,6 +1813,8 @@ class ComponentGroupPDF(ComponentGroup, LabelGenerator, SegmentGenerator):
         group = cls(_pdf_required_field(payload, "group_label", "ComponentGroupPDF"))
         if "clip_rect" in payload:
             group.set_clip_rect(payload["clip_rect"])
+        if "blend_mode" in payload:
+            group.set_blend_mode(payload["blend_mode"])
         restore_extraction_truth_annotations(group, payload.get("extraction_truth", []))
         restore_grammar_truth_annotations(group, payload.get("grammar_truth", []))
         if styles is None:
@@ -1768,6 +1850,8 @@ class ComponentGroupPDF(ComponentGroup, LabelGenerator, SegmentGenerator):
         }
         if self._pdf_clip_rect is not None:
             group_payload["clip_rect"] = list(self._pdf_clip_rect)
+        if self._pdf_blend_mode is not None:
+            group_payload["blend_mode"] = self._pdf_blend_mode
         annotations = serialize_extraction_truth_annotations(self)
         if annotations:
             group_payload["extraction_truth"] = annotations
@@ -1792,16 +1876,24 @@ class ComponentGroupPDF(ComponentGroup, LabelGenerator, SegmentGenerator):
                 message="ComponentGroupPDF only renders built-in PDF components.",
             )
             operators.append(component.generate_pdf(context))
-        if self._pdf_clip_rect is not None:
-            left, top, width, height = self._pdf_clip_rect
+        blend_resource = context.blend_mode_resource_name(self._pdf_blend_mode) if context is not None else None
+        if self._pdf_clip_rect is not None or blend_resource is not None:
             operators = [
                 "q",
-                f"{_number(left)} {_number(top)} {_number(width)} {_number(height)} re",
-                "W",
-                "n",
                 *operators,
                 "Q",
             ]
+            insert_at = 1
+            if blend_resource is not None:
+                operators.insert(insert_at, f"/{blend_resource} gs")
+                insert_at += 1
+            if self._pdf_clip_rect is not None:
+                left, top, width, height = self._pdf_clip_rect
+                operators[insert_at:insert_at] = [
+                    f"{_number(left)} {_number(top)} {_number(width)} {_number(height)} re",
+                    "W",
+                    "n",
+                ]
         return "\n".join(operators)
 
     def generate_label(self) -> dict[str, list[tuple[float, float]]]:
@@ -2628,6 +2720,10 @@ class DocumentPDF(Document):
                 object_id,
                 _pdf_extgstate_object(stroke_opacity=stroke_opacity, fill_opacity=fill_opacity),
             )
+            object_id += 1
+        for resource_name, blend_mode in graphics_state_registry.blend_mode_resources():
+            graphics_state_object_ids[resource_name] = object_id
+            writer.set_object(object_id, _pdf_blend_mode_extgstate_object(blend_mode))
             object_id += 1
 
         resource_sections: list[str] = []

@@ -278,6 +278,99 @@ def test_pdf_opacity_helpers_validate_boundaries_and_reuse_resources() -> None:
             pdf_generator_module._opacity_value(value, "alpha")  # noqa: SLF001
 
 
+@pytest.mark.condition("PDF-GROUP-BLEND-P3")
+def test_document_pdf_emits_group_blend_mode_extgstate(drawing_style: DrawingStyle) -> None:
+    """PDF-GROUP-BLEND-P3: DocumentPDF maps group blend modes to ExtGState resources."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    group = ComponentGroupPDF("blend")
+    group.set_blend_mode("Multiply")
+    group.add_component(RectanglePDF((1.0, 2.0), 3.0, 4.0, 0.0, drawing_style))
+    document.page(1).layer("base").add_component_group(group)
+
+    payload = document.to_pdf_bytes()
+    content = _stream(payload)
+    objects = _pdf_objects(payload)
+    resource_match = re.search(rb"/ExtGState << /GS1 (?P<id>\d+) 0 R", payload)
+
+    _assert_contiguous_object_ids(payload)
+    assert resource_match is not None
+    assert objects[int(resource_match.group("id"))] == b"<< /Type /ExtGState /BM /Multiply >>"
+    assert "q\n1 0 0 -1 0 80 cm\nq\n/GS1 gs\nq\n0 0 0 RG" in content
+
+
+@pytest.mark.condition("PDF-GROUP-BLEND-P3")
+def test_document_pdf_combines_group_blend_and_clip_controls(drawing_style: DrawingStyle) -> None:
+    """PDF-GROUP-BLEND-P3: Group blend and clip controls share one group graphics-state wrapper."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    group = ComponentGroupPDF("blend-clip")
+    group.set_blend_mode("Screen")
+    group.set_clip_rect((1.0, 2.0, 30.0, 40.0))
+    group.add_component(RectanglePDF((10.0, 20.0), 3.0, 4.0, 0.0, drawing_style))
+    document.page(1).layer("base").add_component_group(group)
+
+    content = _stream(document.to_pdf_bytes())
+
+    assert "q\n1 0 0 -1 0 80 cm\nq\n/GS1 gs\n1 2 30 40 re\nW\nn\nq\n0 0 0 RG" in content
+
+
+@pytest.mark.condition("PDF-GROUP-BLEND-P3")
+def test_pdf_blend_mode_helpers_validate_normalize_and_reuse_resources() -> None:
+    """PDF-GROUP-BLEND-P3: Blend mode helpers normalize standard modes and reuse resources."""
+    registry = pdf_generator_module._PDFGraphicsStateRegistry()  # noqa: SLF001
+
+    assert pdf_generator_module._coerce_pdf_blend_mode(None) is None  # noqa: SLF001
+    assert pdf_generator_module._coerce_pdf_blend_mode("Normal") is None  # noqa: SLF001
+    assert pdf_generator_module._coerce_pdf_blend_mode("color-dodge") == "ColorDodge"  # noqa: SLF001
+    assert registry.resource_name_for_blend_mode("screen") == "GS1"
+    assert registry.resource_name_for_blend_mode("Screen") == "GS1"
+    assert registry.resource_name_for_blend_mode("hard light") == "GS2"
+    assert registry.resource_name_for_opacity(stroke_opacity=0.5, fill_opacity=1.0) == "GS3"
+    assert registry.blend_mode_resources() == (("GS1", "Screen"), ("GS2", "HardLight"))
+    assert pdf_generator_module._pdf_blend_mode_extgstate_object("soft_light") == "<< /Type /ExtGState /BM /SoftLight >>"  # noqa: SLF001
+
+
+@pytest.mark.condition("PDF-GROUP-BLEND-P3")
+def test_component_group_pdf_blend_mode_round_trips(drawing_style: DrawingStyle) -> None:
+    """PDF-GROUP-BLEND-P3: Group blend modes serialize and hydrate deterministically."""
+    group = ComponentGroupPDF("blend-roundtrip")
+    group.set_blend_mode("soft-light")
+    group.add_component(RectanglePDF((1.0, 2.0), 3.0, 4.0, 0.0, drawing_style))
+
+    recreated = ComponentGroupPDF.create_from_dict(group.parameters, {drawing_style.name: drawing_style})
+
+    assert group.parameters["ComponentGroupPDF"]["blend_mode"] == "SoftLight"
+    assert recreated.blend_mode() == "SoftLight"
+    assert recreated.parameters == group.parameters
+
+    group.set_blend_mode("Normal")
+    assert group.blend_mode() is None
+    assert "blend_mode" not in group.parameters["ComponentGroupPDF"]
+
+
+@pytest.mark.condition("PDF-GROUP-BLEND-P3")
+@pytest.mark.parametrize("blend_mode", [object(), "", "not-a-mode"])
+def test_component_group_pdf_rejects_malformed_blend_modes(blend_mode: object) -> None:
+    """PDF-GROUP-BLEND-P3: Malformed blend modes fail before group state mutation."""
+    group = ComponentGroupPDF("bad-blend")
+    group.set_blend_mode("Multiply")
+
+    with pytest.raises((TypeError, ValueError), match="PDF blend mode"):
+        group.set_blend_mode(blend_mode)
+
+    assert group.blend_mode() == "Multiply"
+
+
+@pytest.mark.condition("PDF-GROUP-BLEND-P3")
+def test_component_group_pdf_factory_rejects_malformed_blend_modes() -> None:
+    """PDF-GROUP-BLEND-P3: Group hydration rejects malformed serialized blend modes."""
+    payload = {"ComponentGroupPDF": {"group_label": "bad-blend", "components": [], "blend_mode": "not-a-mode"}}
+
+    with pytest.raises(ValueError, match="PDF blend mode must be a standard PDF blend mode"):
+        ComponentGroupPDF.create_from_dict(payload)
+
+
 @pytest.mark.condition("PDF-P1")
 def test_path_pdf_emits_supported_svg_path_commands(drawing_style: DrawingStyle) -> None:
     """PDF-P1: PathPDF maps supported SVG-style path commands to PDF operators."""
