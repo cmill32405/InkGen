@@ -456,8 +456,50 @@ def _number(value: float | int) -> str:
 
 
 def _escape_pdf_string(value: str) -> str:
-    """Escape text for a literal PDF string."""
-    return value.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)").replace("\r", "\\r").replace("\n", "\\n")
+    """Escape a validated WinAnsi value for a PDF literal string."""
+    escaped: list[str] = []
+    for byte in value.encode("cp1252"):
+        if byte == 0x08:
+            escaped.append(r"\b")
+        elif byte == 0x09:
+            escaped.append(r"\t")
+        elif byte == 0x0A:
+            escaped.append(r"\n")
+        elif byte == 0x0C:
+            escaped.append(r"\f")
+        elif byte == 0x0D:
+            escaped.append(r"\r")
+        elif byte == 0x28:
+            escaped.append(r"\(")
+        elif byte == 0x29:
+            escaped.append(r"\)")
+        elif byte == 0x5C:
+            escaped.append(r"\\")
+        elif 0x20 <= byte <= 0x7E:
+            escaped.append(chr(byte))
+        else:
+            escaped.append(f"\\{byte:03o}")
+    return "".join(escaped)
+
+
+def _coerce_pdf_literal_string(value: object, name: str) -> str:
+    """Return a non-empty PDF literal string inside InkGen's WinAnsi domain."""
+    if not isinstance(value, str):
+        raise TypeError(f"{name} must be a string")
+    if not value:
+        raise ValueError(f"{name} must not be empty")
+    try:
+        encoded = value.encode("cp1252")
+    except UnicodeEncodeError as exc:
+        raise ValueError(f"{name} must be encodable as WinAnsi") from exc
+    for index, character in enumerate(value):
+        byte = encoded[index]
+        if character in {"\r", "\n"}:
+            continue
+        if byte in PDF_WINANSI_BYTE_TO_UNICODE:
+            continue
+        raise ValueError(f"{name} must be encodable as WinAnsi")
+    return value
 
 
 def _coerce_pdf_text_content(value: object) -> str:
@@ -499,15 +541,7 @@ def _escape_pdf_text_string(value: str) -> str:
 
 def _coerce_pdf_page_label(label: object) -> str:
     """Return a PDF literal-string-safe page label."""
-    if not isinstance(label, str):
-        raise TypeError("page label must be a string")
-    if not label:
-        raise ValueError("page label must not be empty")
-    try:
-        label.encode("latin-1")
-    except UnicodeEncodeError as exc:
-        raise ValueError("page label must be encodable as latin-1") from exc
-    return label
+    return _coerce_pdf_literal_string(label, "page label")
 
 
 def _coerce_pdf_page_box_name(name: object) -> str:
@@ -554,15 +588,7 @@ def _coerce_pdf_page_rotation(rotation: object) -> int:
 
 def _coerce_pdf_outline_title(title: object) -> str:
     """Return a PDF literal-string-safe outline title."""
-    if not isinstance(title, str):
-        raise TypeError("outline title must be a string")
-    if not title:
-        raise ValueError("outline title must not be empty")
-    try:
-        title.encode("latin-1")
-    except UnicodeEncodeError as exc:
-        raise ValueError("outline title must be encodable as latin-1") from exc
-    return title
+    return _coerce_pdf_literal_string(title, "outline title")
 
 
 def _coerce_pdf_outline_expanded(expanded: object) -> bool:
@@ -574,15 +600,7 @@ def _coerce_pdf_outline_expanded(expanded: object) -> bool:
 
 def _coerce_pdf_destination_name(name: object) -> str:
     """Return a PDF literal-string-safe named destination key."""
-    if not isinstance(name, str):
-        raise TypeError("named destination must be a string")
-    if not name:
-        raise ValueError("named destination must not be empty")
-    try:
-        name.encode("latin-1")
-    except UnicodeEncodeError as exc:
-        raise ValueError("named destination must be encodable as latin-1") from exc
-    return name
+    return _coerce_pdf_literal_string(name, "named destination")
 
 
 def _coerce_pdf_destination_number(value: object, name: str, *, owner: str = "outline") -> float:
@@ -604,28 +622,12 @@ def _coerce_pdf_outline_destination_token(value: float | None) -> str:
 
 def _coerce_pdf_uri(uri: object) -> str:
     """Return a PDF literal-string-safe URI target."""
-    if not isinstance(uri, str):
-        raise TypeError("URI link target must be a string")
-    if not uri:
-        raise ValueError("URI link target must not be empty")
-    try:
-        uri.encode("latin-1")
-    except UnicodeEncodeError as exc:
-        raise ValueError("URI link target must be encodable as latin-1") from exc
-    return uri
+    return _coerce_pdf_literal_string(uri, "URI link target")
 
 
 def _coerce_pdf_annotation_text(value: object, name: str) -> str:
     """Return a PDF literal-string-safe annotation text field."""
-    if not isinstance(value, str):
-        raise TypeError(f"{name} must be a string")
-    if not value:
-        raise ValueError(f"{name} must not be empty")
-    try:
-        value.encode("latin-1")
-    except UnicodeEncodeError as exc:
-        raise ValueError(f"{name} must be encodable as latin-1") from exc
-    return value
+    return _coerce_pdf_literal_string(value, name)
 
 
 def _coerce_pdf_annotation_open(value: object) -> bool:

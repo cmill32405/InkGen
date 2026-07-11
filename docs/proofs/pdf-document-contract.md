@@ -116,6 +116,12 @@ Affected surface:
   gate for PDF-DOC-PAGE-ROTATION-P3.
 - `tests/mutation/filter_pdf_document_page_rotation_work_items.py`: page
   rotation proof-critical mutation filter.
+- `tests/mutation/pdf_winansi_literal_strings_cosmic_ray.toml`: scoped mutation
+  gate for PDF-DOC-WINANSI-STRINGS-P3.
+- `tests/mutation/filter_pdf_winansi_literal_strings_work_items.py`: WinAnsi
+  literal-string proof-critical mutation filter.
+- `docs/adr/0025-pdf-winansi-literal-strings.md`: accepted ADR for the shared
+  PDF metadata literal-string contract.
 
 Incoming dependencies:
 
@@ -346,8 +352,8 @@ ADR/rule impact:
 - Truth output must remain deterministic.
 - PDF file output accepts string and path-like paths that resolve to existing
   directories and rejects malformed output path values.
-- PDF page labels are non-empty Latin-1 strings because the dependency-free
-  backend currently emits literal PDF strings.
+- PDF literal-string metadata is non-empty text in the defined CP1252/WinAnsi
+  byte domain. Non-ASCII bytes are octal-escaped before PDF objects are emitted.
 - PDF page boxes are finite four-number bottom-left coordinate rectangles with
   positive area inside the page MediaBox.
 - PDF page rotations are integer multiples of 90 degrees normalized to nonzero
@@ -358,7 +364,7 @@ ADR/rule impact:
 - Serialized page labels, page boxes, and page rotations must be rejected before
   rendering if they are malformed.
 - PDF outlines are insertion-ordered entries. Each entry has a non-empty
-  Latin-1 title, targets an existing one-based page number, and has finite
+  WinAnsi title, targets an existing one-based page number, and has finite
   destination numbers when `left`, `top`, or `zoom` are provided.
 - A child outline may name one earlier unique parent at any depth by exact title
   value. Duplicate flat titles remain valid until the duplicate title is used as
@@ -370,7 +376,7 @@ ADR/rule impact:
 - Omitted outline `top` and `zoom` values emit PDF `null` destination tokens.
 - Serialized outline entries must be rejected before rendering if malformed.
 - PDF URI link annotations are flat, insertion-ordered entries. Each entry has a
-  non-empty Latin-1 URI string, targets an existing one-based page number, and
+  non-empty WinAnsi URI string, targets an existing one-based page number, and
   owns a finite positive-area rectangle inside the target page MediaBox.
 - Page `/Annots` arrays must include every URI link on that page in insertion
   order.
@@ -383,7 +389,7 @@ ADR/rule impact:
   any URI links on that page.
 - Serialized internal page link entries must be rejected before rendering if
   malformed.
-- PDF named destinations are unique non-empty Latin-1 names targeting existing
+- PDF named destinations are unique non-empty WinAnsi names targeting existing
   one-based page numbers with finite `/XYZ` destination numbers when provided.
 - Named destinations emit in deterministic name order in the catalog `/Names`
   dictionary.
@@ -393,7 +399,7 @@ ADR/rule impact:
   before rendering if malformed.
 - PDF text annotations are flat, insertion-ordered entries. Each entry has an
   existing one-based page number, a finite positive-area rectangle inside the
-  page MediaBox, non-empty Latin-1 contents, optional non-empty Latin-1 title,
+  page MediaBox, non-empty WinAnsi contents, optional non-empty WinAnsi title,
   and a strict boolean open state.
 - Page `/Annots` arrays must include every text annotation on that page after
   URI links, internal page links, and named-destination links on that page.
@@ -401,7 +407,7 @@ ADR/rule impact:
   malformed.
 - PDF FreeText annotations are flat, insertion-ordered entries. Each entry has
   an existing one-based page number, a finite positive-area rectangle inside the
-  page MediaBox, non-empty Latin-1 contents, a strict RGB text color accepted as
+  page MediaBox, non-empty WinAnsi contents, a strict RGB text color accepted as
   a `#rrggbb` string or serialized 0.0-1.0 numeric triple, and a finite positive
   font size.
 - Page `/Annots` arrays must include every FreeText annotation on that page
@@ -411,7 +417,7 @@ ADR/rule impact:
 - PDF highlight annotations are flat, insertion-ordered entries. Each entry has
   an existing one-based page number, a finite positive-area rectangle inside the
   page MediaBox, a strict RGB color accepted as a `#rrggbb` string or serialized
-  0.0-1.0 numeric triple, and optional non-empty Latin-1 contents.
+  0.0-1.0 numeric triple, and optional non-empty WinAnsi contents.
 - Page `/Annots` arrays must include every highlight annotation on that page
   after URI links, internal page links, named-destination links, and text
   annotations on that page.
@@ -422,7 +428,7 @@ ADR/rule impact:
 - PDF square annotations are flat, insertion-ordered entries. Each entry has an
   existing one-based page number, a finite positive-area rectangle inside the
   page MediaBox, a strict RGB border color accepted as a `#rrggbb` string or
-  serialized 0.0-1.0 numeric triple, and optional non-empty Latin-1 contents.
+  serialized 0.0-1.0 numeric triple, and optional non-empty WinAnsi contents.
 - Page `/Annots` arrays must include every square annotation on that page after
   URI links, internal page links, named-destination links, text annotations, and
   highlight annotations on that page.
@@ -439,6 +445,7 @@ ADR/rule impact:
 | Duplicate labels with extraction truth | Emit both annotated groups | PO-PDFDOC-003 | extraction-truth duplicate-label test | killed |
 | Duplicate labels with grammar truth | Emit both annotated groups | PO-PDFDOC-004 | grammar-truth duplicate-label test | killed |
 | PDF file writer path boundary | Accept string/path-like paths and reject malformed output paths before writing | PO-PDFDOC-005 | path-like and malformed-path tests | killed |
+| PDF WinAnsi literal strings | Accept common CP1252 metadata strings and reject undefined/control/non-WinAnsi strings before rendering | PO-PDFDOC-050 | metadata literal-string live-path test | pass with equivalent survivors |
 | Page labels | Emit escaped PDF `/PageLabels`, preserve deterministic bytes, and round-trip through parameters | PO-PDFDOC-006 | page label and page box render/round-trip test | killed |
 | Page boxes | Emit only allowed Crop/Bleed/Trim/Art boxes in bottom-left coordinates inside MediaBox | PO-PDFDOC-007 | page box render/invalid metadata tests | killed |
 | Page rotations | Emit normalized PDF `/Rotate` values, preserve deterministic bytes, and round-trip through parameters | PO-PDFDOC-049 | page structure render/round-trip test | pass with equivalent survivors |
@@ -448,7 +455,7 @@ ADR/rule impact:
 | Outline target index shifts | Insert/remove pages shift or delete outline targets with page indices | PO-PDFDOC-011 | outline page mutation test | mutation target |
 | Serialized outline metadata | Reject malformed outline payloads before rendering | PO-PDFDOC-012 | serialized outline rejection test | mutation target |
 | Nested outlines | Emit deterministic outline child chains and prune orphaned children | PO-PDFDOC-022 | nested outline render/round-trip and page mutation tests | mutation target |
-| Nested outline parent validation | Reject missing, ambiguous, non-Latin-1, and non-string parents | PO-PDFDOC-023 | invalid parent and serialized parent tests | mutation target |
+| Nested outline parent validation | Reject missing, ambiguous, non-WinAnsi, and non-string parents | PO-PDFDOC-023 | invalid parent and serialized parent tests | mutation target |
 | Nested outline serialization | Preserve child parent metadata through parameters and hydration | PO-PDFDOC-024 | nested outline round-trip test | mutation target |
 | Outline expansion state | Emit positive child counts for expanded parents and negative child counts for collapsed parents | PO-PDFDOC-028 | collapsed outline render/round-trip test | mutation target |
 | Outline expansion page shifts | Insert/remove pages preserve expansion state while shifting outline targets | PO-PDFDOC-029 | outline page mutation test | mutation target |
@@ -582,6 +589,24 @@ Current result after the page-rotation metadata update:
     `index > page_number` to `>=`. The comprehension filters
     `index != page_number` before evaluating the output expression, so equality
     is excluded from the expression domain.
+- Gate result: pass with documented equivalent survivors.
+
+Current result after the WinAnsi literal-string update:
+
+- Tool: Cosmic Ray 8.4.6.
+- Config: `tests/mutation/pdf_winansi_literal_strings_cosmic_ray.toml`.
+- Filter: `tests/mutation/filter_pdf_winansi_literal_strings_work_items.py`.
+- Test selection: focused PDF document and PDF generator tests.
+- Raw work items: 6215.
+- Proof-critical work items after filter: 84.
+- Killed mutants: 79.
+- Equivalent survivors: 5.
+- Surviving equivalent mutations:
+  - `_escape_pdf_string()` had five `==` to `<=` mutations on consecutive
+    exact escape branches for backspace, tab, LF, form-feed, and CR. Each lower
+    adjacent integer is already consumed by the immediately preceding branch, so
+    the mutated predicate admits no additional byte in that branch's reachable
+    domain.
 - Gate result: pass with documented equivalent survivors.
 
 Current result after the flat outline update:
@@ -1036,7 +1061,7 @@ through `parameters` and `create_from_dict()`.
 
 ### Proof Method
 
-`set_page_label()` validates that labels are non-empty Latin-1 strings for the
+`set_page_label()` validates that labels are non-empty WinAnsi strings for the
 current literal-string backend. `_page_label_dictionary()` sorts one-based page
 numbers, converts them to zero-based PDF page indices, and escapes backslashes
 and parentheses through `_escape_pdf_string()`. The behavioral test renders two
@@ -1051,7 +1076,42 @@ another explicit Unicode PDF string encoding policy.
 
 ### Conclusion
 
-Proven for Latin-1 labels in the declared PDF document domain.
+Proven for WinAnsi labels in the declared PDF document domain.
+
+## PO-PDFDOC-050: PDF Metadata Literal Strings Use WinAnsi Boundary
+
+### Claim
+
+`DocumentPDF` page labels, outline titles and parents, URI targets, named
+destination names, named-destination link targets, and annotation text fields
+accept common CP1252/WinAnsi metadata strings while rejecting strings outside
+the declared literal-string domain before rendering.
+
+### Proof Method
+
+All public metadata string boundaries delegate to `_coerce_pdf_literal_string()`,
+which requires a non-empty string, checks CP1252 encoding, allows only defined
+WinAnsi bytes plus CR/LF line breaks, and rejects undefined slots, tabs,
+controls, and non-WinAnsi Unicode. `_escape_pdf_string()` escapes PDF literal
+delimiters and octal-escapes non-ASCII WinAnsi bytes so object dictionaries stay
+deterministic and Latin-1/ASCII-safe. The behavioral test builds one document
+that routes `Café € –` through page labels, outlines, named destinations,
+named-destination links, URI links, text annotations, FreeText annotations,
+highlight annotations, square annotations, circle annotations, and line
+annotations, then checks escaped bytes, deterministic rendering, parameter
+round-trip, and absence of raw CP1252 bytes.
+
+### Counterexamples And Exclusions
+
+This does not implement UTF-16BE PDF strings, Unicode normalization,
+right-to-left metadata strings, rich annotation appearances, or tagged PDF
+structure. URI semantic validity is not expanded; the backend only validates
+the PDF literal-string byte domain and non-empty value boundary.
+
+### Conclusion
+
+Proven for the WinAnsi metadata literal-string domain in the `DocumentPDF` live
+path.
 
 ## PO-PDFDOC-007: PDF Page Boxes Are Bounded Metadata
 
@@ -1181,13 +1241,13 @@ round-trip equality.
 
 ### Counterexamples And Exclusions
 
-Deeper outline trees, remote destinations, named destinations, and non-Latin-1
+Deeper outline trees, remote destinations, named destinations, and non-WinAnsi
 titles are excluded from this outline slice. One-level expansion state is
 covered by PO-PDFDOC-028 through PO-PDFDOC-030.
 
 ### Conclusion
 
-Proven for top-level Latin-1 outlines in the declared PDF document domain.
+Proven for top-level WinAnsi outlines in the declared PDF document domain.
 
 ## PO-PDFDOC-011: Outline Targets Follow Page Index Mutations
 
@@ -1261,21 +1321,21 @@ PO-PDFDOC-030.
 
 ### Conclusion
 
-Proven for nested Latin-1 outlines in the declared PDF document domain, with the
+Proven for nested WinAnsi outlines in the declared PDF document domain, with the
 equivalent mutation survivors documented above.
 
 ## PO-PDFDOC-023: Nested Outline Parents Fail Explicitly
 
 ### Claim
 
-`DocumentPDF.add_outline(parent=...)` rejects missing, ambiguous, non-Latin-1,
+`DocumentPDF.add_outline(parent=...)` rejects missing, ambiguous, non-WinAnsi,
 and non-string parents before mutating PDF outline metadata. It also rejects a
 later top-level outline title that would make an existing child parent
 ambiguous.
 
 ### Proof Method
 
-The public boundary coerces parent titles through the same Latin-1 outline-title
+The public boundary coerces parent titles through the same WinAnsi outline-title
 validator used for outline titles, then matches all existing outlines by title
 value. Tests cover missing parents, duplicate parent titles, value equality for
 an independently constructed matching string, and invalid object parents. Tests
@@ -1329,7 +1389,7 @@ Leaf outline items do not emit `/Count` because they have no children.
 
 ### Conclusion
 
-Proven for Latin-1 outline parents in the declared PDF document domain, with
+Proven for WinAnsi outline parents in the declared PDF document domain, with
 mutation verification documented above.
 
 ## PO-PDFDOC-029: Outline Expansion State Follows Page Mutations
@@ -1394,7 +1454,7 @@ counts, deterministic bytes, and serialized round-trip equality.
 
 ### Conclusion
 
-Proven for arbitrary-depth Latin-1 outline trees admitted by the public
+Proven for arbitrary-depth WinAnsi outline trees admitted by the public
 `DocumentPDF.add_outline()` boundary.
 
 ## PO-PDFDOC-032: Deep Outline Parent Ambiguity Fails Explicitly
@@ -1457,12 +1517,12 @@ deterministic repeated rendering, and serialization round-trip equality.
 
 ### Counterexamples And Exclusions
 
-Rich annotation appearances, generic annotation subtypes, and non-Latin-1 URI
+Rich annotation appearances, generic annotation subtypes, and non-WinAnsi URI
 strings are excluded from this flat URI link slice.
 
 ### Conclusion
 
-Proven for Latin-1 URI link annotations in the declared PDF document domain,
+Proven for WinAnsi URI link annotations in the declared PDF document domain,
 with the equivalent mutation survivors documented above.
 
 ## PO-PDFDOC-014: URI Link Targets Follow Page Index Mutations
@@ -1693,12 +1753,12 @@ repeated rendering, and serialization round-trip equality.
 ### Counterexamples And Exclusions
 
 Rich appearance streams, annotation replies, file attachments, stamps,
-highlights, widgets, other non-text annotation subtypes, and non-Latin-1 strings
+highlights, widgets, other non-text annotation subtypes, and non-WinAnsi strings
 are excluded from this text annotation slice.
 
 ### Conclusion
 
-Proven for Latin-1 PDF text annotations in the declared PDF document domain,
+Proven for WinAnsi PDF text annotations in the declared PDF document domain,
 with mutation verification documented above.
 
 ## PO-PDFDOC-026: PDF Text Annotations Follow Page Mutations
@@ -1779,7 +1839,7 @@ FreeText annotation slice.
 
 ### Conclusion
 
-Proven for Latin-1 PDF FreeText annotations in the declared PDF document domain,
+Proven for WinAnsi PDF FreeText annotations in the declared PDF document domain,
 with mutation verification documented above.
 
 ## PO-PDFDOC-047: PDF FreeText Annotations Follow Page Mutations
@@ -1851,12 +1911,12 @@ serialization round-trip equality.
 ### Counterexamples And Exclusions
 
 Multi-quad highlights, rich appearance streams, annotation replies, widgets,
-other annotation subtypes, and non-Latin-1 contents are excluded from this
+other annotation subtypes, and non-WinAnsi contents are excluded from this
 highlight annotation slice.
 
 ### Conclusion
 
-Proven for rectangular Latin-1 PDF highlight annotations in the declared PDF
+Proven for rectangular WinAnsi PDF highlight annotations in the declared PDF
 document domain, with mutation verification documented above.
 
 ## PO-PDFDOC-035: PDF Highlight Annotations Follow Page Mutations
@@ -1930,12 +1990,12 @@ repeated rendering, and serialization round-trip equality.
 ### Counterexamples And Exclusions
 
 Rich appearance streams, fill colors, custom border styles, annotation replies,
-widgets, other annotation subtypes, tagged PDF structure, and non-Latin-1
+widgets, other annotation subtypes, tagged PDF structure, and non-WinAnsi
 contents are excluded from this square annotation slice.
 
 ### Conclusion
 
-Proven for rectangular Latin-1 PDF square annotations in the declared PDF
+Proven for rectangular WinAnsi PDF square annotations in the declared PDF
 document domain, with mutation verification documented above.
 
 ## PO-PDFDOC-038: PDF Square Annotations Follow Page Mutations
@@ -2009,12 +2069,12 @@ equality.
 ### Counterexamples And Exclusions
 
 Rich appearance streams, fill colors, custom border styles, annotation replies,
-widgets, other annotation subtypes, tagged PDF structure, and non-Latin-1
+widgets, other annotation subtypes, tagged PDF structure, and non-WinAnsi
 contents are excluded from this circle annotation slice.
 
 ### Conclusion
 
-Proven for rectangular Latin-1 PDF circle annotations in the declared PDF
+Proven for rectangular WinAnsi PDF circle annotations in the declared PDF
 document domain, with mutation verification documented above.
 
 ## PO-PDFDOC-041: PDF Circle Annotations Follow Page Mutations
@@ -2093,12 +2153,12 @@ equality.
 
 Rich appearance streams, arrowheads, captions, leader-line extensions, fill
 colors, custom border styles, annotation replies, widgets, other annotation
-subtypes, tagged PDF structure, and non-Latin-1 contents are excluded from this
+subtypes, tagged PDF structure, and non-WinAnsi contents are excluded from this
 line annotation slice.
 
 ### Conclusion
 
-Proven for Latin-1 PDF line annotations with distinct page-contained endpoints
+Proven for WinAnsi PDF line annotations with distinct page-contained endpoints
 in the declared PDF document domain, with mutation verification documented
 above.
 

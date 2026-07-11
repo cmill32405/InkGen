@@ -26,11 +26,12 @@ through InkGen's existing `Font.font_file` discovery and are embedded in the PDF
 with WinAnsi widths and a font descriptor. This covers common OS fonts on
 Windows, macOS, and Linux when the font is installed or provided through
 `custom_font_paths`. Used font resources include deterministic `/ToUnicode`
-CMaps for InkGen's current WinAnsi text range. `TextPDF` accepts characters
-that encode to defined CP1252/WinAnsi bytes 32 through 255, octal-escapes
-non-ASCII bytes in PDF literal strings, and maps those bytes back to Unicode
-for standard PDF text extractors. Tabs, control characters, undefined WinAnsi
-slots, and non-WinAnsi Unicode fail before PDF bytes are emitted.
+CMaps for InkGen's current WinAnsi text range. `TextPDF` and document metadata
+literal strings accept characters that encode to defined CP1252/WinAnsi bytes
+32 through 255, octal-escape non-ASCII bytes in PDF literal strings, and map
+text bytes back to Unicode for standard PDF text extractors where `/ToUnicode`
+applies. Tabs, control characters, undefined WinAnsi slots, and non-WinAnsi
+Unicode fail before PDF bytes are emitted.
 
 The dependency-free backend still emits simple single-byte text strings. Full
 Unicode/CID text encoding, glyph subsetting, shaping in PDF text operators, and
@@ -58,7 +59,7 @@ creation system are:
 
 | Area | Current status | Needed for full-feature parity |
 |---|---|---|
-| Text encoding | Single-byte literal strings over defined CP1252/WinAnsi bytes 32-255, installed-font embedding, fail-fast text-domain validation, octal-escaped non-ASCII text bytes, and WinAnsi `/ToUnicode` CMaps | Unicode/CID fonts, glyph subsetting, and full complex-script text extraction maps |
+| Text encoding | Single-byte literal strings over defined CP1252/WinAnsi bytes 32-255, installed-font embedding, fail-fast text and metadata string-domain validation, octal-escaped non-ASCII text bytes, and WinAnsi `/ToUnicode` CMaps for font text | Unicode/CID fonts, glyph subsetting, UTF-16BE document strings, and full complex-script text extraction maps |
 | Text layout | Positioned text components with explicit line-break output using `TextStyle.line_spacing` and per-line `TextStyle.text_align` | Automatic wrapping, tabs, columns, kerning, and complex-script shaping |
 | Graphics state | Basic stroke/fill primitives, rectangular and closed path group clipping with nonzero/even-odd clip rules, group blend modes, stroke/fill alpha ExtGState resources, and stroke dash/cap/join/miter operators | Opacity groups, gradients, and patterns |
 | Document structure | Pages, deterministic metadata, page labels, page rotations, Crop/Bleed/Trim/Art boxes, flat and arbitrary-depth nested outlines/bookmarks, URI links, internal page links, named destinations, named-destination links, text annotations, FreeText annotations, highlight annotations, square annotations, circle annotations, and line annotations | Rich annotation appearances, replies/widgets, raw generic annotations, and tagged PDF structure |
@@ -134,7 +135,7 @@ rendering. Page rotation is viewer metadata; it does not remap component
 geometry or truth coordinates.
 
 `DocumentPDF` also supports PDF outlines through `add_outline()`. Each outline
-has a Latin-1 title, targets an existing page, and may set PDF `/XYZ`
+has a non-empty WinAnsi title, targets an existing page, and may set PDF `/XYZ`
 destination `left`, `top`, and `zoom` values. Omitted `top` or `zoom` values are
 emitted as PDF `null` destination entries. Omit `parent` for a top-level
 outline. Use `parent="<title>"` for a child under an earlier outline whose title
@@ -150,8 +151,8 @@ deterministic root, sibling, and recursive child outline objects.
 URI link annotations can be added through `DocumentPDF.add_uri_link()`. Each
 link targets an existing source page, stores a finite positive-area rectangle
 inside that page's MediaBox, and emits a PDF `/Subtype /Link` annotation with a
-URI action. Link target strings are non-empty Latin-1 values because the current
-dependency-free backend emits literal PDF strings. URI links are stored in
+URI action. Link target strings are non-empty WinAnsi values emitted as escaped
+literal PDF strings. URI links are stored in
 document parameters, round-trip through `DocumentPDF.create_from_dict()`, follow
 page insertions and removals, and are emitted in deterministic page/insertion
 order.
@@ -169,7 +170,7 @@ direct `/Dest` array.
 Named destinations can be added through `DocumentPDF.add_named_destination()`,
 and active regions that target them can be added through
 `DocumentPDF.add_named_destination_link()`. Destination names are non-empty
-Latin-1 PDF literal strings. Named destinations target existing pages with PDF
+WinAnsi PDF literal strings. Named destinations target existing pages with PDF
 `/XYZ` destinations, are emitted through the catalog `/Names` dictionary, sort
 deterministically by destination name, round-trip through
 `DocumentPDF.create_from_dict()`, and follow page insertions and removals. Links
@@ -180,7 +181,7 @@ and tagged PDF structure are intentionally out of scope.
 
 Text annotations can be added through `DocumentPDF.add_text_annotation()`. Each
 annotation has an existing source page, a finite positive-area rectangle inside
-that page's MediaBox, non-empty Latin-1 contents, an optional non-empty Latin-1
+that page's MediaBox, non-empty WinAnsi contents, an optional non-empty WinAnsi
 title, and a strict boolean `open` state. Text annotations are stored in document
 parameters, round-trip through `DocumentPDF.create_from_dict()`, follow page
 insertions and removals, and are emitted as deterministic `/Subtype /Text`
@@ -190,7 +191,7 @@ page.
 FreeText annotations can be added through
 `DocumentPDF.add_free_text_annotation()`. Each annotation has an existing source
 page, a finite positive-area rectangle inside that page's MediaBox, non-empty
-Latin-1 contents, a strict RGB text color accepted as `#rrggbb` or serialized
+WinAnsi contents, a strict RGB text color accepted as `#rrggbb` or serialized
 0.0-1.0 channel triple, and a finite positive font size. FreeText annotations
 emit deterministic `/Subtype /FreeText` objects with `/DA` and local `/DR`
 Helvetica resources, are stored in document parameters, round-trip through
@@ -204,7 +205,7 @@ Highlight annotations can be added through
 `DocumentPDF.add_highlight_annotation()`. Each annotation has an existing source
 page, a finite positive-area rectangle inside that page's MediaBox, a strict RGB
 color accepted as `#rrggbb` or serialized 0.0-1.0 channel triple, and optional
-non-empty Latin-1 contents. Highlights emit deterministic `/Subtype /Highlight`
+non-empty WinAnsi contents. Highlights emit deterministic `/Subtype /Highlight`
 objects with rectangle-derived `/QuadPoints`, are stored in document parameters,
 round-trip through `DocumentPDF.create_from_dict()`, follow page insertions and
 removals, and are emitted after text annotations on each page. Rich annotation
@@ -215,7 +216,7 @@ Square annotations can be added through
 `DocumentPDF.add_square_annotation()`. Each annotation has an existing source
 page, a finite positive-area rectangle inside that page's MediaBox, a strict RGB
 border color accepted as `#rrggbb` or serialized 0.0-1.0 channel triple, and
-optional non-empty Latin-1 contents. Squares emit deterministic
+optional non-empty WinAnsi contents. Squares emit deterministic
 `/Subtype /Square` objects with `/Border [0 0 1]`, are stored in document
 parameters, round-trip through `DocumentPDF.create_from_dict()`, follow page
 insertions and removals, and are emitted after highlight annotations on each
@@ -227,7 +228,7 @@ Circle annotations can be added through
 `DocumentPDF.add_circle_annotation()`. Each annotation has an existing source
 page, a finite positive-area rectangle inside that page's MediaBox, a strict RGB
 border color accepted as `#rrggbb` or serialized 0.0-1.0 channel triple, and
-optional non-empty Latin-1 contents. Circles emit deterministic
+optional non-empty WinAnsi contents. Circles emit deterministic
 `/Subtype /Circle` objects with `/Border [0 0 1]`, are stored in document
 parameters, round-trip through `DocumentPDF.create_from_dict()`, follow page
 insertions and removals, and are emitted after square annotations on each page.
@@ -239,7 +240,7 @@ Line annotations can be added through
 `DocumentPDF.add_line_annotation()`. Each annotation has an existing source page,
 distinct finite start/end points inside that page's MediaBox, a strict RGB
 border color accepted as `#rrggbb` or serialized 0.0-1.0 channel triple, and
-optional non-empty Latin-1 contents. Line endpoints use the same bottom-left
+optional non-empty WinAnsi contents. Line endpoints use the same bottom-left
 page coordinate frame as the existing annotation rectangle APIs. The generated
 PDF derives a positive-area `/Rect` around the line segment and emits
 deterministic `/Subtype /Line` objects with `/L`, `/C`, and `/Border [0 0 1]`.

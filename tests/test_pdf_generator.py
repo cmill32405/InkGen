@@ -620,6 +620,12 @@ def test_pdf_embedded_font_helpers_cover_missing_glyphs_and_open_type_streams() 
     assert pdf_generator_module._pdf_glyph_width(65, {65: "A"}, {}, 1000) == 0  # noqa: SLF001
     assert pdf_generator_module._pdf_name("A B") == "A#20B"  # noqa: SLF001
     assert pdf_generator_module._pdf_name("é") == "EmbeddedFont"  # noqa: SLF001
+    assert pdf_generator_module._escape_pdf_string("Café € –") == r"Caf\351 \200 \226"  # noqa: SLF001
+    assert pdf_generator_module._escape_pdf_string("\b\t\n\f\r()\\ ~") == r"\b\t\n\f\r\(\)\\ ~"  # noqa: SLF001
+    assert pdf_generator_module._escape_pdf_string("\x1f") == r"\037"  # noqa: SLF001
+    assert pdf_generator_module._escape_pdf_string("\x7f") == r"\177"  # noqa: SLF001
+    with pytest.raises(ValueError, match="WinAnsi"):
+        pdf_generator_module._coerce_pdf_literal_string("\n\t", "test field")  # noqa: SLF001
     assert pdf_generator_module._escape_pdf_text_string("\x1f") == r"\037"  # noqa: SLF001
     assert pdf_generator_module._escape_pdf_text_string("\x7f") == r"\177"  # noqa: SLF001
 

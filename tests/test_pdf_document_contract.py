@@ -157,7 +157,7 @@ def test_document_pdf_rejects_invalid_page_structure_metadata() -> None:
     document = DocumentPDF(Canvas(100.0, 80.0))
     document.add_page()
 
-    for label in [object(), "", "not latin \u0100"]:
+    for label in [object(), "", "not winansi \u0100", "bad\tlabel"]:
         with pytest.raises((TypeError, ValueError)):
             document.set_page_label(1, label)  # type: ignore[arg-type]
         assert document.page_label(1) is None
@@ -351,6 +351,56 @@ def test_document_pdf_rejects_invalid_serialized_page_structure_metadata() -> No
     decimal_page_payload["DocumentPDF"]["page_labels"] = {"1.0": "bad"}
     with pytest.raises(TypeError, match="page number keys"):
         DocumentPDF.create_from_dict(decimal_page_payload)
+
+
+@pytest.mark.condition(
+    "PDF-DOC-STRUCT-P3",
+    "PDF-DOC-OUTLINE-P3",
+    "PDF-DOC-NAMED-DEST-P3",
+    "PDF-DOC-URI-LINK-P3",
+    "PDF-DOC-TEXT-ANNOTATION-P3",
+    "PDF-DOC-FREETEXT-P3",
+    "PDF-DOC-HIGHLIGHT-P3",
+    "PDF-DOC-SQUARE-P3",
+    "PDF-DOC-CIRCLE-P3",
+    "PDF-DOC-LINE-P3",
+)
+def test_document_pdf_metadata_literal_strings_accept_winansi_cp1252() -> None:
+    """PDF metadata strings share the same WinAnsi literal-string boundary."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    label = "Caf\u00e9 \u20ac \u2013"
+    uri = "https://example.com/Caf\u00e9-\u20ac-\u2013"
+    escaped_label = b"Caf\\351 \\200 \\226"
+    escaped_uri = b"https://example.com/Caf\\351-\\200-\\226"
+
+    document.set_page_label(1, label)
+    document.add_outline(label, 1)
+    document.add_named_destination(label, 1)
+    document.add_named_destination_link(1, [1.0, 1.0, 10.0, 10.0], label)
+    document.add_uri_link(1, [11.0, 1.0, 20.0, 10.0], uri)
+    document.add_text_annotation(1, [1.0, 11.0, 10.0, 20.0], label, title=label)
+    document.add_free_text_annotation(1, [11.0, 11.0, 20.0, 20.0], label)
+    document.add_highlight_annotation(1, [21.0, 11.0, 30.0, 20.0], contents=label)
+    document.add_square_annotation(1, [31.0, 11.0, 40.0, 20.0], contents=label)
+    document.add_circle_annotation(1, [41.0, 11.0, 50.0, 20.0], contents=label)
+    document.add_line_annotation(1, [51.0, 11.0], [60.0, 20.0], contents=label)
+
+    payload = document.to_pdf_bytes()
+    recreated = DocumentPDF.create_from_dict(document.parameters)
+
+    assert payload == document.to_pdf_bytes()
+    assert b"/P (" + escaped_label + b")" in payload
+    assert b"/Title (" + escaped_label + b")" in payload
+    assert b"/Dest (" + escaped_label + b")" in payload
+    assert b"/URI (" + escaped_uri + b")" in payload
+    assert b"/T (" + escaped_label + b")" in payload
+    assert payload.count(b"/Contents (" + escaped_label + b")") >= 6
+    assert label.encode("cp1252") not in payload
+    assert document.page_label(1) == label
+    assert document.named_destinations() == ({"name": label, "page_number": 1, "left": 0.0},)
+    assert recreated.parameters == document.parameters
+    assert recreated.to_pdf_bytes() == payload
 
 
 @pytest.mark.condition("PDF-DOC-TEXT-ANNOTATION-P3")
