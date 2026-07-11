@@ -39,6 +39,9 @@ The slice covers:
 - `DocumentPDF.add_text_annotation()`
 - `DocumentPDF.clear_text_annotations()`
 - `DocumentPDF.text_annotations()`
+- `DocumentPDF.add_free_text_annotation()`
+- `DocumentPDF.clear_free_text_annotations()`
+- `DocumentPDF.free_text_annotations()`
 - `DocumentPDF.add_highlight_annotation()`
 - `DocumentPDF.clear_highlight_annotations()`
 - `DocumentPDF.highlight_annotations()`
@@ -99,10 +102,16 @@ Affected surface:
   annotation contract.
 - `docs/adr/0020-pdf-line-annotations.md`: accepted ADR for the line annotation
   contract.
+- `docs/adr/0021-pdf-free-text-annotations.md`: accepted ADR for the FreeText
+  annotation contract.
 - `tests/mutation/pdf_document_line_annotation_cosmic_ray.toml`: scoped
   mutation gate for PDF-DOC-LINE-ANNOTATION-P3.
 - `tests/mutation/filter_pdf_document_line_annotation_work_items.py`:
   line-annotation proof-critical mutation filter.
+- `tests/mutation/pdf_document_free_text_annotation_cosmic_ray.toml`: scoped
+  mutation gate for PDF-DOC-FREE-TEXT-ANNOTATION-P3.
+- `tests/mutation/filter_pdf_document_free_text_annotation_work_items.py`:
+  FreeText annotation proof-critical mutation filter.
 
 Incoming dependencies:
 
@@ -130,6 +139,8 @@ Incoming dependencies:
   link annotations targeting those destinations.
 - Callers can depend on `DocumentPDF.add_text_annotation()` to create PDF text
   annotations on existing pages, and on serialization to preserve them.
+- Callers can depend on `DocumentPDF.add_free_text_annotation()` to create PDF
+  FreeText annotations on existing pages, and on serialization to preserve them.
 - Callers can depend on `DocumentPDF.add_highlight_annotation()` to create PDF
   highlight annotations on existing pages, and on serialization to preserve
   them.
@@ -162,6 +173,10 @@ Outgoing dependencies:
 - Text annotations use the same local PDF object writer, existing page-number
   validation, page-box rectangle validator, literal string escaping, and strict
   boolean validation; no dependency was added.
+- FreeText annotations use the same local PDF object writer, existing
+  page-number validation, page-box rectangle validator, literal string escaping,
+  and local RGB color validation. They add local finite-positive font-size
+  validation; no dependency was added.
 - Highlight annotations use the same local PDF object writer, existing
   page-number validation, page-box rectangle validator, literal string escaping,
   and local RGB color validation; no dependency was added.
@@ -231,6 +246,11 @@ Before/after edge changes:
   annotation list. Insertions and removals shift or delete annotation source
   pages. `to_pdf_bytes()` emits `/Subtype /Text` annotation objects in page
   `/Annots` arrays after URI, internal page, and named-destination links.
+- After the FreeText annotation update, `DocumentPDF` owns a flat ordered
+  FreeText annotation list. Insertions and removals shift or delete annotation
+  source pages. `to_pdf_bytes()` emits `/Subtype /FreeText` annotation objects
+  in page `/Annots` arrays after sticky text annotations and before highlight
+  annotations.
 - After the highlight annotation update, `DocumentPDF` owns a flat ordered
   highlight annotation list. Insertions and removals shift or delete annotation
   source pages. `to_pdf_bytes()` emits `/Subtype /Highlight` annotation objects
@@ -273,10 +293,11 @@ Cycle/layer/coupling/redundancy result:
 - Named destination metadata is local to `DocumentPDF`; generic non-text
   annotations, tagged PDF, and richer annotation appearances remain deferred
   until there is a concrete fixture need.
-- Text, highlight, square, circle, and line annotation metadata is local to
-  `DocumentPDF`; file attachments, stamps, widgets, replies, rich appearances,
-  fill colors, line arrowheads, line captions, leader-line extensions, and other
-  annotation subtypes remain deferred until there is a concrete fixture need.
+- Text, FreeText, highlight, square, circle, and line annotation metadata is
+  local to `DocumentPDF`; file attachments, stamps, widgets, replies, rich
+  appearances, FreeText rich text strings, FreeText callouts, fill colors, line
+  arrowheads, line captions, leader-line extensions, and other annotation
+  subtypes remain deferred until there is a concrete fixture need.
 
 ADR/rule impact:
 
@@ -306,6 +327,8 @@ ADR/rule impact:
   API and serialized parameters.
 - ADR-0020 records the line annotation decision because this slice adds public
   API and serialized parameters.
+- ADR-0021 records the FreeText annotation decision because this slice adds
+  public API and serialized parameters.
 
 ## Domain Definitions
 
@@ -367,6 +390,15 @@ ADR/rule impact:
   URI links, internal page links, and named-destination links on that page.
 - Serialized text annotation entries must be rejected before rendering if
   malformed.
+- PDF FreeText annotations are flat, insertion-ordered entries. Each entry has
+  an existing one-based page number, a finite positive-area rectangle inside the
+  page MediaBox, non-empty Latin-1 contents, a strict RGB text color accepted as
+  a `#rrggbb` string or serialized 0.0-1.0 numeric triple, and a finite positive
+  font size.
+- Page `/Annots` arrays must include every FreeText annotation on that page
+  after sticky text annotations and before highlight annotations on that page.
+- Serialized FreeText annotation entries must be rejected before rendering if
+  malformed.
 - PDF highlight annotations are flat, insertion-ordered entries. Each entry has
   an existing one-based page number, a finite positive-area rectangle inside the
   page MediaBox, a strict RGB color accepted as a `#rrggbb` string or serialized
@@ -426,6 +458,9 @@ ADR/rule impact:
 | Text annotations | Emit deterministic `/Subtype /Text` annotation objects and round-trip through parameters | PO-PDFDOC-025 | text annotation render/round-trip test | mutation target |
 | Text annotation page/index shifts | Insert/remove pages shift or delete text annotation pages with page indices | PO-PDFDOC-026 | text annotation page mutation test | mutation target |
 | Serialized text annotation metadata | Reject malformed text annotation payloads before rendering | PO-PDFDOC-027 | serialized text annotation rejection test | mutation target |
+| FreeText annotations | Emit deterministic `/Subtype /FreeText` annotation objects and round-trip through parameters | PO-PDFDOC-046 | FreeText annotation render/round-trip test | pass with equivalent survivor |
+| FreeText annotation page/index shifts | Insert/remove pages shift or delete FreeText annotation pages with page indices | PO-PDFDOC-047 | FreeText annotation page mutation test | pass with equivalent survivor |
+| Serialized FreeText annotation metadata | Reject malformed FreeText annotation payloads before rendering | PO-PDFDOC-048 | serialized FreeText annotation rejection test | pass with equivalent survivor |
 | Highlight annotations | Emit deterministic `/Subtype /Highlight` annotation objects and round-trip through parameters | PO-PDFDOC-034 | highlight annotation render/round-trip test | mutation target |
 | Highlight annotation page/index shifts | Insert/remove pages shift or delete highlight annotation pages with page indices | PO-PDFDOC-035 | highlight annotation page mutation test | mutation target |
 | Serialized highlight annotation metadata | Reject malformed highlight annotation payloads before rendering | PO-PDFDOC-036 | serialized highlight annotation rejection test | mutation target |
@@ -458,7 +493,7 @@ ADR/rule impact:
 | Golden artifact/visual | yes | PDF content stream is a generated artifact. | content-stream assertions |
 | Regression | yes | This closes the duplicate-label traversal regression. | dedicated tests |
 | Serialized payload | yes | Page labels and boxes are persisted in document parameters. | render/round-trip and malformed-payload tests |
-| Navigation metadata | yes | Flat/nested PDF outlines, URI links, internal page links, named destinations, text annotations, highlight annotations, square annotations, circle annotations, and line annotations add document navigation/comment objects and page annotation arrays. | outline, URI link, page link, named destination, text annotation, highlight annotation, square annotation, circle annotation, and line annotation render/round-trip tests |
+| Navigation metadata | yes | Flat/nested PDF outlines, URI links, internal page links, named destinations, text annotations, FreeText annotations, highlight annotations, square annotations, circle annotations, and line annotations add document navigation/comment objects and page annotation arrays. | outline, URI link, page link, named destination, text annotation, FreeText annotation, highlight annotation, square annotation, circle annotation, and line annotation render/round-trip tests |
 
 ## Mutation Testing Gate
 
@@ -846,6 +881,24 @@ Current result after the line annotation update:
     `len(page_annotations)` immediately before the loop, so both sequences have
     the same length by construction in the closed page-plan path.
 - Gate result: pass with documented equivalent survivors.
+
+Current result after the FreeText annotation update:
+
+- Tool: Cosmic Ray 8.4.6.
+- Config: `tests/mutation/pdf_document_free_text_annotation_cosmic_ray.toml`.
+- Filter:
+  `tests/mutation/filter_pdf_document_free_text_annotation_work_items.py`.
+- Test selection: focused PDF document, factory payload, and PDF generator tests.
+- Raw work items: 5955.
+- Proof-critical work items after filter: 100.
+- Killed mutants: 99.
+- Equivalent survivors: 1.
+- Surviving equivalent mutation:
+  - `_shift_pdf_page_metadata_for_removal()` line 2712 changed
+    `annotation.page_number > page_number` to `>=`. The comprehension filters
+    `annotation.page_number != page_number` before evaluating the output
+    expression, so equality is excluded from the expression domain.
+- Gate result: pass with documented equivalent survivor.
 
 ## PO-PDFDOC-001: PDF Rendering Traverses Every Stored Group
 
@@ -1623,6 +1676,84 @@ separate test proves missing optional title/open values hydrate with defaults.
 ### Conclusion
 
 Proven for serialized text annotations in the declared payload domain, with
+mutation verification documented above.
+
+## PO-PDFDOC-046: PDF FreeText Annotations Emit And Round Trip
+
+### Claim
+
+`DocumentPDF` emits deterministic PDF FreeText annotations, stores every
+same-page FreeText annotation in the page `/Annots` array after sticky text
+annotations and before highlight annotations, preserves deterministic bytes,
+and round-trips FreeText annotations through `parameters` and
+`create_from_dict()`.
+
+### Proof Method
+
+`add_free_text_annotation()` validates page number, rectangle, contents, text
+color, and font size before storing a `_PDFFreeTextAnnotation`. `to_pdf_bytes()`
+groups FreeText annotations by page, allocates one annotation object per entry,
+appends their IDs to page `/Annots` arrays after text annotations, and emits
+`/Subtype /FreeText` dictionaries with `/Rect`, `/Contents`, `/DA`, local `/DR`
+Helvetica resources, and `/Border [0 0 0]`. Tests parse PDF objects, verify
+same-page annotation ordering, exact rectangle bytes, escaped contents, default
+appearance bytes, default resource bytes, deterministic repeated rendering, and
+serialization round-trip equality.
+
+### Counterexamples And Exclusions
+
+Rich text strings, appearance streams, author/title metadata, callouts,
+rotation, custom border styles, background fill, replies, widgets, tagged PDF
+structure, and raw generic annotation dictionaries are excluded from this
+FreeText annotation slice.
+
+### Conclusion
+
+Proven for Latin-1 PDF FreeText annotations in the declared PDF document domain,
+with mutation verification documented above.
+
+## PO-PDFDOC-047: PDF FreeText Annotations Follow Page Mutations
+
+### Claim
+
+When pages are inserted or removed, FreeText annotation source pages stay
+aligned with the same logical pages after the mutation, and annotations tied to
+removed pages are deleted.
+
+### Proof Method
+
+`DocumentPDF.add_page()` and `DocumentPDF.remove_page()` route through the PDF
+metadata shift helpers. The FreeText annotation update extends those helpers to
+increment source pages at or after insertion points, decrement source pages
+after removed pages, and drop annotations whose source page matches the removed
+page. Tests include annotations before, on, and after the mutation point.
+
+### Conclusion
+
+Proven for page indices admitted by the `DocumentPDF` public page mutation
+methods, with the equivalent mutation survivor documented above.
+
+## PO-PDFDOC-048: Serialized FreeText Annotation Metadata Fails Explicitly
+
+### Claim
+
+Malformed serialized `free_text_annotations` payloads are rejected during
+`DocumentPDF.create_from_dict()` before any rendered PDF can be produced from
+bad FreeText annotation metadata.
+
+### Proof Method
+
+`create_from_dict()` reads optional FreeText annotation sequences through
+`_pdf_optional_sequence()`, requires each entry to be a mapping, requires
+`page_number`, `rect`, `contents`, `text_color`, and `font_size`, and delegates
+to `add_free_text_annotation()` for page, rectangle, contents, color, and font
+size validation. Tests mutate a valid payload into non-sequence containers,
+non-mapping entries, missing required fields, missing pages, invalid
+rectangles, invalid contents, invalid colors, and invalid font sizes.
+
+### Conclusion
+
+Proven for serialized FreeText annotations in the declared payload domain, with
 mutation verification documented above.
 
 ## PO-PDFDOC-034: PDF Highlight Annotations Emit And Round Trip

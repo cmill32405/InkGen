@@ -472,6 +472,178 @@ def test_document_pdf_text_annotations_use_value_equality_for_large_page_removal
     assert document.text_annotations() == ({"page_number": 1, "rect": [1.0, 1.0, 10.0, 10.0], "contents": "front"},)
 
 
+@pytest.mark.condition("PDF-DOC-FREE-TEXT-ANNOTATION-P3")
+def test_document_pdf_emits_free_text_annotations_and_round_trips() -> None:
+    """PDF-DOC-FREE-TEXT-ANNOTATION-P3: FreeText annotations render and round-trip."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    document.add_text_annotation(1, [1.0, 2.0, 4.0, 5.0], "sticky")
+    document.add_free_text_annotation(1, [5.0, 6.0, 20.0, 25.0], "Free (A)", text_color="#336699", font_size=12.5)
+    document.add_free_text_annotation(
+        page_number=1,
+        rect=[22.0, 6.0, 28.0, 10.0],
+        contents="Tiny",
+        text_color=[0.1234564, 0.2, 0.3],
+        font_size=0.5,
+    )
+    document.add_highlight_annotation(1, [30.0, 6.0, 45.0, 25.0])
+
+    payload = document.to_pdf_bytes()
+    recreated = DocumentPDF.create_from_dict(document.parameters)
+    objects = _pdf_objects(payload)
+    annotation_ids = _annotation_refs_by_page(payload)[0]
+
+    assert payload == document.to_pdf_bytes()
+    assert b"/Subtype /Text" in objects[annotation_ids[0]]
+    assert b"/Subtype /FreeText" in objects[annotation_ids[1]]
+    assert b"/Subtype /FreeText" in objects[annotation_ids[2]]
+    assert b"/Subtype /Highlight" in objects[annotation_ids[3]]
+    assert b"/Rect [5 6 20 25]" in objects[annotation_ids[1]]
+    assert b"/Contents (Free \\(A\\))" in objects[annotation_ids[1]]
+    assert b"/DA (/Helv 12.5 Tf 0.2 0.4 0.6 rg)" in objects[annotation_ids[1]]
+    assert b"/Rect [22 6 28 10]" in objects[annotation_ids[2]]
+    assert b"/Contents (Tiny)" in objects[annotation_ids[2]]
+    assert b"/DA (/Helv 0.5 Tf 0.123456 0.2 0.3 rg)" in objects[annotation_ids[2]]
+    assert (
+        b"/DR << /Font << /Helv << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >> >> >>"
+        in objects[annotation_ids[1]]
+    )
+    assert b"/Border [0 0 0]" in objects[annotation_ids[1]]
+    assert b"/Border [0 0 0]" in objects[annotation_ids[2]]
+    assert document.free_text_annotations() == (
+        {
+            "page_number": 1,
+            "rect": [5.0, 6.0, 20.0, 25.0],
+            "contents": "Free (A)",
+            "text_color": [0.2, 0.4, 0.6],
+            "font_size": 12.5,
+        },
+        {
+            "page_number": 1,
+            "rect": [22.0, 6.0, 28.0, 10.0],
+            "contents": "Tiny",
+            "text_color": [0.123456, 0.2, 0.3],
+            "font_size": 0.5,
+        },
+    )
+    assert recreated.parameters == document.parameters
+    assert recreated.to_pdf_bytes() == payload
+
+
+@pytest.mark.condition("PDF-DOC-FREE-TEXT-ANNOTATION-P3")
+def test_document_pdf_rejects_invalid_free_text_annotation_metadata() -> None:
+    """PDF-DOC-FREE-TEXT-ANNOTATION-P3: FreeText metadata fails at explicit boundaries."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+
+    with pytest.raises(ValueError, match="Position must correlate"):
+        document.add_free_text_annotation(2, [0.0, 0.0, 1.0, 1.0], "note")
+
+    for contents in [object(), "", "not latin \u0100"]:
+        with pytest.raises((TypeError, ValueError)):
+            document.add_free_text_annotation(1, [0.0, 0.0, 1.0, 1.0], contents)  # type: ignore[arg-type]
+        assert document.free_text_annotations() == ()
+
+    for text_color in ["", "#12345g", [1.0, 0.0], [1.0, True, 0.0], [1.1, 0.0, 0.0], object()]:
+        with pytest.raises((TypeError, ValueError)):
+            document.add_free_text_annotation(1, [0.0, 0.0, 1.0, 1.0], "note", text_color=text_color)  # type: ignore[arg-type]
+        assert document.free_text_annotations() == ()
+
+    for font_size in [True, "10", object(), float("nan"), 0.0, -1.0]:
+        with pytest.raises((TypeError, ValueError)):
+            document.add_free_text_annotation(1, [0.0, 0.0, 1.0, 1.0], "note", font_size=font_size)  # type: ignore[arg-type]
+        assert document.free_text_annotations() == ()
+
+    for rect in ["0 0 1 1", [0.0, 0.0, 1.0], [True, 0.0, 1.0, 1.0], [0.0, 0.0, 0.0, 1.0], [-1.0, 0.0, 1.0, 1.0]]:
+        with pytest.raises((TypeError, ValueError)):
+            document.add_free_text_annotation(1, rect, "note")  # type: ignore[arg-type]
+        assert document.free_text_annotations() == ()
+
+    document.add_free_text_annotation(1, [0.0, 0.0, 1.0, 1.0], "note")
+    document.clear_free_text_annotations()
+
+    assert document.free_text_annotations() == ()
+    assert "free_text_annotations" not in document.parameters["DocumentPDF"]
+    assert b"/Annots" not in document.to_pdf_bytes()
+
+
+@pytest.mark.condition("PDF-DOC-FREE-TEXT-ANNOTATION-P3")
+def test_document_pdf_free_text_annotations_track_page_insertions_and_removals() -> None:
+    """PDF-DOC-FREE-TEXT-ANNOTATION-P3: FreeText annotations stay aligned with page mutations."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    document.add_page()
+    document.add_page()
+    document.add_free_text_annotation(1, [1.0, 1.0, 10.0, 10.0], "front")
+    document.add_free_text_annotation(2, [2.0, 2.0, 20.0, 20.0], "middle", text_color=[0.1, 0.2, 0.3], font_size=8)
+    document.add_free_text_annotation(3, [3.0, 3.0, 30.0, 30.0], "tail")
+
+    document.add_page(position=2)
+
+    assert [annotation["page_number"] for annotation in document.free_text_annotations()] == [1, 3, 4]
+
+    document.remove_page(3)
+
+    assert document.free_text_annotations() == (
+        {"page_number": 1, "rect": [1.0, 1.0, 10.0, 10.0], "contents": "front", "text_color": [0.0, 0.0, 0.0], "font_size": 10.0},
+        {"page_number": 3, "rect": [3.0, 3.0, 30.0, 30.0], "contents": "tail", "text_color": [0.0, 0.0, 0.0], "font_size": 10.0},
+    )
+
+
+@pytest.mark.condition("PDF-DOC-FREE-TEXT-ANNOTATION-P3")
+def test_document_pdf_free_text_annotations_use_value_equality_for_large_page_removal() -> None:
+    """PDF-DOC-FREE-TEXT-ANNOTATION-P3: FreeText removal uses page-number value equality."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    for _ in range(260):
+        document.add_page()
+    document.add_free_text_annotation(1, [1.0, 1.0, 10.0, 10.0], "front")
+    document.add_free_text_annotation(int("260"), [2.0, 2.0, 20.0, 20.0], "tail")
+
+    document.remove_page(int("260"))
+
+    assert document.pages == 259
+    assert document.free_text_annotations() == (
+        {
+            "page_number": 1,
+            "rect": [1.0, 1.0, 10.0, 10.0],
+            "contents": "front",
+            "text_color": [0.0, 0.0, 0.0],
+            "font_size": 10.0,
+        },
+    )
+
+
+@pytest.mark.condition("PDF-DOC-FREE-TEXT-ANNOTATION-P3")
+def test_document_pdf_rejects_invalid_serialized_free_text_annotation_metadata() -> None:
+    """PDF-DOC-FREE-TEXT-ANNOTATION-P3: Serialized FreeText payloads fail before rendering."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    document.add_free_text_annotation(1, [1.0, 1.0, 10.0, 10.0], "note")
+
+    invalid_payloads = []
+    for mutator in [
+        lambda data: data["DocumentPDF"].__setitem__("free_text_annotations", "bad"),
+        lambda data: data["DocumentPDF"].__setitem__("free_text_annotations", [object()]),
+        lambda data: data["DocumentPDF"]["free_text_annotations"][0].pop("page_number"),
+        lambda data: data["DocumentPDF"]["free_text_annotations"][0].pop("rect"),
+        lambda data: data["DocumentPDF"]["free_text_annotations"][0].pop("contents"),
+        lambda data: data["DocumentPDF"]["free_text_annotations"][0].pop("text_color"),
+        lambda data: data["DocumentPDF"]["free_text_annotations"][0].pop("font_size"),
+        lambda data: data["DocumentPDF"]["free_text_annotations"][0].__setitem__("page_number", 2),
+        lambda data: data["DocumentPDF"]["free_text_annotations"][0].__setitem__("rect", [0.0, 0.0, 0.0, 1.0]),
+        lambda data: data["DocumentPDF"]["free_text_annotations"][0].__setitem__("contents", ""),
+        lambda data: data["DocumentPDF"]["free_text_annotations"][0].__setitem__("text_color", "bad"),
+        lambda data: data["DocumentPDF"]["free_text_annotations"][0].__setitem__("font_size", 0.0),
+    ]:
+        payload = deepcopy(document.parameters)
+        mutator(payload)
+        invalid_payloads.append(payload)
+
+    for payload in invalid_payloads:
+        with pytest.raises((TypeError, ValueError)):
+            DocumentPDF.create_from_dict(payload)
+
+
 @pytest.mark.condition("PDF-DOC-HIGHLIGHT-ANNOTATION-P3")
 def test_document_pdf_emits_highlight_annotations_and_round_trips() -> None:
     """PDF-DOC-HIGHLIGHT-ANNOTATION-P3: Highlight annotations render and round-trip."""

@@ -164,6 +164,17 @@ class _PDFTextAnnotation:
 
 
 @dataclass(frozen=True)
+class _PDFFreeTextAnnotation:
+    """Validated PDF free-text annotation metadata."""
+
+    page_number: int
+    rect: tuple[float, float, float, float]
+    contents: str
+    text_color: tuple[float, float, float]
+    font_size: float
+
+
+@dataclass(frozen=True)
 class _PDFHighlightAnnotation:
     """Validated PDF highlight annotation metadata."""
 
@@ -597,6 +608,16 @@ def _coerce_pdf_annotation_color(value: object) -> tuple[float, float, float]:
     except ValueError as exc:
         raise ValueError("annotation color must be a #rrggbb string") from exc
     return red, green, blue
+
+
+def _coerce_pdf_free_text_font_size(value: object) -> float:
+    """Return a finite positive PDF free-text annotation font size."""
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise TypeError("free-text annotation font size must be a finite number")
+    number = float(value)
+    if not math.isfinite(number) or number <= 0.0:
+        raise ValueError("free-text annotation font size must be greater than zero")
+    return number
 
 
 def _coerce_pdf_link_rect(
@@ -2121,6 +2142,7 @@ class DocumentPDF(Document):
         self._pdf_named_destinations: dict[str, _PDFNamedDestination] = {}
         self._pdf_named_destination_links: list[_PDFNamedDestinationLinkAnnotation] = []
         self._pdf_text_annotations: list[_PDFTextAnnotation] = []
+        self._pdf_free_text_annotations: list[_PDFFreeTextAnnotation] = []
         self._pdf_highlight_annotations: list[_PDFHighlightAnnotation] = []
         self._pdf_square_annotations: list[_PDFSquareAnnotation] = []
         self._pdf_circle_annotations: list[_PDFCircleAnnotation] = []
@@ -2310,6 +2332,34 @@ class DocumentPDF(Document):
     def text_annotations(self) -> tuple[dict[str, object], ...]:
         """Return serialized PDF text annotations in insertion order."""
         return tuple(self._text_annotation_payload(annotation) for annotation in self._pdf_text_annotations)
+
+    def add_free_text_annotation(
+        self,
+        page_number: int,
+        rect: Sequence[float | int],
+        contents: str,
+        *,
+        text_color: str | Sequence[float | int] = "#000000",
+        font_size: float | int = 10.0,
+    ) -> None:
+        """Add a PDF free-text annotation to an existing page."""
+        page_number = self._validate_existing_position(page_number)
+        page = self.page(page_number)
+        annotation_rect = _coerce_pdf_link_rect(rect, canvas_width=page._canvas.width, canvas_height=page._canvas.height)
+        annotation_contents = _coerce_pdf_annotation_text(contents, "free-text annotation contents")
+        annotation_text_color = _coerce_pdf_annotation_color(text_color)
+        annotation_font_size = _coerce_pdf_free_text_font_size(font_size)
+        self._pdf_free_text_annotations.append(
+            _PDFFreeTextAnnotation(page_number, annotation_rect, annotation_contents, annotation_text_color, annotation_font_size)
+        )
+
+    def clear_free_text_annotations(self) -> None:
+        """Remove all PDF free-text annotations."""
+        self._pdf_free_text_annotations.clear()
+
+    def free_text_annotations(self) -> tuple[dict[str, object], ...]:
+        """Return serialized PDF free-text annotations in insertion order."""
+        return tuple(self._free_text_annotation_payload(annotation) for annotation in self._pdf_free_text_annotations)
 
     def add_highlight_annotation(
         self,
@@ -2531,6 +2581,16 @@ class DocumentPDF(Document):
             )
             for annotation in self._pdf_text_annotations
         ]
+        self._pdf_free_text_annotations = [
+            _PDFFreeTextAnnotation(
+                annotation.page_number + 1 if annotation.page_number >= page_number else annotation.page_number,
+                annotation.rect,
+                annotation.contents,
+                annotation.text_color,
+                annotation.font_size,
+            )
+            for annotation in self._pdf_free_text_annotations
+        ]
         self._pdf_highlight_annotations = [
             _PDFHighlightAnnotation(
                 annotation.page_number + 1 if annotation.page_number >= page_number else annotation.page_number,
@@ -2645,6 +2705,17 @@ class DocumentPDF(Document):
                 annotation.open,
             )
             for annotation in self._pdf_text_annotations
+            if annotation.page_number != page_number
+        ]
+        self._pdf_free_text_annotations = [
+            _PDFFreeTextAnnotation(
+                annotation.page_number - 1 if annotation.page_number > page_number else annotation.page_number,
+                annotation.rect,
+                annotation.contents,
+                annotation.text_color,
+                annotation.font_size,
+            )
+            for annotation in self._pdf_free_text_annotations
             if annotation.page_number != page_number
         ]
         self._pdf_highlight_annotations = [
@@ -2948,6 +3019,38 @@ class DocumentPDF(Document):
         return f"<< /Type /Annot /Subtype /Text /Rect {rect}{title} /Contents ({contents}){open_state} >>"
 
     @staticmethod
+    def _free_text_annotation_payload(annotation: _PDFFreeTextAnnotation) -> dict[str, object]:
+        """Return serialized data for a validated PDF free-text annotation."""
+        return {
+            "page_number": annotation.page_number,
+            "rect": list(annotation.rect),
+            "contents": annotation.contents,
+            "text_color": [round(channel, 6) for channel in annotation.text_color],
+            "font_size": annotation.font_size,
+        }
+
+    def _free_text_annotations_by_page(self) -> dict[int, tuple[_PDFFreeTextAnnotation, ...]]:
+        """Return PDF free-text annotations grouped by page in insertion order."""
+        annotations_by_page: dict[int, list[_PDFFreeTextAnnotation]] = {}
+        for annotation in self._pdf_free_text_annotations:
+            annotations_by_page.setdefault(annotation.page_number, []).append(annotation)
+        return {page_number: tuple(annotations) for page_number, annotations in annotations_by_page.items()}
+
+    @staticmethod
+    def _free_text_annotation_object(annotation: _PDFFreeTextAnnotation) -> str:
+        """Return a PDF free-text annotation object dictionary."""
+        left, bottom, right, top = annotation.rect
+        rect = f"[{_number(left)} {_number(bottom)} {_number(right)} {_number(top)}]"
+        contents = _escape_pdf_string(annotation.contents)
+        color = f"{_number(annotation.text_color[0])} {_number(annotation.text_color[1])} {_number(annotation.text_color[2])}"
+        default_appearance = f"/Helv {_number(annotation.font_size)} Tf {color} rg"
+        default_resources = "<< /Font << /Helv << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >> >> >>"
+        return (
+            f"<< /Type /Annot /Subtype /FreeText /Rect {rect} /Contents ({contents}) "
+            f"/DA ({default_appearance}) /DR {default_resources} /Border [0 0 0] >>"
+        )
+
+    @staticmethod
     def _highlight_annotation_payload(annotation: _PDFHighlightAnnotation) -> dict[str, object]:
         """Return serialized data for a validated PDF highlight annotation."""
         payload: dict[str, object] = {
@@ -3191,6 +3294,7 @@ class DocumentPDF(Document):
         page_links_by_page = self._page_links_by_page()
         named_destination_links_by_page = self._named_destination_links_by_page()
         text_annotations_by_page = self._text_annotations_by_page()
+        free_text_annotations_by_page = self._free_text_annotations_by_page()
         highlight_annotations_by_page = self._highlight_annotations_by_page()
         square_annotations_by_page = self._square_annotations_by_page()
         circle_annotations_by_page = self._circle_annotations_by_page()
@@ -3205,6 +3309,7 @@ class DocumentPDF(Document):
                 + tuple(page_links_by_page.get(page_number, ()))
                 + tuple(named_destination_links_by_page.get(page_number, ()))
                 + tuple(text_annotations_by_page.get(page_number, ()))
+                + tuple(free_text_annotations_by_page.get(page_number, ()))
                 + tuple(highlight_annotations_by_page.get(page_number, ()))
                 + tuple(square_annotations_by_page.get(page_number, ()))
                 + tuple(circle_annotations_by_page.get(page_number, ()))
@@ -3241,6 +3346,8 @@ class DocumentPDF(Document):
                     writer.set_object(annotation_id, self._named_destination_link_annotation_object(link))
                 elif isinstance(link, _PDFTextAnnotation):
                     writer.set_object(annotation_id, self._text_annotation_object(link))
+                elif isinstance(link, _PDFFreeTextAnnotation):
+                    writer.set_object(annotation_id, self._free_text_annotation_object(link))
                 elif isinstance(link, _PDFHighlightAnnotation):
                     writer.set_object(annotation_id, self._highlight_annotation_object(link))
                 elif isinstance(link, _PDFSquareAnnotation):
@@ -3437,6 +3544,15 @@ class DocumentPDF(Document):
             title = annotation_payload.get("title")
             open_state = annotation_payload.get("open", False)
             document.add_text_annotation(page_number, rect, contents, title=title, open=open_state)  # type: ignore[arg-type]
+        for annotation_payload in _pdf_optional_sequence(payload, "free_text_annotations", "DocumentPDF"):
+            if not isinstance(annotation_payload, Mapping):
+                raise TypeError("DocumentPDF free_text_annotations entries must be mappings")
+            page_number = _pdf_required_field(annotation_payload, "page_number", "DocumentPDF free-text annotation")
+            rect = _pdf_required_field(annotation_payload, "rect", "DocumentPDF free-text annotation")
+            contents = _pdf_required_field(annotation_payload, "contents", "DocumentPDF free-text annotation")
+            text_color = _pdf_required_field(annotation_payload, "text_color", "DocumentPDF free-text annotation")
+            font_size = _pdf_required_field(annotation_payload, "font_size", "DocumentPDF free-text annotation")
+            document.add_free_text_annotation(page_number, rect, contents, text_color=text_color, font_size=font_size)  # type: ignore[arg-type]
         for annotation_payload in _pdf_optional_sequence(payload, "highlight_annotations", "DocumentPDF"):
             if not isinstance(annotation_payload, Mapping):
                 raise TypeError("DocumentPDF highlight_annotations entries must be mappings")
@@ -3508,6 +3624,10 @@ class DocumentPDF(Document):
             ]
         if self._pdf_text_annotations:
             document_payload["text_annotations"] = [self._text_annotation_payload(annotation) for annotation in self._pdf_text_annotations]
+        if self._pdf_free_text_annotations:
+            document_payload["free_text_annotations"] = [
+                self._free_text_annotation_payload(annotation) for annotation in self._pdf_free_text_annotations
+            ]
         if self._pdf_highlight_annotations:
             document_payload["highlight_annotations"] = [
                 self._highlight_annotation_payload(annotation) for annotation in self._pdf_highlight_annotations

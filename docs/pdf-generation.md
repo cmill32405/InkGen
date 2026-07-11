@@ -44,10 +44,10 @@ images with alpha, JPEG pass-through, ICC profile emission, Standard 14 fonts,
 named TrueType/OpenType font embedding, page labels, Crop/Bleed/Trim/Art page
 boxes, flat and arbitrary-depth nested outlines/bookmarks, URI links, internal
 page links, named destinations, named-destination links, text annotations,
-highlight annotations, square annotations, circle annotations, line annotations, rectangular and
-closed path group clipping, stroke/fill opacity through PDF ExtGState resources,
-group blend modes through PDF ExtGState resources, and stroke
-dash/cap/join/miter operators.
+FreeText annotations, highlight annotations, square annotations, circle
+annotations, line annotations, rectangular and closed path group clipping,
+stroke/fill opacity through PDF ExtGState resources, group blend modes through
+PDF ExtGState resources, and stroke dash/cap/join/miter operators.
 
 The remaining gaps that keep the backend from being a fully featured PDF
 creation system are:
@@ -57,7 +57,7 @@ creation system are:
 | Text encoding | WinAnsi literal strings, installed-font embedding, and printable WinAnsi `/ToUnicode` CMaps | Unicode/CID fonts, glyph subsetting, and full complex-script text extraction maps |
 | Text layout | Positioned text components with explicit line-break output using `TextStyle.line_spacing` and per-line `TextStyle.text_align` | Automatic wrapping, tabs, columns, kerning, and complex-script shaping |
 | Graphics state | Basic stroke/fill primitives, rectangular and closed path group clipping with nonzero/even-odd clip rules, group blend modes, stroke/fill alpha ExtGState resources, and stroke dash/cap/join/miter operators | Opacity groups, gradients, and patterns |
-| Document structure | Pages, deterministic metadata, page labels, Crop/Bleed/Trim/Art boxes, flat and arbitrary-depth nested outlines/bookmarks, URI links, internal page links, named destinations, named-destination links, text annotations, highlight annotations, square annotations, circle annotations, and line annotations | Other generic annotations and tagged PDF structure |
+| Document structure | Pages, deterministic metadata, page labels, Crop/Bleed/Trim/Art boxes, flat and arbitrary-depth nested outlines/bookmarks, URI links, internal page links, named destinations, named-destination links, text annotations, FreeText annotations, highlight annotations, square annotations, circle annotations, and line annotations | Rich annotation appearances, replies/widgets, raw generic annotations, and tagged PDF structure |
 | Color/profile support | Device RGB/CMYK and JPEG ICC profile objects | Broader calibrated color spaces and selectable PDF/A-style archival constraints |
 | Import/conversion | SVG input remains SVG-only | Arbitrary SVG-to-PDF conversion and external PDF embedding are out of scope until explicitly approved |
 | Optimization/security | Classic xref table and plain objects | Object streams, font/image subsetting, encryption, and signatures if those become product requirements |
@@ -167,8 +167,8 @@ deterministically by destination name, round-trip through
 `DocumentPDF.create_from_dict()`, and follow page insertions and removals. Links
 to named destinations are deterministic `/Subtype /Link` annotations with a
 literal-string `/Dest`. Generic PDF annotation types beyond the explicit text,
-highlight, square, circle, and line APIs, rich annotation appearances, and tagged PDF
-structure are intentionally out of scope.
+FreeText, highlight, square, circle, and line APIs, rich annotation appearances,
+and tagged PDF structure are intentionally out of scope.
 
 Text annotations can be added through `DocumentPDF.add_text_annotation()`. Each
 annotation has an existing source page, a finite positive-area rectangle inside
@@ -178,6 +178,19 @@ parameters, round-trip through `DocumentPDF.create_from_dict()`, follow page
 insertions and removals, and are emitted as deterministic `/Subtype /Text`
 annotation objects after URI, internal page, and named-destination links on each
 page.
+
+FreeText annotations can be added through
+`DocumentPDF.add_free_text_annotation()`. Each annotation has an existing source
+page, a finite positive-area rectangle inside that page's MediaBox, non-empty
+Latin-1 contents, a strict RGB text color accepted as `#rrggbb` or serialized
+0.0-1.0 channel triple, and a finite positive font size. FreeText annotations
+emit deterministic `/Subtype /FreeText` objects with `/DA` and local `/DR`
+Helvetica resources, are stored in document parameters, round-trip through
+`DocumentPDF.create_from_dict()`, follow page insertions and removals, and are
+emitted after sticky text annotations on each page. Rich text strings,
+appearance streams, callouts, rotation, border styles, replies/widgets, tagged
+PDF structure, and arbitrary raw annotation dictionaries remain intentionally
+out of scope.
 
 Highlight annotations can be added through
 `DocumentPDF.add_highlight_annotation()`. Each annotation has an existing source
@@ -362,6 +375,6 @@ The PDF backend is covered by PDF-P1 tests for:
 - Named destinations and named-destination link annotations with serialization
   round trips, deterministic name-tree ordering, source/target validation,
   insertion/removal index shifts, and invalid metadata rejection
-- Text, highlight, square, circle, and line annotations with serialization round trips,
-  source-page validation, insertion/removal index shifts, deterministic page
-  annotation ordering, and invalid metadata rejection
+- Text, FreeText, highlight, square, circle, and line annotations with
+  serialization round trips, source-page validation, insertion/removal index
+  shifts, deterministic page annotation ordering, and invalid metadata rejection

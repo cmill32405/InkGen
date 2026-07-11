@@ -37,6 +37,7 @@ nav:
       - ADR-0018 PDF Group Clip Rules: adr/0018-pdf-group-clip-rules.md
       - ADR-0019 PDF Circle Annotations: adr/0019-pdf-circle-annotations.md
       - ADR-0020 PDF Line Annotations: adr/0020-pdf-line-annotations.md
+      - ADR-0021 PDF FreeText Annotations: adr/0021-pdf-free-text-annotations.md
   - Proof Notes:
       - Grammar Truth: proofs/grammar-truth.md
       - Extraction Truth Contract: proofs/extraction-truth-contract.md
