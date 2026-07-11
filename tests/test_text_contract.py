@@ -137,6 +137,40 @@ def test_text_pdf_multiline_uses_line_spacing_and_normalizes_line_breaks(text_st
     assert all("\\r" not in operator and "\\n" not in operator for operator in operators if operator.endswith("Tj"))
 
 
+@pytest.mark.condition("TEXT-PDF-ENCODING-P3")
+def test_text_pdf_accepts_upper_printable_ascii_boundary(text_style: TextStyle) -> None:
+    """TEXT-PDF-ENCODING-P3: Printable ASCII includes tilde at byte 126."""
+    assert "(~) Tj" in TextPDF("~", (1.0, 2.0), text_style).generate_pdf()
+
+
+@pytest.mark.condition("TEXT-PDF-ENCODING-P3")
+@pytest.mark.parametrize("text", ["Café", "Ω", "A\tB", "\x1f", "OK\nΩ"])
+def test_text_pdf_rejects_text_outside_mapped_extraction_domain(text_style: TextStyle, text: str) -> None:
+    """TEXT-PDF-ENCODING-P3: TextPDF fails before emitting unmapped PDF text bytes."""
+    with pytest.raises(ValueError, match="printable ASCII"):
+        TextPDF(text, (1.0, 2.0), text_style)
+
+
+@pytest.mark.condition("TEXT-PDF-ENCODING-P3")
+def test_text_pdf_revalidates_text_mutated_after_construction(text_style: TextStyle) -> None:
+    """TEXT-PDF-ENCODING-P3: TextPDF render rejects post-construction invalid text."""
+    component = TextPDF("Seed", (1.0, 2.0), text_style)
+
+    component.text = "A\u0100"
+
+    with pytest.raises(ValueError, match="printable ASCII"):
+        component.generate_pdf()
+
+
+@pytest.mark.condition("TEXT-PDF-ENCODING-P3")
+def test_text_pdf_hydration_rejects_unmapped_text_payload(text_style: TextStyle) -> None:
+    """TEXT-PDF-ENCODING-P3: Serialized PDF text payloads obey the same text domain."""
+    payload = {"TextPDF": {"text": "A\u0100", "position": (1.0, 2.0)}}
+
+    with pytest.raises(ValueError, match="printable ASCII"):
+        TextPDF.create_from_dict(payload, text_style)
+
+
 @pytest.mark.condition("TEXT-PDF-ALIGN-P2")
 @pytest.mark.parametrize(
     ("alignment", "expected_matrices"),

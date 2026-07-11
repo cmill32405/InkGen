@@ -454,6 +454,22 @@ def _escape_pdf_string(value: str) -> str:
     return value.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)").replace("\r", "\\r").replace("\n", "\\n")
 
 
+def _coerce_pdf_text_content(value: object) -> str:
+    """Return text inside InkGen's currently mapped PDF text domain."""
+    if isinstance(value, (str, int, float, complex, bool)):
+        text = str(value)
+    else:
+        raise TypeError("PDF text must be a string or scalar value")
+    for character in text:
+        if character in {"\r", "\n"}:
+            continue
+        codepoint = ord(character)
+        if PDF_WINANSI_FIRST_CHAR <= codepoint <= PDF_WINANSI_LAST_CHAR:
+            continue
+        raise ValueError("PDF text currently supports printable ASCII characters plus line breaks")
+    return text
+
+
 def _coerce_pdf_page_label(label: object) -> str:
     """Return a PDF literal-string-safe page label."""
     if not isinstance(label, str):
@@ -1828,7 +1844,7 @@ class TextPDF(TextComponent, PDFGeneratorInterface):
 
     def __init__(self, text: str, position: tuple[float, float], style: TextStyle) -> None:
         """Create a PDF text component."""
-        super().__init__(text=text, position=position, style=style)
+        super().__init__(text=_coerce_pdf_text_content(text), position=position, style=style)
 
     @classmethod
     def create_from_dict(cls, data: dict, style: TextStyle | None = None) -> TextPDF:
@@ -1845,12 +1861,13 @@ class TextPDF(TextComponent, PDFGeneratorInterface):
 
     def generate_pdf(self, context: PDFRenderContext | None = None) -> str:
         """Generate PDF operators for this text."""
+        text = _coerce_pdf_text_content(self.text)
         color = _color_components(getattr(self.style, "color", "#000000")) or (0.0, 0.0, 0.0)
         size = float(getattr(self.style.font, "size", 10.0))
         x, y = self.position
         line_spacing = float(getattr(self.style, "line_spacing", 1.0))
         text_align = getattr(self.style, "text_align", "start") or "start"
-        lines = self.text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
         text_operators: list[str] = []
         for index, line in enumerate(lines):
             line_y = y + (index * size * line_spacing)

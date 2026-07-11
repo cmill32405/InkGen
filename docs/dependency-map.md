@@ -113,6 +113,7 @@ tests and, where appropriate, recording an ADR.
 | `DocumentPDF -> ComponentGroupPDF -> built-in PDF components` | The PDF render path is intentionally closed so noninterference properties can be proven. | Arbitrary custom PDF render components are outside the proven contract. |
 | `pdf_generator.py -> fonttools` | PDF named-font embedding reads installed font metrics and embeds font-file streams without adding a PDF dependency. | Font parsing errors must fail back to Standard 14 behavior rather than corrupting PDF output. |
 | `pdf_generator.py -> image_assets.py` | PDF image rendering consumes decoded image assets and emits image XObjects plus optional alpha soft masks. | Moving image encoding into document outputs would couple drawing rendering to DOCX/HTML policy. |
+| `TextPDF -> _coerce_pdf_text_content()` | PDF text objects are limited to the bytes covered by the current `/ToUnicode` CMap. | Allowing non-ASCII text before full Unicode/CID support can produce rendered-but-unextractable fixture text or late serialization failures. |
 | `grammar_truth.py -> extraction_truth.py` | Grammar truth reuses source channel and PDF coordinate conversion constants. | Extraction truth changes can accidentally change grammar truth records. |
 | `cad_component_groups.py -> svg_generator.py` | Legacy CAD helpers still build SVG-specific component groups. | This path is not renderer-neutral and should not be copied into new drawing recipes. |
 
@@ -129,6 +130,7 @@ These contracts are more important than individual implementation details.
 | Deterministic artifact bytes/records | Regression tests and fixture generation | Tests become flaky or fixtures churn |
 | Closed PDF renderer component set | PDF noninterference proofs and deterministic rendering | Custom dynamic `generate_pdf()` paths can break proof obligations |
 | PDF font resource policy | Synthetic fixtures using OS fonts and parser text extraction checks | Generic fonts unexpectedly embed, named fonts collapse to Helvetica, widths/descriptors drift, or ToUnicode maps disappear |
+| PDF text encoding policy | Synthetic fixtures with parser-visible text | Tabs, control characters, non-ASCII Latin-1, or Unicode text enters PDF text streams before the renderer owns matching encoding and extraction maps |
 | PDF graphics-state policy | Synthetic fixtures using transparent drawing styles | Drawing opacity is ignored, ExtGState resources are nondeterministic, or opaque drawings create unnecessary graphics states |
 | Raster image alpha/orientation/color preservation | SVG/PDF/DOCX/DXF fixtures and colored-background drawings | Transparent pixels are flattened or compared against the wrong background; EXIF-rotated images render with wrong dimensions; CMYK/ICC JPEGs lose color intent |
 | `pdf_render_contract.py` guard semantics | PO-GT-004 mutation gate and PDF render-path failures | Unsupported groups/components render instead of failing at the boundary |
