@@ -41,13 +41,14 @@ backend, not a full Acrobat replacement. The current backend is useful for
 parser-facing technical drawings because it supports pages, vector primitives,
 closed renderer domains, deterministic bytes, extraction/grammar truth, raster
 images with alpha, JPEG pass-through, ICC profile emission, Standard 14 fonts,
-named TrueType/OpenType font embedding, page labels, Crop/Bleed/Trim/Art page
-boxes, flat and arbitrary-depth nested outlines/bookmarks, URI links, internal
-page links, named destinations, named-destination links, text annotations,
-FreeText annotations, highlight annotations, square annotations, circle
-annotations, line annotations, rectangular and closed path group clipping,
-stroke/fill opacity through PDF ExtGState resources, group blend modes through
-PDF ExtGState resources, and stroke dash/cap/join/miter operators.
+named TrueType/OpenType font embedding, page labels, page rotations,
+Crop/Bleed/Trim/Art page boxes, flat and arbitrary-depth nested
+outlines/bookmarks, URI links, internal page links, named destinations,
+named-destination links, text annotations, FreeText annotations, highlight
+annotations, square annotations, circle annotations, line annotations,
+rectangular and closed path group clipping, stroke/fill opacity through PDF
+ExtGState resources, group blend modes through PDF ExtGState resources, and
+stroke dash/cap/join/miter operators.
 
 The remaining gaps that keep the backend from being a fully featured PDF
 creation system are:
@@ -57,7 +58,7 @@ creation system are:
 | Text encoding | WinAnsi literal strings, installed-font embedding, and printable WinAnsi `/ToUnicode` CMaps | Unicode/CID fonts, glyph subsetting, and full complex-script text extraction maps |
 | Text layout | Positioned text components with explicit line-break output using `TextStyle.line_spacing` and per-line `TextStyle.text_align` | Automatic wrapping, tabs, columns, kerning, and complex-script shaping |
 | Graphics state | Basic stroke/fill primitives, rectangular and closed path group clipping with nonzero/even-odd clip rules, group blend modes, stroke/fill alpha ExtGState resources, and stroke dash/cap/join/miter operators | Opacity groups, gradients, and patterns |
-| Document structure | Pages, deterministic metadata, page labels, Crop/Bleed/Trim/Art boxes, flat and arbitrary-depth nested outlines/bookmarks, URI links, internal page links, named destinations, named-destination links, text annotations, FreeText annotations, highlight annotations, square annotations, circle annotations, and line annotations | Rich annotation appearances, replies/widgets, raw generic annotations, and tagged PDF structure |
+| Document structure | Pages, deterministic metadata, page labels, page rotations, Crop/Bleed/Trim/Art boxes, flat and arbitrary-depth nested outlines/bookmarks, URI links, internal page links, named destinations, named-destination links, text annotations, FreeText annotations, highlight annotations, square annotations, circle annotations, and line annotations | Rich annotation appearances, replies/widgets, raw generic annotations, and tagged PDF structure |
 | Color/profile support | Device RGB/CMYK and JPEG ICC profile objects | Broader calibrated color spaces and selectable PDF/A-style archival constraints |
 | Import/conversion | SVG input remains SVG-only | Arbitrary SVG-to-PDF conversion and external PDF embedding are out of scope until explicitly approved |
 | Optimization/security | Classic xref table and plain objects | Object streams, font/image subsetting, encryption, and signatures if those become product requirements |
@@ -116,14 +117,18 @@ JPEGs that require EXIF rotation or unsupported color modes fall back to
 normalized RGB samples. SVG output uses the same `RasterImageAsset` through
 `ImageSVG`, normalized to an embedded PNG data URI.
 
-`DocumentPDF` supports explicit page labels through `set_page_label()` and
-additional page boxes through `set_page_box()`. Page labels are emitted as a PDF
-`/PageLabels` number tree with literal string prefixes. Page boxes are emitted
-on the target page dictionary as `/CropBox`, `/BleedBox`, `/TrimBox`, or
-`/ArtBox` entries in PDF bottom-left page coordinates. Labels and boxes are
+`DocumentPDF` supports explicit page labels through `set_page_label()`, page
+rotations through `set_page_rotation()`, and additional page boxes through
+`set_page_box()`. Page labels are emitted as a PDF `/PageLabels` number tree
+with literal string prefixes. Page rotations are emitted as page dictionary
+`/Rotate` entries normalized to `90`, `180`, or `270`. Page boxes are emitted on
+the target page dictionary as `/CropBox`, `/BleedBox`, `/TrimBox`, or `/ArtBox`
+entries in PDF bottom-left page coordinates. Labels, rotations, and boxes are
 stored in document parameters, round-trip through `DocumentPDF.create_from_dict()`,
-and follow page insertions and removals. Invalid page labels, page numbers, box
-names, and box coordinates fail at the `DocumentPDF` boundary before rendering.
+and follow page insertions and removals. Invalid page labels, rotations, page
+numbers, box names, and box coordinates fail at the `DocumentPDF` boundary before
+rendering. Page rotation is viewer metadata; it does not remap component
+geometry or truth coordinates.
 
 `DocumentPDF` also supports PDF outlines through `add_outline()`. Each outline
 has a Latin-1 title, targets an existing page, and may set PDF `/XYZ`
@@ -362,8 +367,9 @@ The PDF backend is covered by PDF-P1 tests for:
 - Renderer-neutral zoning recipes that emit PDF-safe component groups
 - Grammar truth records for cues, constructs, links, and assessments
 - Visual spot-check artifact generation
-- Page labels and Crop/Bleed/Trim/Art page boxes with serialization round trips,
-  insertion/removal index shifts, and invalid metadata rejection
+- Page labels, page rotations, and Crop/Bleed/Trim/Art page boxes with
+  serialization round trips, insertion/removal index shifts, and invalid
+  metadata rejection
 - Flat PDF outlines/bookmarks with serialization round trips, destination
   validation, insertion/removal index shifts, and invalid metadata rejection
 - URI link annotations with serialization round trips, same-page annotation

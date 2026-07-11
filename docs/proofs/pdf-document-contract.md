@@ -112,6 +112,10 @@ Affected surface:
   mutation gate for PDF-DOC-FREE-TEXT-ANNOTATION-P3.
 - `tests/mutation/filter_pdf_document_free_text_annotation_work_items.py`:
   FreeText annotation proof-critical mutation filter.
+- `tests/mutation/pdf_document_page_rotation_cosmic_ray.toml`: scoped mutation
+  gate for PDF-DOC-PAGE-ROTATION-P3.
+- `tests/mutation/filter_pdf_document_page_rotation_work_items.py`: page
+  rotation proof-critical mutation filter.
 
 Incoming dependencies:
 
@@ -123,9 +127,10 @@ Incoming dependencies:
   annotated groups and components.
 - `DocumentPDF` depends on `Layer` for group containment.
 - Callers can depend on `DocumentPDF.set_page_label()` and
-  `DocumentPDF.set_page_box()` for PDF-specific page metadata, and on
-  `DocumentPDF.parameters` plus `DocumentPDF.create_from_dict()` to preserve that
-  metadata.
+  `DocumentPDF.set_page_box()` for PDF-specific page metadata, on
+  `DocumentPDF.set_page_rotation()` for parser-stress rotated-page metadata, and
+  on `DocumentPDF.parameters` plus `DocumentPDF.create_from_dict()` to preserve
+  that metadata.
 - Callers can depend on `DocumentPDF.add_outline()` to create top-level or
   arbitrary-depth child PDF outline entries that target existing pages, and on
   serialization to preserve target, parent, and expansion state.
@@ -205,10 +210,11 @@ Before/after edge changes:
 - After the filepath hardening update, `DocumentPDF.create_pdf()` accepts string
   and path-like output paths and rejects non-path, bytes, empty, and
   missing-directory paths before writing.
-- After the page-structure update, `DocumentPDF` owns a PDF-specific metadata
-  map keyed by one-based page number. Insertions and removals shift or delete
+- After the page-structure update, `DocumentPDF` owns PDF-specific metadata maps
+  keyed by one-based page number. Insertions and removals shift or delete
   metadata with the affected page indices. `to_pdf_bytes()` emits `/PageLabels`
-  in the catalog and allowed page boxes in each page dictionary.
+  in the catalog and allowed page boxes plus page rotations in each page
+  dictionary.
 - After the outline update, `DocumentPDF` owns a flat ordered outline list.
   Insertions and removals shift or delete outline targets with affected page
   indices. `to_pdf_bytes()` emits a PDF `/Outlines` root, linked flat item
@@ -344,10 +350,13 @@ ADR/rule impact:
   backend currently emits literal PDF strings.
 - PDF page boxes are finite four-number bottom-left coordinate rectangles with
   positive area inside the page MediaBox.
+- PDF page rotations are integer multiples of 90 degrees normalized to nonzero
+  `/Rotate` values of `90`, `180`, or `270`; normalized zero is stored as no
+  explicit rotation.
 - Page-structure metadata is page-owned state and must follow page insertion and
   removal operations.
-- Serialized page labels and page boxes must be rejected before rendering if they
-  are malformed.
+- Serialized page labels, page boxes, and page rotations must be rejected before
+  rendering if they are malformed.
 - PDF outlines are insertion-ordered entries. Each entry has a non-empty
   Latin-1 title, targets an existing one-based page number, and has finite
   destination numbers when `left`, `top`, or `zoom` are provided.
@@ -432,8 +441,9 @@ ADR/rule impact:
 | PDF file writer path boundary | Accept string/path-like paths and reject malformed output paths before writing | PO-PDFDOC-005 | path-like and malformed-path tests | killed |
 | Page labels | Emit escaped PDF `/PageLabels`, preserve deterministic bytes, and round-trip through parameters | PO-PDFDOC-006 | page label and page box render/round-trip test | killed |
 | Page boxes | Emit only allowed Crop/Bleed/Trim/Art boxes in bottom-left coordinates inside MediaBox | PO-PDFDOC-007 | page box render/invalid metadata tests | killed |
-| Page metadata index shifts | Insert/remove pages shift or delete label/box metadata with the page index | PO-PDFDOC-008 | insertion/removal metadata tests | pass with equivalent survivors |
-| Serialized page metadata | Reject malformed page label/page box payloads before rendering | PO-PDFDOC-009 | serialized metadata rejection test | killed |
+| Page rotations | Emit normalized PDF `/Rotate` values, preserve deterministic bytes, and round-trip through parameters | PO-PDFDOC-049 | page structure render/round-trip test | pass with equivalent survivors |
+| Page metadata index shifts | Insert/remove pages shift or delete label/box/rotation metadata with the page index | PO-PDFDOC-008 | insertion/removal metadata tests | pass with equivalent survivors |
+| Serialized page metadata | Reject malformed page label/page box/page rotation payloads before rendering | PO-PDFDOC-009 | serialized metadata rejection test | pass with equivalent survivors |
 | Flat outlines | Emit deterministic flat `/Outlines` root and linked item objects | PO-PDFDOC-010 | outline render/round-trip test | mutation target |
 | Outline target index shifts | Insert/remove pages shift or delete outline targets with page indices | PO-PDFDOC-011 | outline page mutation test | mutation target |
 | Serialized outline metadata | Reject malformed outline payloads before rendering | PO-PDFDOC-012 | serialized outline rejection test | mutation target |
@@ -548,6 +558,30 @@ Current result after the page-structure metadata update:
   - `_shift_pdf_page_metadata_for_removal()` line 1599 made the same equivalent
     `>` to `>=` change for page boxes, with the same `index != page_number`
     pre-filter.
+- Gate result: pass with documented equivalent survivors.
+
+Current result after the page-rotation metadata update:
+
+- Tool: Cosmic Ray 8.4.6.
+- Config: `tests/mutation/pdf_document_page_rotation_cosmic_ray.toml`.
+- Filter: `tests/mutation/filter_pdf_document_page_rotation_work_items.py`.
+- Test selection: focused PDF document, factory payload, and PDF generator tests.
+- Raw work items: 6078.
+- Proof-critical work items after filter: 89.
+- Killed mutants: 86.
+- Equivalent survivors: 3.
+- Surviving equivalent mutations:
+  - `_coerce_pdf_page_rotation()` line 507 changed
+    `rotation % 90 != 0` to `rotation % 90 > 0`. Python modulo by the positive
+    divisor `90` returns values in `[0, 89]`, so `!= 0` and `> 0` are
+    equivalent for every admitted integer.
+  - `set_page_rotation()` line 2538 changed `page_rotation == 0` to
+    `page_rotation <= 0`. `_coerce_pdf_page_rotation()` normalizes into
+    `[0, 359]`, so no negative value can reach this branch.
+  - `_shift_pdf_page_metadata_for_removal()` line 2672 changed
+    `index > page_number` to `>=`. The comprehension filters
+    `index != page_number` before evaluating the output expression, so equality
+    is excluded from the expression domain.
 - Gate result: pass with documented equivalent survivors.
 
 Current result after the flat outline update:
@@ -1051,9 +1085,9 @@ Proven for the declared page-box key and coordinate domain.
 
 ### Claim
 
-When pages are inserted or removed, explicit PDF page labels and page boxes stay
-attached to the same logical page position after the mutation, and metadata for
-a removed page is deleted.
+When pages are inserted or removed, explicit PDF page labels, page boxes, and
+page rotations stay attached to the same logical page position after the
+mutation, and metadata for a removed page is deleted.
 
 ### Proof Method
 
@@ -1063,33 +1097,69 @@ to `Document.add_page()`. `DocumentPDF.remove_page()` validates the existing pag
 number, delegates to `Document.remove_page()`, then deletes metadata for the
 removed page and shifts later entries down. The behavioral test sets metadata on
 the tail page, inserts before it, removes before it, and then removes the tagged
-page while checking labels, boxes, page count, and serialized absence.
+page while checking labels, boxes, rotations, page count, and serialized
+absence.
 
 ### Conclusion
 
 Proven for page indices admitted by the `DocumentPDF` public page mutation
-methods, with the three equivalent mutation survivors documented above.
+methods, with the equivalent page-rotation mutation survivor documented above.
+
+## PO-PDFDOC-049: PDF Page Rotations Emit And Round Trip
+
+### Claim
+
+`DocumentPDF` emits explicit page rotations as PDF page dictionary `/Rotate`
+entries, normalizes accepted integer multiples of 90 degrees, stores only
+nonzero rotations, preserves deterministic bytes, and round-trips rotations
+through `parameters` and `create_from_dict()`.
+
+### Proof Method
+
+`set_page_rotation()` validates the page number and delegates to
+`_coerce_pdf_page_rotation()`, which rejects bools, non-integers, and integers
+that are not multiples of 90. Accepted values are normalized modulo 360; zero is
+represented as no explicit rotation. `_page_rotation_operator()` emits one
+`/Rotate` entry per page that has explicit nonzero rotation. The behavioral test
+renders `90` and `-90`, verifies exact `/Rotate 90` and `/Rotate 270` bytes,
+checks deterministic repeated rendering, recreates the document from
+`parameters`, and checks byte and parameter equality.
+
+### Counterexamples And Exclusions
+
+Page rotation is viewer/page metadata. It does not rotate component geometry,
+truth coordinates, annotation rectangles, page boxes, or content streams.
+Coordinate remapping for rotated-page truth records remains out of scope for
+this slice.
+
+### Conclusion
+
+Proven for page rotation metadata in the declared PDF document domain, with
+mutation verification documented above.
 
 ## PO-PDFDOC-009: Serialized Page Metadata Fails Explicitly
 
 ### Claim
 
-Malformed serialized `page_labels` and `page_boxes` payloads are rejected during
-`DocumentPDF.create_from_dict()` before any rendered PDF can be produced from
-bad page-structure metadata.
+Malformed serialized `page_labels`, `page_boxes`, and `page_rotations` payloads
+are rejected during `DocumentPDF.create_from_dict()` before any rendered PDF can
+be produced from bad page-structure metadata.
 
 ### Proof Method
 
 `create_from_dict()` reads optional mappings through `_pdf_optional_mapping()`,
 normalizes page keys through `_pdf_page_number_key()`, requires per-page box
-entries to be mappings, and then delegates to `set_page_label()` and
-`set_page_box()` for the same public boundary validation. Tests mutate a valid
-payload into non-mapping page label/page box containers, invalid page numbers,
-empty labels, unsupported box names, and invalid box coordinates.
+entries to be mappings, and then delegates to `set_page_label()`,
+`set_page_box()`, and `set_page_rotation()` for the same public boundary
+validation. Tests mutate a valid payload into non-mapping page label/page
+box/page rotation containers, invalid page numbers, empty labels, unsupported
+box names, invalid box coordinates, invalid rotation types, and invalid rotation
+values.
 
 ### Conclusion
 
-Proven for serialized page labels and page boxes in the declared payload domain.
+Proven for serialized page labels, page boxes, and page rotations in the
+declared payload domain, with mutation verification documented above.
 
 ## PO-PDFDOC-010: Flat PDF Outlines Emit And Round Trip
 

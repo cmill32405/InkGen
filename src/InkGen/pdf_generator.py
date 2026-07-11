@@ -500,6 +500,15 @@ def _coerce_pdf_page_box(
     return left, bottom, right, top
 
 
+def _coerce_pdf_page_rotation(rotation: object) -> int:
+    """Return a normalized PDF page rotation angle."""
+    if isinstance(rotation, bool) or not isinstance(rotation, int):
+        raise TypeError("page rotation must be an integer number of degrees")
+    if rotation % 90 != 0:
+        raise ValueError("page rotation must be a multiple of 90 degrees")
+    return rotation % 360
+
+
 def _coerce_pdf_outline_title(title: object) -> str:
     """Return a PDF literal-string-safe outline title."""
     if not isinstance(title, str):
@@ -2136,6 +2145,7 @@ class DocumentPDF(Document):
         super().__init__(canvas)
         self._pdf_page_labels: dict[int, str] = {}
         self._pdf_page_boxes: dict[int, dict[str, tuple[float, float, float, float]]] = {}
+        self._pdf_page_rotations: dict[int, int] = {}
         self._pdf_outlines: list[_PDFOutlineEntry] = []
         self._pdf_uri_links: list[_PDFUriLinkAnnotation] = []
         self._pdf_page_links: list[_PDFPageLinkAnnotation] = []
@@ -2518,10 +2528,30 @@ class DocumentPDF(Document):
         canonical_name = _coerce_pdf_page_box_name(box_name)
         return self._pdf_page_boxes.get(page_number, {}).get(canonical_name)
 
+    def set_page_rotation(self, page_number: int, rotation: int | None) -> None:
+        """Set or clear PDF page rotation metadata for an existing page."""
+        page_number = self._validate_existing_position(page_number)
+        if rotation is None:
+            self._pdf_page_rotations.pop(page_number, None)
+            return
+        page_rotation = _coerce_pdf_page_rotation(rotation)
+        if page_rotation == 0:
+            self._pdf_page_rotations.pop(page_number, None)
+            return
+        self._pdf_page_rotations[page_number] = page_rotation
+
+    def page_rotation(self, page_number: int) -> int | None:
+        """Return the explicit PDF page rotation for a page, if one is set."""
+        page_number = self._validate_existing_position(page_number)
+        return self._pdf_page_rotations.get(page_number)
+
     def _shift_pdf_page_metadata_for_insert(self, page_number: int) -> None:
         """Shift PDF-specific page metadata when a page is inserted."""
         self._pdf_page_labels = {index + 1 if index >= page_number else index: label for index, label in self._pdf_page_labels.items()}
         self._pdf_page_boxes = {index + 1 if index >= page_number else index: boxes for index, boxes in self._pdf_page_boxes.items()}
+        self._pdf_page_rotations = {
+            index + 1 if index >= page_number else index: rotation for index, rotation in self._pdf_page_rotations.items()
+        }
         self._pdf_outlines = [
             _PDFOutlineEntry(
                 outline.title,
@@ -2637,6 +2667,11 @@ class DocumentPDF(Document):
         }
         self._pdf_page_boxes = {
             index - 1 if index > page_number else index: boxes for index, boxes in self._pdf_page_boxes.items() if index != page_number
+        }
+        self._pdf_page_rotations = {
+            index - 1 if index > page_number else index: rotation
+            for index, rotation in self._pdf_page_rotations.items()
+            if index != page_number
         }
         self._pdf_outlines = [
             _PDFOutlineEntry(
@@ -2775,6 +2810,11 @@ class DocumentPDF(Document):
             f"/{name} [{_number(left)} {_number(bottom)} {_number(right)} {_number(top)}]"
             for name, (left, bottom, right, top) in sorted(boxes.items())
         )
+
+    def _page_rotation_operator(self, page_number: int) -> str:
+        """Return a PDF page rotation dictionary entry for a page."""
+        rotation = self._pdf_page_rotations.get(page_number)
+        return f"/Rotate {rotation}" if rotation is not None else ""
 
     @staticmethod
     def _outline_entry_payload(outline: _PDFOutlineEntry) -> dict[str, object]:
@@ -3324,6 +3364,8 @@ class DocumentPDF(Document):
         for page_number, page, content_bytes, content_id, page_id, page_annotations, annotation_ids in page_plans:
             page_box_entries = self._page_box_operators(page_number)
             page_boxes = f" {page_box_entries}" if page_box_entries else ""
+            page_rotation = self._page_rotation_operator(page_number)
+            rotation = f" {page_rotation}" if page_rotation else ""
             annotations = f" /Annots [{' '.join(f'{annotation_id} 0 R' for annotation_id in annotation_ids)}]" if annotation_ids else ""
             writer.set_object(
                 content_id, b"<< /Length " + str(len(content_bytes)).encode("ascii") + b" >>\nstream\n" + content_bytes + b"\nendstream"
@@ -3332,7 +3374,7 @@ class DocumentPDF(Document):
                 page_id,
                 (
                     f"<< /Type /Page /Parent {pages_id} 0 R "
-                    f"/MediaBox [0 0 {_number(page._canvas.width)} {_number(page._canvas.height)}]{page_boxes} "
+                    f"/MediaBox [0 0 {_number(page._canvas.width)} {_number(page._canvas.height)}]{page_boxes}{rotation} "
                     f"/Resources {resources} "
                     f"/Contents {content_id} 0 R{annotations} >>"
                 ),
@@ -3491,6 +3533,8 @@ class DocumentPDF(Document):
                 raise TypeError("DocumentPDF page_boxes entries must be mappings")
             for box_name, box in page_boxes.items():
                 document.set_page_box(page_number, box_name, box)  # type: ignore[arg-type]
+        for page_key, rotation in _pdf_optional_mapping(payload, "page_rotations", "DocumentPDF").items():
+            document.set_page_rotation(_pdf_page_number_key(page_key, "DocumentPDF page_rotations"), rotation)  # type: ignore[arg-type]
         for outline_payload in _pdf_optional_sequence(payload, "outlines", "DocumentPDF"):
             if not isinstance(outline_payload, Mapping):
                 raise TypeError("DocumentPDF outlines entries must be mappings")
@@ -3607,6 +3651,10 @@ class DocumentPDF(Document):
             document_payload["page_boxes"] = {
                 str(page_number): {box_name: list(box) for box_name, box in sorted(page_boxes.items())}
                 for page_number, page_boxes in sorted(self._pdf_page_boxes.items())
+            }
+        if self._pdf_page_rotations:
+            document_payload["page_rotations"] = {
+                str(page_number): rotation for page_number, rotation in sorted(self._pdf_page_rotations.items())
             }
         if self._pdf_outlines:
             document_payload["outlines"] = [self._outline_entry_payload(outline) for outline in self._pdf_outlines]

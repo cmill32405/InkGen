@@ -111,7 +111,7 @@ def test_document_pdf_grammar_truth_includes_duplicate_label_groups() -> None:
     assert {record["value"] for record in records} == {"first", "second"}
 
 
-@pytest.mark.condition("PDF-DOC-STRUCT-P3")
+@pytest.mark.condition("PDF-DOC-STRUCT-P3", "PDF-DOC-PAGE-ROTATION-P3")
 def test_document_pdf_emits_page_labels_and_page_boxes() -> None:
     """PDF-DOC-STRUCT-P3: PDF document structure metadata renders and round-trips."""
     document = DocumentPDF(Canvas(100.0, 80.0))
@@ -122,6 +122,8 @@ def test_document_pdf_emits_page_labels_and_page_boxes() -> None:
     document.set_page_box(1, "CropBox", [5.0, 6.0, 95.0, 74.0])
     document.set_page_box(1, "/TrimBox", (10.0, 12.0, 90.0, 70.0))
     document.set_page_box(2, "ArtBox", [0.0, 0.0, 100.0, 80.0])
+    document.set_page_rotation(1, 90)
+    document.set_page_rotation(2, -90)
 
     payload = document.to_pdf_bytes()
     recreated = DocumentPDF.create_from_dict(document.parameters)
@@ -133,8 +135,11 @@ def test_document_pdf_emits_page_labels_and_page_boxes() -> None:
     assert b"/CropBox [5 6 95 74]" in payload
     assert b"/TrimBox [10 12 90 70]" in payload
     assert b"/ArtBox [0 0 100 80]" in payload
+    assert b"/Rotate 90" in payload
+    assert b"/Rotate 270" in payload
     assert b"/Count 2" in payload
     assert payload.count(b"/CropBox") == 1
+    assert payload.count(b"/Rotate") == 2
     assert len(object_ids) == len(set(object_ids))
     assert trailer_size is not None
     assert int(trailer_size.group("size")) == max(int(object_id) for object_id in object_ids) + 1
@@ -142,9 +147,11 @@ def test_document_pdf_emits_page_labels_and_page_boxes() -> None:
     assert recreated.to_pdf_bytes() == payload
     assert recreated.page_label(1) == "Cover (A)"
     assert recreated.page_box(1, "trim") == (10.0, 12.0, 90.0, 70.0)
+    assert recreated.page_rotation(1) == 90
+    assert recreated.page_rotation(2) == 270
 
 
-@pytest.mark.condition("PDF-DOC-STRUCT-P3")
+@pytest.mark.condition("PDF-DOC-STRUCT-P3", "PDF-DOC-PAGE-ROTATION-P3")
 def test_document_pdf_rejects_invalid_page_structure_metadata() -> None:
     """PDF-DOC-STRUCT-P3: Page labels and page boxes fail at explicit boundaries."""
     document = DocumentPDF(Canvas(100.0, 80.0))
@@ -181,23 +188,38 @@ def test_document_pdf_rejects_invalid_page_structure_metadata() -> None:
             document.set_page_box(1, "CropBox", box)  # type: ignore[arg-type]
         assert document.page_box(1, "CropBox") is None
 
+    for rotation in [True, 90.0, "90", object()]:
+        with pytest.raises(TypeError, match="page rotation"):
+            document.set_page_rotation(1, rotation)  # type: ignore[arg-type]
+        assert document.page_rotation(1) is None
+    for rotation in [45, 91]:
+        with pytest.raises(ValueError, match="multiple of 90"):
+            document.set_page_rotation(1, rotation)
+        assert document.page_rotation(1) is None
+
     with pytest.raises(ValueError, match="Position must correlate"):
         document.set_page_label(2, "missing")
     with pytest.raises(ValueError, match="Position must correlate"):
         document.set_page_box(2, "CropBox", [0.0, 0.0, 1.0, 1.0])
+    with pytest.raises(ValueError, match="Position must correlate"):
+        document.set_page_rotation(2, 90)
 
     document.set_page_label(1, "P1")
     document.set_page_box(1, "CropBox", [0.0, 0.0, 1.0, 1.0])
+    document.set_page_rotation(1, 180)
     document.set_page_label(1, None)
     document.set_page_box(1, "CropBox", None)
+    document.set_page_rotation(1, 360)
 
     assert document.page_label(1) is None
     assert document.page_box(1, "CropBox") is None
+    assert document.page_rotation(1) is None
     assert "page_labels" not in document.parameters["DocumentPDF"]
     assert "page_boxes" not in document.parameters["DocumentPDF"]
+    assert "page_rotations" not in document.parameters["DocumentPDF"]
 
 
-@pytest.mark.condition("PDF-DOC-STRUCT-P3")
+@pytest.mark.condition("PDF-DOC-STRUCT-P3", "PDF-DOC-PAGE-ROTATION-P3")
 def test_document_pdf_page_structure_metadata_tracks_page_insertions_and_removals() -> None:
     """PDF-DOC-STRUCT-P3: Page-specific PDF metadata follows page index mutations."""
     document = DocumentPDF(Canvas(100.0, 80.0))
@@ -206,34 +228,43 @@ def test_document_pdf_page_structure_metadata_tracks_page_insertions_and_removal
     document.add_page()
     document.set_page_label(2, "middle")
     document.set_page_box(2, "BleedBox", [2.0, 3.0, 80.0, 60.0])
+    document.set_page_rotation(2, 90)
     document.set_page_label(3, "tail")
     document.set_page_box(3, "ArtBox", [1.0, 2.0, 90.0, 70.0])
+    document.set_page_rotation(3, 180)
 
     document.add_page()
 
     assert document.page_label(2) == "middle"
     assert document.page_box(2, "BleedBox") == (2.0, 3.0, 80.0, 60.0)
+    assert document.page_rotation(2) == 90
     assert document.page_label(3) == "tail"
 
     document.add_page(position=2)
 
     assert document.page_label(3) == "middle"
     assert document.page_box(3, "BleedBox") == (2.0, 3.0, 80.0, 60.0)
+    assert document.page_rotation(3) == 90
     assert document.page_label(4) == "tail"
     assert document.page_box(4, "ArtBox") == (1.0, 2.0, 90.0, 70.0)
+    assert document.page_rotation(4) == 180
     assert document.page_label(2) is None
+    assert document.page_rotation(2) is None
 
     document.remove_page(2)
 
     assert document.page_label(2) == "middle"
     assert document.page_box(2, "BleedBox") == (2.0, 3.0, 80.0, 60.0)
+    assert document.page_rotation(2) == 90
     assert document.page_label(3) == "tail"
     assert document.page_box(3, "ArtBox") == (1.0, 2.0, 90.0, 70.0)
+    assert document.page_rotation(3) == 180
 
     document.remove_page(1)
 
     assert document.page_label(1) == "middle"
     assert document.page_box(1, "BleedBox") == (2.0, 3.0, 80.0, 60.0)
+    assert document.page_rotation(1) == 90
     assert document.page_label(2) == "tail"
 
     document.remove_page(2)
@@ -241,10 +272,12 @@ def test_document_pdf_page_structure_metadata_tracks_page_insertions_and_removal
     assert document.pages == 2
     assert document.page_label(1) == "middle"
     assert document.page_box(1, "BleedBox") == (2.0, 3.0, 80.0, 60.0)
+    assert document.page_rotation(1) == 90
     assert "2" not in document.parameters["DocumentPDF"].get("page_labels", {})
+    assert "2" not in document.parameters["DocumentPDF"].get("page_rotations", {})
 
 
-@pytest.mark.condition("PDF-DOC-STRUCT-P3")
+@pytest.mark.condition("PDF-DOC-STRUCT-P3", "PDF-DOC-PAGE-ROTATION-P3")
 def test_document_pdf_page_structure_metadata_tracks_front_insert_and_noninterned_removal() -> None:
     """PDF-DOC-STRUCT-P3: Page metadata uses value equality for page index mutations."""
     document = DocumentPDF(Canvas(100.0, 80.0))
@@ -254,30 +287,36 @@ def test_document_pdf_page_structure_metadata_tracks_front_insert_and_noninterne
     last_page = int("260")
     document.set_page_label(first_page, "front")
     document.set_page_box(first_page, "CropBox", [1.0, 1.0, 90.0, 70.0])
+    document.set_page_rotation(first_page, 90)
     document.set_page_label(last_page, "tail")
     document.set_page_box(last_page, "TrimBox", [2.0, 2.0, 80.0, 60.0])
+    document.set_page_rotation(last_page, 180)
 
     document.add_page(position=1)
 
     assert document.page_label(2) == "front"
     assert document.page_box(2, "CropBox") == (1.0, 1.0, 90.0, 70.0)
+    assert document.page_rotation(2) == 90
     assert document.page_label(261) == "tail"
     assert document.page_box(261, "TrimBox") == (2.0, 2.0, 80.0, 60.0)
+    assert document.page_rotation(261) == 180
 
     document.remove_page(int("261"))
 
     assert document.pages == 260
     assert "261" not in document.parameters["DocumentPDF"].get("page_labels", {})
     assert "261" not in document.parameters["DocumentPDF"].get("page_boxes", {})
+    assert "261" not in document.parameters["DocumentPDF"].get("page_rotations", {})
 
 
-@pytest.mark.condition("PDF-DOC-STRUCT-P3")
+@pytest.mark.condition("PDF-DOC-STRUCT-P3", "PDF-DOC-PAGE-ROTATION-P3")
 def test_document_pdf_rejects_invalid_serialized_page_structure_metadata() -> None:
     """PDF-DOC-STRUCT-P3: Serialized page labels and boxes validate before rendering."""
     document = DocumentPDF(Canvas(100.0, 80.0))
     document.add_page()
     document.set_page_label(1, "P1")
     document.set_page_box(1, "BleedBox", [1.0, 1.0, 99.0, 79.0])
+    document.set_page_rotation(1, 90)
 
     invalid_payloads = []
     for mutator in [
@@ -290,6 +329,10 @@ def test_document_pdf_rejects_invalid_serialized_page_structure_metadata() -> No
         lambda data: data["DocumentPDF"].__setitem__("page_boxes", {"1": "bad"}),
         lambda data: data["DocumentPDF"].__setitem__("page_boxes", {"1": {"MediaBox": [0.0, 0.0, 1.0, 1.0]}}),
         lambda data: data["DocumentPDF"].__setitem__("page_boxes", {"1": {"CropBox": [0.0, 0.0, 0.0, 1.0]}}),
+        lambda data: data["DocumentPDF"].__setitem__("page_rotations", "bad"),
+        lambda data: data["DocumentPDF"].__setitem__("page_rotations", {"0": 90}),
+        lambda data: data["DocumentPDF"].__setitem__("page_rotations", {"1": True}),
+        lambda data: data["DocumentPDF"].__setitem__("page_rotations", {"1": 45}),
     ]:
         payload = deepcopy(document.parameters)
         mutator(payload)
