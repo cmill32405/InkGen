@@ -46,6 +46,12 @@ from .grammar_truth import (
 )
 from .image_assets import RasterImageAsset, RasterImageComponent
 from .paragraph import LineSpacingRule, Paragraph, ParagraphAlignment, ParagraphLine, TabStop
+from .parser_stress_fixtures import (
+    DEFAULT_PARSER_STRESS_BOM_ROWS,
+    ParserStressBOMRow,
+    ParserStressFixtureSpec,
+    build_parser_stress_pdf,
+)
 from .pdf_generator import (
     ArcPDF,
     CirclePDF,
@@ -153,6 +159,8 @@ __all__ = [
     "OutputFormat",
     "PDFGeneratorInterface",
     "PDFRenderContext",
+    "ParserStressBOMRow",
+    "ParserStressFixtureSpec",
     "PathSVG",
     "PathDrawing",
     "PathPDF",
@@ -191,7 +199,9 @@ __all__ = [
     "ZoningDrawing",
     "annotate_extraction_truth",
     "annotate_grammar_truth",
+    "build_parser_stress_pdf",
     "component_to_fitter_shape",
+    "DEFAULT_PARSER_STRESS_BOM_ROWS",
     "extraction_truth_json",
     "flatten_svg",
     "grammar_truth_json",

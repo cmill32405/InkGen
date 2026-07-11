@@ -18,11 +18,14 @@ from InkGen import (
     ImageDrawing,
     ImagePDF,
     ImageSVG,
+    ParserStressBOMRow,
+    ParserStressFixtureSpec,
     RasterImageAsset,
     RasterImageComponent,
     RectanglePDF,
     Table,
     ZoningDrawing,
+    build_parser_stress_pdf,
 )
 from InkGen.document_outputs import DocumentOutputFormat as ModuleDocumentOutputFormat
 from InkGen.document_outputs import FlowDocument as ModuleFlowDocument
@@ -33,6 +36,9 @@ from InkGen.extraction_truth import ExtractionTruthRecord as ModuleExtractionTru
 from InkGen.grammar_truth import GrammarTruthRecord as ModuleGrammarTruthRecord
 from InkGen.image_assets import RasterImageAsset as ModuleRasterImageAsset
 from InkGen.image_assets import RasterImageComponent as ModuleRasterImageComponent
+from InkGen.parser_stress_fixtures import ParserStressBOMRow as ModuleParserStressBOMRow
+from InkGen.parser_stress_fixtures import ParserStressFixtureSpec as ModuleParserStressFixtureSpec
+from InkGen.parser_stress_fixtures import build_parser_stress_pdf as module_build_parser_stress_pdf
 from InkGen.pdf_generator import ComponentGroupPDF as ModuleComponentGroupPDF
 from InkGen.pdf_generator import DocumentPDF as ModuleDocumentPDF
 from InkGen.pdf_generator import ImagePDF as ModuleImagePDF
@@ -53,6 +59,8 @@ DOCUMENTED_PUBLIC_SYMBOLS = {
     "LinePDF",
     "PDFGeneratorInterface",
     "PDFRenderContext",
+    "ParserStressBOMRow",
+    "ParserStressFixtureSpec",
     "PathPDF",
     "RectanglePDF",
     "Row",
@@ -69,6 +77,7 @@ DOCUMENTED_PUBLIC_SYMBOLS = {
     "ImagePDF",
     "ImageSVG",
     "ZoningDrawing",
+    "build_parser_stress_pdf",
     "RasterImageAsset",
     "RasterImageComponent",
     "annotate_extraction_truth",
@@ -117,6 +126,9 @@ def test_root_exports_match_submodule_identities() -> None:
     assert ImageDrawing is ModuleImageDrawing
     assert ImageSVG is ModuleImageSVG
     assert ImagePDF is ModuleImagePDF
+    assert ParserStressBOMRow is ModuleParserStressBOMRow
+    assert ParserStressFixtureSpec is ModuleParserStressFixtureSpec
+    assert build_parser_stress_pdf is module_build_parser_stress_pdf
 
 
 @pytest.mark.condition("PUBLIC-API-P1")

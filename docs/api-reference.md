@@ -55,6 +55,15 @@ available from the package root for caller-facing failure handling:
 - `PathPDF`, `RegularPolygonPDF`, `PolygonalPDF`, `CirclePDF`, `TextPDF`.
 - `ComponentGroupPDF`, `DocumentPDF`.
 
+## Parser Stress Fixtures (`InkGen.parser_stress_fixtures`)
+
+- `ParserStressBOMRow`: BOM row values for parser fixture generation.
+- `ParserStressFixtureSpec`: Title-block, revision, page-rotation, page-label,
+  transparency, and BOM-row configuration for deterministic parser fixtures.
+- `build_parser_stress_pdf()`: Builds a `DocumentPDF` that exercises rotated
+  pages, TrimBox metadata, title blocks, BOM tables, transparency, zone markers,
+  and extraction/grammar truth records.
+
 ## Tables (`InkGen.table`)
 
 - `Table`, `Row`, `Column`, `Cell`.

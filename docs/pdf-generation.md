@@ -62,7 +62,7 @@ creation system are:
 | Color/profile support | Device RGB/CMYK and JPEG ICC profile objects | Broader calibrated color spaces and selectable PDF/A-style archival constraints |
 | Import/conversion | SVG input remains SVG-only | Arbitrary SVG-to-PDF conversion and external PDF embedding are out of scope until explicitly approved |
 | Optimization/security | Classic xref table and plain objects | Object streams, font/image subsetting, encryption, and signatures if those become product requirements |
-| Parser stress fixtures | Core truth records and current synthetic drawings | Purpose-built fixtures for CID encodings, missing/odd CMaps, rotated pages, transparency, scans, tables, title blocks, and BOM drawings |
+| Parser stress fixtures | Purpose-built technical-drawing fixture builder for rotated pages, transparency, tables, title blocks, BOM rows, page boxes, and truth labels | Additional variants for CID encodings, missing/odd CMaps, scans, and other parser-hostile PDF producer behaviors |
 
 The highest-value PDF hardening target for Document Intelligence remains full
 Unicode/CID font support because parser extraction quality depends on
@@ -276,6 +276,13 @@ Semantic extraction-truth annotations can be attached through
 `InkGen.extraction_truth` and emitted with `DocumentPDF.extraction_truth()`. Those
 records use rendered PDF point coordinates (`pdf_points_bottom_left`) so they can
 be compared directly with parser output.
+
+Parser stress PDFs can be built with `InkGen.parser_stress_fixtures`. The
+default `build_parser_stress_pdf()` output is a single-page technical drawing
+with a rotated PDF page dictionary, TrimBox metadata, a title block, a BOM table,
+a semi-transparent overlay, zone markers, and extraction/grammar truth records.
+The builder composes public PDF primitives and truth helpers; it does not own PDF
+serialization and does not add dependencies.
 
 Grammar truth annotations can be attached through `InkGen.grammar_truth` and
 emitted with `DocumentPDF.grammar_truth()`. The emit is registry-agnostic: InkGen

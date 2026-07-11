@@ -38,6 +38,7 @@ nav:
       - ADR-0019 PDF Circle Annotations: adr/0019-pdf-circle-annotations.md
       - ADR-0020 PDF Line Annotations: adr/0020-pdf-line-annotations.md
       - ADR-0021 PDF FreeText Annotations: adr/0021-pdf-free-text-annotations.md
+      - ADR-0022 Parser Stress Fixtures: adr/0022-parser-stress-fixture-builders.md
   - Proof Notes:
       - Grammar Truth: proofs/grammar-truth.md
       - Extraction Truth Contract: proofs/extraction-truth-contract.md
@@ -108,6 +109,7 @@ nav:
       - Table Required Fields Contract: proofs/table-required-fields-contract.md
       - Table Merge Argument Contract: proofs/table-merge-argument-contract.md
       - DXF Renderer Contract: proofs/dxf-renderer-contract.md
+      - Parser Stress Fixture Contract: proofs/parser-stress-fixture-contract.md
   - Architecture Diagrams: architecture-diagrams.md
   - Notes:
       - Mask Alignment Findings: mask_alignment_findings.md
