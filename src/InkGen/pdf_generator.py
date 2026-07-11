@@ -193,6 +193,18 @@ class _PDFCircleAnnotation:
     contents: str | None
 
 
+@dataclass(frozen=True)
+class _PDFLineAnnotation:
+    """Validated PDF line annotation metadata."""
+
+    page_number: int
+    start: tuple[float, float]
+    end: tuple[float, float]
+    rect: tuple[float, float, float, float]
+    color: tuple[float, float, float]
+    contents: str | None
+
+
 class PDFGeneratorInterface(metaclass=abc.ABCMeta):
     """Interface for components that can emit PDF content-stream operators."""
 
@@ -595,6 +607,49 @@ def _coerce_pdf_link_rect(
 ) -> tuple[float, float, float, float]:
     """Return a validated PDF annotation rectangle in bottom-left page coordinates."""
     return _coerce_pdf_page_box(rect, canvas_width=canvas_width, canvas_height=canvas_height)
+
+
+def _coerce_pdf_line_annotation_point(
+    point: object,
+    name: str,
+    *,
+    canvas_width: float,
+    canvas_height: float,
+) -> tuple[float, float]:
+    """Return a validated PDF line annotation endpoint in page coordinates."""
+    if isinstance(point, (str, bytes)) or not isinstance(point, Sequence) or len(point) != 2:
+        raise TypeError(f"line annotation {name} must be a two-number sequence")
+    values = []
+    for value in point:
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise TypeError(f"line annotation {name} coordinates must be finite numbers")
+        number = float(value)
+        if not math.isfinite(number):
+            raise ValueError(f"line annotation {name} coordinates must be finite numbers")
+        values.append(number)
+    x, y = values
+    if not (0.0 <= x <= canvas_width and 0.0 <= y <= canvas_height):
+        raise ValueError(f"line annotation {name} must fit inside the page MediaBox")
+    return x, y
+
+
+def _pdf_line_annotation_rect(
+    start: tuple[float, float],
+    end: tuple[float, float],
+    *,
+    canvas_width: float,
+    canvas_height: float,
+) -> tuple[float, float, float, float]:
+    """Return a positive-area annotation rectangle enclosing a line segment."""
+    min_x = min(start[0], end[0])
+    max_x = max(start[0], end[0])
+    min_y = min(start[1], end[1])
+    max_y = max(start[1], end[1])
+    left = max(0.0, min_x - 1.0)
+    right = min(canvas_width, max_x + 1.0)
+    bottom = max(0.0, min_y - 1.0)
+    top = min(canvas_height, max_y + 1.0)
+    return left, bottom, right, top
 
 
 def _coerce_pdf_clip_rect(rect: object) -> tuple[float, float, float, float]:
@@ -2052,6 +2107,7 @@ class DocumentPDF(Document):
         self._pdf_highlight_annotations: list[_PDFHighlightAnnotation] = []
         self._pdf_square_annotations: list[_PDFSquareAnnotation] = []
         self._pdf_circle_annotations: list[_PDFCircleAnnotation] = []
+        self._pdf_line_annotations: list[_PDFLineAnnotation] = []
 
     @staticmethod
     def _iter_layer_groups(layer: Layer, *, sort: bool = False) -> tuple[ComponentGroup, ...]:
@@ -2310,6 +2366,52 @@ class DocumentPDF(Document):
         """Return serialized PDF circle annotations in insertion order."""
         return tuple(self._circle_annotation_payload(annotation) for annotation in self._pdf_circle_annotations)
 
+    def add_line_annotation(
+        self,
+        page_number: int,
+        start: Sequence[float | int],
+        end: Sequence[float | int],
+        *,
+        color: str | Sequence[float | int] = "#ff0000",
+        contents: str | None = None,
+    ) -> None:
+        """Add a PDF line markup annotation to an existing page."""
+        page_number = self._validate_existing_position(page_number)
+        page = self.page(page_number)
+        annotation_start = _coerce_pdf_line_annotation_point(
+            start,
+            "start",
+            canvas_width=page._canvas.width,
+            canvas_height=page._canvas.height,
+        )
+        annotation_end = _coerce_pdf_line_annotation_point(
+            end,
+            "end",
+            canvas_width=page._canvas.width,
+            canvas_height=page._canvas.height,
+        )
+        if annotation_start == annotation_end:
+            raise ValueError("line annotation endpoints must be distinct")
+        annotation_rect = _pdf_line_annotation_rect(
+            annotation_start,
+            annotation_end,
+            canvas_width=page._canvas.width,
+            canvas_height=page._canvas.height,
+        )
+        annotation_color = _coerce_pdf_annotation_color(color)
+        annotation_contents = None if contents is None else _coerce_pdf_annotation_text(contents, "line annotation contents")
+        self._pdf_line_annotations.append(
+            _PDFLineAnnotation(page_number, annotation_start, annotation_end, annotation_rect, annotation_color, annotation_contents)
+        )
+
+    def clear_line_annotations(self) -> None:
+        """Remove all PDF line annotations."""
+        self._pdf_line_annotations.clear()
+
+    def line_annotations(self) -> tuple[dict[str, object], ...]:
+        """Return serialized PDF line annotations in insertion order."""
+        return tuple(self._line_annotation_payload(annotation) for annotation in self._pdf_line_annotations)
+
     def set_page_label(self, page_number: int, label: str | None) -> None:
         """Set or clear a PDF page label for an existing page."""
         page_number = self._validate_existing_position(page_number)
@@ -2439,6 +2541,17 @@ class DocumentPDF(Document):
             )
             for annotation in self._pdf_circle_annotations
         ]
+        self._pdf_line_annotations = [
+            _PDFLineAnnotation(
+                annotation.page_number + 1 if annotation.page_number >= page_number else annotation.page_number,
+                annotation.start,
+                annotation.end,
+                annotation.rect,
+                annotation.color,
+                annotation.contents,
+            )
+            for annotation in self._pdf_line_annotations
+        ]
 
     def _shift_pdf_page_metadata_for_removal(self, page_number: int) -> None:
         """Shift PDF-specific page metadata when a page is removed."""
@@ -2545,6 +2658,18 @@ class DocumentPDF(Document):
                 annotation.contents,
             )
             for annotation in self._pdf_circle_annotations
+            if annotation.page_number != page_number
+        ]
+        self._pdf_line_annotations = [
+            _PDFLineAnnotation(
+                annotation.page_number - 1 if annotation.page_number > page_number else annotation.page_number,
+                annotation.start,
+                annotation.end,
+                annotation.rect,
+                annotation.color,
+                annotation.contents,
+            )
+            for annotation in self._pdf_line_annotations
             if annotation.page_number != page_number
         ]
 
@@ -2890,6 +3015,36 @@ class DocumentPDF(Document):
         contents = f" /Contents ({_escape_pdf_string(annotation.contents)})" if annotation.contents is not None else ""
         return f"<< /Type /Annot /Subtype /Circle /Rect {rect} /C {color} /Border [0 0 1]{contents} >>"
 
+    @staticmethod
+    def _line_annotation_payload(annotation: _PDFLineAnnotation) -> dict[str, object]:
+        """Return serialized data for a validated PDF line annotation."""
+        payload: dict[str, object] = {
+            "page_number": annotation.page_number,
+            "start": list(annotation.start),
+            "end": list(annotation.end),
+            "color": [round(channel, 6) for channel in annotation.color],
+        }
+        if annotation.contents is not None:
+            payload["contents"] = annotation.contents
+        return payload
+
+    def _line_annotations_by_page(self) -> dict[int, tuple[_PDFLineAnnotation, ...]]:
+        """Return PDF line annotations grouped by page in insertion order."""
+        annotations_by_page: dict[int, list[_PDFLineAnnotation]] = {}
+        for annotation in self._pdf_line_annotations:
+            annotations_by_page.setdefault(annotation.page_number, []).append(annotation)
+        return {page_number: tuple(annotations) for page_number, annotations in annotations_by_page.items()}
+
+    @staticmethod
+    def _line_annotation_object(annotation: _PDFLineAnnotation) -> str:
+        """Return a PDF line annotation object dictionary."""
+        left, bottom, right, top = annotation.rect
+        rect = f"[{_number(left)} {_number(bottom)} {_number(right)} {_number(top)}]"
+        line = f"[{_number(annotation.start[0])} {_number(annotation.start[1])} {_number(annotation.end[0])} {_number(annotation.end[1])}]"
+        color = f"[{_number(annotation.color[0])} {_number(annotation.color[1])} {_number(annotation.color[2])}]"
+        contents = f" /Contents ({_escape_pdf_string(annotation.contents)})" if annotation.contents is not None else ""
+        return f"<< /Type /Annot /Subtype /Line /Rect {rect} /L {line} /C {color} /Border [0 0 1]{contents} >>"
+
     def create_pdf(self, filepath: str | os.PathLike[str]) -> None:
         """Create a deterministic PDF file at the requested path."""
         path = _normalize_output_filepath(filepath)
@@ -3022,6 +3177,7 @@ class DocumentPDF(Document):
         highlight_annotations_by_page = self._highlight_annotations_by_page()
         square_annotations_by_page = self._square_annotations_by_page()
         circle_annotations_by_page = self._circle_annotations_by_page()
+        line_annotations_by_page = self._line_annotations_by_page()
         page_plans = []
         for page_number, (page, content) in enumerate(rendered_pages, start=1):
             content_bytes = content.encode("latin-1")
@@ -3035,6 +3191,7 @@ class DocumentPDF(Document):
                 + tuple(highlight_annotations_by_page.get(page_number, ()))
                 + tuple(square_annotations_by_page.get(page_number, ()))
                 + tuple(circle_annotations_by_page.get(page_number, ()))
+                + tuple(line_annotations_by_page.get(page_number, ()))
             )
             annotation_ids = list(range(object_id + 2, object_id + 2 + len(page_annotations)))
             object_id += 2 + len(page_annotations)
@@ -3073,6 +3230,8 @@ class DocumentPDF(Document):
                     writer.set_object(annotation_id, self._square_annotation_object(link))
                 elif isinstance(link, _PDFCircleAnnotation):
                     writer.set_object(annotation_id, self._circle_annotation_object(link))
+                elif isinstance(link, _PDFLineAnnotation):
+                    writer.set_object(annotation_id, self._line_annotation_object(link))
                 else:  # pragma: no cover - page plans are built from closed annotation lists.
                     raise TypeError(f"Unsupported PDF annotation type: {link.__class__.__name__}")
 
@@ -3285,6 +3444,15 @@ class DocumentPDF(Document):
             color = _pdf_required_field(annotation_payload, "color", "DocumentPDF circle annotation")
             contents = annotation_payload.get("contents")
             document.add_circle_annotation(page_number, rect, color=color, contents=contents)  # type: ignore[arg-type]
+        for annotation_payload in _pdf_optional_sequence(payload, "line_annotations", "DocumentPDF"):
+            if not isinstance(annotation_payload, Mapping):
+                raise TypeError("DocumentPDF line_annotations entries must be mappings")
+            page_number = _pdf_required_field(annotation_payload, "page_number", "DocumentPDF line annotation")
+            start = _pdf_required_field(annotation_payload, "start", "DocumentPDF line annotation")
+            end = _pdf_required_field(annotation_payload, "end", "DocumentPDF line annotation")
+            color = _pdf_required_field(annotation_payload, "color", "DocumentPDF line annotation")
+            contents = annotation_payload.get("contents")
+            document.add_line_annotation(page_number, start, end, color=color, contents=contents)  # type: ignore[arg-type]
         return document
 
     @property
@@ -3335,6 +3503,8 @@ class DocumentPDF(Document):
             document_payload["circle_annotations"] = [
                 self._circle_annotation_payload(annotation) for annotation in self._pdf_circle_annotations
             ]
+        if self._pdf_line_annotations:
+            document_payload["line_annotations"] = [self._line_annotation_payload(annotation) for annotation in self._pdf_line_annotations]
         return {"DocumentPDF": document_payload}
 
 

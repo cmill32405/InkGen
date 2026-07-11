@@ -1026,6 +1026,223 @@ def test_document_pdf_rejects_invalid_serialized_circle_annotation_metadata() ->
     assert recreated.circle_annotations() == ({"page_number": 1, "rect": [1.0, 2.0, 30.0, 40.0], "color": [0.2, 0.4, 0.6]},)
 
 
+@pytest.mark.condition("PDF-DOC-LINE-ANNOTATION-P3")
+def test_document_pdf_emits_line_annotations_and_round_trips() -> None:
+    """PDF-DOC-LINE-ANNOTATION-P3: Line annotations render and round-trip."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    document.add_page()
+    document.add_circle_annotation(1, [0.0, 0.0, 4.0, 4.0])
+    document.add_line_annotation(1, [5.0, 6.0], [20.0, 25.0], color="#336699", contents="Leader (A)")
+    document.add_line_annotation(1, [20.0, 25.0], [5.0, 6.0], color="#663399")
+    document.add_line_annotation(2, [0.0, 0.0], [100.0, 0.0])
+    document.add_line_annotation(2, [100.0, 0.0], [100.0, 80.0], color="#00ff00")
+    document.add_line_annotation(2, [0.0, 80.0], [100.0, 80.0], color="#0000ff")
+    document.add_line_annotation(2, [10.0, 10.0], [20.0, 20.0], color=[0.1234564, 0.2, 0.3])
+
+    payload = document.to_pdf_bytes()
+    recreated = DocumentPDF.create_from_dict(document.parameters)
+    objects = _pdf_objects(payload)
+    annotation_refs = _annotation_refs_by_page(payload)
+    annotation_ids = [annotation_id for page_refs in annotation_refs for annotation_id in page_refs]
+
+    assert payload == document.to_pdf_bytes()
+    assert [len(page_refs) for page_refs in annotation_refs] == [3, 4]
+    assert b"/Subtype /Circle" in objects[annotation_ids[0]]
+    assert b"/Subtype /Line" in objects[annotation_ids[1]]
+    assert b"/Rect [4 5 21 26]" in objects[annotation_ids[1]]
+    assert b"/L [5 6 20 25]" in objects[annotation_ids[1]]
+    assert b"/C [0.2 0.4 0.6]" in objects[annotation_ids[1]]
+    assert b"/Border [0 0 1]" in objects[annotation_ids[1]]
+    assert b"/Contents (Leader \\(A\\))" in objects[annotation_ids[1]]
+    assert b"/Subtype /Line" in objects[annotation_ids[2]]
+    assert b"/Rect [4 5 21 26]" in objects[annotation_ids[2]]
+    assert b"/L [20 25 5 6]" in objects[annotation_ids[2]]
+    assert b"/Subtype /Line" in objects[annotation_ids[3]]
+    assert b"/Rect [0 0 100 1]" in objects[annotation_ids[3]]
+    assert b"/L [0 0 100 0]" in objects[annotation_ids[3]]
+    assert b"/C [1 0 0]" in objects[annotation_ids[3]]
+    assert b"/Subtype /Line" in objects[annotation_ids[3]]
+    assert b"/Subtype /Line" in objects[annotation_ids[4]]
+    assert b"/Rect [99 0 100 80]" in objects[annotation_ids[4]]
+    assert b"/L [100 0 100 80]" in objects[annotation_ids[4]]
+    assert b"/Subtype /Line" in objects[annotation_ids[5]]
+    assert b"/Rect [0 79 100 80]" in objects[annotation_ids[5]]
+    assert b"/L [0 80 100 80]" in objects[annotation_ids[5]]
+    assert b"/Subtype /Line" in objects[annotation_ids[6]]
+    assert b"/C [0.123456 0.2 0.3]" in objects[annotation_ids[6]]
+    assert sorted(objects) == list(range(1, max(objects) + 1))
+    assert document.line_annotations() == (
+        {"page_number": 1, "start": [5.0, 6.0], "end": [20.0, 25.0], "color": [0.2, 0.4, 0.6], "contents": "Leader (A)"},
+        {"page_number": 1, "start": [20.0, 25.0], "end": [5.0, 6.0], "color": [0.4, 0.2, 0.6]},
+        {"page_number": 2, "start": [0.0, 0.0], "end": [100.0, 0.0], "color": [1.0, 0.0, 0.0]},
+        {"page_number": 2, "start": [100.0, 0.0], "end": [100.0, 80.0], "color": [0.0, 1.0, 0.0]},
+        {"page_number": 2, "start": [0.0, 80.0], "end": [100.0, 80.0], "color": [0.0, 0.0, 1.0]},
+        {"page_number": 2, "start": [10.0, 10.0], "end": [20.0, 20.0], "color": [0.123456, 0.2, 0.3]},
+    )
+    assert recreated.parameters == document.parameters
+    assert recreated.to_pdf_bytes() == payload
+
+
+@pytest.mark.condition("PDF-DOC-LINE-ANNOTATION-P3")
+def test_document_pdf_rejects_invalid_line_annotation_metadata() -> None:
+    """PDF-DOC-LINE-ANNOTATION-P3: Line metadata fails at explicit boundaries."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+
+    with pytest.raises(ValueError, match="Position must correlate"):
+        document.add_line_annotation(2, [0.0, 0.0], [1.0, 1.0])
+    with pytest.raises(TypeError):
+        document.add_line_annotation(1, [0.0, 0.0], [1.0, 1.0], "#ff0000")  # type: ignore[misc]
+    for point in [object(), "ab", b"ab", [0.0], [0.0, 1.0, 2.0]]:
+        with pytest.raises(TypeError, match="two-number sequence"):
+            document.add_line_annotation(1, point, [1.0, 1.0])  # type: ignore[arg-type]
+        with pytest.raises(TypeError, match="two-number sequence"):
+            document.add_line_annotation(1, [1.0, 1.0], point)  # type: ignore[arg-type]
+
+    invalid_points = [
+        "0 0",
+        [0.0],
+        [True, 0.0],
+        [0.0, float("nan")],
+        [-1.0, 0.0],
+        [0.0, -0.5],
+        [101.0, 0.0],
+        [0.0, 81.0],
+    ]
+    for point in invalid_points:
+        with pytest.raises((TypeError, ValueError)):
+            document.add_line_annotation(1, point, [1.0, 1.0])  # type: ignore[arg-type]
+        assert document.line_annotations() == ()
+        with pytest.raises((TypeError, ValueError)):
+            document.add_line_annotation(1, [1.0, 1.0], point)  # type: ignore[arg-type]
+        assert document.line_annotations() == ()
+
+    with pytest.raises(ValueError, match="endpoints must be distinct"):
+        document.add_line_annotation(1, [1.0, 1.0], [1.0, 1.0])
+    assert document.line_annotations() == ()
+
+    invalid_colors = [
+        "",
+        "red",
+        "#12345",
+        "#12345g",
+        "#3366990",
+        None,
+        object(),
+        [1.0, 0.0],
+        [1.0, 0.0, 0.0, 0.0],
+        [1.0, True, 0.0],
+        [-0.1, 0.0, 0.0],
+        [1.1, 0.0, 0.0],
+        [float("nan"), 0.0, 0.0],
+    ]
+    for color in invalid_colors:
+        with pytest.raises((TypeError, ValueError)):
+            document.add_line_annotation(1, [0.0, 0.0], [1.0, 1.0], color=color)  # type: ignore[arg-type]
+        assert document.line_annotations() == ()
+
+    for contents in [object(), "", "not latin \u0100"]:
+        with pytest.raises((TypeError, ValueError)):
+            document.add_line_annotation(1, [0.0, 0.0], [1.0, 1.0], contents=contents)  # type: ignore[arg-type]
+        assert document.line_annotations() == ()
+
+    document.add_line_annotation(1, [0.0, 0.0], [1.0, 1.0])
+    document.clear_line_annotations()
+
+    assert document.line_annotations() == ()
+    assert "line_annotations" not in document.parameters["DocumentPDF"]
+    assert b"/Annots" not in document.to_pdf_bytes()
+
+
+@pytest.mark.condition("PDF-DOC-LINE-ANNOTATION-P3")
+def test_document_pdf_line_annotations_track_page_insertions_and_removals() -> None:
+    """PDF-DOC-LINE-ANNOTATION-P3: Line annotations stay aligned with page mutations."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    document.add_page()
+    document.add_page()
+    document.add_line_annotation(1, [1.0, 1.0], [10.0, 10.0], color="#ff0000")
+    document.add_line_annotation(2, [2.0, 2.0], [20.0, 20.0], color="#00ff00", contents="middle")
+    document.add_line_annotation(3, [3.0, 3.0], [30.0, 30.0], color="#0000ff")
+
+    document.add_page(position=2)
+
+    assert document.line_annotations() == (
+        {"page_number": 1, "start": [1.0, 1.0], "end": [10.0, 10.0], "color": [1.0, 0.0, 0.0]},
+        {
+            "page_number": 3,
+            "start": [2.0, 2.0],
+            "end": [20.0, 20.0],
+            "color": [0.0, 1.0, 0.0],
+            "contents": "middle",
+        },
+        {"page_number": 4, "start": [3.0, 3.0], "end": [30.0, 30.0], "color": [0.0, 0.0, 1.0]},
+    )
+
+    document.remove_page(3)
+
+    assert document.line_annotations() == (
+        {"page_number": 1, "start": [1.0, 1.0], "end": [10.0, 10.0], "color": [1.0, 0.0, 0.0]},
+        {"page_number": 3, "start": [3.0, 3.0], "end": [30.0, 30.0], "color": [0.0, 0.0, 1.0]},
+    )
+
+    document.remove_page(1)
+
+    assert document.line_annotations() == ({"page_number": 2, "start": [3.0, 3.0], "end": [30.0, 30.0], "color": [0.0, 0.0, 1.0]},)
+
+
+@pytest.mark.condition("PDF-DOC-LINE-ANNOTATION-P3")
+def test_document_pdf_line_annotations_use_value_equality_for_large_page_removal() -> None:
+    """PDF-DOC-LINE-ANNOTATION-P3: Line removal uses page-number value equality."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    for _ in range(260):
+        document.add_page()
+    document.add_line_annotation(1, [1.0, 1.0], [10.0, 10.0])
+    document.add_line_annotation(int("260"), [2.0, 2.0], [20.0, 20.0])
+
+    document.remove_page(int("260"))
+
+    assert document.pages == 259
+    assert document.line_annotations() == ({"page_number": 1, "start": [1.0, 1.0], "end": [10.0, 10.0], "color": [1.0, 0.0, 0.0]},)
+
+
+@pytest.mark.condition("PDF-DOC-LINE-ANNOTATION-P3")
+def test_document_pdf_rejects_invalid_serialized_line_annotation_metadata() -> None:
+    """PDF-DOC-LINE-ANNOTATION-P3: Serialized lines validate before rendering."""
+    document = DocumentPDF(Canvas(100.0, 80.0))
+    document.add_page()
+    document.add_line_annotation(1, [1.0, 2.0], [30.0, 40.0], color="#336699", contents="note")
+
+    invalid_payloads = []
+    for mutator in [
+        lambda data: data["DocumentPDF"].__setitem__("line_annotations", "bad"),
+        lambda data: data["DocumentPDF"].__setitem__("line_annotations", [object()]),
+        lambda data: data["DocumentPDF"]["line_annotations"][0].pop("page_number"),
+        lambda data: data["DocumentPDF"]["line_annotations"][0].pop("start"),
+        lambda data: data["DocumentPDF"]["line_annotations"][0].pop("end"),
+        lambda data: data["DocumentPDF"]["line_annotations"][0].pop("color"),
+        lambda data: data["DocumentPDF"]["line_annotations"][0].__setitem__("page_number", 2),
+        lambda data: data["DocumentPDF"]["line_annotations"][0].__setitem__("start", [0.0]),
+        lambda data: data["DocumentPDF"]["line_annotations"][0].__setitem__("end", [1.0, 2.0]),
+        lambda data: data["DocumentPDF"]["line_annotations"][0].__setitem__("color", [2.0, 0.0, 0.0]),
+        lambda data: data["DocumentPDF"]["line_annotations"][0].__setitem__("contents", ""),
+    ]:
+        payload = deepcopy(document.parameters)
+        mutator(payload)
+        invalid_payloads.append(payload)
+
+    for payload in invalid_payloads:
+        with pytest.raises((TypeError, ValueError)):
+            DocumentPDF.create_from_dict(payload)
+
+    missing_optional_payload = deepcopy(document.parameters)
+    missing_optional_payload["DocumentPDF"]["line_annotations"][0].pop("contents")
+    recreated = DocumentPDF.create_from_dict(missing_optional_payload)
+
+    assert recreated.line_annotations() == ({"page_number": 1, "start": [1.0, 2.0], "end": [30.0, 40.0], "color": [0.2, 0.4, 0.6]},)
+
+
 @pytest.mark.condition("PDF-DOC-TEXT-ANNOTATION-P3")
 def test_document_pdf_rejects_invalid_serialized_text_annotation_metadata() -> None:
     """PDF-DOC-TEXT-ANNOTATION-P3: Serialized text annotations validate before rendering."""
