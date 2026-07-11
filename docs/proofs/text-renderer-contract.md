@@ -40,6 +40,10 @@ Affected surface:
 - `src/InkGen/dxf_generator.py`: DXF `TEXT` entity output.
 - `tests/test_text_contract.py`: validation, renderer, materialization, and
   live DXF evidence.
+- `tests/mutation/pdf_text_alignment_cosmic_ray.toml`: scoped mutation gate for
+  TEXT-PDF-ALIGN-P2.
+- `tests/mutation/filter_pdf_text_alignment_work_items.py`: proof-critical
+  mutation filter for PDF text-line alignment.
 
 Incoming dependencies:
 
@@ -144,6 +148,8 @@ ADR/rule impact:
   when rendered inside `DocumentPDF`.
 - `TextPDF.generate_pdf()` now normalizes CRLF/CR/LF line breaks and emits one
   positioned PDF text-showing operation per line using `TextStyle.line_spacing`.
+- `TextPDF.generate_pdf()` now applies `TextStyle.text_align` to each emitted
+  PDF text line using InkGen's deterministic text-width estimate.
 - `DocumentPDF.to_pdf_bytes()` now emits built-in PDF Standard font resources
   for Helvetica, Times, and Courier family classes, including bold and italic
   variants, instead of always binding `/F1` to Helvetica.
@@ -170,6 +176,7 @@ ADR/rule impact:
 | Negative text anchor | Preserve as valid text placement | PO-TEXT-001 | valid-position tests and policy note | killed/equivalent |
 | SVG output | Emit exact escaped text element | PO-TEXT-003 | `test_text_svg_emits_exact_escaped_text` | killed/equivalent |
 | PDF output | Emit exact escaped text object and one positioned text operation per normalized line | PO-TEXT-004 | `test_text_pdf_emits_exact_text_object_and_escapes_string`, `test_text_pdf_multiline_uses_line_spacing_and_normalizes_line_breaks` | killed/equivalent |
+| PDF text alignment | Apply start, center, and end alignment to each normalized PDF text line | PO-TEXT-013 | `test_text_pdf_applies_alignment_to_each_line` | pass with equivalent survivors |
 | PDF defensive defaults | Use black and 10-point defaults for incomplete internals | PO-TEXT-004 | `test_text_pdf_uses_black_and_ten_point_defensive_defaults` | killed |
 | PDF Standard font resources | Map built-in family/style/weight classes to deterministic page resources | PO-TEXT-010 | `test_document_pdf_maps_text_styles_to_standard_font_resources`, `test_document_pdf_maps_standard_font_variants`, `test_document_pdf_numeric_weight_threshold_keeps_599_regular`, `test_document_pdf_empty_page_has_no_font_resource_dictionary` | killed |
 | PDF embedded named font resources | Embed named installed fonts with widths, descriptors, font-file streams, and deterministic reuse | PO-TEXT-011 | `test_document_pdf_embeds_named_installed_font_resources`, `test_document_pdf_reuses_embedded_font_resources_across_sizes`, `test_pdf_embedded_font_helpers_cover_missing_glyphs_and_open_type_streams`, `test_pdf_embedded_font_lookup_falls_back_for_missing_font_files`, `test_font_preserves_requested_family_for_renderer_policy` | killed/equivalent |
@@ -187,7 +194,7 @@ ADR/rule impact:
 | Test class | Applicable? | Reason | Evidence |
 |---|---|---|---|
 | Unit | yes | Validation and geometry access are deterministic. | TEXT-P1 tests named above |
-| Behavioral/condition | yes | TEXT-P1 defines text behavior across validation and renderers. | Tests are marked `@pytest.mark.condition("TEXT-P1")`. |
+| Behavioral/condition | yes | TEXT-P1 defines text behavior across validation and renderers; TEXT-PDF-ALIGN-P2 defines PDF text-line alignment behavior. | Tests are marked `@pytest.mark.condition("TEXT-P1")` and `@pytest.mark.condition("TEXT-PDF-ALIGN-P2")`. |
 | Failure-mode | yes | Invalid text anchors must fail before rendering. | Invalid-boundary test |
 | Integration/live-path | yes | DXF proof exercises `DXFDocument.add_group()`. | DXF test |
 | Contract/API compatibility | yes | Valid text preserves anchor and serialization. | Geometry and round-trip tests |
@@ -211,6 +218,8 @@ Proof-critical mutation targets:
   text operators should fail exact output tests.
 - Changing PDF line-break normalization, line-spacing offsets, or per-line
   escaping should fail multiline PDF output tests.
+- Changing PDF text-line width or alignment-origin calculation should fail
+  TEXT-PDF-ALIGN-P2 exact PDF matrix tests.
 - Removing or misrouting PDF `/ToUnicode` CMaps should fail font-resource
   extraction-map tests.
 - Redirecting `TextDrawing.to_component()` should fail materialization tests.
@@ -281,6 +290,23 @@ Current result:
     `_coerce_point_pair(value: object, /, name: str)`. All production callers
     pass `value` positionally and `name` by keyword, so this does not change the
     reachable public API behavior under the current helper-private contract.
+- `TEXT-PDF-ALIGN-P2` continuation:
+  `tests/mutation/pdf_text_alignment_cosmic_ray.toml`, filtered by
+  `tests/mutation/filter_pdf_text_alignment_work_items.py`: 5,797 raw work
+  items filtered to 129 proof-critical items; 123 killed and 6 survived as
+  documented equivalents.
+- Equivalent survivors:
+  - `_pdf_text_aligned_x()` comparisons from `==` to `is` for `"center"` and
+    `"end"` are equivalent for the public `TextStyle` domain because
+    `TextStyle.text_align` stores normalized literal string values.
+  - `_pdf_text_aligned_x()` comparisons from `==` to `<=` for `"center"` and
+    `"end"` are equivalent for the normalized three-value domain: only
+    `"center"` reaches the center branch, only `"end"` reaches the end branch,
+    and `"start"` falls through.
+  - `TextPDF.generate_pdf()` fallback `line_spacing` default mutations from
+    `1.0` to `0.0` or `2.0` are equivalent for the valid `TextStyle` domain
+    because `TextStyle` construction always exposes a validated
+    `line_spacing` attribute.
 
 ## PO-TEXT-001: Valid Text Geometry Is Preserved
 
@@ -379,6 +405,41 @@ complex shaping, vertical text, and glyph subsetting remain out of scope.
 
 Proven for the stated domain after focused tests and scoped mutation, with
 equivalent default-fallback survivors documented above.
+
+## PO-TEXT-013: PDF Applies Text Alignment Per Line
+
+### Claim
+
+`TextPDF.generate_pdf()` positions each normalized text line according to the
+validated `TextStyle.text_align` value. `start` alignment uses the anchor x
+coordinate directly, `center` subtracts half of the line width, and `end`
+subtracts the full line width. Each line uses its own width, so multiline text
+with different line lengths does not reuse the first line's offset.
+
+### Domain
+
+All `TextPDF` instances with valid text anchors and `TextStyle.text_align`
+values admitted by `TextStyle`: `start`/`left`, `center`/`middle`, and
+`end`/`right`. The width model is InkGen's deterministic PDF text estimate:
+`font_size * 0.6 * character_count`.
+
+### Proof Method
+
+The alignment test renders multiline text with center and right alignment,
+using different line lengths and a trailing empty line. It asserts the exact
+`Tm` x origins and the emitted `Tj` lines. A mutation gate targets the
+alignment helper and `TextPDF.generate_pdf()` line-origin path.
+
+### Counterexamples And Exclusions
+
+This obligation does not prove automatic wrapping, tabs, columns, kerning,
+glyph-specific metrics, complex-script shaping, vertical text, rich text runs,
+or Unicode/CID font encoding.
+
+### Conclusion
+
+Proven for explicit-line PDF text alignment in the stated domain, with
+equivalent mutation survivors documented above.
 
 ## PO-TEXT-010: PDF Uses Standard Font Resources From TextStyle
 

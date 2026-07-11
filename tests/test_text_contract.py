@@ -137,6 +137,43 @@ def test_text_pdf_multiline_uses_line_spacing_and_normalizes_line_breaks(text_st
     assert all("\\r" not in operator and "\\n" not in operator for operator in operators if operator.endswith("Tj"))
 
 
+@pytest.mark.condition("TEXT-PDF-ALIGN-P2")
+@pytest.mark.parametrize(
+    ("alignment", "expected_matrices"),
+    [
+        (
+            "center",
+            [
+                "1 0 0 -1 16.7 4 Tm",
+                "1 0 0 -1 10.1 15 Tm",
+                "1 0 0 -1 20 26 Tm",
+            ],
+        ),
+        (
+            "right",
+            [
+                "1 0 0 -1 13.4 4 Tm",
+                "1 0 0 -1 0.2 15 Tm",
+                "1 0 0 -1 20 26 Tm",
+            ],
+        ),
+    ],
+)
+def test_text_pdf_applies_alignment_to_each_line(
+    text_style: TextStyle,
+    alignment: str,
+    expected_matrices: list[str],
+) -> None:
+    """TEXT-PDF-ALIGN-P2: TextPDF aligns each normalized line from its own width."""
+    text_style.font = Font(size=11.0)
+    text_style.text_align = alignment
+
+    operators = TextPDF("A\nAAA\n", (20.0, 4.0), text_style).generate_pdf().splitlines()
+
+    assert [operator for operator in operators if operator.endswith(" Tm")] == expected_matrices
+    assert [operator for operator in operators if operator.endswith("Tj")] == ["(A) Tj", "(AAA) Tj", "() Tj"]
+
+
 @pytest.mark.condition("TEXT-P1")
 def test_text_pdf_uses_black_and_ten_point_defensive_defaults(text_style: TextStyle) -> None:
     """TEXT-P1: TextPDF uses deterministic defaults if style internals are incomplete."""

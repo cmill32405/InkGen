@@ -1778,6 +1778,21 @@ class CirclePDF(SingleDimensionDrawingComponent, PDFGeneratorInterface):
         return _drawing_pdf(self.style, path, context=context)
 
 
+def _pdf_text_line_width(line: str, font_size: float) -> float:
+    """Return InkGen's deterministic PDF text-line width estimate."""
+    return len(line) * font_size * 0.6
+
+
+def _pdf_text_aligned_x(anchor_x: float, line: str, font_size: float, text_align: str) -> float:
+    """Return the PDF text origin for an InkGen text alignment value."""
+    line_width = _pdf_text_line_width(line, font_size)
+    if text_align == "center":
+        return anchor_x - (line_width / 2.0)
+    if text_align == "end":
+        return anchor_x - line_width
+    return anchor_x
+
+
 class TextPDF(TextComponent, PDFGeneratorInterface):
     """PDF representation of a text component."""
 
@@ -1804,11 +1819,13 @@ class TextPDF(TextComponent, PDFGeneratorInterface):
         size = float(getattr(self.style.font, "size", 10.0))
         x, y = self.position
         line_spacing = float(getattr(self.style, "line_spacing", 1.0))
+        text_align = getattr(self.style, "text_align", "start") or "start"
         lines = self.text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
         text_operators: list[str] = []
         for index, line in enumerate(lines):
             line_y = y + (index * size * line_spacing)
-            text_operators.append(f"1 0 0 -1 {_number(x)} {_number(line_y)} Tm")
+            line_x = _pdf_text_aligned_x(x, line, size, text_align)
+            text_operators.append(f"1 0 0 -1 {_number(line_x)} {_number(line_y)} Tm")
             text_operators.append(f"({_escape_pdf_string(line)}) Tj")
         font_resource = context.font_resource_name(self.style) if context is not None else "F1"
         return "\n".join(

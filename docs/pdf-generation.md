@@ -55,7 +55,7 @@ creation system are:
 | Area | Current status | Needed for full-feature parity |
 |---|---|---|
 | Text encoding | WinAnsi literal strings, installed-font embedding, and printable WinAnsi `/ToUnicode` CMaps | Unicode/CID fonts, glyph subsetting, and full complex-script text extraction maps |
-| Text layout | Positioned text components with explicit line-break output using `TextStyle.line_spacing` | Automatic wrapping, alignment across line boxes, tabs, columns, kerning, and complex-script shaping |
+| Text layout | Positioned text components with explicit line-break output using `TextStyle.line_spacing` and per-line `TextStyle.text_align` | Automatic wrapping, tabs, columns, kerning, and complex-script shaping |
 | Graphics state | Basic stroke/fill primitives, rectangular and closed path group clipping with nonzero/even-odd clip rules, group blend modes, stroke/fill alpha ExtGState resources, and stroke dash/cap/join/miter operators | Opacity groups, gradients, and patterns |
 | Document structure | Pages, deterministic metadata, page labels, Crop/Bleed/Trim/Art boxes, flat and arbitrary-depth nested outlines/bookmarks, URI links, internal page links, named destinations, named-destination links, text annotations, highlight annotations, square annotations, circle annotations, and line annotations | Other generic annotations and tagged PDF structure |
 | Color/profile support | Device RGB/CMYK and JPEG ICC profile objects | Broader calibrated color spaces and selectable PDF/A-style archival constraints |
