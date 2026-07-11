@@ -61,7 +61,13 @@ from InkGen.svg_generator import LabelGenerator, SegmentGenerator
 PDF_FIXED_DATE = "D:20000101000000Z"
 PDF_GENERIC_FONT_FAMILIES = {"serif", "sans-serif", "monospace", "cursive", "fantasy"}
 PDF_WINANSI_FIRST_CHAR = 32
-PDF_WINANSI_LAST_CHAR = 126
+PDF_WINANSI_LAST_CHAR = 255
+PDF_WINANSI_UNDEFINED_BYTES = frozenset({0x7F, 0x81, 0x8D, 0x8F, 0x90, 0x9D})
+PDF_WINANSI_BYTE_TO_UNICODE = {
+    byte: ord(bytes([byte]).decode("cp1252"))
+    for byte in range(PDF_WINANSI_FIRST_CHAR, PDF_WINANSI_LAST_CHAR + 1)
+    if byte not in PDF_WINANSI_UNDEFINED_BYTES
+}
 PDF_PAGE_BOX_NAMES = {
     "crop": "CropBox",
     "cropbox": "CropBox",
@@ -460,14 +466,35 @@ def _coerce_pdf_text_content(value: object) -> str:
         text = str(value)
     else:
         raise TypeError("PDF text must be a string or scalar value")
-    for character in text:
+    try:
+        encoded = text.encode("cp1252")
+    except UnicodeEncodeError as exc:
+        raise ValueError("PDF text currently supports WinAnsi characters plus line breaks") from exc
+    for index, character in enumerate(text):
+        byte = encoded[index]
         if character in {"\r", "\n"}:
             continue
-        codepoint = ord(character)
-        if PDF_WINANSI_FIRST_CHAR <= codepoint <= PDF_WINANSI_LAST_CHAR:
+        if byte in PDF_WINANSI_BYTE_TO_UNICODE:
             continue
-        raise ValueError("PDF text currently supports printable ASCII characters plus line breaks")
+        raise ValueError("PDF text currently supports WinAnsi characters plus line breaks")
     return text
+
+
+def _escape_pdf_text_string(value: str) -> str:
+    """Escape a WinAnsi text value for a PDF literal string."""
+    escaped: list[str] = []
+    for byte in value.encode("cp1252"):
+        if byte == 0x28:
+            escaped.append(r"\(")
+        elif byte == 0x29:
+            escaped.append(r"\)")
+        elif byte == 0x5C:
+            escaped.append(r"\\")
+        elif 0x20 <= byte <= 0x7E:
+            escaped.append(chr(byte))
+        else:
+            escaped.append(f"\\{byte:03o}")
+    return "".join(escaped)
 
 
 def _coerce_pdf_page_label(label: object) -> str:
@@ -966,7 +993,10 @@ def _pdf_embedded_font_resource(font_file: str) -> _PDFFontResource:
 
 def _pdf_glyph_width(codepoint: int, cmap: dict[int, str], metrics: Mapping[str, tuple[int, int]], units_per_em: int) -> int:
     """Return a 1000-unit PDF width for one WinAnsi codepoint."""
-    glyph_name = cmap.get(codepoint)
+    unicode_codepoint = PDF_WINANSI_BYTE_TO_UNICODE.get(codepoint)
+    if unicode_codepoint is None:
+        return 0
+    glyph_name = cmap.get(unicode_codepoint)
     if glyph_name is None:
         return 0
     return _pdf_font_unit(metrics.get(glyph_name, (0, 0))[0], units_per_em)
@@ -1008,7 +1038,12 @@ def _pdf_font_descriptor_object(resource: _PDFFontResource, font_file_object_id:
 
 def _pdf_tounicode_cmap_object() -> bytes:
     """Build a deterministic ToUnicode CMap for InkGen's WinAnsi text domain."""
-    entries = "\n".join(f"<{code:02X}> <{code:04X}>" for code in range(PDF_WINANSI_FIRST_CHAR, PDF_WINANSI_LAST_CHAR + 1))
+    entries = [f"<{byte:02X}> <{codepoint:04X}>" for byte, codepoint in PDF_WINANSI_BYTE_TO_UNICODE.items()]
+    blocks = []
+    for index in range(0, len(entries), 100):
+        chunk = entries[index : index + 100]
+        blocks.append(f"{len(chunk)} beginbfchar\n" + "\n".join(chunk) + "\nendbfchar")
+    bfchar_blocks = "\n".join(blocks)
     payload = (
         "/CIDInit /ProcSet findresource begin\n"
         "12 dict begin\n"
@@ -1019,9 +1054,7 @@ def _pdf_tounicode_cmap_object() -> bytes:
         "1 begincodespacerange\n"
         f"<{PDF_WINANSI_FIRST_CHAR:02X}> <{PDF_WINANSI_LAST_CHAR:02X}>\n"
         "endcodespacerange\n"
-        f"{PDF_WINANSI_LAST_CHAR - PDF_WINANSI_FIRST_CHAR + 1} beginbfchar\n"
-        f"{entries}\n"
-        "endbfchar\n"
+        f"{bfchar_blocks}\n"
         "endcmap\n"
         "CMapName currentdict /CMap defineresource pop\n"
         "end\n"
@@ -1873,7 +1906,7 @@ class TextPDF(TextComponent, PDFGeneratorInterface):
             line_y = y + (index * size * line_spacing)
             line_x = _pdf_text_aligned_x(x, line, size, text_align)
             text_operators.append(f"1 0 0 -1 {_number(line_x)} {_number(line_y)} Tm")
-            text_operators.append(f"({_escape_pdf_string(line)}) Tj")
+            text_operators.append(f"({_escape_pdf_text_string(line)}) Tj")
         font_resource = context.font_resource_name(self.style) if context is not None else "F1"
         return "\n".join(
             [

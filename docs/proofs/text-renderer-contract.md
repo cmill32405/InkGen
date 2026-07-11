@@ -156,10 +156,11 @@ ADR/rule impact:
 - `DocumentPDF.to_pdf_bytes()` now embeds named installed TrueType/OpenType font
   files with WinAnsi widths, font descriptors, and deterministic resource reuse.
 - `DocumentPDF.to_pdf_bytes()` now attaches deterministic `/ToUnicode` CMaps to
-  used Standard 14 and embedded WinAnsi font resources for printable ASCII text
+  used Standard 14 and embedded WinAnsi font resources for defined WinAnsi text
   extraction.
-- `TextPDF` now rejects text outside the mapped printable ASCII PDF text domain
-  at construction, serialized hydration, and render time.
+- `TextPDF` now accepts defined CP1252/WinAnsi text, octal-escapes non-ASCII
+  bytes, and rejects text outside the mapped WinAnsi PDF text domain at
+  construction, serialized hydration, and render time.
 - DXF text export is proven to emit a `0/TEXT` entity pair and apply optional
   canvas-height Y inversion.
 - `TextDrawing.__post_init__()` now stores normalized scalar text strings and
@@ -182,8 +183,8 @@ ADR/rule impact:
 | PDF defensive defaults | Use black and 10-point defaults for incomplete internals | PO-TEXT-004 | `test_text_pdf_uses_black_and_ten_point_defensive_defaults` | killed |
 | PDF Standard font resources | Map built-in family/style/weight classes to deterministic page resources | PO-TEXT-010 | `test_document_pdf_maps_text_styles_to_standard_font_resources`, `test_document_pdf_maps_standard_font_variants`, `test_document_pdf_numeric_weight_threshold_keeps_599_regular`, `test_document_pdf_empty_page_has_no_font_resource_dictionary` | killed |
 | PDF embedded named font resources | Embed named installed fonts with widths, descriptors, font-file streams, and deterministic reuse | PO-TEXT-011 | `test_document_pdf_embeds_named_installed_font_resources`, `test_document_pdf_reuses_embedded_font_resources_across_sizes`, `test_pdf_embedded_font_helpers_cover_missing_glyphs_and_open_type_streams`, `test_pdf_embedded_font_lookup_falls_back_for_missing_font_files`, `test_font_preserves_requested_family_for_renderer_policy` | killed/equivalent |
-| PDF ASCII ToUnicode maps | Attach deterministic CMaps to used Standard 14 and embedded font dictionaries | PO-TEXT-012 | `test_document_pdf_standard_fonts_emit_tounicode_cmaps`, `test_document_pdf_maps_text_styles_to_standard_font_resources`, `test_document_pdf_embeds_named_installed_font_resources` | killed |
-| PDF text encoding boundary | Reject text outside mapped printable ASCII before PDF bytes are emitted | PO-TEXT-014 | `test_text_pdf_accepts_upper_printable_ascii_boundary`, `test_text_pdf_rejects_text_outside_mapped_extraction_domain`, `test_text_pdf_revalidates_text_mutated_after_construction`, `test_text_pdf_hydration_rejects_unmapped_text_payload` | killed |
+| PDF WinAnsi ToUnicode maps | Attach deterministic CMaps to used Standard 14 and embedded font dictionaries | PO-TEXT-012 | `test_document_pdf_standard_fonts_emit_tounicode_cmaps`, `test_document_pdf_maps_text_styles_to_standard_font_resources`, `test_document_pdf_embeds_named_installed_font_resources` | killed |
+| PDF text encoding boundary | Accept defined WinAnsi text and reject text outside the mapped domain before PDF bytes are emitted | PO-TEXT-014 | `test_text_pdf_accepts_upper_printable_ascii_boundary`, `test_text_pdf_escapes_winansi_bytes_for_non_ascii_text`, `test_text_pdf_rejects_text_outside_mapped_extraction_domain`, `test_text_pdf_revalidates_text_mutated_after_construction`, `test_text_pdf_hydration_rejects_unmapped_text_payload` | mutation target |
 | Serialization | Preserve parameters round trip | PO-TEXT-005 | `test_text_primitives_round_trip_parameters` | killed/equivalent |
 | Neutral materialization | Materialize to `TextSVG`/`TextPDF` | PO-TEXT-006 | `test_text_drawing_materializes_svg_and_pdf_components` | killed/equivalent |
 | Neutral scalar text payloads | Normalize to strings before public state is exposed | PO-TEXT-008 | `test_text_drawing_normalizes_scalar_text_before_materialization` | killed |
@@ -276,8 +277,14 @@ Current result:
     `line_spacing` attribute.
 - `TEXT-PDF-ENCODING-P3` continuation:
   `tests/mutation/pdf_text_encoding_cosmic_ray.toml`, filtered by
-  `tests/mutation/filter_pdf_text_encoding_work_items.py`: 6,098 raw work
-  items filtered to 22 proof-critical items; 22 killed and 0 survived.
+  `tests/mutation/filter_pdf_text_encoding_work_items.py`: 6,156 raw work
+  items filtered to 90 proof-critical items; 88 killed and 2 survived as
+  documented equivalents.
+- Equivalent survivors:
+  - `_pdf_glyph_width()` fallback tuple mutations from `(0, 0)` to `(0, -1)`
+    or `(0, 1)` are equivalent because the helper reads only index `0`, the
+    glyph advance width. The second tuple element is the left-side bearing and
+    is not part of the PDF width calculation.
 - Incompetent mutants were invalid boolean/exception/subtype mutations that
   could not run as viable behavioral alternatives.
 - Equivalent survivors:
@@ -521,19 +528,20 @@ Proven for named installed WinAnsi-compatible font resources after focused
 tests and scoped mutation. Full quality gates remain part of the slice
 closeout.
 
-## PO-TEXT-012: PDF Fonts Include ASCII ToUnicode Maps
+## PO-TEXT-012: PDF Fonts Include WinAnsi ToUnicode Maps
 
 ### Claim
 
 `DocumentPDF.to_pdf_bytes()` attaches deterministic `/ToUnicode` CMaps to used
-Standard 14 and embedded WinAnsi font dictionaries so printable ASCII bytes in
+Standard 14 and embedded WinAnsi font dictionaries so defined WinAnsi bytes in
 generated text streams have explicit Unicode extraction mappings.
 
 ### Domain
 
 Text rendered through `DocumentPDF` with the current InkGen PDF text encoding
-domain: single-byte literal strings over printable ASCII bytes
-`PDF_WINANSI_FIRST_CHAR` to `PDF_WINANSI_LAST_CHAR`.
+domain: single-byte literal strings over defined CP1252/WinAnsi bytes
+`PDF_WINANSI_FIRST_CHAR` to `PDF_WINANSI_LAST_CHAR`, excluding undefined byte
+slots.
 
 ### Proof Method
 
@@ -541,35 +549,36 @@ domain: single-byte literal strings over printable ASCII bytes
 font resource before emitting that font dictionary. `_pdf_font_object()` writes
 the `/ToUnicode <object> 0 R` reference for both Standard 14 and embedded
 TrueType font dictionaries. `_pdf_tounicode_cmap_object()` emits a deterministic
-`beginbfchar` map from each current printable ASCII byte to the same Unicode
-code point. Focused tests assert Standard and embedded font dictionaries include
+`beginbfchar` map from each current WinAnsi byte to its Unicode code point.
+Focused tests assert Standard and embedded font dictionaries include
 `/ToUnicode`, include the expected CMap name, and include representative
-space, `A`, and `~` mappings.
+space, `A`, `~`, euro, and `é` mappings while excluding undefined byte slots.
 
 ### Counterexamples And Exclusions
 
-This does not implement full WinAnsi, Unicode/CID font encoding, glyph
-subsetting, multi-byte text strings, shaping, vertical writing, or CMaps for
-text outside the current printable ASCII range.
+This does not implement Unicode/CID font encoding, glyph subsetting, multi-byte
+text strings, shaping, vertical writing, or CMaps for text outside the current
+defined WinAnsi range.
 
 ### Conclusion
 
 Behavioral tests and scoped mutation prove the Standard 14 and embedded-font
-live paths for the current printable-ASCII extraction-map domain.
+live paths for the current WinAnsi extraction-map domain.
 
 ## PO-TEXT-014: PDF Text Fails Outside Mapped Encoding Domain
 
 ### Claim
 
-`TextPDF` rejects text that cannot be represented by the current PDF text
-operator and extraction-map contract before PDF bytes are emitted.
+`TextPDF` accepts text that can be represented by the current PDF text operator
+and extraction-map contract, and rejects text outside that domain before PDF
+bytes are emitted.
 
 ### Domain
 
-The admitted PDF text-object domain is printable ASCII characters 32 through
-126 plus CR/LF line breaks. CR/LF line breaks are normalized before output.
-Scalar values admitted by `TextComponent.text` are converted to strings before
-the same validation is applied.
+The admitted PDF text-object domain is characters that encode to defined
+CP1252/WinAnsi bytes 32 through 255 plus CR/LF line breaks. CR/LF line breaks
+are normalized before output. Scalar values admitted by `TextComponent.text`
+are converted to strings before the same validation is applied.
 
 ### Proof Method
 
@@ -577,20 +586,23 @@ the same validation is applied.
 `TextPDF.generate_pdf()` runs the same validator again so a post-construction
 mutation through the inherited `text` setter cannot bypass the boundary.
 `TextPDF.create_from_dict()` delegates to the constructor, so serialized
-payloads are covered by the same rule. Tests cover non-ASCII Latin-1,
-non-Latin Unicode, tab/control characters, post-construction mutation, and
-serialized hydration.
+payloads are covered by the same rule. `_escape_pdf_text_string()` converts
+accepted CP1252 bytes to PDF literal-string syntax and octal-escapes non-ASCII
+bytes so the final content stream remains Latin-1 serializable. Tests cover
+non-ASCII WinAnsi output, non-WinAnsi Unicode, tab/control characters,
+post-construction mutation, and serialized hydration.
 
 ### Counterexamples And Exclusions
 
-Full WinAnsi, UTF-16BE literal strings, Type0/CID fonts, glyph subsetting,
-complex-script shaping, rich text runs, vertical writing, and extraction maps
-for text outside bytes 32 through 126 remain out of scope.
+UTF-16BE literal strings, Type0/CID fonts, glyph subsetting, complex-script
+shaping, rich text runs, vertical writing, and extraction maps for text outside
+defined WinAnsi bytes remain out of scope.
 
 ### Conclusion
 
 Focused tests and scoped mutation prove the construction, hydration, and live
-render paths for the declared printable-ASCII PDF text domain.
+render paths for the declared WinAnsi PDF text domain, with the equivalent
+fallback-tuple survivors documented above.
 
 ## PO-TEXT-005: Serialization Preserves Text Parameters
 

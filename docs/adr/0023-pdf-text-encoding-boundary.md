@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted.
+Superseded by ADR-0024.
 
 ## Context
 
@@ -35,7 +35,8 @@ model, width model, and `/ToUnicode` mapping for the expanded domain.
 ## Consequences
 
 - PDF text output can no longer silently emit bytes outside its proven
-  extraction-map domain.
+  extraction-map domain. ADR-0024 expands that domain from printable ASCII to
+  defined CP1252/WinAnsi bytes.
 - `TextPDF.create_from_dict()` and mutated `TextPDF.text` values share the same
   render boundary.
 - Existing ASCII drawing, BOM, and parser-stress fixtures continue to render.

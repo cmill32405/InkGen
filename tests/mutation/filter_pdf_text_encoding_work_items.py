@@ -11,19 +11,31 @@ module_path LIKE '%pdf_generator.py'
 AND (
   (
     definition_name = '_coerce_pdf_text_content'
-    AND start_pos_row BETWEEN 457 AND 471
+    AND start_pos_row BETWEEN 463 AND 479
+  )
+  OR (
+    definition_name = '_escape_pdf_text_string'
+    AND start_pos_row BETWEEN 482 AND 495
+  )
+  OR (
+    definition_name = '_pdf_glyph_width'
+    AND start_pos_row BETWEEN 993 AND 1001
+  )
+  OR (
+    definition_name = '_pdf_tounicode_cmap_object'
+    AND start_pos_row BETWEEN 1038 AND 1065
   )
   OR (
     definition_name = '__init__'
-    AND start_pos_row BETWEEN 1842 AND 1848
+    AND start_pos_row BETWEEN 1874 AND 1880
   )
   OR (
     definition_name = 'create_from_dict'
-    AND start_pos_row BETWEEN 1850 AND 1858
+    AND start_pos_row BETWEEN 1882 AND 1890
   )
   OR (
     definition_name = 'generate_pdf'
-    AND start_pos_row BETWEEN 1862 AND 1864
+    AND start_pos_row BETWEEN 1894 AND 1896
   )
 )
 AND operator_name NOT LIKE 'core/ReplaceBinaryOperator_BitOr_%'

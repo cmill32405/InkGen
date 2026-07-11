@@ -130,7 +130,7 @@ These contracts are more important than individual implementation details.
 | Deterministic artifact bytes/records | Regression tests and fixture generation | Tests become flaky or fixtures churn |
 | Closed PDF renderer component set | PDF noninterference proofs and deterministic rendering | Custom dynamic `generate_pdf()` paths can break proof obligations |
 | PDF font resource policy | Synthetic fixtures using OS fonts and parser text extraction checks | Generic fonts unexpectedly embed, named fonts collapse to Helvetica, widths/descriptors drift, or ToUnicode maps disappear |
-| PDF text encoding policy | Synthetic fixtures with parser-visible text | Tabs, control characters, non-ASCII Latin-1, or Unicode text enters PDF text streams before the renderer owns matching encoding and extraction maps |
+| PDF text encoding policy | Synthetic fixtures with parser-visible text | Tabs, control characters, undefined WinAnsi slots, or non-WinAnsi Unicode text enters PDF text streams before the renderer owns matching encoding and extraction maps |
 | PDF graphics-state policy | Synthetic fixtures using transparent drawing styles | Drawing opacity is ignored, ExtGState resources are nondeterministic, or opaque drawings create unnecessary graphics states |
 | Raster image alpha/orientation/color preservation | SVG/PDF/DOCX/DXF fixtures and colored-background drawings | Transparent pixels are flattened or compared against the wrong background; EXIF-rotated images render with wrong dimensions; CMYK/ICC JPEGs lose color intent |
 | `pdf_render_contract.py` guard semantics | PO-GT-004 mutation gate and PDF render-path failures | Unsupported groups/components render instead of failing at the boundary |

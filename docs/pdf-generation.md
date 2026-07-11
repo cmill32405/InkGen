@@ -26,14 +26,15 @@ through InkGen's existing `Font.font_file` discovery and are embedded in the PDF
 with WinAnsi widths and a font descriptor. This covers common OS fonts on
 Windows, macOS, and Linux when the font is installed or provided through
 `custom_font_paths`. Used font resources include deterministic `/ToUnicode`
-CMaps for InkGen's current printable ASCII text range, bytes 32 through 126, so
-standard PDF text extractors can map generated ASCII bytes back to Unicode.
-`TextPDF` rejects tabs, control characters, non-ASCII Latin-1, and Unicode
-characters outside that mapped range before PDF bytes are emitted.
+CMaps for InkGen's current WinAnsi text range. `TextPDF` accepts characters
+that encode to defined CP1252/WinAnsi bytes 32 through 255, octal-escapes
+non-ASCII bytes in PDF literal strings, and maps those bytes back to Unicode
+for standard PDF text extractors. Tabs, control characters, undefined WinAnsi
+slots, and non-WinAnsi Unicode fail before PDF bytes are emitted.
 
 The dependency-free backend still emits simple single-byte text strings. Full
-WinAnsi, Unicode/CID text encoding, glyph subsetting, shaping in PDF text
-operators, and complex-script extraction maps beyond the current ASCII CMap are not
+Unicode/CID text encoding, glyph subsetting, shaping in PDF text operators, and
+complex-script extraction maps beyond the current WinAnsi CMap are not
 implemented in this slice.
 
 ## PDF Capability Roadmap
@@ -57,7 +58,7 @@ creation system are:
 
 | Area | Current status | Needed for full-feature parity |
 |---|---|---|
-| Text encoding | Single-byte literal strings over printable ASCII bytes 32-126, installed-font embedding, fail-fast text-domain validation, and printable ASCII `/ToUnicode` CMaps | Full WinAnsi, Unicode/CID fonts, glyph subsetting, and full complex-script text extraction maps |
+| Text encoding | Single-byte literal strings over defined CP1252/WinAnsi bytes 32-255, installed-font embedding, fail-fast text-domain validation, octal-escaped non-ASCII text bytes, and WinAnsi `/ToUnicode` CMaps | Unicode/CID fonts, glyph subsetting, and full complex-script text extraction maps |
 | Text layout | Positioned text components with explicit line-break output using `TextStyle.line_spacing` and per-line `TextStyle.text_align` | Automatic wrapping, tabs, columns, kerning, and complex-script shaping |
 | Graphics state | Basic stroke/fill primitives, rectangular and closed path group clipping with nonzero/even-odd clip rules, group blend modes, stroke/fill alpha ExtGState resources, and stroke dash/cap/join/miter operators | Opacity groups, gradients, and patterns |
 | Document structure | Pages, deterministic metadata, page labels, page rotations, Crop/Bleed/Trim/Art boxes, flat and arbitrary-depth nested outlines/bookmarks, URI links, internal page links, named destinations, named-destination links, text annotations, FreeText annotations, highlight annotations, square annotations, circle annotations, and line annotations | Rich annotation appearances, replies/widgets, raw generic annotations, and tagged PDF structure |

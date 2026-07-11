@@ -482,7 +482,8 @@ def test_document_pdf_maps_text_styles_to_standard_font_resources() -> None:
     assert b"/BaseFont /Courier" in payload
     assert payload.count(b"/ToUnicode ") == 2
     assert payload.count(b"/CMapName /InkGen-WinAnsi-UCS2") == 2
-    assert payload.count(b"95 beginbfchar") == 2
+    assert payload.count(b"100 beginbfchar") == 4
+    assert payload.count(b"18 beginbfchar") == 2
     assert b"<7F> <007F>" not in payload
     assert "/F1 11 Tf" in content
     assert "/F2 9 Tf" in content
@@ -545,11 +546,15 @@ def test_document_pdf_standard_fonts_emit_tounicode_cmaps() -> None:
     assert b"/Subtype /Type1" in payload
     assert b"/ToUnicode " in payload
     assert b"/CMapName /InkGen-WinAnsi-UCS2" in payload
-    assert b"95 beginbfchar" in payload
+    assert payload.count(b"100 beginbfchar") == 2
+    assert b"18 beginbfchar" in payload
     assert b"<20> <0020>" in payload
     assert b"<41> <0041>" in payload
     assert b"<7E> <007E>" in payload
     assert b"<7F> <007F>" not in payload
+    assert b"<80> <20AC>" in payload
+    assert b"<81>" not in payload
+    assert b"<E9> <00E9>" in payload
 
 
 @pytest.mark.condition("PDF-FONT-EMBED-P3")
@@ -563,7 +568,7 @@ def test_document_pdf_embeds_named_installed_font_resources() -> None:
     assert b"/Subtype /TrueType" in payload
     assert b"/FontDescriptor" in payload
     assert b"/FontFile2" in payload
-    assert b"/FirstChar 32 /LastChar 126" in payload
+    assert b"/FirstChar 32 /LastChar 255" in payload
     assert b"/Widths [" in payload
     assert b"/Encoding /WinAnsiEncoding" in payload
     assert b"/ToUnicode " in payload
@@ -611,8 +616,12 @@ def test_pdf_embedded_font_helpers_cover_missing_glyphs_and_open_type_streams() 
     """PDF-FONT-EMBED-P3: Embedded-font helpers handle fallback boundaries."""
     assert pdf_generator_module._pdf_glyph_width(65, {}, {}, 1000) == 0  # noqa: SLF001
     assert pdf_generator_module._pdf_glyph_width(65, {65: "A"}, {"A": (500, 0)}, 1000) == 500  # noqa: SLF001
+    assert pdf_generator_module._pdf_glyph_width(0x7F, {0x7F: "DEL"}, {"DEL": (500, 0)}, 1000) == 0  # noqa: SLF001
+    assert pdf_generator_module._pdf_glyph_width(65, {65: "A"}, {}, 1000) == 0  # noqa: SLF001
     assert pdf_generator_module._pdf_name("A B") == "A#20B"  # noqa: SLF001
     assert pdf_generator_module._pdf_name("é") == "EmbeddedFont"  # noqa: SLF001
+    assert pdf_generator_module._escape_pdf_text_string("\x1f") == r"\037"  # noqa: SLF001
+    assert pdf_generator_module._escape_pdf_text_string("\x7f") == r"\177"  # noqa: SLF001
 
     missing_data = pdf_generator_module._PDFFontResource(
         resource_name="F1",

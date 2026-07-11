@@ -139,15 +139,23 @@ def test_text_pdf_multiline_uses_line_spacing_and_normalizes_line_breaks(text_st
 
 @pytest.mark.condition("TEXT-PDF-ENCODING-P3")
 def test_text_pdf_accepts_upper_printable_ascii_boundary(text_style: TextStyle) -> None:
-    """TEXT-PDF-ENCODING-P3: Printable ASCII includes tilde at byte 126."""
+    """TEXT-PDF-ENCODING-P3: WinAnsi text still includes tilde at byte 126."""
     assert "(~) Tj" in TextPDF("~", (1.0, 2.0), text_style).generate_pdf()
 
 
 @pytest.mark.condition("TEXT-PDF-ENCODING-P3")
-@pytest.mark.parametrize("text", ["Café", "Ω", "A\tB", "\x1f", "OK\nΩ"])
+def test_text_pdf_escapes_winansi_bytes_for_non_ascii_text(text_style: TextStyle) -> None:
+    """TEXT-PDF-ENCODING-P3: Non-ASCII WinAnsi text emits deterministic byte escapes."""
+    content = TextPDF("Caf\u00e9 \u20ac \u2013", (1.0, 2.0), text_style).generate_pdf()
+
+    assert r"(Caf\351 \200 \226) Tj" in content
+
+
+@pytest.mark.condition("TEXT-PDF-ENCODING-P3")
+@pytest.mark.parametrize("text", ["Ω", "A\tB", "\x1f", "OK\nΩ", "OK\n\t"])
 def test_text_pdf_rejects_text_outside_mapped_extraction_domain(text_style: TextStyle, text: str) -> None:
     """TEXT-PDF-ENCODING-P3: TextPDF fails before emitting unmapped PDF text bytes."""
-    with pytest.raises(ValueError, match="printable ASCII"):
+    with pytest.raises(ValueError, match="WinAnsi"):
         TextPDF(text, (1.0, 2.0), text_style)
 
 
@@ -158,7 +166,7 @@ def test_text_pdf_revalidates_text_mutated_after_construction(text_style: TextSt
 
     component.text = "A\u0100"
 
-    with pytest.raises(ValueError, match="printable ASCII"):
+    with pytest.raises(ValueError, match="WinAnsi"):
         component.generate_pdf()
 
 
@@ -167,7 +175,7 @@ def test_text_pdf_hydration_rejects_unmapped_text_payload(text_style: TextStyle)
     """TEXT-PDF-ENCODING-P3: Serialized PDF text payloads obey the same text domain."""
     payload = {"TextPDF": {"text": "A\u0100", "position": (1.0, 2.0)}}
 
-    with pytest.raises(ValueError, match="printable ASCII"):
+    with pytest.raises(ValueError, match="WinAnsi"):
         TextPDF.create_from_dict(payload, text_style)
 
 

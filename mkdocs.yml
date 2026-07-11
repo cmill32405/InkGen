@@ -40,6 +40,7 @@ nav:
       - ADR-0021 PDF FreeText Annotations: adr/0021-pdf-free-text-annotations.md
       - ADR-0022 Parser Stress Fixtures: adr/0022-parser-stress-fixture-builders.md
       - ADR-0023 PDF Text Encoding Boundary: adr/0023-pdf-text-encoding-boundary.md
+      - ADR-0024 PDF WinAnsi Text Encoding: adr/0024-pdf-winansi-text-encoding.md
   - Proof Notes:
       - Grammar Truth: proofs/grammar-truth.md
       - Extraction Truth Contract: proofs/extraction-truth-contract.md
