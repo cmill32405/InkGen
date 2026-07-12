@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from io import BytesIO
 from uuid import uuid4
+from zipfile import ZipFile
 
 import pytest
 
@@ -157,6 +159,11 @@ def test_table_parameters_reject_invalid_hydrated_geometry() -> None:
 def test_table_svg_and_flow_document_use_valid_table_contract() -> None:
     """TABLE-P1: Valid table geometry remains live through SVG and flow-document paths."""
     table = _table()
+    table.add_column(width=8.0)
+    table.add_row(height=6.0)
+    table.cell(0, 1).add_paragraph("B1", style_id="body")
+    table.cell(1, 0).add_paragraph("A2", style_id="body")
+    table.cell(1, 1).add_paragraph("B2", style_id="body")
 
     group = TableSVG.from_table(
         table,
@@ -168,15 +175,44 @@ def test_table_svg_and_flow_document_use_valid_table_contract() -> None:
 
     assert isinstance(group, ComponentGroupSVG)
     components = list(group.components())
-    assert [type(component) for component in components] == [RectangleSVG, TextSVG]
-    assert components[0].width == pytest.approx(12.0)
-    assert components[0].height == pytest.approx(6.0)
-    assert components[1].text == "A1"
+    assert [type(component) for component in components] == [
+        RectangleSVG,
+        TextSVG,
+        RectangleSVG,
+        TextSVG,
+        RectangleSVG,
+        TextSVG,
+        RectangleSVG,
+        TextSVG,
+    ]
+    rectangles = [component for component in components if type(component) is RectangleSVG]
+    assert [(rectangle.position, rectangle.width, rectangle.height) for rectangle in rectangles] == [
+        ((5.0, 7.0), pytest.approx(12.0), pytest.approx(6.0)),
+        ((17.0, 7.0), pytest.approx(8.0), pytest.approx(6.0)),
+        ((5.0, 13.0), pytest.approx(12.0), pytest.approx(6.0)),
+        ((17.0, 13.0), pytest.approx(8.0), pytest.approx(6.0)),
+    ]
+    assert [component.text for component in components if type(component) is TextSVG] == ["A1", "B1", "A2", "B2"]
+    assert table.cell_bounds(1, 1) == ((17.0, 13.0), 8.0, 6.0)
 
     document = FlowDocument(title="Table contract")
     document.add_table(table)
-    assert "A1" in document.to_html()
-    assert "A1" in document.to_plain_text()
+    rehydrated = FlowDocument.create_from_dict(document.parameters)
+    assert isinstance(rehydrated.blocks[0], Table)
+    assert rehydrated.blocks[0].cell_bounds(1, 1) == ((17.0, 13.0), 8.0, 6.0)
+
+    assert document.to_plain_text() == "A1\tB1\nA2\tB2"
+    assert "| A1 | B1 |" in document.to_markdown()
+    assert "| A2 | B2 |" in document.to_markdown()
+    assert "<td>A1</td><td>B1</td>" in document.to_html()
+    assert "A1\tB1\\par A2\tB2\\par" in document.to_rtf()
+    with ZipFile(BytesIO(document.to_docx_bytes())) as package:
+        document_xml = package.read("word/document.xml").decode("utf-8")
+    assert "<w:tbl>" in document_xml
+    assert '<w:tcW w:w="680" w:type="dxa"/>' in document_xml
+    assert '<w:tcW w:w="454" w:type="dxa"/>' in document_xml
+    assert "<w:t>A1</w:t>" in document_xml
+    assert "<w:t>B2</w:t>" in document_xml
 
 
 @pytest.mark.condition("TABLE-AUTOFIT-P2")

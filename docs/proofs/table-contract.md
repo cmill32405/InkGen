@@ -93,7 +93,7 @@ ADR/rule impact:
 
 | Domain class | Handling | Proof obligation | Test evidence | Mutation status |
 |---|---|---|---|---|
-| Valid table geometry | Preserve origin, row height, column width, and cell content | PO-TABLE-001 | `test_table_svg_and_flow_document_use_valid_table_contract` | behavioral evidence |
+| Valid table geometry | Preserve origin, row height, column width, and cell content | PO-TABLE-001 | `test_table_svg_and_flow_document_use_valid_table_contract` | mutation target |
 | Invalid origins | Reject malformed, boolean, and non-finite coordinates | PO-TABLE-002 | `test_table_rejects_nonfinite_and_boolean_positions` | mutation target |
 | Invalid row/column dimensions | Reject negative, boolean, and non-finite dimensions at add/set boundaries | PO-TABLE-003 | `test_table_rejects_invalid_row_column_dimensions` | mutation target |
 | Invalid padding | Reject negative, boolean, and non-finite padding in model and SVG renderer | PO-TABLE-004 | `test_table_padding_validation_is_shared_by_model_and_svg_renderer` | mutation target |
@@ -131,6 +131,12 @@ Current result:
   delegation rows: 47 work items, 47 killed, and 0 survived. Type-annotation
   union mutations and a keyword-only signature marker mutation were excluded as
   non-executable equivalents.
+- Valid-table live path gate, scoped to current table geometry, SVG component
+  emission, flow-document table dispatch, DOCX width conversion, and concrete
+  table serializers: 365 work items, 364 killed, and 1 documented equivalent
+  survivor. The survivor changes the empty-table fast-return guard from
+  `not row_count or not column_count` to `not row_count and not column_count`;
+  it is outside the valid 2x2 table domain for PO-TABLE-001.
 
 ## PO-TABLE-001: Valid Tables Remain Live
 
@@ -146,12 +152,14 @@ and paragraph text with registered text styles.
 
 ### Proof Method
 
-`TableSVG.from_table()` builds a rectangle and text component from the table,
-and `FlowDocument` emits table text in HTML and plain-text paths.
+`TableSVG.from_table()` builds rectangle and text components from a 2x2 table,
+`Table.cell_bounds()` preserves row and column offsets, `FlowDocument`
+round-trips serialized table blocks, and table content emits through plain text,
+Markdown, HTML, RTF, and DOCX paths.
 
 ### Conclusion
 
-Supported by behavioral evidence for the stated domain.
+Proven when tests and mutation pass for the stated domain.
 
 ## PO-TABLE-002: Table Origins Are Finite Numeric Coordinates
 
