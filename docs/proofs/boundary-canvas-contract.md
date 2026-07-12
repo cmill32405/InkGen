@@ -29,7 +29,10 @@ Affected surface:
   validation, canvas dimension validation, and unit validation.
 - `tests/test_boundary_canvas_contract.py`: BOUNDARY-CANVAS-P1 behavioral,
   failure-mode, serialization, and live-path tests.
-- `tests/mutation/boundary_canvas_cosmic_ray.toml`: scoped mutation gate.
+- `tests/mutation/boundary_canvas_cosmic_ray.toml`: scoped boundary model
+  mutation gate.
+- `tests/mutation/layer_canvas_live_path_cosmic_ray.toml`: scoped layer
+  live-path mutation gate.
 - `tests/mutation/filter_boundary_canvas_work_items.py`: proof-critical
   mutation filter.
 
@@ -120,7 +123,7 @@ ADR/rule impact:
 | Invalid units | Reject non-string units and unsupported string units | PO-BCAN-003 | `test_canvas_units_fail_at_public_boundary` | killed |
 | Boundary hulls | Accept finite convex unordered or closed hulls and reject malformed/degenerate/nonfinite hulls | PO-BCAN-004 | `test_boundary_rejects_malformed_degenerate_and_nonfinite_hulls` | 2 equivalent survivors documented |
 | Candidate hull checks | Return containment result for valid hulls and reject malformed candidate hulls | PO-BCAN-005 | `test_boundary_check_validates_candidate_hulls_and_strict_flag` | killed |
-| Layer live path | Hardened canvas boundary remains wired into off-canvas rejection | PO-BCAN-006 | `test_boundary_canvas_contract_is_live_in_layer_off_canvas_check` | behavioral evidence |
+| Layer live path | Hardened canvas boundary remains wired into off-canvas rejection | PO-BCAN-006 | `test_boundary_canvas_contract_is_live_in_layer_off_canvas_check` | killed |
 
 ## Test Applicability Matrix
 
@@ -155,6 +158,8 @@ Current result:
 
 - Cosmic Ray 8.4.6, scoped to executable BOUNDARY-CANVAS-P1 validation rows:
   74 work items, 72 killed, and 2 documented equivalent survivors.
+- Cosmic Ray 8.4.6, scoped to `Layer.add_component_group()` canvas-boundary
+  live-path rows: 3 work items, 3 killed, and 0 survived.
 - Equivalent survivors:
   - `_normalize_hull`: `len(raw_points) < 3` changed to
     `len(raw_points) < 2`.
@@ -297,4 +302,5 @@ off-canvas group raises `ComponentGroupOffCanvas` through
 
 ### Conclusion
 
-Supported by behavioral evidence for the stated domain.
+Proven for the stated domain after focused live-path tests and scoped mutation:
+3 layer live-path work items, 3 killed, and 0 survived.
