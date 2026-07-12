@@ -161,7 +161,7 @@ def test_text_style_contract_remains_live_in_svg_and_pdf_output() -> None:
     style.line_spacing = 1.25
 
     svg = TextSVG("Hello <PDF>", (4.0, 5.0), style).generate_svg()
-    pdf = TextPDF("Hello (PDF)", (4.0, 5.0), style).generate_pdf()
+    pdf = TextPDF("Hello (PDF)\nNext", (4.0, 5.0), style).generate_pdf()
 
     assert "fill:#112233" in svg
     assert "line-height:1.25" in svg
@@ -170,4 +170,7 @@ def test_text_style_contract_remains_live_in_svg_and_pdf_output() -> None:
     assert "Hello &lt;PDF&gt;" in svg
     assert "0.066667 0.133333 0.2 rg" in pdf
     assert "/F1 12 Tf" in pdf
+    assert "1 0 0 -1 -35.6 5 Tm" in pdf
     assert "(Hello \\(PDF\\)) Tj" in pdf
+    assert "1 0 0 -1 -10.4 20 Tm" in pdf
+    assert "(Next) Tj" in pdf

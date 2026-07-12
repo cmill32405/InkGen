@@ -32,6 +32,10 @@ Affected surface:
 - `tests/mutation/text_style_cosmic_ray.toml`: scoped mutation gate.
 - `tests/mutation/filter_text_style_work_items.py`: proof-critical mutation
   filter.
+- `tests/mutation/text_style_live_path_cosmic_ray.toml`: scoped SVG/PDF
+  renderer live-path mutation gate.
+- `tests/mutation/filter_text_style_live_path_work_items.py`:
+  proof-critical renderer live-path mutation filter.
 
 Incoming dependencies:
 
@@ -112,7 +116,7 @@ ADR/rule impact:
 | Invalid colors/alignment/script flags | Reject malformed colors, unsupported alignment, non-string alignment, and non-boolean script flags | PO-TSTYLE-003 | `test_text_style_rejects_invalid_color_align_and_script_boundaries` | killed |
 | Invalid line spacing | Reject booleans, negatives, non-finite values, and non-numeric values while preserving zero | PO-TSTYLE-004 | `test_text_style_rejects_invalid_line_spacing_boundaries` | killed |
 | Hydrated payloads | Route serialized values through public validation boundaries | PO-TSTYLE-005 | `test_text_style_hydration_uses_public_validation_boundaries` | killed |
-| SVG/PDF live paths | Emit validated text style values into SVG and PDF text output | PO-TSTYLE-006 | `test_text_style_contract_remains_live_in_svg_and_pdf_output` | behavioral evidence |
+| SVG/PDF live paths | Emit validated text style values into SVG and PDF text output | PO-TSTYLE-006 | `test_text_style_contract_remains_live_in_svg_and_pdf_output` | 157 killed; 6 equivalent survivors |
 
 ## Test Applicability Matrix
 
@@ -147,6 +151,22 @@ Current result:
 
 - Cosmic Ray 8.4.6, scoped to executable TEXT-STYLE-P1 rows: 22 work items,
   22 killed, and 0 survived.
+- SVG/PDF live-path continuation:
+  `tests/mutation/text_style_live_path_cosmic_ray.toml`, filtered by
+  `tests/mutation/filter_text_style_live_path_work_items.py`: 163 work items,
+  157 killed, and 6 documented equivalent survivors. Equivalent survivor
+  classes:
+  - `_pdf_text_aligned_x()` comparison mutations from `==` to `is` are
+    equivalent for the public `TextStyle` domain because `TextStyle.text_align`
+    normalizes valid inputs to the canonical `start`, `end`, or `center`
+    strings consumed by `TextPDF`.
+  - `_pdf_text_aligned_x()` comparison mutations from `==` to `<=` are
+    equivalent for the normalized text-align domain: `center` still takes the
+    center branch, `end` still takes the end branch, and `start` still falls
+    through.
+  - `TextPDF.generate_pdf()` default `line_spacing` value mutations are
+    equivalent for the public `TextPDF` domain because valid `TextStyle`
+    instances always expose a validated `line_spacing` attribute.
 
 ## PO-TSTYLE-001: Valid Text Styles Normalize Deterministically
 
@@ -271,9 +291,13 @@ alignment, line spacing, and font size.
 ### Proof Method
 
 The live-path test renders text through SVG and PDF paths and asserts emitted
-SVG style tokens, escaped SVG text, PDF RGB operators, font-size operator, and
-escaped PDF literal text.
+SVG style tokens, escaped SVG text, PDF RGB operators, font-size operator, PDF
+alignment transforms, PDF line-spacing transforms, and escaped PDF literal
+text. The scoped live-path mutation gate targets the current `TextSVG`
+style/text output rows and `TextPDF` color, font, alignment, line-spacing, and
+literal text rows.
 
 ### Conclusion
 
-Supported by behavioral evidence for the stated domain.
+Proven for the stated domain after focused tests and mutation pass with
+documented equivalent survivors.
