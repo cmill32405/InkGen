@@ -146,7 +146,7 @@ ADR/rule impact:
 | Serialization | Preserve label, component order, and style cache reuse on round trip | PO-CGROUP-005 | `test_component_group_round_trip_preserves_label_order_and_styles` | existing behavior |
 | Serialized group payload envelopes | Reject malformed roots, collections, component entries, style envelopes, and unsupported type names before dynamic dispatch | PO-CGROUP-006 | `test_component_group_hydration_rejects_malformed_payload_envelopes`, `test_component_group_hydration_rejects_malformed_style_envelopes` | killed/equivalent |
 | Base component payloads | Hydrate valid style-free base `Component` entries | PO-CGROUP-007 | `test_component_group_round_trip_preserves_base_components` | killed/equivalent |
-| Style-cache mapping boundary | Reject non-mutable style caches and wrong-kind cached style overrides before component construction | PO-CGROUP-008 | `test_component_group_hydration_rejects_malformed_style_caches`, `test_component_group_hydration_reuses_valid_style_cache_entries`, `test_component_group_hydration_rejects_wrong_kind_style_overrides` | pending |
+| Style-cache mapping boundary | Reject non-mutable style caches and wrong-kind cached style overrides before component construction | PO-CGROUP-008 | `test_component_group_hydration_rejects_malformed_style_caches`, `test_component_group_hydration_reuses_valid_style_cache_entries`, `test_component_group_hydration_rejects_wrong_kind_style_overrides` | killed |
 
 ## Test Applicability Matrix
 
@@ -186,7 +186,8 @@ Current result:
   survivor.
 - Cosmic Ray 8.4.6, scoped to COMPONENT-GROUP-STYLES-MAPPING-P2 style-cache
   normalization and cached override type-guard rows: 7 work items, 7 killed,
-  and 0 survivors.
+  and 0 survivors. Reverified during the proof-matrix consistency slice with
+  the same scoped result: 7 work items, 7 killed, and 0 survivors.
 - Equivalent survivor:
   - `create_from_dict`: `component_class is Component` changed to
     `component_class == Component`.
