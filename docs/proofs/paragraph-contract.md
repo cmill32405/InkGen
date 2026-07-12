@@ -211,7 +211,7 @@ ADR/rule impact:
 
 | Domain class | Handling | Proof obligation | Test evidence | Mutation status |
 |---|---|---|---|---|
-| Valid paragraph geometry | Preserve layout and materialization | PO-PARA-001 | `test_paragraph_contract_remains_live_through_render_and_document_paths` | behavioral evidence |
+| Valid paragraph geometry | Preserve layout and materialization | PO-PARA-001 | `test_paragraph_contract_remains_live_through_render_and_document_paths` | mutation target |
 | Invalid origins | Reject malformed, boolean, and non-finite coordinates | PO-PARA-002 | `test_paragraph_rejects_nonfinite_boolean_and_malformed_positions` | killed |
 | Invalid measurements | Reject negative, boolean, non-finite, and non-numeric bounded values | PO-PARA-003 | `test_paragraph_rejects_invalid_numeric_measurements` | killed |
 | Line spacing and outline levels | Enforce finite positive spacing and integer outline range | PO-PARA-004 | `test_paragraph_rejects_invalid_line_spacing_and_outline_level` | killed |
@@ -300,6 +300,12 @@ Current result:
   `PARAGRAPH-REQUIRED-FIELDS-P2`: 1 work item, 1 killed, and 0 survived.
 - Cosmic Ray 8.4.6, scoped to paragraph position payload validation after
   `PARAGRAPH-POSITION-PAYLOAD-P2`: 14 work items, 14 killed, and 0 survived.
+- Valid-paragraph live path gate, scoped to current paragraph line layout,
+  renderer-neutral text materialization, SVG/PDF group conversion, flow-document
+  paragraph dispatch, and concrete paragraph serializers: 449 work items, 449
+  killed, and 0 survived. Enum identity-to-equality equivalents, unclaimed
+  fallback constants, and single-line newline fallback mutations were excluded
+  from this live-path gate.
 
 ## PO-PARA-001: Valid Paragraphs Remain Live
 
@@ -315,14 +321,15 @@ text style, and paragraph text.
 
 ### Proof Method
 
-`Paragraph.layout_lines()` produces line records, `to_drawing_group()` emits
-`TextDrawing` recipes, and the live-path test materializes those recipes to SVG
-and PDF groups while also exporting through HTML and plain-text flow-document
-paths.
+`Paragraph.layout_lines()` produces exact right-aligned line records with
+non-zero indents and spacing, `to_drawing_group()` emits matching `TextDrawing`
+recipes, and the live-path test materializes those recipes to SVG and PDF groups
+while also exporting through plain text, Markdown, HTML, RTF, and DOCX
+flow-document paths.
 
 ### Conclusion
 
-Supported by behavioral evidence for the stated domain.
+Proven when tests and mutation pass for the stated domain.
 
 ## PO-PARA-002: Paragraph Origins Are Finite Numeric Coordinates
 

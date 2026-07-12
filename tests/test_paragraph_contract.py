@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from io import BytesIO
 from uuid import uuid4
+from zipfile import ZipFile
 
 import pytest
 
 from InkGen.document_outputs import FlowDocument
+from InkGen.drawing_components import TextDrawing
 from InkGen.paragraph import LineSpacingRule, Paragraph, ParagraphAlignment, TabStop
 from InkGen.pdf_generator import ComponentGroupPDF
 from InkGen.style import Font, TextStyle
@@ -548,19 +551,58 @@ def test_paragraph_contract_remains_live_through_render_and_document_paths() -> 
         width=28.0,
         style=_style(),
         alignment="right",
+        first_line_indent=2.0,
+        hanging_indent=1.0,
+        left_indent=2.0,
+        right_indent=2.0,
+        space_before=1.0,
+        space_after=1.5,
         line_spacing_rule=LineSpacingRule.EXACTLY,
         line_spacing=5.0,
     )
 
     lines = paragraph.layout_lines()
-    assert len(lines) >= 1
-    assert all(line.position[0] >= paragraph.position[0] for line in lines)
+    assert [line.text for line in lines] == ["Alpha beta", "gamma delta"]
+    assert [line.position for line in lines] == [
+        (pytest.approx(10.068055555555556), pytest.approx(9.751666666666667)),
+        (pytest.approx(8.127777777777776), pytest.approx(14.751666666666667)),
+    ]
+    assert [line.width for line in lines] == [pytest.approx(19.931944444444444), pytest.approx(21.872222222222224)]
 
     drawing_group = paragraph.to_drawing_group("paragraph_contract")
-    assert isinstance(drawing_group.to_group("svg"), ComponentGroupSVG)
-    assert isinstance(drawing_group.to_group("pdf"), ComponentGroupPDF)
+    assert [type(component) for component in drawing_group.components] == [TextDrawing, TextDrawing]
+    assert [component.text for component in drawing_group.components] == ["Alpha beta", "gamma delta"]
+    assert [component.position for component in drawing_group.components] == [line.position for line in lines]
+    svg_group = drawing_group.to_group("svg")
+    pdf_group = drawing_group.to_group("pdf")
+    assert isinstance(svg_group, ComponentGroupSVG)
+    assert isinstance(pdf_group, ComponentGroupPDF)
+    assert [component.text for component in svg_group.components()] == ["Alpha beta", "gamma delta"]
+    assert [component.text for component in pdf_group.components()] == ["Alpha beta", "gamma delta"]
 
     document = FlowDocument(title="Paragraph contract")
     document.add_paragraph(paragraph)
-    assert "Alpha beta" in document.to_plain_text()
-    assert "Alpha beta" in document.to_html()
+    rehydrated = FlowDocument.create_from_dict(document.parameters, {paragraph.style.name: paragraph.style})
+    assert isinstance(rehydrated.blocks[0], Paragraph)
+    assert [line.text for line in rehydrated.blocks[0].layout_lines()] == ["Alpha beta", "gamma delta"]
+
+    assert document.to_plain_text() == "Alpha beta gamma delta"
+    assert "Alpha beta gamma delta" in document.to_markdown()
+    assert "text-align: right" in document.to_html()
+    assert "<h1>Paragraph contract</h1>" in document.to_html()
+    assert "margin-left: 2.0mm" in document.to_html()
+    assert "text-indent: 1.0mm" in document.to_html()
+    assert "Alpha beta gamma delta" in document.to_html()
+    assert "# Paragraph contract" in document.to_markdown()
+    assert r"\qr" in document.to_rtf()
+    assert r"\fi57" in document.to_rtf()
+    assert r"\fs20" in document.to_rtf()
+    assert r"\b Paragraph contract\b0\par" in document.to_rtf()
+    assert "Alpha beta gamma delta\\par" in document.to_rtf()
+    with ZipFile(BytesIO(document.to_docx_bytes())) as package:
+        document_xml = package.read("word/document.xml").decode("utf-8")
+    assert '<w:jc w:val="right"/>' in document_xml
+    assert '<w:spacing w:before="57" w:after="85" w:line="283" w:lineRule="exact"/>' in document_xml
+    assert '<w:ind w:left="113" w:right="113" w:firstLine="113" w:hanging="57"/>' in document_xml
+    assert '<w:sz w:val="20"/>' in document_xml
+    assert '<w:t xml:space="preserve">Alpha beta gamma delta</w:t>' in document_xml
