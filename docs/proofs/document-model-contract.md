@@ -48,6 +48,10 @@ Affected surface:
   DOCUMENT-LOAD-STYLE-PREPASS-P2 mutation filter.
 - `tests/mutation/filter_document_model_filepath_work_items.py`:
   DOCUMENT-MODEL-FILEPATH-P2 mutation filter.
+- `tests/mutation/document_model_pdf_live_path_cosmic_ray.toml`: scoped PDF
+  live-path mutation gate.
+- `tests/mutation/filter_document_model_pdf_live_path_work_items.py`:
+  DOCUMENT-MODEL-P1 PDF live-path mutation filter.
 
 Incoming dependencies:
 
@@ -188,7 +192,7 @@ ADR/rule impact:
 | Invalid remove/lookup positions | Reject missing and malformed page numbers | PO-DOCM-003 | `test_document_page_remove_and_lookup_reject_invalid_positions` | killed |
 | Incompatible page canvas | Reject mismatched width, height, or units | PO-DOCM-004 | `test_document_rejects_pages_with_incompatible_canvas` | killed |
 | Serialized page/layer hydration | Preserve payload layers without ghost base layers | PO-DOCM-005 | `test_document_serialization_preserves_one_based_page_order` | killed |
-| PDF live path | Render through one-based document page contract | PO-DOCM-006 | `test_document_page_contract_remains_live_through_pdf_render_path` | behavioral evidence |
+| PDF live path | Render through one-based document page contract | PO-DOCM-006 | `test_document_page_contract_remains_live_through_pdf_render_path` | killed |
 | Serialized document/layer payload envelopes | Reject malformed roots and collection fields before downstream hydration | PO-DOCM-007 | `test_document_model_hydration_rejects_malformed_payload_envelopes`, `test_layer_hydration_requires_collision_settings_for_each_group` | killed |
 | Style cache boundary | Reject non-mutable `styles` caches before component-group hydration | PO-DOCM-008 | `test_document_model_hydration_rejects_malformed_style_caches`, `test_document_load_rejects_malformed_style_cache` | killed |
 | YAML load style prepass | Delegate YAML payloads directly to hardened document hydration and avoid dynamic style prepass dispatch | PO-DOCM-009 | `test_document_load_populates_styles_through_validated_hydration`, `test_document_load_delegates_malformed_yaml_to_document_factory` | mutation target |
@@ -294,6 +298,18 @@ DOCUMENT-MODEL-FILEPATH-P2 current result:
   returned `1539 passed` with `95%` total coverage.
 - Ruff lint and scoped format checks passed for touched Python files.
 - MkDocs strict build and `git diff --check` passed.
+
+DOCUMENT-MODEL-PDF-LIVE-PATH current result:
+
+- Cosmic Ray 8.4.6, scoped to `DocumentPDF.to_pdf_bytes()` one-based page
+  iteration and `self.page(page_number)` consumption: 16 work items, 16 killed,
+  0 survivors.
+- Focused dependent-path tests:
+  `python -m pytest -q tests\test_document_model_contract.py tests\test_pdf_generator.py`
+  returned `127 passed`.
+- The live-path assertion now checks a real page object (`/Type /Page /Parent`)
+  and the rendered rectangle operator rather than the ambiguous `/Type /Page`
+  substring also present in `/Type /Pages`.
 
 ## PO-DOCM-001: Valid Page Insertions Preserve One-Based Order
 
@@ -414,11 +430,15 @@ Documents containing PDF-native component groups.
 ### Proof Method
 
 The live-path test adds a page, inserts a PDF group through `page(1)`, and
-checks generated PDF bytes.
+checks generated PDF bytes for both a real page object and the rendered
+rectangle operator. The scoped mutation gate mutates `DocumentPDF.to_pdf_bytes()`
+page iteration and page lookup rows, proving the renderer still consumes the
+one-based base document page path.
 
 ### Conclusion
 
-Supported by behavioral evidence for the stated domain.
+Proven for the stated domain after focused PDF live-path tests and scoped
+mutation: 16 work items, 16 killed, and 0 survived.
 
 ## PO-DOCM-007: Serialized Payload Envelopes Fail Explicitly
 
