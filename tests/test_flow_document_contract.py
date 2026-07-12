@@ -478,8 +478,9 @@ def test_flow_document_hydration_dispatches_dynamic_block_type_strings() -> None
     assert clone.to_plain_text() == "Intro\n\nPN\tQty\n\n[Drawing: flow-drawing; RectangleDrawing]"
 
 
-@pytest.mark.condition("DRAWING-GROUP-P1")
-def test_flow_document_drawing_group_hydration_rejects_malformed_label() -> None:
+@pytest.mark.condition("DRAWING-GROUP-P1", "FLOW-DOCUMENT-P1")
+@pytest.mark.parametrize("group_label", [123, type("StringifiableLabel", (), {"__str__": lambda self: "looks-valid"})()])
+def test_flow_document_drawing_group_hydration_rejects_malformed_label(group_label: object) -> None:
     """DRAWING-GROUP-P1: Flow-document hydration cannot stringify drawing labels."""
     payload = {
         "FlowDocument": {
@@ -488,7 +489,7 @@ def test_flow_document_drawing_group_hydration_rejects_malformed_label() -> None
                 {
                     "type": "drawing",
                     "payload": {
-                        "group_label": 123,
+                        "group_label": group_label,
                         "components": [],
                     },
                 }

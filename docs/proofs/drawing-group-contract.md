@@ -155,7 +155,7 @@ ADR/rule impact:
 | Valid neutral group to SVG | Preserve label, order, component type, annotations | PO-DGROUP-001 | `test_drawing_group_materializes_svg_and_pdf_groups` | killed/equivalent |
 | Valid neutral group to PDF | Preserve label, order, component type, annotations | PO-DGROUP-001 | same | killed/equivalent |
 | Invalid group label | Reject non-string labels before rendering or serialization | PO-DGROUP-005 | `test_drawing_group_rejects_non_string_labels` | killed |
-| Invalid serialized flow-document drawing label | Reject instead of stringifying during hydration | PO-DGROUP-005 | `test_flow_document_drawing_group_hydration_rejects_malformed_label` | behavioral evidence |
+| Invalid serialized flow-document drawing label | Reject instead of stringifying during hydration | PO-DGROUP-005 | `test_flow_document_drawing_group_hydration_rejects_malformed_label` | killed |
 | Attribute-only invalid primitive | Reject at add boundary | PO-DGROUP-002 | `test_drawing_group_rejects_invalid_recipe_boundaries` | killed |
 | Malformed constructor component collection | Reject raw strings, bytes, non-sequences, non-primitives, and attribute-only primitives before materialization | PO-DGROUP-007 | `test_drawing_group_constructor_rejects_malformed_components` | killed |
 | Valid constructor component sequence | Normalize to mutable list and preserve materialization | PO-DGROUP-007 | `test_drawing_group_constructor_accepts_valid_component_sequences` | killed |
@@ -223,6 +223,10 @@ Current result:
   after `DRAWING-GROUP-COMPONENTS-P2`: 8 work items, 8 killed, and 0 survived.
 - Cosmic Ray 8.4.6, scoped to live component-list validation after
   `DRAWING-GROUP-LIVE-COMPONENTS-P2`: 4 work items, 4 killed, and 0 survived.
+- Cosmic Ray 8.4.6, scoped to the flow-document drawing-label hydration call
+  site: 7 work items, 7 killed, and 0 survived. The focused malformed-label
+  test covers direct non-string labels and stringifiable non-string labels so
+  the old `str(group_label)` repair path cannot return.
 
 ## PO-DGROUP-001: Valid Groups Materialize To Concrete Groups
 
@@ -381,8 +385,8 @@ Public `DrawingComponentGroup(group_label=...)` construction and
 components are added or renderers are selected. `_drawing_from_parameters()`
 passes the serialized `group_label` through unchanged, so malformed serialized
 labels are checked by the same neutral group constructor. Focused tests cover
-direct non-string labels and a flow-document drawing block with a malformed
-serialized label.
+direct non-string labels and flow-document drawing blocks with malformed direct
+and stringifiable non-string serialized labels.
 
 ### Counterexamples And Exclusions
 

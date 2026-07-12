@@ -300,7 +300,7 @@ ADR/rule impact:
 | Materialized drawing point surface | Accept finite coordinate pairs and reject malformed/non-finite materialized point surfaces before HTML/Markdown/DOCX artifacts consume them | PO-FDOC-022 | `test_flow_document_accepts_valid_materialized_drawing_points`, `test_flow_document_rejects_malformed_materialized_drawing_points` | killed |
 | Live drawing components in text/parameter paths | Reject malformed public drawing-group mutations before plain-text summaries or serialized parameters consume them | PO-FDOC-023 | `test_flow_document_plain_text_revalidates_mutated_drawing_components`, `test_flow_document_parameters_revalidate_mutated_drawing_components`, `test_flow_document_parameters_preserve_path_drawing_commands` | killed |
 | Document artifact numbers | Reject malformed live circle DrawingML numbers and malformed DOCX twip numbers before artifact serialization | PO-FDOC-026 | `test_flow_document_formats_valid_circle_drawingml_and_twips`, `test_flow_document_empty_drawing_bounds_use_unit_fallback`, `test_flow_document_circle_bounds_continue_to_materialized_components`, `test_flow_document_rejects_malformed_circle_drawingml_numbers`, `test_flow_document_rejects_malformed_docx_twip_numbers` | 65 killed; 2 equivalent survivors |
-| Malformed serialized drawing label | Reject through the neutral group label contract | PO-FDOC-006 | `test_flow_document_drawing_group_hydration_rejects_malformed_label` | behavioral evidence |
+| Malformed serialized drawing label | Reject through the neutral group label contract | PO-FDOC-006 | `test_flow_document_drawing_group_hydration_rejects_malformed_label` | killed |
 | Invalid drawing materialization | Reject before silent omission | PO-FDOC-004 | `test_flow_document_rejects_invalid_drawing_materialization` | killed |
 | Invalid drawing render fragments | Reject SVG materializations without string `generate_svg()` fragments and DOCX/PDF materializations without points | PO-FDOC-014 | `test_flow_document_rejects_materializations_without_render_fragments` | killed |
 | DOCX DrawingML linework | Emit group-relative anchored DrawingML coordinates and extents | PO-FDOC-005 | `test_flow_document_docx_drawingml_line_uses_group_relative_points` | killed |
@@ -449,6 +449,11 @@ Current result:
   boundary and mutation filter. Focused flow-document tests returned
   `121 passed`; compatibility tests returned `178 passed`; the full coverage
   gate returned `1540 passed` with `95%` total coverage.
+- `FLOW-DOCUMENT-P1` scoped to the drawing-label hydration call site produced
+  7 proof-critical work items: 7 killed and 0 survived. Cosmic Ray did not
+  generate a constructor-argument mutant for adding `str(...)`, so the focused
+  test explicitly uses a stringifiable non-string label to pin that historical
+  failure mode.
 
 ## PO-FDOC-001: DOCX Bytes Are Deterministic
 
@@ -709,11 +714,12 @@ contract and rejects malformed serialized labels instead of stringifying them.
 `_drawing_from_parameters()` passes `data["group_label"]` directly to
 `DrawingComponentGroup`. The neutral group constructor validates the label
 before any component hydration or output rendering occurs. The focused test
-supplies a malformed serialized label and asserts the neutral group label error.
+supplies direct and stringifiable malformed serialized labels and asserts the
+neutral group label error.
 
 ### Conclusion
 
-Proven for the stated domain after tests.
+Proven for the stated domain after focused tests and mutation pass.
 
 ## PO-FDOC-007: Serialized Block Envelopes Are Validated
 
