@@ -110,13 +110,13 @@ ADR/rule impact:
 
 | Domain class | Handling | Proof obligation | Test evidence | Mutation status |
 |---|---|---|---|---|
-| Valid default zoning | Emit SVG rectangles, lines, and text labels | PO-CADZ-001 | `test_legacy_zoning_emits_only_svg_components` | behavioral evidence |
+| Valid default zoning | Emit SVG rectangles, lines, and text labels | PO-CADZ-001 | `test_legacy_zoning_emits_only_svg_components` | mutation target |
 | Explicit zero margin/width | Preserve as supplied most-specific values | PO-CADZ-002 | `test_legacy_zoning_honors_zero_specific_margins_and_widths` | killed |
-| Invalid parameter types/ranges/names | Reject before geometry generation | PO-CADZ-003 | `test_legacy_zoning_rejects_invalid_boundary_parameters` | behavioral evidence |
+| Invalid parameter types/ranges/names | Reject before geometry generation | PO-CADZ-003 | `test_legacy_zoning_rejects_invalid_boundary_parameters` | mutation target |
 | Boolean and non-finite positive-real overrides | Reject before SVG geometry generation | PO-CADZ-006 | `test_legacy_zoning_rejects_bool_and_nonfinite_parameters`, `test_legacy_zoning_accepts_finite_boundary_parameters` | mutation target |
 | Serialized factory roots and required fields | Reject malformed roots and missing/malformed fields before incidental indexing | PO-CADZ-007 | `test_legacy_zoning_factory_rejects_malformed_root_payloads`, `test_legacy_zoning_factory_rejects_missing_and_malformed_payload_fields` | killed |
 | Serialized factory style envelopes and registries | Reject malformed style envelopes and wrong-kind style overrides before construction side effects | PO-CADZ-008 | `test_legacy_zoning_factory_rejects_malformed_style_envelopes`, `test_legacy_zoning_factory_rejects_malformed_style_registry` | killed |
-| Serialization with style registry | Preserve parameters and generated component geometry | PO-CADZ-004 | `test_legacy_zoning_round_trips_parameters_with_style_registry` | behavioral evidence |
+| Serialization with style registry | Preserve parameters and generated component geometry | PO-CADZ-004 | `test_legacy_zoning_round_trips_parameters_with_style_registry` | mutation target |
 | Default zone width calculation | Use widest A/W/Y text outline plus padding | PO-CADZ-005 | `test_legacy_zoning_default_width_tracks_text_outline` | killed |
 | Multi-format zoning | Excluded from legacy helper | Explicit exclusion | `ZoningDrawing` tests | Out of scope |
 
@@ -172,6 +172,22 @@ CAD-ZONING-FACTORY-PAYLOAD-P2 current result:
 - Mutation filter:
   `tests/mutation/filter_cad_zoning_factory_payload_work_items.py`.
 
+CAD-ZONING-P1 live-contract current result:
+
+- Focused tests: `35 passed`.
+- Mutation: `50` representative live-contract work items, `50 killed`, `0
+  survivors`.
+- Mutation config:
+  `tests/mutation/cad_zoning_live_contract_cosmic_ray.toml`.
+- Mutation filter:
+  `tests/mutation/filter_cad_zoning_live_contract_work_items.py`.
+- Exclusions: exhaustive coordinate-arithmetic mutations inside the documented
+  legacy SVG helper are not used as proof obligations for this slice. The
+  retained mutation set targets constructor validation, representative SVG
+  component emission, label generation, serialization, and style-registry
+  factory reconstruction. The strengthened tests assert component counts, key
+  rectangle geometry, paired labels, and round-trip component parity.
+
 ## PO-CADZ-001: Legacy Zoning Emits SVG Components
 
 ### Claim
@@ -187,11 +203,14 @@ objects.
 ### Proof Method
 
 `Zoning._create_zoning()` constructs `RectangleSVG`, `LineSVG`, and `TextSVG`
-instances directly and stores them in a base `ComponentGroup`.
+instances directly and stores them in a base `ComponentGroup`. The focused test
+asserts the base-group type, component counts, key rectangle geometry, and paired
+vertical/horizontal labels.
 
 ### Conclusion
 
-Supported by behavioral evidence for the stated domain.
+Proven for the stated domain after focused tests and representative mutation
+pass.
 
 ## PO-CADZ-002: Zero Specific Values Override Less-Specific Values
 
@@ -228,11 +247,14 @@ invalid character codes, and unknown parameter names.
 
 ### Proof Method
 
-`__init__()` validates each keyword before calling `_create_zoning()`.
+`__init__()` validates each keyword before calling `_create_zoning()`. The
+focused test covers malformed numeric parameters, invalid zone counts, invalid
+character codes, and unknown parameter names.
 
 ### Conclusion
 
-Supported by behavioral evidence for the stated domain.
+Proven for the stated domain after focused tests and representative mutation
+pass.
 
 ## PO-CADZ-004: Serialization Preserves Legacy Zoning
 
@@ -249,11 +271,14 @@ Valid zoning instances with serializable canvas and styles.
 
 `parameters` stores canvas, style payloads, and resolved parameters.
 `create_from_dict()` resolves styles by name or recreates them, then constructs a
-new `Zoning` with the stored parameters.
+new `Zoning` with the stored parameters. The focused test asserts parameter
+equality, component-parameter parity, and component-count parity after
+style-registry reconstruction.
 
 ### Conclusion
 
-Supported by behavioral evidence for the stated domain.
+Proven for the stated domain after focused tests and representative mutation
+pass.
 
 ## PO-CADZ-005: Default Width Uses Text Outline
 
@@ -272,7 +297,7 @@ Valid zoning instances without explicit zone-width overrides.
 
 ### Conclusion
 
-Supported by behavioral evidence; assignment rows are included in mutation.
+Supported by focused tests and scoped mutation evidence for the stated domain.
 
 ## PO-CADZ-006: Numeric Overrides Are Finite And Non-Boolean
 

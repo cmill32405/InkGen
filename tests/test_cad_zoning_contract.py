@@ -47,7 +47,20 @@ def test_legacy_zoning_emits_only_svg_components(
     assert zoning.component_group.group_label == "Zoning"
     assert component_types == {RectangleSVG, LineSVG, TextSVG}
     assert sum(type(component) is RectangleSVG for component in components) == 2
+    assert sum(type(component) is LineSVG for component in components) == 32
     assert sum(type(component) is TextSVG for component in components) == 36
+    assert len(components) == 70
+
+    rectangles = [component for component in components if type(component) is RectangleSVG]
+    assert rectangles[0].position == (5, 5)
+    assert rectangles[0].width == pytest.approx(200.0)
+    assert rectangles[0].height == pytest.approx(287.0)
+    assert rectangles[1].position[0] > rectangles[0].position[0]
+    assert rectangles[1].position[1] > rectangles[0].position[1]
+
+    text_labels = [component.text for component in components if type(component) is TextSVG]
+    assert text_labels[:16] == [label for character in "ABCDEFGH" for label in (character, character)]
+    assert text_labels[-20:] == [label for character in "123456789:" for label in (character, character)]
 
 
 @pytest.mark.condition("CAD-ZONING-P1")
@@ -208,6 +221,7 @@ def test_legacy_zoning_round_trips_parameters_with_style_registry(
     assert [component.parameters for component in recreated.component_group.components()] == [
         component.parameters for component in zoning.component_group.components()
     ]
+    assert len(list(recreated.component_group.components())) == len(list(zoning.component_group.components()))
 
 
 @pytest.mark.condition("CAD-ZONING-P1")
