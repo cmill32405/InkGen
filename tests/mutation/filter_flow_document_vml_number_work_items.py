@@ -1,4 +1,4 @@
-"""Filter Cosmic Ray work items to FLOW-DOCUMENT-VML-NUMBER-P2 rows."""
+"""Filter Cosmic Ray work items to flow-document artifact-number rows."""
 
 from __future__ import annotations
 
@@ -11,11 +11,11 @@ module_path = 'src/InkGen/document_outputs.py'
 AND (
   (
     definition_name = '_drawing_bounds'
-    AND start_pos_row BETWEEN 498 AND 500
+    AND start_pos_row BETWEEN 618 AND 632
   )
   OR (
-    definition_name = '_component_vml'
-    AND start_pos_row BETWEEN 513 AND 522
+    definition_name = '_component_drawingml'
+    AND start_pos_row BETWEEN 635 AND 667
   )
   OR (
     definition_name IN (
@@ -23,9 +23,10 @@ AND (
       '_artifact_point_pair',
       '_artifact_number',
       '_positive_artifact_number',
+      '_nonnegative_artifact_number',
       '_mm_to_twips'
     )
-    AND start_pos_row BETWEEN 674 AND 735
+    AND start_pos_row BETWEEN 1021 AND 1096
   )
 )
 AND operator_name NOT LIKE 'core/ReplaceBinaryOperator_%'

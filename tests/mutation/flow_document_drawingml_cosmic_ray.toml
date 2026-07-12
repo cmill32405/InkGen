@@ -4,7 +4,7 @@ module-path = [
 ]
 timeout = 90.0
 excluded-modules = []
-test-command = "python -m pytest -x tests/test_flow_document_contract.py tests/test_document_outputs.py"
+test-command = "env PYTHONPATH=src /home/ubuntu/.cache/inkgen_mutation_venv/bin/python -m pytest -x tests/test_flow_document_contract.py tests/test_document_outputs.py"
 
 [cosmic-ray.distributor]
 name = "local"

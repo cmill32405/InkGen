@@ -20,6 +20,7 @@ from InkGen.document_outputs import (
     _drawingml_segments_docx,
     _drawingml_shape_docx,
     _drawingml_text_body,
+    _mm_to_twips,
     _nonnegative_artifact_number,
     _vml_number,
 )
@@ -1003,6 +1004,8 @@ def test_flow_document_formats_valid_circle_drawingml_and_twips() -> None:
         document_xml = package.read("word/document.xml").decode("utf-8")
 
     assert 'w:before="57"' in document_xml
+    assert _mm_to_twips(1.0) == 57
+    assert _mm_to_twips(25.4) == 1440
     assert "<w:pict>" not in document_xml
     assert 'prst="ellipse"' in document_xml
     assert '<wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH>' in document_xml
@@ -1025,6 +1028,32 @@ def test_flow_document_artifact_number_formats_fractional_and_near_integer_value
     """FLOW-DOCUMENT-DRAWINGML-P3: Artifact numbers preserve fractions and snap near integers."""
     assert _vml_number(1.25) == "1.25"
     assert _vml_number(2.0000000005) == "2"
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-DRAWINGML-P3")
+def test_flow_document_empty_drawing_bounds_use_unit_fallback() -> None:
+    """FLOW-DOCUMENT-DRAWINGML-P3: Empty drawing bounds use the stable unit fallback."""
+    document = FlowDocument()
+    group = DrawingComponentGroup("empty-bounds")
+    document.add_drawing_group(group)
+
+    html = document.to_html()
+
+    assert '<svg width="1mm" height="1mm" viewBox="0 0 1 1">' in html
+
+
+@pytest.mark.condition("FLOW-DOCUMENT-DRAWINGML-P3")
+def test_flow_document_circle_bounds_continue_to_materialized_components() -> None:
+    """FLOW-DOCUMENT-DRAWINGML-P3: Circle bounds do not stop later component traversal."""
+    document = FlowDocument()
+    group = DrawingComponentGroup("mixed-bounds")
+    group.add_component(CircleDrawing((4.0, 4.0), 2.0, _drawing_style()))
+    group.components.append(_PointSurfaceDrawingPrimitive([(10.0, 10.0), (14.0, 16.0)]))  # type: ignore[arg-type]
+    document.add_drawing_group(group)
+
+    html = document.to_html()
+
+    assert '<svg width="12mm" height="14mm" viewBox="2 2 12 14">' in html
 
 
 @pytest.mark.condition("FLOW-DOCUMENT-DRAWINGML-P3")

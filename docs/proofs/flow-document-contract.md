@@ -299,7 +299,7 @@ ADR/rule impact:
 | File writer path boundary | Accept string/path-like output paths and reject malformed output path values or non-directory parents before writing | PO-FDOC-013 | `test_flow_document_file_writers_accept_pathlike_outputs`, `test_flow_document_file_writers_reject_malformed_paths`, `test_flow_document_file_writers_fail_on_missing_directory`, `test_flow_document_file_writers_reject_file_parent_paths` | killed |
 | Materialized drawing point surface | Accept finite coordinate pairs and reject malformed/non-finite materialized point surfaces before HTML/Markdown/DOCX artifacts consume them | PO-FDOC-022 | `test_flow_document_accepts_valid_materialized_drawing_points`, `test_flow_document_rejects_malformed_materialized_drawing_points` | killed |
 | Live drawing components in text/parameter paths | Reject malformed public drawing-group mutations before plain-text summaries or serialized parameters consume them | PO-FDOC-023 | `test_flow_document_plain_text_revalidates_mutated_drawing_components`, `test_flow_document_parameters_revalidate_mutated_drawing_components`, `test_flow_document_parameters_preserve_path_drawing_commands` | killed |
-| Document artifact numbers | Reject malformed live circle DrawingML numbers and malformed DOCX twip numbers before artifact serialization | PO-FDOC-026 | `test_flow_document_formats_valid_circle_drawingml_and_twips`, `test_flow_document_rejects_malformed_circle_drawingml_numbers`, `test_flow_document_rejects_malformed_docx_twip_numbers` | pending |
+| Document artifact numbers | Reject malformed live circle DrawingML numbers and malformed DOCX twip numbers before artifact serialization | PO-FDOC-026 | `test_flow_document_formats_valid_circle_drawingml_and_twips`, `test_flow_document_empty_drawing_bounds_use_unit_fallback`, `test_flow_document_circle_bounds_continue_to_materialized_components`, `test_flow_document_rejects_malformed_circle_drawingml_numbers`, `test_flow_document_rejects_malformed_docx_twip_numbers` | 65 killed; 2 equivalent survivors |
 | Malformed serialized drawing label | Reject through the neutral group label contract | PO-FDOC-006 | `test_flow_document_drawing_group_hydration_rejects_malformed_label` | behavioral evidence |
 | Invalid drawing materialization | Reject before silent omission | PO-FDOC-004 | `test_flow_document_rejects_invalid_drawing_materialization` | killed |
 | Invalid drawing render fragments | Reject SVG materializations without string `generate_svg()` fragments and DOCX/PDF materializations without points | PO-FDOC-014 | `test_flow_document_rejects_materializations_without_render_fragments` | killed |
@@ -405,10 +405,17 @@ Current result:
   `_validate_drawing_component_boundary()` produced 8 proof-critical work
   items. Result: 8 killed, 0 survived.
 - `FLOW-DOCUMENT-DRAWINGML-P3` supersedes the legacy
-  `FLOW-DOCUMENT-VML-NUMBER-P2` vector path. The prior artifact-number slice
-  scoped to circle bounds/vector output, artifact-number helpers, and DOCX twip
-  conversion produced 32 proof-critical work items.
-  Result: 32 killed, 0 survived.
+  `FLOW-DOCUMENT-VML-NUMBER-P2` vector path. The artifact-number filter was
+  corrected from stale VML line ranges to current DrawingML circle bounds,
+  artifact-number helper, and DOCX twip conversion rows. The corrected slice
+  produced 67 proof-critical work items. Result: 65 killed, 2 documented
+  equivalent survivors. Equivalent survivors:
+  - `_drawing_bounds()`: empty drawing fallback max-x `1.0` changed to `0.0`.
+    The public HTML path clamps empty width to at least `1.0`, so the emitted
+    empty fallback remains `width="1mm"` and `viewBox="0 0 1 1"`.
+  - `_drawing_bounds()`: empty drawing fallback max-y `1.0` changed to `0.0`.
+    The public HTML path clamps empty height to at least `1.0`, so the emitted
+    empty fallback remains `height="1mm"` and `viewBox="0 0 1 1"`.
 - `FLOW-DOCUMENT-DRAWINGML-P3` scoped to `_drawing_docx()`,
   `_component_drawingml()`, `_drawingml_segments_docx()`,
   `_drawingml_shape_docx()`, `_drawingml_fill()`, `_drawingml_line()`,
@@ -1167,9 +1174,11 @@ through `_positive_artifact_number()` before arithmetic or string formatting.
 Artifact number formatting and DOCX twip conversion use `_artifact_number()` so
 booleans, strings, bytes, arbitrary objects, `nan`, and infinity fail before
 artifact text is emitted. Focused tests pin valid circle DrawingML and twip
-formatting, then mutate live circle and paragraph state to cover malformed
-point shape, boolean coordinates, non-finite coordinates, malformed radius
-values, non-positive radii, and malformed twip values.
+formatting, empty drawing fallback bounds, mixed circle/materialized-component
+bound traversal, and the exact millimeter-to-twip scale. They then mutate live
+circle and paragraph state to cover malformed point shape, boolean coordinates,
+non-finite coordinates, malformed radius values, non-positive radii, and
+malformed twip values.
 
 ### Counterexamples And Exclusions
 
@@ -1182,8 +1191,9 @@ geometry remains delegated to materialized component point-surface checks.
 ### Conclusion
 
 Focused tests and mutation cover the public output paths and corrupted
-live-state partitions. Full coverage, lint, docs, and diff hygiene remain
-release-gate checks for the slice.
+live-state partitions. The corrected mutation slice produced 67 proof-critical
+work items: 65 killed and 2 equivalent empty-fallback survivors. Full coverage,
+lint, docs, and diff hygiene remain release-gate checks for the slice.
 
 ## Current Slice Decision
 
