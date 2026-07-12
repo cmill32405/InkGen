@@ -289,7 +289,7 @@ ADR/rule impact:
 | Repeated DOCX generation | Preserve exact bytes and fixed part order/timestamps | PO-FDOC-001 | `test_flow_document_docx_bytes_are_deterministic` | killed |
 | Text with XML/HTML/Markdown/RTF controls | Escape per target format | PO-FDOC-002 | `test_flow_document_escapes_text_across_output_formats` | 127 killed; 3 equivalent survivors |
 | RTF non-ASCII text | Emit RTF Unicode escapes for title and paragraph text | PO-FDOC-016 | `test_flow_document_rtf_escapes_unicode_text` | killed with documented equivalent survivors |
-| Paragraph/table/drawing block order | Preserve through parameters and output | PO-FDOC-003 | `test_flow_document_preserves_mixed_block_order_after_round_trip` | behavioral evidence |
+| Paragraph/table/drawing block order | Preserve through parameters and output | PO-FDOC-003 | `test_flow_document_preserves_mixed_block_order_after_round_trip` | killed |
 | Root payload shape | Accept wrapped/direct mappings and reject malformed payload roots or collection fields | PO-FDOC-008 | `test_flow_document_hydrates_direct_payload_mapping`, `test_flow_document_hydration_rejects_malformed_root_payloads` | killed |
 | Serialized block envelope and dispatch | Reject malformed envelopes and dispatch valid dynamic type strings by value | PO-FDOC-007 | `test_flow_document_hydration_rejects_malformed_block_envelopes`, `test_flow_document_hydration_dispatches_dynamic_block_type_strings` | killed |
 | Serialized drawing payload | Reject missing drawing payload keys and non-sequence component collections before component iteration | PO-FDOC-010 | `test_flow_document_hydration_rejects_malformed_drawing_payloads` | killed |
@@ -469,6 +469,9 @@ Current result:
   literals, so identity and equality take the same branch for the tested public
   RTF text domain. The threshold mutant changing `< 128` to `< 127` exposed a
   real DEL boundary and was closed by escaping DEL through the Unicode path.
+- `FLOW-DOCUMENT-P1` scoped to mixed block order across append methods,
+  `parameters`, hydration, plain text, HTML, Markdown, RTF, DOCX XML, and block
+  dispatch produced 128 proof-critical work items: 128 killed and 0 survived.
 
 ## PO-FDOC-001: DOCX Bytes Are Deterministic
 
@@ -561,13 +564,15 @@ registries for globally unique style names.
 
 ### Proof Method
 
-The block serializers tag each block by type in document order. The focused test
-recreates a paragraph/table/drawing document and compares block classes,
-parameters, and plain-text order.
+The public add methods append to the same `_blocks` list read by `blocks`,
+`parameters`, hydration, and every output loop. The block serializers tag each
+block by type in document order. The focused test recreates a
+paragraph/table/drawing document and compares block classes, parameters,
+plain-text order, HTML order, Markdown order, RTF order, and DOCX XML order.
 
 ### Conclusion
 
-Proven for the stated domain after tests.
+Proven for the stated domain after focused tests and mutation pass.
 
 ## PO-FDOC-004: Invalid Drawing Materialization Fails Loudly
 

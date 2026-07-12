@@ -418,6 +418,17 @@ def test_flow_document_preserves_mixed_block_order_after_round_trip() -> None:
     assert clone.parameters == document.parameters
     assert clone.to_plain_text() == "Intro\n\nPN\tQty\n\n[Drawing: flow-drawing; RectangleDrawing]"
 
+    html = clone.to_html()
+    markdown = clone.to_markdown()
+    rtf = clone.to_rtf()
+    with zipfile.ZipFile(BytesIO(clone.to_docx_bytes())) as package:
+        document_xml = package.read("word/document.xml").decode("utf-8")
+
+    assert html.index("Intro") < html.index("<table>") < html.index("<svg")
+    assert markdown.index("Intro") < markdown.index("| PN | Qty |") < markdown.index("<svg")
+    assert rtf.index("Intro") < rtf.index("PN\tQty") < rtf.index("[Drawing: flow-drawing")
+    assert document_xml.index("Intro") < document_xml.index("<w:tbl>") < document_xml.index("<wp:anchor")
+
 
 @pytest.mark.condition("FLOW-DOCUMENT-P1")
 @pytest.mark.parametrize(
