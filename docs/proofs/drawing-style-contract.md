@@ -143,7 +143,7 @@ ADR/rule impact:
 | Invalid opacity | Reject booleans, out-of-range, non-finite, and non-numeric values at construction and setter boundaries | PO-DSTYLE-004 | `test_drawing_style_rejects_invalid_stroke_width_and_opacity_boundaries` | killed |
 | Invalid stroke presentation | Reject malformed dash arrays, dash offsets, line caps, line joins, and miter limits | PO-DSTYLE-008 | `test_drawing_style_rejects_invalid_stroke_presentation_boundaries`, `test_stroke_presentation_maps_each_renderer_operator_domain` | 154 killed; 4 equivalent survivors |
 | Hydrated payloads | Route serialized values through the public constructor validation | PO-DSTYLE-005 | `test_drawing_style_hydration_uses_public_validation_boundaries` | killed |
-| SVG/PDF live paths | Emit validated style values into SVG style strings and PDF graphics operators | PO-DSTYLE-006 | `test_drawing_style_contract_remains_live_in_svg_and_pdf_output` | behavioral evidence |
+| SVG/PDF live paths | Emit validated style values into SVG style strings and PDF graphics operators | PO-DSTYLE-006 | `test_drawing_style_contract_remains_live_in_svg_and_pdf_output` | 130 killed; 5 equivalent survivors |
 | PDF stroke/fill opacity | Emit non-opaque drawing style alpha through deterministic ExtGState resources | PO-DSTYLE-007 | `test_document_pdf_emits_extgstate_for_drawing_opacity`, `test_document_pdf_reuses_opacity_extgstate_resources`, `test_document_pdf_separates_stroke_and_fill_opacity_domains`, `test_document_pdf_omits_extgstate_for_opaque_drawings`, `test_pdf_opacity_helpers_validate_boundaries_and_reuse_resources` | 111 killed; 24 equivalent survivors |
 | DXF stroke style output | Emit validated stroke color and stroke width as DXF true-color and standard lineweight group codes | PO-DSTYLE-009 | `test_dxf_entities_emit_drawing_style_color_and_lineweight`, `test_dxf_style_lineweight_uses_standard_values_and_disabled_stroke_omits_codes` | DXF-STYLES-P2 gate |
 
@@ -216,6 +216,22 @@ Current result:
   - SVG/PDF line-cap checks mutating `linecap != "butt"` to
     `linecap > "butt"` are equivalent for the validated line-cap domain because
     the only non-default values, `round` and `square`, sort after `butt`.
+- SVG/PDF live-path continuation:
+  `tests/mutation/drawing_style_live_path_cosmic_ray.toml`, filtered by
+  `tests/mutation/filter_drawing_style_live_path_work_items.py`: 135 work
+  items, 130 killed, and 5 documented equivalent survivors. Equivalent
+  survivor classes:
+  - `_paint_operator()` keyword-only `*` separator and default `fill`/`stroke`
+    mutations do not affect the proven rectangle live path because PDF drawing
+    primitives call `_paint_operator(style, fill=..., stroke=...)` with explicit
+    keyword arguments.
+  - SVG fill opacity mutating `fill.lower() != "none"` to
+    `fill.lower() < "none"` is equivalent for the validated `DrawingStyle`
+    domain because all non-`none` fills normalize to lower-case hex strings,
+    and `#...` sorts before `none`.
+  - SVG line-cap checks mutating `linecap != "butt"` to `linecap > "butt"` are
+    equivalent for the validated line-cap domain because the only non-default
+    values, `round` and `square`, sort after `butt`.
 
 ## PO-DSTYLE-001: Valid Drawing Styles Normalize Deterministically
 
@@ -342,11 +358,14 @@ stroke, fill, stroke width, stroke opacity, and fill opacity.
 ### Proof Method
 
 The live-path test renders a rectangle through SVG and PDF paths and asserts
-the emitted SVG style tokens and PDF graphics operators.
+the emitted SVG style tokens and PDF graphics operators. The scoped live-path
+mutation gate targets the current SVG style-string helper, PDF style operator
+helper, and PDF paint operator helper rows.
 
 ### Conclusion
 
-Supported by behavioral evidence for the stated domain.
+Proven for the stated domain after focused tests and mutation pass with
+documented equivalent survivors.
 
 ## PO-DSTYLE-007: PDF Emits Drawing Opacity ExtGState
 
