@@ -9,15 +9,23 @@ import pytest
 from InkGen.parser_stress_fixtures import (
     ParserStressBOMRow,
     ParserStressFixtureSpec,
+    ScannedParserStressFixtureSpec,
+    _coerce_fixture_page_rotation,
     _unique_style_name,
     build_parser_stress_pdf,
+    build_scanned_parser_stress_pdf,
 )
-from InkGen.pdf_generator import ComponentGroupPDF, DocumentPDF
+from InkGen.pdf_generator import ComponentGroupPDF, DocumentPDF, ImagePDF
 from InkGen.style import DrawingStyle
 
 
 def _groups_by_label(document: DocumentPDF) -> dict[str, ComponentGroupPDF]:
     return {group.group_label: group for group in document.page(1).layer("base").groups()}
+
+
+def _document_canvas_dimensions(document: DocumentPDF) -> tuple[float, float]:
+    canvas = document.parameters["DocumentPDF"]["canvas"]["Canvas"]
+    return canvas["width"], canvas["height"]
 
 
 @pytest.mark.condition("PDF-PARSER-STRESS-FIXTURE-P3")
@@ -36,6 +44,7 @@ def test_parser_stress_pdf_builds_rotated_transparent_truth_labeled_fixture() ->
     grammar_truth = document.grammar_truth()
 
     assert isinstance(document, DocumentPDF)
+    assert _document_canvas_dimensions(document) == (340.0, 200.0)
     assert document.page_rotation(1) == 90
     groups = _groups_by_label(document)
     assert set(groups) == {"title_block", "bom_table", "transparent_overlay", "zone_markers"}
@@ -59,6 +68,7 @@ def test_parser_stress_pdf_builds_rotated_transparent_truth_labeled_fixture() ->
     assert any(record["condition_id"] == "BOM-TABLE" and record["kind"] == "construct" for record in grammar_truth)
     assert any(record["condition_id"] == "TRANSPARENCY-CUE" for record in grammar_truth)
     assert any(record["page"] == 0 and record["bbox"] is None and record["value"]["known_fixture"] is True for record in grammar_truth)
+    assert any(record["condition_id"] == "PARSER-STRESS-DOCUMENT" and record["value"]["known_fixture"] is True for record in grammar_truth)
     assert json.loads(document.extraction_truth_json()) == extraction_truth
     assert json.loads(document.grammar_truth_json()) == grammar_truth
 
@@ -88,10 +98,16 @@ def test_parser_stress_spec_normalizes_rotations() -> None:
     positive = ParserStressFixtureSpec(page_rotation=450, style_namespace="parser_stress_rotation_positive")
     negative = ParserStressFixtureSpec(page_rotation=-90, style_namespace="parser_stress_rotation_negative")
 
+    assert _coerce_fixture_page_rotation(0) == 0
+    assert _coerce_fixture_page_rotation(90) == 90
     assert positive.page_rotation == 90
     assert negative.page_rotation == 270
     assert build_parser_stress_pdf(positive).page_rotation(1) == 90
     assert build_parser_stress_pdf(negative).page_rotation(1) == 270
+    with pytest.raises(TypeError, match="page_rotation"):
+        _coerce_fixture_page_rotation(True)
+    with pytest.raises(ValueError, match="page_rotation"):
+        _coerce_fixture_page_rotation(1)
 
 
 @pytest.mark.condition("PDF-PARSER-STRESS-FIXTURE-P3")
@@ -143,3 +159,100 @@ def test_parser_stress_bom_row_rejects_empty_fields() -> None:
         ParserStressBOMRow("1", "", "DESCRIPTION", "1")
     with pytest.raises(ValueError, match="quantity"):
         ParserStressBOMRow("1", "PN-1", "DESCRIPTION", 1)  # type: ignore[arg-type]
+
+
+@pytest.mark.condition("PDF-PARSER-STRESS-SCAN-P3")
+def test_scanned_parser_stress_pdf_builds_image_only_truth_labeled_fixture() -> None:
+    """PDF-PARSER-STRESS-SCAN-P3: The scanned fixture emits an image-only PDF page."""
+    spec = ScannedParserStressFixtureSpec(scan_id="SCAN-0100", page_label="SCAN-A-", source_name="scan-a.png")
+
+    document = build_scanned_parser_stress_pdf(spec)
+    payload = document.to_pdf_bytes()
+    extraction_truth = document.extraction_truth()
+    grammar_truth = document.grammar_truth()
+    groups = _groups_by_label(document)
+    components = tuple(groups["scanned_page"].components())
+
+    assert isinstance(document, DocumentPDF)
+    assert _document_canvas_dimensions(document) == (340.0, 200.0)
+    assert set(groups) == {"scanned_page"}
+    assert len(components) == 1
+    assert type(components[0]) is ImagePDF
+    assert components[0].position == (0.1, 0.1)
+    assert components[0].width == 339.8
+    assert components[0].height == 199.8
+    assert components[0].image.width == 680
+    assert components[0].image.height == 400
+    image = components[0].image.image()
+    pixels = image.load()
+    assert pixels[72, 60] == (0, 0, 0)
+    assert pixels[168, 60] == (0, 0, 0)
+    assert pixels[398, 60] == (0, 0, 0)
+    assert pixels[50, 68] == (0, 0, 0)
+    assert pixels[50, 88] == (0, 0, 0)
+    grid_x = {36, 37, 72, 73, 168, 169, 398, 399, 438, 439}
+    grid_y = {48, 49, 68, 69, 88, 89, 108, 109, 128, 129}
+    header_dark_pixels = sum(
+        1 for y in range(54, 72) for x in range(42, 430) if pixels[x, y][0] < 100 and x not in grid_x and y not in grid_y
+    )
+    row_dark_pixels = sum(
+        1 for y in range(70, 115) for x in range(42, 430) if pixels[x, y][0] < 100 and x not in grid_x and y not in grid_y
+    )
+    assert header_dark_pixels > 500
+    assert row_dark_pixels > 500
+    assert document.page_rotation(1) is None
+    assert b"/TrimBox [0 0 340 200]" in payload
+    assert b"/Subtype /Image" in payload
+    assert b"/XObject << /Im1" in payload
+    assert "339.8 0 0 -199.8 0.1 199.9 cm\n/Im1 Do" in payload.decode("latin-1")
+    assert b"BT" not in payload
+    assert b" Tj" not in payload
+    assert b"SCAN-0100" not in payload
+    assert {(record["field"], record["role"], record["source_channel"], record["instance_id"]) for record in extraction_truth} >= {
+        ("scanned_page_image", "image", "image", "SCAN-0100"),
+        ("scanned_page", "region", "body", "SCAN-0100"),
+    }
+    assert any(
+        record["condition_id"] == "PARSER-STRESS-SCANNED-DOCUMENT"
+        and record["kind"] == "assessment"
+        and record["bbox"] is None
+        and record["value"]["known_fixture"] is True
+        and record["value"]["extractable_text"] is False
+        for record in grammar_truth
+    )
+    assert any(
+        record["condition_id"] == "SCANNED-PAGE-IMAGE"
+        and record["kind"] == "cue"
+        and record["source_channel"] == "image"
+        and record["value"]["image_format"] == "PNG"
+        for record in grammar_truth
+    )
+    assert any(record["condition_id"] == "IMAGE-ONLY-PAGE" and record["kind"] == "construct" for record in grammar_truth)
+    assert json.loads(document.extraction_truth_json()) == extraction_truth
+    assert json.loads(document.grammar_truth_json()) == grammar_truth
+
+
+@pytest.mark.condition("PDF-PARSER-STRESS-SCAN-P3")
+def test_scanned_parser_stress_pdf_default_builds_are_deterministic() -> None:
+    """PDF-PARSER-STRESS-SCAN-P3: Repeated scanned fixture builds are deterministic."""
+    first = build_scanned_parser_stress_pdf()
+    second = build_scanned_parser_stress_pdf()
+
+    assert first.to_pdf_bytes() == second.to_pdf_bytes()
+    assert first.extraction_truth_json() == second.extraction_truth_json()
+    assert first.grammar_truth_json() == second.grammar_truth_json()
+
+
+@pytest.mark.condition("PDF-PARSER-STRESS-SCAN-P3")
+def test_scanned_parser_stress_spec_rejects_empty_or_invalid_inputs() -> None:
+    """PDF-PARSER-STRESS-SCAN-P3: Invalid scanned fixture specs fail before rendering."""
+    with pytest.raises(ValueError, match="scan_id"):
+        ScannedParserStressFixtureSpec(scan_id="")
+    with pytest.raises(ValueError, match="page_label"):
+        ScannedParserStressFixtureSpec(page_label="")
+    with pytest.raises(ValueError, match="source_name"):
+        ScannedParserStressFixtureSpec(source_name="")
+    with pytest.raises(ValueError, match="scan_id"):
+        ScannedParserStressFixtureSpec(scan_id=10)  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="spec"):
+        build_scanned_parser_stress_pdf(object())  # type: ignore[arg-type]

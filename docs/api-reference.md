@@ -60,9 +60,14 @@ available from the package root for caller-facing failure handling:
 - `ParserStressBOMRow`: BOM row values for parser fixture generation.
 - `ParserStressFixtureSpec`: Title-block, revision, page-rotation, page-label,
   transparency, and BOM-row configuration for deterministic parser fixtures.
+- `ScannedParserStressFixtureSpec`: Scan ID, page-label, and source-name
+  configuration for deterministic image-only parser fixtures.
 - `build_parser_stress_pdf()`: Builds a `DocumentPDF` that exercises rotated
   pages, TrimBox metadata, title blocks, BOM tables, transparency, zone markers,
   and extraction/grammar truth records.
+- `build_scanned_parser_stress_pdf()`: Builds a `DocumentPDF` with a single
+  near-full-page raster image XObject and truth records marking the page as a
+  known image-only scan fixture with no extractable PDF text.
 
 ## Tables (`InkGen.table`)
 

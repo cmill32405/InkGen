@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import io
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+
+from PIL import Image, ImageDraw
 
 from InkGen.boundary import Canvas
 from InkGen.extraction_truth import annotate_extraction_truth
 from InkGen.grammar_truth import annotate_grammar_truth
-from InkGen.pdf_generator import ComponentGroupPDF, DocumentPDF, LinePDF, RectanglePDF, TextPDF
+from InkGen.image_assets import RasterImageAsset
+from InkGen.pdf_generator import ComponentGroupPDF, DocumentPDF, ImagePDF, LinePDF, RectanglePDF, TextPDF
 from InkGen.style import DrawingStyle, Font, Style, TextStyle
 
 
@@ -68,6 +72,24 @@ class ParserStressFixtureSpec:
 
 
 @dataclass(frozen=True)
+class ScannedParserStressFixtureSpec:
+    """Configuration for a deterministic image-only scanned PDF fixture."""
+
+    scan_id: str = "SCAN-0001"
+    page_label: str = "SCAN-"
+    source_name: str = "scan_fixture.png"
+
+    def __post_init__(self) -> None:
+        """Validate the scanned fixture spec."""
+        for field_name, value in (
+            ("scan_id", self.scan_id),
+            ("page_label", self.page_label),
+            ("source_name", self.source_name),
+        ):
+            _require_non_empty_string(value, field_name)
+
+
+@dataclass(frozen=True)
 class _FixtureStyles:
     outline: DrawingStyle
     grid: DrawingStyle
@@ -109,6 +131,60 @@ def build_parser_stress_pdf(spec: ParserStressFixtureSpec | None = None) -> Docu
     if spec.include_transparency:
         layer.add_component_group(_transparent_overlay_group(styles))
     layer.add_component_group(_zone_marker_group(styles))
+    return document
+
+
+def build_scanned_parser_stress_pdf(spec: ScannedParserStressFixtureSpec | None = None) -> DocumentPDF:
+    """Build a deterministic image-only PDF that simulates a scanned page."""
+    if spec is None:
+        spec = ScannedParserStressFixtureSpec()
+    if not isinstance(spec, ScannedParserStressFixtureSpec):
+        raise TypeError("spec must be a ScannedParserStressFixtureSpec or None.")
+
+    canvas = Canvas(340.0, 200.0)
+    document = DocumentPDF(canvas)
+    document.add_page()
+    document.set_page_label(1, spec.page_label)
+    document.set_page_box(1, "TrimBox", (0.0, 0.0, canvas.width, canvas.height))
+
+    annotate_grammar_truth(
+        document,
+        "PARSER-STRESS-SCANNED-DOCUMENT",
+        "assessment",
+        value={
+            "fixture_family": "scanned_pdf",
+            "known_fixture": True,
+            "extractable_text": False,
+        },
+        source_channel="metadata",
+        instance_id=spec.scan_id,
+    )
+
+    asset = RasterImageAsset.from_bytes(_scan_page_png_bytes(spec.scan_id), source=spec.source_name)
+    page_inset = 0.1
+    image = ImagePDF(asset, (page_inset, page_inset), canvas.width - page_inset * 2, canvas.height - page_inset * 2)
+    annotate_extraction_truth(
+        image,
+        "scanned_page_image",
+        spec.scan_id,
+        role="image",
+        source_channel="image",
+        instance_id=spec.scan_id,
+    )
+    annotate_grammar_truth(
+        image,
+        "SCANNED-PAGE-IMAGE",
+        "cue",
+        value={"image_format": asset.format, "width_px": asset.width, "height_px": asset.height},
+        source_channel="image",
+        instance_id=spec.scan_id,
+    )
+
+    group = ComponentGroupPDF("scanned_page")
+    group.add_component(image)
+    annotate_extraction_truth(group, "scanned_page", spec.scan_id, role="region", instance_id=spec.scan_id)
+    annotate_grammar_truth(group, "IMAGE-ONLY-PAGE", "construct", value="near_full_page_raster", instance_id=spec.scan_id)
+    document.page(1).layer("base").add_component_group(group)
     return document
 
 
@@ -232,6 +308,48 @@ def _require_non_empty_string(value: object, field_name: str) -> str:
     if not isinstance(value, str) or not value:
         raise ValueError(f"{field_name} must be a non-empty string.")
     return value
+
+
+def _scan_page_png_bytes(scan_id: str) -> bytes:
+    scale = 2
+    width = int(340 * scale)
+    height = int(200 * scale)
+    image = Image.new("RGB", (width, height), "white")
+    draw = ImageDraw.Draw(image)
+
+    def xy(x: float, y: float) -> tuple[int, int]:
+        return int(round(x * scale)), int(round(y * scale))
+
+    def rectangle(x0: float, y0: float, x1: float, y1: float, *, outline: str, fill: str | None = None) -> None:
+        draw.rectangle((xy(x0, y0), xy(x1, y1)), outline=outline, fill=fill, width=scale)
+
+    rectangle(12.0, 12.0, 328.0, 188.0, outline="black")
+    rectangle(158.0, 146.0, 264.0, 184.0, outline="black")
+    rectangle(158.0, 146.0, 264.0, 155.0, outline="black", fill="#eeeeee")
+    draw.text(xy(161.0, 149.0), "SCANNED DRAWING", fill="black")
+    draw.text(xy(161.0, 164.0), scan_id, fill="black")
+
+    table_x = 18.0
+    table_y = 24.0
+    row_height = 10.0
+    column_edges = (18.0, 36.0, 84.0, 199.0, 219.0)
+    table_bottom = table_y + row_height * 4
+    rectangle(table_x, table_y, column_edges[-1], table_bottom, outline="black")
+    rectangle(table_x, table_y, column_edges[-1], table_y + row_height, outline="black", fill="#eeeeee")
+    for x in column_edges[1:-1]:
+        draw.line((xy(x, table_y), xy(x, table_bottom)), fill="black", width=scale)
+    for index in range(1, 4):
+        y = table_y + row_height * index
+        draw.line((xy(table_x, y), xy(column_edges[-1], y)), fill="black", width=scale)
+
+    for text, x in (("ITEM", 21.0), ("PART", 39.0), ("DESCRIPTION", 87.0), ("QTY", 202.0)):
+        draw.text(xy(x, 27.0), text, fill="black")
+    for row, text in enumerate(("1  SCN-1001  RASTER TITLE BLOCK  1", "2  SCN-1002  IMAGE TABLE ROW    4"), start=1):
+        draw.text(xy(21.0, table_y + row_height * row + 3.0), text, fill="black")
+
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 def _unique_style_name(namespace: str, suffix: str) -> str:

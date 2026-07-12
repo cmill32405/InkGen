@@ -23,9 +23,11 @@ from InkGen import (
     RasterImageAsset,
     RasterImageComponent,
     RectanglePDF,
+    ScannedParserStressFixtureSpec,
     Table,
     ZoningDrawing,
     build_parser_stress_pdf,
+    build_scanned_parser_stress_pdf,
 )
 from InkGen.document_outputs import DocumentOutputFormat as ModuleDocumentOutputFormat
 from InkGen.document_outputs import FlowDocument as ModuleFlowDocument
@@ -38,7 +40,9 @@ from InkGen.image_assets import RasterImageAsset as ModuleRasterImageAsset
 from InkGen.image_assets import RasterImageComponent as ModuleRasterImageComponent
 from InkGen.parser_stress_fixtures import ParserStressBOMRow as ModuleParserStressBOMRow
 from InkGen.parser_stress_fixtures import ParserStressFixtureSpec as ModuleParserStressFixtureSpec
+from InkGen.parser_stress_fixtures import ScannedParserStressFixtureSpec as ModuleScannedParserStressFixtureSpec
 from InkGen.parser_stress_fixtures import build_parser_stress_pdf as module_build_parser_stress_pdf
+from InkGen.parser_stress_fixtures import build_scanned_parser_stress_pdf as module_build_scanned_parser_stress_pdf
 from InkGen.pdf_generator import ComponentGroupPDF as ModuleComponentGroupPDF
 from InkGen.pdf_generator import DocumentPDF as ModuleDocumentPDF
 from InkGen.pdf_generator import ImagePDF as ModuleImagePDF
@@ -80,8 +84,10 @@ DOCUMENTED_PUBLIC_SYMBOLS = {
     "build_parser_stress_pdf",
     "RasterImageAsset",
     "RasterImageComponent",
+    "ScannedParserStressFixtureSpec",
     "annotate_extraction_truth",
     "annotate_grammar_truth",
+    "build_scanned_parser_stress_pdf",
     "extraction_truth_json",
     "flatten_svg",
     "grammar_truth_json",
@@ -129,6 +135,8 @@ def test_root_exports_match_submodule_identities() -> None:
     assert ParserStressBOMRow is ModuleParserStressBOMRow
     assert ParserStressFixtureSpec is ModuleParserStressFixtureSpec
     assert build_parser_stress_pdf is module_build_parser_stress_pdf
+    assert ScannedParserStressFixtureSpec is ModuleScannedParserStressFixtureSpec
+    assert build_scanned_parser_stress_pdf is module_build_scanned_parser_stress_pdf
 
 
 @pytest.mark.condition("PUBLIC-API-P1")

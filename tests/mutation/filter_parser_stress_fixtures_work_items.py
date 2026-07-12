@@ -12,6 +12,7 @@ AND (
   definition_name IN (
     '__post_init__',
     'build_parser_stress_pdf',
+    'build_scanned_parser_stress_pdf',
     '_coerce_fixture_page_rotation',
     '_require_non_empty_string',
     '_unique_style_name'

@@ -108,7 +108,7 @@ tests and, where appropriate, recording an ADR.
 | `document_outputs.py -> image_assets.py` | DOCX output registers native image media parts for `ImageDrawing` blocks. | Flow documents should package media only; raster decoding and PDF/SVG image encoding stay in lower layers. |
 | `document_outputs.py -> PDF materialized point surfaces` | DOCX DrawingML uses existing neutral/PDF point geometry for linework instead of owning another drawing geometry model. | PDF point-surface contract changes can alter DOCX vector output. |
 | `pdf_generator.py -> extraction_truth.py/grammar_truth.py` | PDF documents emit parser-facing truth records in PDF coordinates. | Truth schema changes can break downstream parser fixtures. |
-| `parser_stress_fixtures.py -> pdf_generator.py/extraction_truth.py/grammar_truth.py` | Parser stress fixtures compose public PDF primitives and truth annotations into repeatable technical drawings. | Fixture helpers must not reach into PDF object writer internals or become a second renderer. |
+| `parser_stress_fixtures.py -> pdf_generator.py/image_assets.py/extraction_truth.py/grammar_truth.py` | Parser stress fixtures compose public PDF/image primitives and truth annotations into repeatable technical drawings and image-only scan fixtures. | Fixture helpers must not reach into PDF object writer internals, own raster decoding policy, or become a second renderer. |
 | `pdf_generator.py -> pdf_render_contract.py` | The PDF render path delegates proof-critical closed-domain checks to a small mutation-tested contract module. | Bypassing the helper weakens PO-GT-004 and can hide custom render paths. |
 | `DocumentPDF -> ComponentGroupPDF -> built-in PDF components` | The PDF render path is intentionally closed so noninterference properties can be proven. | Arbitrary custom PDF render components are outside the proven contract. |
 | `pdf_generator.py -> fonttools` | PDF named-font embedding reads installed font metrics and embeds font-file streams without adding a PDF dependency. | Font parsing errors must fail back to Standard 14 behavior rather than corrupting PDF output. |
@@ -140,7 +140,7 @@ These contracts are more important than individual implementation details.
 | Flow document block order | DOCX/HTML/Markdown/RTF/text exports | Document content is reordered or omitted |
 | Flow document DrawingML vectors | DOCX exports and Google Docs/Word synthetic fixtures | DOCX falls back to VML, vector positions drift, or document outputs start owning drawing geometry |
 | Public exports in `__init__.py` | External callers and examples | Imports from `InkGen` break |
-| Parser stress fixture builders | Document Intelligence fixture generation | Fixtures stop exercising title blocks, BOM tables, rotations, transparency, page metadata, or truth labels |
+| Parser stress fixture builders | Document Intelligence fixture generation | Fixtures stop exercising title blocks, BOM tables, rotations, transparency, page metadata, image-only scan pages, or truth labels |
 
 ## Dependency Review Checklist
 

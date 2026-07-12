@@ -285,8 +285,12 @@ Parser stress PDFs can be built with `InkGen.parser_stress_fixtures`. The
 default `build_parser_stress_pdf()` output is a single-page technical drawing
 with a rotated PDF page dictionary, TrimBox metadata, a title block, a BOM table,
 a semi-transparent overlay, zone markers, and extraction/grammar truth records.
-The builder composes public PDF primitives and truth helpers; it does not own PDF
-serialization and does not add dependencies.
+The companion `build_scanned_parser_stress_pdf()` output is a single-page,
+image-only scanned-page fixture: the page carries one near-full-page raster
+image XObject, no PDF text operators, and truth records that mark the fixture as
+known scan-like input with `extractable_text: false`. Both builders compose
+public PDF/image primitives and truth helpers; they do not own PDF serialization
+and do not add dependencies.
 
 Grammar truth annotations can be attached through `InkGen.grammar_truth` and
 emitted with `DocumentPDF.grammar_truth()`. The emit is registry-agnostic: InkGen

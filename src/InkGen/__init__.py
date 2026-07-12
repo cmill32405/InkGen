@@ -50,7 +50,9 @@ from .parser_stress_fixtures import (
     DEFAULT_PARSER_STRESS_BOM_ROWS,
     ParserStressBOMRow,
     ParserStressFixtureSpec,
+    ScannedParserStressFixtureSpec,
     build_parser_stress_pdf,
+    build_scanned_parser_stress_pdf,
 )
 from .pdf_generator import (
     ArcPDF,
@@ -185,6 +187,7 @@ __all__ = [
     "StandardDrawingComponent",
     "Style",
     "SVGComponent",
+    "ScannedParserStressFixtureSpec",
     "Table",
     "TableSVG",
     "TabStop",
@@ -200,6 +203,7 @@ __all__ = [
     "annotate_extraction_truth",
     "annotate_grammar_truth",
     "build_parser_stress_pdf",
+    "build_scanned_parser_stress_pdf",
     "component_to_fitter_shape",
     "DEFAULT_PARSER_STRESS_BOM_ROWS",
     "extraction_truth_json",
