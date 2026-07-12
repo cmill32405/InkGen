@@ -32,6 +32,10 @@ Affected surface:
   path, and live-output tests.
 - `tests/mutation/font_cosmic_ray.toml`: scoped mutation gate.
 - `tests/mutation/filter_font_work_items.py`: proof-critical mutation filter.
+- `tests/mutation/font_live_path_cosmic_ray.toml`: scoped SVG/PDF/DXF/DOCX
+  live-path mutation gate.
+- `tests/mutation/filter_font_live_path_work_items.py`: proof-critical
+  renderer live-path mutation filter.
 
 Incoming dependencies:
 
@@ -125,7 +129,7 @@ ADR/rule impact:
 | Requested family tracking | Preserve the caller-requested family independently from resolved font-manager family | PO-FONT-007 | `test_font_preserves_requested_family_for_renderer_policy` | killed/equivalent |
 | Custom font paths | Validate type/existence and avoid mutating caller lists | PO-FONT-004 | `test_font_custom_paths_are_validated_and_copied` | killed |
 | Hydrated payloads | Route serialized values through public validation boundaries | PO-FONT-005 | `test_font_hydration_uses_public_validation_boundaries` | killed |
-| Live output paths | Emit validated font size/style/weight into SVG, PDF, DXF, and DOCX output | PO-FONT-006 | `test_font_contract_remains_live_in_output_paths` | behavioral evidence |
+| Live output paths | Emit validated font size/style/weight into SVG, PDF, DXF, and DOCX output | PO-FONT-006 | `test_font_contract_remains_live_in_output_paths` | 69 killed; 2 equivalent survivors |
 
 ## Test Applicability Matrix
 
@@ -169,6 +173,14 @@ Current result:
   - `custom_font_paths` list validation changed `and` to `or`. The malformed
     list fixture still raises `TypeError` before public font state is usable;
     only the internal failing expression changes.
+- SVG/PDF/DXF/DOCX live-path continuation:
+  `tests/mutation/font_live_path_cosmic_ray.toml`, filtered by
+  `tests/mutation/filter_font_live_path_work_items.py`: 71 work items, 69
+  killed, and 2 documented equivalent survivors.
+- Equivalent survivors:
+  - `TextPDF.generate_pdf()` default font-size value mutations are equivalent
+    for the public `TextPDF` domain because valid `TextStyle` instances always
+    expose a validated `Font` with a `size` attribute.
 
 ## PO-FONT-001: Valid Font Values Normalize Deterministically
 
@@ -295,11 +307,14 @@ weight.
 
 The live-path test renders text through SVG, PDF, DXF, and DOCX paths and
 asserts emitted CSS font style/size, PDF font operator, DXF text height, and
-DOCX half-point/bold/italic run properties.
+DOCX half-point/bold/italic run properties. The scoped live-path mutation gate
+targets the current SVG font style/size/family rows, PDF font-size operator
+rows, DXF text-height rows, and DOCX run-property rows.
 
 ### Conclusion
 
-Supported by behavioral evidence for the stated domain.
+Proven for the stated domain after focused tests and mutation pass with
+documented equivalent survivors.
 
 ## PO-FONT-007: Requested Family Is Preserved For Renderer Policy
 
