@@ -148,6 +148,9 @@ Before/after edge changes:
 - After the RTF Unicode hardening update, `FlowDocument.to_rtf()` emits
   non-ASCII title and paragraph text as RTF `\uN?` escapes instead of raw
   Unicode text in an `\ansi` document.
+- After the text escaping hardening update, `FlowDocument.to_rtf()` also emits
+  DEL (`0x7f`) through the RTF Unicode escape path instead of raw control text,
+  while preserving printable ASCII.
 - After the materialized-points hardening update, HTML/DOCX drawing bounds and
   DOCX DrawingML output validate materialized point surfaces as finite
   coordinate pairs before generated document artifacts consume them.
@@ -276,13 +279,15 @@ ADR/rule impact:
   `_table_markdown()`, and Markdown escaping helpers add a dependency-free
   document output that preserves flow-document block order and reuses validated
   SVG drawing materialization.
+- `_rtf_escape()` now treats only codepoints below `0x7f` as raw ASCII, so DEL
+  is escaped consistently with non-ASCII RTF text.
 
 ## Comprehensiveness Matrix
 
 | Domain class | Handling | Proof obligation | Test evidence | Mutation status |
 |---|---|---|---|---|
 | Repeated DOCX generation | Preserve exact bytes and fixed part order/timestamps | PO-FDOC-001 | `test_flow_document_docx_bytes_are_deterministic` | killed |
-| Text with XML/HTML/Markdown/RTF controls | Escape per target format | PO-FDOC-002 | `test_flow_document_escapes_text_across_output_formats` | behavioral evidence |
+| Text with XML/HTML/Markdown/RTF controls | Escape per target format | PO-FDOC-002 | `test_flow_document_escapes_text_across_output_formats` | 127 killed; 3 equivalent survivors |
 | RTF non-ASCII text | Emit RTF Unicode escapes for title and paragraph text | PO-FDOC-016 | `test_flow_document_rtf_escapes_unicode_text` | killed with documented equivalent survivors |
 | Paragraph/table/drawing block order | Preserve through parameters and output | PO-FDOC-003 | `test_flow_document_preserves_mixed_block_order_after_round_trip` | behavioral evidence |
 | Root payload shape | Accept wrapped/direct mappings and reject malformed payload roots or collection fields | PO-FDOC-008 | `test_flow_document_hydrates_direct_payload_mapping`, `test_flow_document_hydration_rejects_malformed_root_payloads` | killed |
@@ -454,6 +459,16 @@ Current result:
   generate a constructor-argument mutant for adding `str(...)`, so the focused
   test explicitly uses a stringifiable non-string label to pin that historical
   failure mode.
+- `FLOW-DOCUMENT-P1` scoped to ASCII control escaping in DOCX, HTML, Markdown,
+  and RTF produced 130 proof-critical work items: 127 killed and 3 documented
+  equivalent survivors. Equivalent survivors:
+  - `_rtf_escape()`: `character == "\\"` changed to `character is "\\"`.
+  - `_rtf_escape()`: `character == "{"` changed to `character is "{"`.
+  - `_rtf_escape()`: `character == "}"` changed to `character is "}"`.
+  In CPython, iterating a string yields cached one-character strings for these
+  literals, so identity and equality take the same branch for the tested public
+  RTF text domain. The threshold mutant changing `< 128` to `< 127` exposed a
+  real DEL boundary and was closed by escaping DEL through the Unicode path.
 
 ## PO-FDOC-001: DOCX Bytes Are Deterministic
 
@@ -481,21 +496,24 @@ Proven for the stated domain after tests and mutation pass.
 
 ### Claim
 
-Text control characters are escaped in DOCX XML, HTML, and RTF outputs.
+Text control characters are escaped in DOCX XML, HTML, Markdown, and RTF
+outputs.
 
 ### Domain
 
-Paragraph text and titles containing XML/HTML/RTF control characters.
+Paragraph text and titles containing XML/HTML/Markdown/RTF control characters.
 
 ### Proof Method
 
-DOCX uses XML escaping, HTML uses HTML escaping, and RTF escapes backslashes and
-braces. The focused test asserts representative control characters in all three
-formats.
+DOCX uses XML escaping, HTML uses HTML escaping, Markdown escapes Markdown
+syntax characters, and RTF escapes backslashes, braces, non-ASCII text, and DEL
+(`0x7f`). The focused test asserts representative title and multiline
+paragraph control characters through every public format.
 
 ### Conclusion
 
-Supported by behavioral evidence for the stated representative domain.
+Proven for the stated representative domain after focused tests, mutation, and
+documented equivalent survivors.
 
 ## PO-FDOC-016: RTF Unicode Text Is Escaped
 

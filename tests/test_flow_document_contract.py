@@ -22,6 +22,7 @@ from InkGen.document_outputs import (
     _drawingml_text_body,
     _mm_to_twips,
     _nonnegative_artifact_number,
+    _rtf_escape,
     _vml_number,
 )
 from InkGen.drawing_components import (
@@ -206,8 +207,8 @@ def test_flow_document_docx_bytes_are_deterministic() -> None:
 @pytest.mark.condition("FLOW-DOCUMENT-P1")
 def test_flow_document_escapes_text_across_output_formats() -> None:
     """FLOW-DOCUMENT-P1: DOCX, HTML, Markdown, and RTF escape format control characters."""
-    document = FlowDocument(title="Control {Doc}")
-    document.add_paragraph(_paragraph("A&B <tag> {x}\\y"))
+    document = FlowDocument(title="Control & <Doc> {x}\\y")
+    document.add_paragraph(_paragraph("A&B <tag>\nNext <line> {x}\\y"))
 
     with zipfile.ZipFile(BytesIO(document.to_docx_bytes())) as package:
         document_xml = package.read("word/document.xml").decode("utf-8")
@@ -215,12 +216,15 @@ def test_flow_document_escapes_text_across_output_formats() -> None:
     markdown = document.to_markdown()
     rtf = document.to_rtf()
 
-    assert "A&amp;B &lt;tag&gt; {x}\\y" in document_xml
-    assert "A&amp;B &lt;tag&gt; {x}\\y" in html
-    assert "# Control \\{Doc\\}" in markdown
-    assert "A&B \\<tag\\> \\{x\\}\\\\y" in markdown
-    assert r"Control \{Doc\}" in rtf
-    assert r"A&B <tag> \{x\}\\y" in rtf
+    assert "A&amp;B &lt;tag&gt;" in document_xml
+    assert '<w:br/><w:t xml:space="preserve">Next &lt;line&gt; {x}\\y</w:t>' in document_xml
+    assert "<title>Control &amp; &lt;Doc&gt; {x}\\y</title>" in html
+    assert "<h1>Control &amp; &lt;Doc&gt; {x}\\y</h1>" in html
+    assert "A&amp;B &lt;tag&gt;<br>Next &lt;line&gt; {x}\\y" in html
+    assert "# Control & \\<Doc\\> \\{x\\}\\\\y" in markdown
+    assert "A&B \\<tag\\>  \nNext \\<line\\> \\{x\\}\\\\y" in markdown
+    assert r"Control & <Doc> \{x\}\\y" in rtf
+    assert r"A&B <tag>\line Next <line> \{x\}\\y" in rtf
 
 
 @pytest.mark.condition("FLOW-DOCUMENT-MARKDOWN-P3")
@@ -283,8 +287,8 @@ def test_flow_document_markdown_omits_zero_column_tables() -> None:
 @pytest.mark.condition("FLOW-DOCUMENT-RTF-UNICODE-P2")
 def test_flow_document_rtf_escapes_unicode_text() -> None:
     """FLOW-DOCUMENT-RTF-UNICODE-P2: RTF output escapes non-ASCII text."""
-    document = FlowDocument(title="Résumé 🚀 \u0080")
-    document.add_paragraph(_paragraph("Torque µ Ω 😀 \u8000"))
+    document = FlowDocument(title="Résumé 🚀 \u0080 \x7f ~")
+    document.add_paragraph(_paragraph("Torque µ Ω 😀 \u8000 \x7f ~"))
 
     rtf = document.to_rtf()
 
@@ -292,8 +296,9 @@ def test_flow_document_rtf_escapes_unicode_text() -> None:
     assert "Torque µ Ω 😀" not in rtf
     assert "\u0080" not in rtf
     assert "\u8000" not in rtf
-    assert r"R\u233?sum\u233? \u-10179?\u-8576? \u128?" in rtf
-    assert r"Torque \u181? \u937? \u-10179?\u-8704? \u-32768?" in rtf
+    assert r"R\u233?sum\u233? \u-10179?\u-8576? \u128? \u127? ~" in rtf
+    assert r"Torque \u181? \u937? \u-10179?\u-8704? \u-32768? \u127? ~" in rtf
+    assert _rtf_escape("~\x7f") == r"~\u127?"
 
 
 @pytest.mark.condition("FLOW-DOCUMENT-TITLE-P2")

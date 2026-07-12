@@ -1109,7 +1109,7 @@ def _rtf_escape(value: str) -> str:
             parts.append(r"\{")
         elif character == "}":
             parts.append(r"\}")
-        elif ord(character) < 128:
+        elif ord(character) < 127:
             parts.append(character)
         else:
             encoded = character.encode("utf-16-le")
