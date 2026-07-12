@@ -66,7 +66,7 @@ creation system are:
 | Color/profile support | Device RGB/CMYK and JPEG ICC profile objects | Broader calibrated color spaces and selectable PDF/A-style archival constraints |
 | Import/conversion | SVG input remains SVG-only | Arbitrary SVG-to-PDF conversion and external PDF embedding are out of scope until explicitly approved |
 | Optimization/security | Classic xref table and plain objects | Object streams, font/image subsetting, encryption, and signatures if those become product requirements |
-| Parser stress fixtures | Purpose-built technical-drawing fixture builder for rotated pages, transparency, tables, title blocks, BOM rows, page boxes, and truth labels | Additional variants for CID encodings, missing/odd CMaps, scans, and other parser-hostile PDF producer behaviors |
+| Parser stress fixtures | Purpose-built technical-drawing fixture builder for rotated pages, transparency, tables, title blocks, BOM rows, page boxes, truth labels, and image-only scan-like pages | Additional variants for CID encodings, missing/odd CMaps, and other parser-hostile PDF producer behaviors |
 
 The highest-value PDF hardening target for Document Intelligence remains full
 Unicode/CID font support because parser extraction quality depends on
