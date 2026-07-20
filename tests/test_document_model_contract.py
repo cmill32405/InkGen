@@ -381,6 +381,6 @@ def test_document_page_contract_remains_live_through_pdf_render_path() -> None:
 
     payload = document.to_pdf_bytes()
 
-    assert payload.startswith(b"%PDF-1.4\n")
+    assert payload.startswith(b"%PDF-1.6\n")
     assert b"/Type /Page /Parent" in payload
     assert b"20 20 30 20 re\nS" in payload

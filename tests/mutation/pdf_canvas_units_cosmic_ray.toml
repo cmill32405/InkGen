@@ -1,0 +1,25 @@
+[cosmic-ray]
+module-path = [
+  "src/InkGen/pdf_generator.py",
+]
+timeout = 60.0
+excluded-modules = []
+test-command = "C:/Users/chris/.cache/inkgen_mutation_venv/Scripts/python.exe -m pytest -x tests/test_pdf_generator.py -k 'honors_canvas_units_once or pdf_unit_scale'"
+
+[cosmic-ray.distributor]
+name = "local"
+
+[cosmic-ray.filters.operators-filter]
+exclude-operators = [
+  "core/ReplaceBinaryOperator_BitOr_Add",
+  "core/ReplaceBinaryOperator_BitOr_BitAnd",
+  "core/ReplaceBinaryOperator_BitOr_BitXor",
+  "core/ReplaceBinaryOperator_BitOr_Div",
+  "core/ReplaceBinaryOperator_BitOr_FloorDiv",
+  "core/ReplaceBinaryOperator_BitOr_LShift",
+  "core/ReplaceBinaryOperator_BitOr_Mod",
+  "core/ReplaceBinaryOperator_BitOr_Mul",
+  "core/ReplaceBinaryOperator_BitOr_Pow",
+  "core/ReplaceBinaryOperator_BitOr_RShift",
+  "core/ReplaceBinaryOperator_BitOr_Sub",
+]

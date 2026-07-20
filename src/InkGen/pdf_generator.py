@@ -59,6 +59,9 @@ from InkGen.style import DrawingStyle, TextStyle
 from InkGen.svg_generator import LabelGenerator, SegmentGenerator
 
 PDF_FIXED_DATE = "D:20000101000000Z"
+PDF_VERSION = "1.6"
+PDF_POINTS_PER_INCH = 72.0
+PDF_MILLIMETERS_PER_INCH = 25.4
 PDF_GENERIC_FONT_FAMILIES = {"serif", "sans-serif", "monospace", "cursive", "fantasy"}
 PDF_WINANSI_FIRST_CHAR = 32
 PDF_WINANSI_LAST_CHAR = 255
@@ -426,7 +429,7 @@ class _PDFObjectWriter:
 
     def build(self, *, root_id: int, info_id: int) -> bytes:
         """Build a PDF file with a classic xref table."""
-        output = bytearray(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
+        output = bytearray(f"%PDF-{PDF_VERSION}\n".encode("ascii") + b"%\xe2\xe3\xcf\xd3\n")
         offsets = [0]
         for object_id in sorted(self._objects):
             offsets.append(len(output))
@@ -453,6 +456,23 @@ def _number(value: float | int) -> str:
     if math.isclose(numeric, round(numeric), abs_tol=1e-9):
         return str(int(round(numeric)))
     return f"{numeric:.6f}".rstrip("0").rstrip(".")
+
+
+def _pdf_points_per_canvas_unit(units: str) -> float:
+    """Return the PDF user-unit scale for canonical Canvas units."""
+    if units == "mm":
+        return PDF_POINTS_PER_INCH / PDF_MILLIMETERS_PER_INCH
+    if units == "in":
+        return PDF_POINTS_PER_INCH
+    raise ValueError(f"Unsupported PDF canvas units: {units}")
+
+
+def _scale_pdf_truth_payload(payload: dict[str, object], unit_scale: float) -> dict[str, object]:
+    """Scale one emitted truth bbox from canvas user units to PDF points."""
+    bbox = payload.get("bbox")
+    if isinstance(bbox, list):
+        payload["bbox"] = [float(value) * unit_scale for value in bbox]
+    return payload
 
 
 def _escape_pdf_string(value: str) -> str:
@@ -3419,6 +3439,7 @@ class DocumentPDF(Document):
             page_rotation = self._page_rotation_operator(page_number)
             rotation = f" {page_rotation}" if page_rotation else ""
             annotations = f" /Annots [{' '.join(f'{annotation_id} 0 R' for annotation_id in annotation_ids)}]" if annotation_ids else ""
+            user_unit = _number(_pdf_points_per_canvas_unit(page._canvas.units))
             writer.set_object(
                 content_id, b"<< /Length " + str(len(content_bytes)).encode("ascii") + b" >>\nstream\n" + content_bytes + b"\nendstream"
             )
@@ -3426,7 +3447,8 @@ class DocumentPDF(Document):
                 page_id,
                 (
                     f"<< /Type /Page /Parent {pages_id} 0 R "
-                    f"/MediaBox [0 0 {_number(page._canvas.width)} {_number(page._canvas.height)}]{page_boxes}{rotation} "
+                    f"/MediaBox [0 0 {_number(page._canvas.width)} {_number(page._canvas.height)}] "
+                    f"/UserUnit {user_unit}{page_boxes}{rotation} "
                     f"/Resources {resources} "
                     f"/Contents {content_id} 0 R{annotations} >>"
                 ),
@@ -3526,7 +3548,8 @@ class DocumentPDF(Document):
                                 canvas_height=page._canvas.height,
                             )
                         )
-        return [record.to_dict() for record in sort_extraction_truth_records(records)]
+        unit_scale = _pdf_points_per_canvas_unit(self._canvas.units)
+        return [_scale_pdf_truth_payload(record.to_dict(), unit_scale) for record in sort_extraction_truth_records(records)]
 
     def extraction_truth_json(self) -> str:
         """Serialize this document's extraction truth to deterministic JSON."""
@@ -3559,7 +3582,8 @@ class DocumentPDF(Document):
                                 canvas_height=page._canvas.height,
                             )
                         )
-        return [record.to_dict() for record in sort_grammar_truth_records(records)]
+        unit_scale = _pdf_points_per_canvas_unit(self._canvas.units)
+        return [_scale_pdf_truth_payload(record.to_dict(), unit_scale) for record in sort_grammar_truth_records(records)]
 
     def grammar_truth_json(self) -> str:
         """Serialize this document's grammar truth to deterministic JSON."""

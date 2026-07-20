@@ -50,12 +50,13 @@ def test_document_pdf_emits_grammar_truth_in_pdf_coordinates() -> None:
     annotate_grammar_truth(group, "B1", "cue", value="heading_level", instance_id="heading")
     document = _document_with_group(group)
 
+    mm_to_points = 72.0 / 25.4
     assert document.grammar_truth() == [
         {
             "condition_id": "B1",
             "kind": "cue",
             "page": 1,
-            "bbox": [10.0, 55.0, 40.0, 75.0],
+            "bbox": [10.0 * mm_to_points, 55.0 * mm_to_points, 40.0 * mm_to_points, 75.0 * mm_to_points],
             "value": "heading_level",
             "links_to": None,
             "source_channel": "body",
@@ -93,7 +94,13 @@ def test_document_pdf_emits_assessment_and_link_truth() -> None:
     assert link["condition_id"] == "LINK"
     assert link["kind"] == "link"
     assert link["links_to"] == "section-1"
-    assert link["bbox"] == [10.0, 60.0, 40.0, 70.0]
+    mm_to_points = 72.0 / 25.4
+    assert link["bbox"] == [
+        10.0 * mm_to_points,
+        60.0 * mm_to_points,
+        40.0 * mm_to_points,
+        70.0 * mm_to_points,
+    ]
 
 
 @pytest.mark.condition("PDF-P3")
@@ -214,7 +221,13 @@ def test_neutral_drawing_annotations_materialize_to_pdf_grammar_truth() -> None:
 
     assert sorted(records) == ["B2", "E2", "K1"]
     assert records["B2"]["bbox"] is not None
-    assert records["E2"]["bbox"] == [5.0, 65.0, 55.0, 75.0]
+    mm_to_points = 72.0 / 25.4
+    assert records["E2"]["bbox"] == [
+        5.0 * mm_to_points,
+        65.0 * mm_to_points,
+        55.0 * mm_to_points,
+        75.0 * mm_to_points,
+    ]
     assert records["K1"]["bbox"] is not None
 
 

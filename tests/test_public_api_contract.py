@@ -151,7 +151,7 @@ def test_root_exports_work_in_pdf_authoring_path() -> None:
 
     payload = document.to_pdf_bytes()
 
-    assert payload.startswith(b"%PDF-1.4")
+    assert payload.startswith(b"%PDF-1.6")
     assert b"5 6 10 8 re" in payload
 
 

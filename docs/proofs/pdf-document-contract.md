@@ -8,6 +8,9 @@ link annotations, internal page link annotations, named destinations, text
 annotations, highlight annotations, square annotations, circle annotations, and
 line annotations.
 
+It also covers the `PDF-UNITS-P1` contract that maps declared canvas units to
+physical PDF dimensions and parser-facing truth coordinates.
+
 ## Scope
 
 The slice covers:
@@ -59,6 +62,8 @@ The slice covers:
 - `DocumentPDF.parameters`
 - `DocumentPDF.extraction_truth()`
 - `DocumentPDF.grammar_truth()`
+- `_pdf_points_per_canvas_unit()`
+- `_scale_pdf_truth_payload()`
 
 ## Architecture Impact
 
@@ -71,6 +76,10 @@ Affected surface:
 - `tests/mutation/pdf_document_cosmic_ray.toml`: scoped mutation gate.
 - `tests/mutation/filter_pdf_document_work_items.py`: proof-critical mutation
   filter.
+- `tests/mutation/pdf_canvas_units_cosmic_ray.toml`: scoped mutation gate for
+  `PDF-UNITS-P1`.
+- `tests/mutation/filter_pdf_canvas_units_work_items.py`: proof-critical unit,
+  truth-scaling, and PDF-version mutation filter.
 - `tests/mutation/pdf_document_structure_cosmic_ray.toml`: scoped mutation gate
   for PDF-DOC-STRUCT-P3.
 - `tests/mutation/filter_pdf_document_structure_work_items.py`: page-structure
@@ -122,6 +131,8 @@ Affected surface:
   literal-string proof-critical mutation filter.
 - `docs/adr/0025-pdf-winansi-literal-strings.md`: accepted ADR for the shared
   PDF metadata literal-string contract.
+- `docs/adr/0027-pdf-canvas-unit-scaling.md`: accepted ADR for physical PDF
+  page, drawing, metadata, and truth-coordinate scaling.
 
 Incoming dependencies:
 
@@ -167,6 +178,8 @@ Outgoing dependencies:
 - `DocumentPDF` consumes `Layer`, `Layers`, `ComponentGroupPDF`, PDF component
   renderers, extraction-truth helpers, and grammar-truth helpers.
 - No dependency was added.
+- PDF unit scaling uses the PDF 1.6 `/UserUnit` page entry and local arithmetic;
+  it adds no package dependency.
 - Page-structure metadata uses only local PDF dictionary serialization and the
   existing `Document` page model.
 - Outlines use the same local PDF object writer, existing page-number
@@ -2208,3 +2221,90 @@ contents hydrate with defaults.
 
 Proven for serialized line annotations in the declared payload domain, with
 mutation verification documented above.
+
+## PO-PDFDOC-046: Canvas Units Determine Physical PDF Size
+
+### Claim
+
+For canvas width `W`, height `H`, and canonical units `U`, the rendered physical
+page dimensions in points are `(W * S(U), H * S(U))`, where:
+
+```text
+S(mm) = 72 / 25.4
+S(in) = 72
+```
+
+### Proof Method
+
+`Canvas` admits and canonicalizes only millimeters and inches.
+`_pdf_points_per_canvas_unit()` is an exhaustive mapping over those canonical
+values. `DocumentPDF.to_pdf_bytes()` emits `W` and `H` in the page `MediaBox`
+and emits `S(U)` as `/UserUnit`. By the PDF 1.6 page-coordinate definition, one
+default user-space unit is `S(U)` points. Therefore the physical page dimensions
+are exactly the stated products. `PDF-UNITS-P1` tests both exhaustive unit cases,
+and an independent PyMuPDF probe verifies the reported 100 mm by 200 mm case as
+approximately 283.4646 points by 566.9292 points.
+
+### Counterexamples And Exclusions
+
+Callers that pre-scale geometry violate the one-conversion precondition and
+will produce double-scaled output. Canvas does not admit points, pixels, or
+arbitrary custom units.
+
+### Conclusion
+
+Proven for every unit value admitted by `Canvas`.
+
+## PO-PDFDOC-047: Page Geometry Is Scaled Exactly Once
+
+### Claim
+
+Every page-space geometry value retains its canvas numeric value in PDF object
+and content syntax and receives physical scaling once through `/UserUnit`.
+
+### Proof Method
+
+The page content stream still contains one top-left coordinate transform using
+the raw canvas height, and the rectangle in `PDF-UNITS-P1` remains
+`10 10 30 20 re`. The page dictionary owns the sole unit-scale entry. PDF page
+content, media/page boxes, destinations, links, and annotations share default
+page user space, so the page scale applies uniformly without component-level
+conversion.
+
+### Conclusion
+
+Proven for the live `DocumentPDF.to_pdf_bytes()` path and its page-space
+objects.
+
+## PO-PDFDOC-048: Truth Bboxes Match Physical PDF Points
+
+### Claim
+
+Every non-null extraction-truth and grammar-truth bbox emitted by
+`DocumentPDF` equals its bottom-left canvas bbox multiplied componentwise by
+`S(U)`.
+
+### Proof Method
+
+Both public truth methods obtain deterministic bottom-left records from their
+existing helpers, compute the same exhaustive unit scale used by the page, and
+apply `_scale_pdf_truth_payload()` before dictionary emission. `PDF-UNITS-P1`
+attaches both truth types to the live rectangle group and asserts all four
+coordinates for millimeter and inch canvases. Existing truth contract tests pin
+the corrected millimeter expectations.
+
+### Conclusion
+
+Proven for non-null truth bboxes emitted through `DocumentPDF`; out-of-band
+records with null bboxes remain unchanged.
+
+## PDF-UNITS-P1 Mutation Evidence
+
+Cosmic Ray 8.4.6 generated 6,269 raw work items for `pdf_generator.py`. The
+checked-in filter selected 50 proof-critical mutants covering the canonical
+unit mapping, truth-bbox multiplication, and PDF-version writer expression.
+The focused condition tests killed all 50 mutants; zero survived and zero were
+incompetent. The test domain includes millimeters, inches, dynamically
+constructed canonical strings, two unsupported unit strings, scaled extraction
+and grammar truth, null out-of-band truth, the PDF 1.6 header, the `/UserUnit`
+entry, and unchanged canvas-valued content operators.

@@ -12,6 +12,8 @@ import InkGen.pdf_generator as pdf_generator_module
 import InkGen.svg_generator as svg_generator_module
 from InkGen.boundary import Canvas
 from InkGen.component import Component, ComponentGroup, PathCommand
+from InkGen.extraction_truth import annotate_extraction_truth
+from InkGen.grammar_truth import annotate_grammar_truth
 from InkGen.pdf_generator import (
     ArcPDF,
     CirclePDF,
@@ -454,12 +456,76 @@ def test_document_pdf_is_deterministic_and_flips_page_coordinates_once(drawing_s
     content = _stream(first)
 
     assert first == second
-    assert first.startswith(b"%PDF-1.4\n")
+    assert first.startswith(b"%PDF-1.6\n")
     assert b"/CreationDate (D:20000101000000Z)" in first
     assert b"/MediaBox [0 0 100 80]" in first
     assert content.count("1 0 0 -1 0 80 cm") == 1
     assert "10 20 30 40 re" in content
     assert "1 0 0 -1 15 25 Tm" in content
+
+
+@pytest.mark.condition("PDF-UNITS-P1")
+@pytest.mark.parametrize(
+    ("units", "expected_user_unit", "expected_width_points", "expected_height_points"),
+    [
+        ("mm", 72.0 / 25.4, 100.0 * 72.0 / 25.4, 200.0 * 72.0 / 25.4),
+        ("in", 72.0, 7200.0, 14400.0),
+    ],
+)
+def test_document_pdf_honors_canvas_units_once(
+    drawing_style: DrawingStyle,
+    units: str,
+    expected_user_unit: float,
+    expected_width_points: float,
+    expected_height_points: float,
+) -> None:
+    """PDF-UNITS-P1: PDF physical dimensions honor Canvas units exactly once."""
+    canvas = Canvas(100.0, 200.0, units)
+    document = DocumentPDF(canvas)
+    document.add_page()
+    group = ComponentGroupPDF("units")
+    group.add_component(RectanglePDF((10.0, 10.0), 30.0, 20.0, 0.0, drawing_style))
+    annotate_extraction_truth(group, "unit_box", "present")
+    annotate_grammar_truth(group, "PDF-UNITS-P1", "cue", value="unit_box")
+    document.page(1).layer("base").add_component_group(group)
+    annotate_extraction_truth(document, "source", "generated", source_channel="metadata")
+    annotate_grammar_truth(document, "PDF-UNITS-P1", "assessment", source_channel="metadata")
+
+    payload = document.to_pdf_bytes()
+    content = _stream(payload)
+    user_unit_match = re.search(rb"/UserUnit (?P<scale>[0-9.]+)", payload)
+
+    assert payload.startswith(b"%PDF-1.6\n")
+    assert b"/MediaBox [0 0 100 200]" in payload
+    assert user_unit_match is not None
+    emitted_scale = float(user_unit_match.group("scale"))
+    assert emitted_scale == pytest.approx(expected_user_unit)
+    assert canvas.width * emitted_scale == pytest.approx(expected_width_points)
+    assert canvas.height * emitted_scale == pytest.approx(expected_height_points)
+    assert content.count("1 0 0 -1 0 200 cm") == 1
+    assert "10 10 30 20 re" in content
+    expected_truth_bbox = [
+        10.0 * emitted_scale,
+        170.0 * emitted_scale,
+        40.0 * emitted_scale,
+        190.0 * emitted_scale,
+    ]
+    extraction_truth = document.extraction_truth()
+    grammar_truth = document.grammar_truth()
+    assert next(record["bbox"] for record in extraction_truth if record["source_channel"] == "body") == pytest.approx(expected_truth_bbox)
+    assert next(record["bbox"] for record in grammar_truth if record["source_channel"] == "body") == pytest.approx(expected_truth_bbox)
+    assert next(record["bbox"] for record in extraction_truth if record["source_channel"] == "metadata") is None
+    assert next(record["bbox"] for record in grammar_truth if record["source_channel"] == "metadata") is None
+
+
+@pytest.mark.condition("PDF-UNITS-P1")
+def test_pdf_unit_scale_rejects_noncanonical_units() -> None:
+    """PDF-UNITS-P1: The internal PDF unit boundary rejects unknown units."""
+    assert pdf_generator_module._pdf_points_per_canvas_unit("".join(("m", "m"))) == pytest.approx(72.0 / 25.4)
+    assert pdf_generator_module._pdf_points_per_canvas_unit("".join(("i", "n"))) == 72.0
+    for units in ("pt", "cm"):
+        with pytest.raises(ValueError, match=f"Unsupported PDF canvas units: {units}"):
+            pdf_generator_module._pdf_points_per_canvas_unit(units)
 
 
 @pytest.mark.condition("PDF-FONT-STANDARD-P2")

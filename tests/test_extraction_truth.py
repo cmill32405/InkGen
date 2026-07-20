@@ -53,13 +53,14 @@ def test_document_pdf_emits_group_truth_in_pdf_coordinates(drawing_style: Drawin
     annotate_extraction_truth(group, "invoice_total", "123.45", instance_id="body-total")
     document = _document_with_group(group)
 
+    mm_to_points = 72.0 / 25.4
     assert document.extraction_truth() == [
         {
             "field": "invoice_total",
             "value": "123.45",
             "role": "value",
             "page": 1,
-            "bbox": [10.0, 55.0, 40.0, 75.0],
+            "bbox": [10.0 * mm_to_points, 55.0 * mm_to_points, 40.0 * mm_to_points, 75.0 * mm_to_points],
             "source_channel": "body",
             "is_truth": True,
             "instance_id": "body-total",
@@ -117,8 +118,19 @@ def test_document_pdf_emits_component_and_out_of_band_truth(
     assert sibling_record["bbox"] is None
     value_record = next(record for record in truth if record["role"] == "value" and record["source_channel"] == "body")
     label_record = next(record for record in truth if record["role"] == "label")
-    assert value_record["bbox"] == [20.0, 40.0, 60.0, 50.0]
-    assert label_record["bbox"] == [10.0, 65.0, 15.0, 70.0]
+    mm_to_points = 72.0 / 25.4
+    assert value_record["bbox"] == [
+        20.0 * mm_to_points,
+        40.0 * mm_to_points,
+        60.0 * mm_to_points,
+        50.0 * mm_to_points,
+    ]
+    assert label_record["bbox"] == [
+        10.0 * mm_to_points,
+        65.0 * mm_to_points,
+        15.0 * mm_to_points,
+        70.0 * mm_to_points,
+    ]
     assert truth == document.extraction_truth()
 
 
