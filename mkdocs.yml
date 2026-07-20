@@ -43,6 +43,7 @@ nav:
       - ADR-0024 PDF WinAnsi Text Encoding: adr/0024-pdf-winansi-text-encoding.md
       - ADR-0025 PDF WinAnsi Literal Strings: adr/0025-pdf-winansi-literal-strings.md
       - ADR-0027 PDF Canvas Unit Scaling: adr/0027-pdf-canvas-unit-scaling.md
+      - ADR-0028 PDF Standard Page Coordinate Scaling: adr/0028-pdf-standard-page-coordinate-scaling.md
   - Proof Notes:
       - Grammar Truth: proofs/grammar-truth.md
       - Extraction Truth Contract: proofs/extraction-truth-contract.md

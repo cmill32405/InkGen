@@ -80,6 +80,10 @@ Affected surface:
   `PDF-UNITS-P1`.
 - `tests/mutation/filter_pdf_canvas_units_work_items.py`: proof-critical unit,
   truth-scaling, and PDF-version mutation filter.
+- `tests/mutation/pdf_standard_page_scaling_cosmic_ray.toml`: scoped mutation
+  gate for ADR-0028's standard page-coordinate mechanism.
+- `tests/mutation/filter_pdf_standard_page_scaling_work_items.py`:
+  coordinate-specific point-conversion mutation filter.
 - `tests/mutation/pdf_document_structure_cosmic_ray.toml`: scoped mutation gate
   for PDF-DOC-STRUCT-P3.
 - `tests/mutation/filter_pdf_document_structure_work_items.py`: page-structure
@@ -131,8 +135,10 @@ Affected surface:
   literal-string proof-critical mutation filter.
 - `docs/adr/0025-pdf-winansi-literal-strings.md`: accepted ADR for the shared
   PDF metadata literal-string contract.
-- `docs/adr/0027-pdf-canvas-unit-scaling.md`: accepted ADR for physical PDF
-  page, drawing, metadata, and truth-coordinate scaling.
+- `docs/adr/0027-pdf-canvas-unit-scaling.md`: superseded ADR that introduced
+  physical PDF page, drawing, metadata, and truth-coordinate scaling.
+- `docs/adr/0028-pdf-standard-page-coordinate-scaling.md`: accepted ADR for
+  standard point-valued page dictionaries plus content-stream scaling.
 
 Incoming dependencies:
 
@@ -178,8 +184,8 @@ Outgoing dependencies:
 - `DocumentPDF` consumes `Layer`, `Layers`, `ComponentGroupPDF`, PDF component
   renderers, extraction-truth helpers, and grammar-truth helpers.
 - No dependency was added.
-- PDF unit scaling uses the PDF 1.6 `/UserUnit` page entry and local arithmetic;
-  it adds no package dependency.
+- PDF unit scaling uses point-valued page dictionaries, a content-stream `cm`,
+  and local arithmetic; it adds no package dependency.
 - Page-structure metadata uses only local PDF dictionary serialization and the
   existing `Document` page model.
 - Outlines use the same local PDF object writer, existing page-number
@@ -2238,12 +2244,12 @@ S(in) = 72
 
 `Canvas` admits and canonicalizes only millimeters and inches.
 `_pdf_points_per_canvas_unit()` is an exhaustive mapping over those canonical
-values. `DocumentPDF.to_pdf_bytes()` emits `W` and `H` in the page `MediaBox`
-and emits `S(U)` as `/UserUnit`. By the PDF 1.6 page-coordinate definition, one
-default user-space unit is `S(U)` points. Therefore the physical page dimensions
-are exactly the stated products. `PDF-UNITS-P1` tests both exhaustive unit cases,
-and an independent PyMuPDF probe verifies the reported 100 mm by 200 mm case as
-approximately 283.4646 points by 566.9292 points.
+values. `DocumentPDF.to_pdf_bytes()` emits `W * S(U)` and `H * S(U)` directly in
+the page `MediaBox`. Therefore a consumer that reads only standard page geometry
+obtains the stated physical dimensions. `PDF-UNITS-P1` tests both exhaustive
+unit cases. A naive regex parser verifies the raw `MediaBox`, and an independent
+PyMuPDF probe verifies an A4 millimeter canvas as approximately 595.2756 points
+by 841.8898 points.
 
 ### Counterexamples And Exclusions
 
@@ -2259,17 +2265,19 @@ Proven for every unit value admitted by `Canvas`.
 
 ### Claim
 
-Every page-space geometry value retains its canvas numeric value in PDF object
-and content syntax and receives physical scaling once through `/UserUnit`.
+Every page-space geometry value receives the page's physical scale exactly
+once. Content operators retain canvas values; page dictionaries use points.
 
 ### Proof Method
 
-The page content stream still contains one top-left coordinate transform using
-the raw canvas height, and the rectangle in `PDF-UNITS-P1` remains
-`10 10 30 20 re`. The page dictionary owns the sole unit-scale entry. PDF page
-content, media/page boxes, destinations, links, and annotations share default
-page user space, so the page scale applies uniformly without component-level
-conversion.
+The page content stream starts with one uniform `S(U)` matrix and retains the
+top-left coordinate transform using the raw canvas height; the rectangle in
+`PDF-UNITS-P1` remains `10 10 30 20 re`. `MediaBox`, other page boxes,
+destinations, links, annotation geometry, annotation border widths, and
+FreeText font sizes are multiplied by `S(U)` before dictionary emission because
+content matrices do not transform those objects. Zoom values, colors, and page
+rotation remain dimensionless. The integrated metadata test covers each
+coordinate family and preserves canvas-valued model round trips.
 
 ### Conclusion
 
@@ -2300,11 +2308,22 @@ records with null bboxes remain unchanged.
 
 ## PDF-UNITS-P1 Mutation Evidence
 
-Cosmic Ray 8.4.6 generated 6,269 raw work items for `pdf_generator.py`. The
-checked-in filter selected 50 proof-critical mutants covering the canonical
-unit mapping, truth-bbox multiplication, and PDF-version writer expression.
-The focused condition tests killed all 50 mutants; zero survived and zero were
-incompetent. The test domain includes millimeters, inches, dynamically
-constructed canonical strings, two unsupported unit strings, scaled extraction
-and grammar truth, null out-of-band truth, the PDF 1.6 header, the `/UserUnit`
-entry, and unchanged canvas-valued content operators.
+The ADR-0027 campaign killed 50 of 50 proof-critical mutants for the original
+unit mapping and truth conversion. The superseding ADR-0028 campaign initialized
+6,302 source-wide mutants and filtered them to 70 coordinate-specific work
+items. The final result is 70 killed, zero survived, zero incompetent, and zero
+pending. It covers point-valued page dictionaries, the content-stream scale
+matrix, metadata conversion, the PDF 1.4 header, `/UserUnit` absence, canonical
+and rejected unit strings, and scaled truth records. The local evidence database
+is `pdf_standard_page_scaling_v2_codex_20260720.sqlite`; the reproducible config
+and filter are checked in under `tests/mutation/`. SHA-256 evidence hashes are:
+
+- mutation database: `93E6C61211AFD6A526914A811753C32D77C35BF299BE09BE1E9FA5E31953E5BD`;
+- `pdf_generator.py`: `D6644714EB297806A67C0F9214BB44C409DE9462117D2166A0C027DDEB4765A7`;
+- `test_pdf_generator.py`: `72F738B60B027E29614390BF00BFAD017C760620DC8DEB52768DB6491498021E`;
+- `test_pdf_document_contract.py`: `2ED9385110A629A4D5D3AC7456D4B42FA7DD02EFCE678E46EA2B31F978493298`.
+
+Direct execution in pdf.js is not part of this proof. The consumer evidence is
+the raw lightweight-parser contract plus PyMuPDF 1.27.1. The emitted mechanism
+uses standard PDF 1.4 `MediaBox` and `cm` semantics and no longer depends on
+reader support for PDF 1.6 `/UserUnit`.

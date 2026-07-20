@@ -298,7 +298,7 @@ def test_document_pdf_emits_group_blend_mode_extgstate(drawing_style: DrawingSty
     _assert_contiguous_object_ids(payload)
     assert resource_match is not None
     assert objects[int(resource_match.group("id"))] == b"<< /Type /ExtGState /BM /Multiply >>"
-    assert "q\n1 0 0 -1 0 80 cm\nq\n/GS1 gs\nq\n0 0 0 RG" in content
+    assert "q\n2.834646 0 0 2.834646 0 0 cm\n1 0 0 -1 0 80 cm\nq\n/GS1 gs\nq\n0 0 0 RG" in content
 
 
 @pytest.mark.condition("PDF-GROUP-BLEND-P3")
@@ -314,7 +314,7 @@ def test_document_pdf_combines_group_blend_and_clip_controls(drawing_style: Draw
 
     content = _stream(document.to_pdf_bytes())
 
-    assert "q\n1 0 0 -1 0 80 cm\nq\n/GS1 gs\n1 2 30 40 re\nW\nn\nq\n0 0 0 RG" in content
+    assert "q\n2.834646 0 0 2.834646 0 0 cm\n1 0 0 -1 0 80 cm\nq\n/GS1 gs\n1 2 30 40 re\nW\nn\nq\n0 0 0 RG" in content
 
 
 @pytest.mark.condition("PDF-GROUP-BLEND-P3")
@@ -456,9 +456,9 @@ def test_document_pdf_is_deterministic_and_flips_page_coordinates_once(drawing_s
     content = _stream(first)
 
     assert first == second
-    assert first.startswith(b"%PDF-1.6\n")
+    assert first.startswith(b"%PDF-1.4\n")
     assert b"/CreationDate (D:20000101000000Z)" in first
-    assert b"/MediaBox [0 0 100 80]" in first
+    assert b"/MediaBox [0 0 283.464567 226.771654]" in first
     assert content.count("1 0 0 -1 0 80 cm") == 1
     assert "10 20 30 40 re" in content
     assert "1 0 0 -1 15 25 Tm" in content
@@ -466,7 +466,7 @@ def test_document_pdf_is_deterministic_and_flips_page_coordinates_once(drawing_s
 
 @pytest.mark.condition("PDF-UNITS-P1")
 @pytest.mark.parametrize(
-    ("units", "expected_user_unit", "expected_width_points", "expected_height_points"),
+    ("units", "expected_scale", "expected_width_points", "expected_height_points"),
     [
         ("mm", 72.0 / 25.4, 100.0 * 72.0 / 25.4, 200.0 * 72.0 / 25.4),
         ("in", 72.0, 7200.0, 14400.0),
@@ -475,11 +475,11 @@ def test_document_pdf_is_deterministic_and_flips_page_coordinates_once(drawing_s
 def test_document_pdf_honors_canvas_units_once(
     drawing_style: DrawingStyle,
     units: str,
-    expected_user_unit: float,
+    expected_scale: float,
     expected_width_points: float,
     expected_height_points: float,
 ) -> None:
-    """PDF-UNITS-P1: PDF physical dimensions honor Canvas units exactly once."""
+    """PDF-UNITS-P1: standard page geometry honors Canvas units exactly once."""
     canvas = Canvas(100.0, 200.0, units)
     document = DocumentPDF(canvas)
     document.add_page()
@@ -493,22 +493,26 @@ def test_document_pdf_honors_canvas_units_once(
 
     payload = document.to_pdf_bytes()
     content = _stream(payload)
-    user_unit_match = re.search(rb"/UserUnit (?P<scale>[0-9.]+)", payload)
+    media_box_match = re.search(
+        rb"/MediaBox \[0 0 (?P<width>[0-9.]+) (?P<height>[0-9.]+)\]",
+        payload,
+    )
 
-    assert payload.startswith(b"%PDF-1.6\n")
-    assert b"/MediaBox [0 0 100 200]" in payload
-    assert user_unit_match is not None
-    emitted_scale = float(user_unit_match.group("scale"))
-    assert emitted_scale == pytest.approx(expected_user_unit)
-    assert canvas.width * emitted_scale == pytest.approx(expected_width_points)
-    assert canvas.height * emitted_scale == pytest.approx(expected_height_points)
+    assert payload.startswith(b"%PDF-1.4\n")
+    assert b"/UserUnit" not in payload
+    assert media_box_match is not None
+    assert float(media_box_match.group("width")) == pytest.approx(expected_width_points)
+    assert float(media_box_match.group("height")) == pytest.approx(expected_height_points)
+    assert content.startswith(
+        f"q\n{pdf_generator_module._number(expected_scale)} 0 0 {pdf_generator_module._number(expected_scale)} 0 0 cm\n"
+    )
     assert content.count("1 0 0 -1 0 200 cm") == 1
     assert "10 10 30 20 re" in content
     expected_truth_bbox = [
-        10.0 * emitted_scale,
-        170.0 * emitted_scale,
-        40.0 * emitted_scale,
-        190.0 * emitted_scale,
+        10.0 * expected_scale,
+        170.0 * expected_scale,
+        40.0 * expected_scale,
+        190.0 * expected_scale,
     ]
     extraction_truth = document.extraction_truth()
     grammar_truth = document.grammar_truth()
@@ -519,11 +523,44 @@ def test_document_pdf_honors_canvas_units_once(
 
 
 @pytest.mark.condition("PDF-UNITS-P1")
+def test_document_pdf_canvas_units_work_in_lightweight_and_pymupdf_consumers(drawing_style: DrawingStyle) -> None:
+    """PDF-UNITS-P1: consumers need only standard MediaBox and content CTM semantics."""
+    fitz = pytest.importorskip("fitz")
+    canvas = Canvas(210.0, 297.0, "mm")
+    document = DocumentPDF(canvas)
+    document.add_page()
+    group = ComponentGroupPDF("consumer_compatibility")
+    group.add_component(RectanglePDF((10.0, 20.0), 30.0, 40.0, 0.0, drawing_style))
+    document.page(1).layer("base").add_component_group(group)
+
+    payload = document.to_pdf_bytes()
+    media_box_match = re.search(
+        rb"/MediaBox \[0 0 (?P<width>[0-9.]+) (?P<height>[0-9.]+)\]",
+        payload,
+    )
+    content = _stream(payload)
+    scale = 72.0 / 25.4
+
+    assert media_box_match is not None
+    assert float(media_box_match.group("width")) == pytest.approx(210.0 * scale)
+    assert float(media_box_match.group("height")) == pytest.approx(297.0 * scale)
+    assert content.splitlines()[:3] == [
+        "q",
+        f"{pdf_generator_module._number(scale)} 0 0 {pdf_generator_module._number(scale)} 0 0 cm",
+        "1 0 0 -1 0 297 cm",
+    ]
+    with fitz.open(stream=payload, filetype="pdf") as parsed:
+        assert parsed.page_count == 1
+        assert parsed[0].rect.width == pytest.approx(210.0 * scale, abs=1e-3)
+        assert parsed[0].rect.height == pytest.approx(297.0 * scale, abs=1e-3)
+
+
+@pytest.mark.condition("PDF-UNITS-P1")
 def test_pdf_unit_scale_rejects_noncanonical_units() -> None:
     """PDF-UNITS-P1: The internal PDF unit boundary rejects unknown units."""
-    assert pdf_generator_module._pdf_points_per_canvas_unit("".join(("m", "m"))) == pytest.approx(72.0 / 25.4)
-    assert pdf_generator_module._pdf_points_per_canvas_unit("".join(("i", "n"))) == 72.0
-    for units in ("pt", "cm"):
+    assert pdf_generator_module._pdf_points_per_canvas_unit(bytearray(b"mm").decode("ascii")) == pytest.approx(72.0 / 25.4)
+    assert pdf_generator_module._pdf_points_per_canvas_unit(bytearray(b"in").decode("ascii")) == 72.0
+    for units in ("aa", "cm", "pt", "zz"):
         with pytest.raises(ValueError, match=f"Unsupported PDF canvas units: {units}"):
             pdf_generator_module._pdf_points_per_canvas_unit(units)
 
@@ -905,7 +942,7 @@ def test_document_pdf_consumes_group_clip_path_with_rect_and_blend_live(drawing_
 
     content = _stream(document.to_pdf_bytes())
 
-    expected = "q\n1 0 0 -1 0 80 cm\nq\n/GS1 gs\n1 2 30 40 re\nW\nn\n2 3 m\n20 3 l\n20 30 l\nh\nW\nn"
+    expected = "q\n2.834646 0 0 2.834646 0 0 cm\n1 0 0 -1 0 80 cm\nq\n/GS1 gs\n1 2 30 40 re\nW\nn\n2 3 m\n20 3 l\n20 30 l\nh\nW\nn"
     assert expected in content
     assert content.index("/GS1 gs") < content.index("1 2 30 40 re")
     assert content.index("1 2 30 40 re") < content.index("2 3 m")
@@ -1175,7 +1212,7 @@ def test_document_pdf_outputs_one_pdf_page_per_inkgen_page(drawing_style: Drawin
     assert payload.count(b"/Type /Page ") == 2
     assert b"/Type /Pages" in payload
     assert b"/Count 2" in payload
-    assert payload.count(b"/MediaBox [0 0 100 80]") == 2
+    assert payload.count(b"/MediaBox [0 0 283.464567 226.771654]") == 2
     assert payload.count(b"1 0 0 -1 0 80 cm") == 2
 
 

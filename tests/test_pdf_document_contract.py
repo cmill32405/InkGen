@@ -8,11 +8,22 @@ from uuid import uuid4
 
 import pytest
 
+import InkGen.pdf_generator as pdf_generator_module
 from InkGen.boundary import Canvas
 from InkGen.extraction_truth import annotate_extraction_truth
 from InkGen.grammar_truth import annotate_grammar_truth
 from InkGen.pdf_generator import ComponentGroupPDF, DocumentPDF, RectanglePDF
 from InkGen.style import DrawingStyle
+
+PDF_MM_SCALE = 72.0 / 25.4
+
+
+def _scaled_pdf_values(*values: float) -> bytes:
+    return " ".join(pdf_generator_module._number(value * PDF_MM_SCALE) for value in values).encode("ascii")
+
+
+def _scaled_pdf_array(*values: float) -> bytes:
+    return b"[" + _scaled_pdf_values(*values) + b"]"
 
 
 def _drawing_style() -> DrawingStyle:
@@ -132,9 +143,9 @@ def test_document_pdf_emits_page_labels_and_page_boxes() -> None:
 
     assert payload == document.to_pdf_bytes()
     assert b"/PageLabels << /Nums [0 << /P (Cover \\(A\\)) >> 1 << /P (B\\\\2) >>] >>" in payload
-    assert b"/CropBox [5 6 95 74]" in payload
-    assert b"/TrimBox [10 12 90 70]" in payload
-    assert b"/ArtBox [0 0 100 80]" in payload
+    assert b"/CropBox " + _scaled_pdf_array(5.0, 6.0, 95.0, 74.0) in payload
+    assert b"/TrimBox " + _scaled_pdf_array(10.0, 12.0, 90.0, 70.0) in payload
+    assert b"/ArtBox " + _scaled_pdf_array(0.0, 0.0, 100.0, 80.0) in payload
     assert b"/Rotate 90" in payload
     assert b"/Rotate 270" in payload
     assert b"/Count 2" in payload
@@ -149,6 +160,41 @@ def test_document_pdf_emits_page_labels_and_page_boxes() -> None:
     assert recreated.page_box(1, "trim") == (10.0, 12.0, 90.0, 70.0)
     assert recreated.page_rotation(1) == 90
     assert recreated.page_rotation(2) == 270
+
+
+@pytest.mark.condition("PDF-UNITS-P1")
+def test_document_pdf_scales_page_metadata_outside_the_content_stream() -> None:
+    """PDF-UNITS-P1: page metadata coordinates are emitted in physical points."""
+    document = DocumentPDF(Canvas(100.0, 80.0, "mm"))
+    document.add_page()
+    document.add_page()
+    document.set_page_box(1, "CropBox", [1.0, 2.0, 30.0, 40.0])
+    document.add_outline("target", 2, left=5.0, top=6.0, zoom=1.25)
+    document.add_named_destination("named", 2, left=7.0, top=8.0, zoom=1.5)
+    document.add_uri_link(1, [1.0, 2.0, 3.0, 4.0], "https://example.com")
+    document.add_page_link(1, [5.0, 6.0, 7.0, 8.0], 2, left=9.0, top=10.0, zoom=2.0)
+    document.add_named_destination_link(1, [11.0, 12.0, 13.0, 14.0], "named")
+    document.add_free_text_annotation(1, [15.0, 16.0, 17.0, 18.0], "note", font_size=4.0)
+    document.add_highlight_annotation(1, [19.0, 20.0, 21.0, 22.0])
+    document.add_line_annotation(1, [23.0, 24.0], [25.0, 26.0])
+    document.add_square_annotation(1, [27.0, 28.0, 29.0, 30.0])
+    document.add_circle_annotation(1, [31.0, 32.0, 33.0, 34.0])
+
+    payload = document.to_pdf_bytes()
+    assert b"/CropBox " + _scaled_pdf_array(1.0, 2.0, 30.0, 40.0) in payload
+    assert b"/XYZ " + _scaled_pdf_values(5.0, 6.0) + b" 1.25]" in payload
+    assert b"/XYZ " + _scaled_pdf_values(7.0, 8.0) + b" 1.5]" in payload
+    assert b"/Rect " + _scaled_pdf_array(1.0, 2.0, 3.0, 4.0) in payload
+    assert b"/Rect " + _scaled_pdf_array(5.0, 6.0, 7.0, 8.0) in payload
+    assert b"/XYZ " + _scaled_pdf_values(9.0, 10.0) + b" 2]" in payload
+    assert b"/Rect " + _scaled_pdf_array(11.0, 12.0, 13.0, 14.0) in payload
+    assert b"/Rect " + _scaled_pdf_array(15.0, 16.0, 17.0, 18.0) in payload
+    assert b"/Helv " + _scaled_pdf_values(4.0) + b" Tf" in payload
+    assert b"/QuadPoints " + _scaled_pdf_array(19.0, 22.0, 21.0, 22.0, 19.0, 20.0, 21.0, 20.0) in payload
+    assert b"/L " + _scaled_pdf_array(23.0, 24.0, 25.0, 26.0) in payload
+    assert b"/Rect " + _scaled_pdf_array(27.0, 28.0, 29.0, 30.0) in payload
+    assert b"/Rect " + _scaled_pdf_array(31.0, 32.0, 33.0, 34.0) in payload
+    assert payload.count(b"/Border [0 0 " + _scaled_pdf_values(1.0) + b"]") == 3
 
 
 @pytest.mark.condition("PDF-DOC-STRUCT-P3", "PDF-DOC-PAGE-ROTATION-P3")
@@ -428,14 +474,14 @@ def test_document_pdf_emits_text_annotations_and_round_trips() -> None:
     assert payload == document.to_pdf_bytes()
     assert [len(page_refs) for page_refs in annotation_refs] == [2, 1]
     assert b"/Subtype /Text" in objects[annotation_ids[0]]
-    assert b"/Rect [5 6 20 25]" in objects[annotation_ids[0]]
+    assert b"/Rect " + _scaled_pdf_array(5.0, 6.0, 20.0, 25.0) in objects[annotation_ids[0]]
     assert b"/T (Reviewer\\\\One)" in objects[annotation_ids[0]]
     assert b"/Contents (Check this \\(A\\))" in objects[annotation_ids[0]]
     assert b"/Open true" in objects[annotation_ids[0]]
-    assert b"/Rect [30 6 45 25]" in objects[annotation_ids[1]]
+    assert b"/Rect " + _scaled_pdf_array(30.0, 6.0, 45.0, 25.0) in objects[annotation_ids[1]]
     assert b"/Contents (Closed note)" in objects[annotation_ids[1]]
     assert b"/Open" not in objects[annotation_ids[1]]
-    assert b"/Rect [0 0 100 80]" in objects[annotation_ids[2]]
+    assert b"/Rect " + _scaled_pdf_array(0.0, 0.0, 100.0, 80.0) in objects[annotation_ids[2]]
     assert b"/Contents (Page 2 note)" in objects[annotation_ids[2]]
     assert sorted(objects) == list(range(1, max(objects) + 1))
     assert document.text_annotations() == (
@@ -591,12 +637,12 @@ def test_document_pdf_emits_free_text_annotations_and_round_trips() -> None:
     assert b"/Subtype /FreeText" in objects[annotation_ids[1]]
     assert b"/Subtype /FreeText" in objects[annotation_ids[2]]
     assert b"/Subtype /Highlight" in objects[annotation_ids[3]]
-    assert b"/Rect [5 6 20 25]" in objects[annotation_ids[1]]
+    assert b"/Rect " + _scaled_pdf_array(5.0, 6.0, 20.0, 25.0) in objects[annotation_ids[1]]
     assert b"/Contents (Free \\(A\\))" in objects[annotation_ids[1]]
-    assert b"/DA (/Helv 12.5 Tf 0.2 0.4 0.6 rg)" in objects[annotation_ids[1]]
-    assert b"/Rect [22 6 28 10]" in objects[annotation_ids[2]]
+    assert b"/DA (/Helv " + _scaled_pdf_values(12.5) + b" Tf 0.2 0.4 0.6 rg)" in objects[annotation_ids[1]]
+    assert b"/Rect " + _scaled_pdf_array(22.0, 6.0, 28.0, 10.0) in objects[annotation_ids[2]]
     assert b"/Contents (Tiny)" in objects[annotation_ids[2]]
-    assert b"/DA (/Helv 0.5 Tf 0.123456 0.2 0.3 rg)" in objects[annotation_ids[2]]
+    assert b"/DA (/Helv " + _scaled_pdf_values(0.5) + b" Tf 0.123456 0.2 0.3 rg)" in objects[annotation_ids[2]]
     assert (
         b"/DR << /Font << /Helv << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >> >> >>"
         in objects[annotation_ids[1]]
@@ -758,15 +804,15 @@ def test_document_pdf_emits_highlight_annotations_and_round_trips() -> None:
     assert [len(page_refs) for page_refs in annotation_refs] == [2, 2]
     assert b"/Subtype /Text" in objects[annotation_ids[0]]
     assert b"/Subtype /Highlight" in objects[annotation_ids[1]]
-    assert b"/Rect [5 6 20 25]" in objects[annotation_ids[1]]
-    assert b"/QuadPoints [5 25 20 25 5 6 20 6]" in objects[annotation_ids[1]]
+    assert b"/Rect " + _scaled_pdf_array(5.0, 6.0, 20.0, 25.0) in objects[annotation_ids[1]]
+    assert b"/QuadPoints " + _scaled_pdf_array(5.0, 25.0, 20.0, 25.0, 5.0, 6.0, 20.0, 6.0) in objects[annotation_ids[1]]
     assert b"/C [0.2 0.4 0.6]" in objects[annotation_ids[1]]
     assert b"/Contents (Clause \\(A\\))" in objects[annotation_ids[1]]
     assert b"/Subtype /Highlight" in objects[annotation_ids[2]]
-    assert b"/Rect [0 0 100 80]" in objects[annotation_ids[2]]
+    assert b"/Rect " + _scaled_pdf_array(0.0, 0.0, 100.0, 80.0) in objects[annotation_ids[2]]
     assert b"/C [1 1 0]" in objects[annotation_ids[2]]
     assert b"/Subtype /Highlight" in objects[annotation_ids[3]]
-    assert b"/Rect [10 10 20 20]" in objects[annotation_ids[3]]
+    assert b"/Rect " + _scaled_pdf_array(10.0, 10.0, 20.0, 20.0) in objects[annotation_ids[3]]
     assert b"/C [0.123456 0.2 0.3]" in objects[annotation_ids[3]]
     assert document.highlight_annotations() == (
         {
@@ -946,12 +992,12 @@ def test_document_pdf_emits_square_annotations_and_round_trips() -> None:
     assert [len(page_refs) for page_refs in annotation_refs] == [2, 2]
     assert b"/Subtype /Highlight" in objects[annotation_ids[0]]
     assert b"/Subtype /Square" in objects[annotation_ids[1]]
-    assert b"/Rect [5 6 20 25]" in objects[annotation_ids[1]]
+    assert b"/Rect " + _scaled_pdf_array(5.0, 6.0, 20.0, 25.0) in objects[annotation_ids[1]]
     assert b"/C [0.2 0.4 0.6]" in objects[annotation_ids[1]]
-    assert b"/Border [0 0 1]" in objects[annotation_ids[1]]
+    assert b"/Border [0 0 " + _scaled_pdf_values(1.0) + b"]" in objects[annotation_ids[1]]
     assert b"/Contents (Box \\(A\\))" in objects[annotation_ids[1]]
     assert b"/Subtype /Square" in objects[annotation_ids[2]]
-    assert b"/Rect [0 0 100 80]" in objects[annotation_ids[2]]
+    assert b"/Rect " + _scaled_pdf_array(0.0, 0.0, 100.0, 80.0) in objects[annotation_ids[2]]
     assert b"/C [1 0 0]" in objects[annotation_ids[2]]
     assert b"/Subtype /Square" in objects[annotation_ids[3]]
     assert b"/C [0.123456 0.2 0.3]" in objects[annotation_ids[3]]
@@ -1129,12 +1175,12 @@ def test_document_pdf_emits_circle_annotations_and_round_trips() -> None:
     assert [len(page_refs) for page_refs in annotation_refs] == [2, 2]
     assert b"/Subtype /Square" in objects[annotation_ids[0]]
     assert b"/Subtype /Circle" in objects[annotation_ids[1]]
-    assert b"/Rect [5 6 20 25]" in objects[annotation_ids[1]]
+    assert b"/Rect " + _scaled_pdf_array(5.0, 6.0, 20.0, 25.0) in objects[annotation_ids[1]]
     assert b"/C [0.2 0.4 0.6]" in objects[annotation_ids[1]]
-    assert b"/Border [0 0 1]" in objects[annotation_ids[1]]
+    assert b"/Border [0 0 " + _scaled_pdf_values(1.0) + b"]" in objects[annotation_ids[1]]
     assert b"/Contents (Oval \\(A\\))" in objects[annotation_ids[1]]
     assert b"/Subtype /Circle" in objects[annotation_ids[2]]
-    assert b"/Rect [0 0 100 80]" in objects[annotation_ids[2]]
+    assert b"/Rect " + _scaled_pdf_array(0.0, 0.0, 100.0, 80.0) in objects[annotation_ids[2]]
     assert b"/C [1 0 0]" in objects[annotation_ids[2]]
     assert b"/Subtype /Circle" in objects[annotation_ids[3]]
     assert b"/C [0.123456 0.2 0.3]" in objects[annotation_ids[3]]
@@ -1315,25 +1361,25 @@ def test_document_pdf_emits_line_annotations_and_round_trips() -> None:
     assert [len(page_refs) for page_refs in annotation_refs] == [3, 4]
     assert b"/Subtype /Circle" in objects[annotation_ids[0]]
     assert b"/Subtype /Line" in objects[annotation_ids[1]]
-    assert b"/Rect [4 5 21 26]" in objects[annotation_ids[1]]
-    assert b"/L [5 6 20 25]" in objects[annotation_ids[1]]
+    assert b"/Rect " + _scaled_pdf_array(4.0, 5.0, 21.0, 26.0) in objects[annotation_ids[1]]
+    assert b"/L " + _scaled_pdf_array(5.0, 6.0, 20.0, 25.0) in objects[annotation_ids[1]]
     assert b"/C [0.2 0.4 0.6]" in objects[annotation_ids[1]]
-    assert b"/Border [0 0 1]" in objects[annotation_ids[1]]
+    assert b"/Border [0 0 " + _scaled_pdf_values(1.0) + b"]" in objects[annotation_ids[1]]
     assert b"/Contents (Leader \\(A\\))" in objects[annotation_ids[1]]
     assert b"/Subtype /Line" in objects[annotation_ids[2]]
-    assert b"/Rect [4 5 21 26]" in objects[annotation_ids[2]]
-    assert b"/L [20 25 5 6]" in objects[annotation_ids[2]]
+    assert b"/Rect " + _scaled_pdf_array(4.0, 5.0, 21.0, 26.0) in objects[annotation_ids[2]]
+    assert b"/L " + _scaled_pdf_array(20.0, 25.0, 5.0, 6.0) in objects[annotation_ids[2]]
     assert b"/Subtype /Line" in objects[annotation_ids[3]]
-    assert b"/Rect [0 0 100 1]" in objects[annotation_ids[3]]
-    assert b"/L [0 0 100 0]" in objects[annotation_ids[3]]
+    assert b"/Rect " + _scaled_pdf_array(0.0, 0.0, 100.0, 1.0) in objects[annotation_ids[3]]
+    assert b"/L " + _scaled_pdf_array(0.0, 0.0, 100.0, 0.0) in objects[annotation_ids[3]]
     assert b"/C [1 0 0]" in objects[annotation_ids[3]]
     assert b"/Subtype /Line" in objects[annotation_ids[3]]
     assert b"/Subtype /Line" in objects[annotation_ids[4]]
-    assert b"/Rect [99 0 100 80]" in objects[annotation_ids[4]]
-    assert b"/L [100 0 100 80]" in objects[annotation_ids[4]]
+    assert b"/Rect " + _scaled_pdf_array(99.0, 0.0, 100.0, 80.0) in objects[annotation_ids[4]]
+    assert b"/L " + _scaled_pdf_array(100.0, 0.0, 100.0, 80.0) in objects[annotation_ids[4]]
     assert b"/Subtype /Line" in objects[annotation_ids[5]]
-    assert b"/Rect [0 79 100 80]" in objects[annotation_ids[5]]
-    assert b"/L [0 80 100 80]" in objects[annotation_ids[5]]
+    assert b"/Rect " + _scaled_pdf_array(0.0, 79.0, 100.0, 80.0) in objects[annotation_ids[5]]
+    assert b"/L " + _scaled_pdf_array(0.0, 80.0, 100.0, 80.0) in objects[annotation_ids[5]]
     assert b"/Subtype /Line" in objects[annotation_ids[6]]
     assert b"/C [0.123456 0.2 0.3]" in objects[annotation_ids[6]]
     assert sorted(objects) == list(range(1, max(objects) + 1))
@@ -1564,11 +1610,11 @@ def test_document_pdf_emits_internal_page_link_annotations_and_round_trips() -> 
     assert payload == document.to_pdf_bytes()
     assert [len(page_refs) for page_refs in annotation_refs] == [2]
     assert b"/Subtype /Link" in objects[annotation_ids[0]]
-    assert b"/Rect [5 6 20 25]" in objects[annotation_ids[0]]
+    assert b"/Rect " + _scaled_pdf_array(5.0, 6.0, 20.0, 25.0) in objects[annotation_ids[0]]
     assert b"/Border [0 0 0]" in objects[annotation_ids[0]]
-    assert f"/Dest [{page_ids[2]} 0 R /XYZ 12 null null]".encode("ascii") in objects[annotation_ids[0]]
-    assert b"/Rect [30 6 45 25]" in objects[annotation_ids[1]]
-    assert f"/Dest [{page_ids[1]} 0 R /XYZ 2 70 1.5]".encode("ascii") in objects[annotation_ids[1]]
+    assert f"/Dest [{page_ids[2]} 0 R /XYZ ".encode("ascii") + _scaled_pdf_values(12.0) + b" null null]" in objects[annotation_ids[0]]
+    assert b"/Rect " + _scaled_pdf_array(30.0, 6.0, 45.0, 25.0) in objects[annotation_ids[1]]
+    assert f"/Dest [{page_ids[1]} 0 R /XYZ ".encode("ascii") + _scaled_pdf_values(2.0, 70.0) + b" 1.5]" in objects[annotation_ids[1]]
     assert sorted(objects) == list(range(1, max(objects) + 1))
     assert document.page_links() == (
         {"page_number": 1, "rect": [5.0, 6.0, 20.0, 25.0], "target_page_number": 3, "left": 12.0},
@@ -1735,14 +1781,14 @@ def test_document_pdf_emits_named_destinations_and_links_round_trips() -> None:
     assert payload == document.to_pdf_bytes()
     assert [len(page_refs) for page_refs in annotation_refs] == [2]
     assert b"/Names << /Dests << /Names [" in objects[1]
-    assert f"(A\\\\1) [{page_ids[2]} 0 R /XYZ 9 null null]".encode("ascii") in objects[1]
-    assert f"(B \\(2\\)) [{page_ids[1]} 0 R /XYZ 5 70 1.25]".encode("ascii") in objects[1]
+    assert f"(A\\\\1) [{page_ids[2]} 0 R /XYZ ".encode("ascii") + _scaled_pdf_values(9.0) + b" null null]" in objects[1]
+    assert f"(B \\(2\\)) [{page_ids[1]} 0 R /XYZ ".encode("ascii") + _scaled_pdf_values(5.0, 70.0) + b" 1.25]" in objects[1]
     assert objects[1].index(b"(A\\\\1)") < objects[1].index(b"(B \\(2\\))")
     assert b"/Subtype /Link" in objects[annotation_ids[0]]
     assert b"/Dest (B \\(2\\))" in objects[annotation_ids[0]]
-    assert b"/Rect [5 6 20 25]" in objects[annotation_ids[0]]
+    assert b"/Rect " + _scaled_pdf_array(5.0, 6.0, 20.0, 25.0) in objects[annotation_ids[0]]
     assert b"/Dest (A\\\\1)" in objects[annotation_ids[1]]
-    assert b"/Rect [30 6 45 25]" in objects[annotation_ids[1]]
+    assert b"/Rect " + _scaled_pdf_array(30.0, 6.0, 45.0, 25.0) in objects[annotation_ids[1]]
     assert sorted(objects) == list(range(1, max(objects) + 1))
     assert document.named_destinations() == (
         {"name": r"A\1", "page_number": 3, "left": 9.0},
@@ -1959,9 +2005,9 @@ def test_document_pdf_emits_flat_outlines_and_round_trips() -> None:
     assert f"/Next {last_id} 0 R".encode("ascii") in objects[middle_id]
     assert f"/Prev {middle_id} 0 R".encode("ascii") in objects[last_id]
     assert b"/Next" not in objects[last_id]
-    assert b"/XYZ 0 null null]" in objects[first_id]
-    assert b"/XYZ 12.5 70 1.25]" in objects[middle_id]
-    assert b"/XYZ 20 null null]" in objects[last_id]
+    assert b"/XYZ " + _scaled_pdf_values(0.0) + b" null null]" in objects[first_id]
+    assert b"/XYZ " + _scaled_pdf_values(12.5, 70.0) + b" 1.25]" in objects[middle_id]
+    assert b"/XYZ " + _scaled_pdf_values(20.0) + b" null null]" in objects[last_id]
     assert sorted(objects) == list(range(1, max(objects) + 1))
     assert document.outlines() == (
         {"title": "Cover (A)", "page_number": 1, "left": 0.0},
@@ -2017,7 +2063,7 @@ def test_document_pdf_emits_nested_outlines_and_round_trips() -> None:
     assert f"/Prev {first_id} 0 R".encode("ascii") in objects[second_top_id]
     assert b"/Next" not in objects[second_top_id]
     assert b"/Title (Section 1.2)" in objects[child_2_id]
-    assert b"/XYZ 20 70 1.25]" in objects[child_2_id]
+    assert b"/XYZ " + _scaled_pdf_values(20.0, 70.0) + b" 1.25]" in objects[child_2_id]
     assert document.outlines() == (
         {"title": "Chapter 1", "page_number": 1, "left": 0.0},
         {"title": "Section 1.1", "page_number": 2, "left": 10.0, "parent": "Chapter 1"},
@@ -2349,12 +2395,12 @@ def test_document_pdf_emits_uri_link_annotations_and_round_trips() -> None:
     assert payload == document.to_pdf_bytes()
     assert [len(page_refs) for page_refs in annotation_refs] == [2, 1]
     assert b"/Subtype /Link" in objects[annotation_ids[0]]
-    assert b"/Rect [5 6 20 25]" in objects[annotation_ids[0]]
+    assert b"/Rect " + _scaled_pdf_array(5.0, 6.0, 20.0, 25.0) in objects[annotation_ids[0]]
     assert b"/Border [0 0 0]" in objects[annotation_ids[0]]
     assert b"/A << /S /URI /URI (https://example.com/a?x=\\(1\\)) >>" in objects[annotation_ids[0]]
-    assert b"/Rect [30 6 45 25]" in objects[annotation_ids[1]]
+    assert b"/Rect " + _scaled_pdf_array(30.0, 6.0, 45.0, 25.0) in objects[annotation_ids[1]]
     assert b"/URI (https://example.com/b)" in objects[annotation_ids[1]]
-    assert b"/Rect [0 0 100 80]" in objects[annotation_ids[2]]
+    assert b"/Rect " + _scaled_pdf_array(0.0, 0.0, 100.0, 80.0) in objects[annotation_ids[2]]
     assert b"/URI (mailto:test\\\\user@example.com)" in objects[annotation_ids[2]]
     assert sorted(objects) == list(range(1, max(objects) + 1))
     assert document.uri_links() == (

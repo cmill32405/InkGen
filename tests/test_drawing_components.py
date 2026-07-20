@@ -85,7 +85,7 @@ def test_neutral_zoning_recipe_materializes_pdf_components() -> None:
 
     assert isinstance(group, ComponentGroupPDF)
     assert component_types == {"LinePDF", "RectanglePDF", "TextPDF"}
-    assert payload.startswith(b"%PDF-1.6\n")
+    assert payload.startswith(b"%PDF-1.4\n")
     assert b"/Count 1" in payload
 
 

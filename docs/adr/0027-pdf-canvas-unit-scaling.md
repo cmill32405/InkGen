@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted.
+Superseded by ADR-0028.
 
 ## Context
 
@@ -44,3 +44,7 @@ PDF page.
 - Generated files require a PDF 1.6-capable reader.
 - Deterministic output is preserved; no package dependency or public model
   field is added.
+
+ADR-0028 retains the physical-size contract while replacing `/UserUnit` with
+point-valued page dictionaries and a content-stream scale matrix for broader
+consumer compatibility.

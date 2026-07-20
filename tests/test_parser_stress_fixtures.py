@@ -53,7 +53,7 @@ def test_parser_stress_pdf_builds_rotated_transparent_truth_labeled_fixture() ->
     assert len(tuple(groups["transparent_overlay"].components())) == 2
     assert len(tuple(groups["zone_markers"].components())) == 8
     assert b"/Rotate 90" in payload
-    assert b"/TrimBox [0 0 340 200]" in payload
+    assert b"/TrimBox [0 0 963.779528 566.929134]" in payload
     assert b"/ExtGState" in payload
     assert b"PARSER STRESS TEST" in payload
     assert b"PSF-1001" in payload
@@ -201,7 +201,7 @@ def test_scanned_parser_stress_pdf_builds_image_only_truth_labeled_fixture() -> 
     assert header_dark_pixels > 500
     assert row_dark_pixels > 500
     assert document.page_rotation(1) is None
-    assert b"/TrimBox [0 0 340 200]" in payload
+    assert b"/TrimBox [0 0 963.779528 566.929134]" in payload
     assert b"/Subtype /Image" in payload
     assert b"/XObject << /Im1" in payload
     assert "339.8 0 0 -199.8 0.1 199.9 cm\n/Im1 Do" in payload.decode("latin-1")

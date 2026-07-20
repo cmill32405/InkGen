@@ -59,7 +59,7 @@ from InkGen.style import DrawingStyle, TextStyle
 from InkGen.svg_generator import LabelGenerator, SegmentGenerator
 
 PDF_FIXED_DATE = "D:20000101000000Z"
-PDF_VERSION = "1.6"
+PDF_VERSION = "1.4"
 PDF_POINTS_PER_INCH = 72.0
 PDF_MILLIMETERS_PER_INCH = 25.4
 PDF_GENERIC_FONT_FAMILIES = {"serif", "sans-serif", "monospace", "cursive", "fantasy"}
@@ -459,12 +459,27 @@ def _number(value: float | int) -> str:
 
 
 def _pdf_points_per_canvas_unit(units: str) -> float:
-    """Return the PDF user-unit scale for canonical Canvas units."""
+    """Return the point scale for canonical Canvas units."""
     if units == "mm":
         return PDF_POINTS_PER_INCH / PDF_MILLIMETERS_PER_INCH
     if units == "in":
         return PDF_POINTS_PER_INCH
     raise ValueError(f"Unsupported PDF canvas units: {units}")
+
+
+def _scaled_pdf_number(value: float | int, unit_scale: float) -> str:
+    """Format a canvas-unit length as a PDF point value."""
+    return _number(float(value) * unit_scale)
+
+
+def _scaled_pdf_rectangle(rect: Sequence[float], unit_scale: float) -> str:
+    """Format a canvas-unit rectangle as a PDF point array."""
+    return f"[{' '.join(_scaled_pdf_number(value, unit_scale) for value in rect)}]"
+
+
+def _scaled_pdf_destination_token(value: float | None, unit_scale: float) -> str:
+    """Format an optional canvas-unit destination coordinate in PDF points."""
+    return "null" if value is None else _scaled_pdf_number(value, unit_scale)
 
 
 def _scale_pdf_truth_payload(payload: dict[str, object], unit_scale: float) -> dict[str, object]:
@@ -2875,13 +2890,10 @@ class DocumentPDF(Document):
         )
         return f"<< /Nums [{entries}] >>"
 
-    def _page_box_operators(self, page_number: int) -> str:
+    def _page_box_operators(self, page_number: int, unit_scale: float) -> str:
         """Return additional PDF page-box dictionary entries for a page."""
         boxes = self._pdf_page_boxes.get(page_number, {})
-        return " ".join(
-            f"/{name} [{_number(left)} {_number(bottom)} {_number(right)} {_number(top)}]"
-            for name, (left, bottom, right, top) in sorted(boxes.items())
-        )
+        return " ".join(f"/{name} {_scaled_pdf_rectangle(rect, unit_scale)}" for name, rect in sorted(boxes.items()))
 
     def _page_rotation_operator(self, page_number: int) -> str:
         """Return a PDF page rotation dictionary entry for a page."""
@@ -2918,12 +2930,16 @@ class DocumentPDF(Document):
         return retained
 
     @staticmethod
-    def _outline_destination(outline: _PDFOutlineEntry, page_ids_by_number: Mapping[int, int]) -> str:
+    def _outline_destination(
+        outline: _PDFOutlineEntry,
+        page_ids_by_number: Mapping[int, int],
+        unit_scale: float,
+    ) -> str:
         """Return a PDF outline destination array."""
         page_id = page_ids_by_number[outline.page_number]
         return (
-            f"[{page_id} 0 R /XYZ {_number(outline.left)} "
-            f"{_coerce_pdf_outline_destination_token(outline.top)} {_coerce_pdf_outline_destination_token(outline.zoom)}]"
+            f"[{page_id} 0 R /XYZ {_scaled_pdf_number(outline.left, unit_scale)} "
+            f"{_scaled_pdf_destination_token(outline.top, unit_scale)} {_coerce_pdf_outline_destination_token(outline.zoom)}]"
         )
 
     @staticmethod
@@ -2933,6 +2949,7 @@ class DocumentPDF(Document):
         outline_item_ids: Sequence[int],
         outlines: Sequence[_PDFOutlineEntry],
         page_ids_by_number: Mapping[int, int],
+        unit_scales_by_page: Mapping[int, float],
     ) -> dict[int, str]:
         """Return PDF outline object payloads keyed by object id."""
         objects: dict[int, str] = {}
@@ -2969,7 +2986,11 @@ class DocumentPDF(Document):
                 descendant_count = DocumentPDF._outline_descendant_count(index, child_indices_by_parent_index)
                 count = descendant_count if outline.expanded else -descendant_count
                 child_links = f" /First {object_ids_by_index[children[0]]} 0 R /Last {object_ids_by_index[children[-1]]} 0 R /Count {count}"
-            destination = DocumentPDF._outline_destination(outline, page_ids_by_number)
+            destination = DocumentPDF._outline_destination(
+                outline,
+                page_ids_by_number,
+                unit_scales_by_page[outline.page_number],
+            )
             objects[object_id] = (
                 f"<< /Title ({_escape_pdf_string(outline.title)}) /Parent {parent_id} 0 R"
                 f"{prev_link}{next_link}{child_links} /Dest {destination} >>"
@@ -2999,10 +3020,9 @@ class DocumentPDF(Document):
         return {page_number: tuple(links) for page_number, links in links_by_page.items()}
 
     @staticmethod
-    def _uri_link_annotation_object(link: _PDFUriLinkAnnotation) -> str:
+    def _uri_link_annotation_object(link: _PDFUriLinkAnnotation, unit_scale: float) -> str:
         """Return a PDF URI link annotation object dictionary."""
-        left, bottom, right, top = link.rect
-        rect = f"[{_number(left)} {_number(bottom)} {_number(right)} {_number(top)}]"
+        rect = _scaled_pdf_rectangle(link.rect, unit_scale)
         uri = _escape_pdf_string(link.uri)
         return f"<< /Type /Annot /Subtype /Link /Rect {rect} /Border [0 0 0] /A << /S /URI /URI ({uri}) >> >>"
 
@@ -3029,14 +3049,18 @@ class DocumentPDF(Document):
         return {page_number: tuple(links) for page_number, links in links_by_page.items()}
 
     @staticmethod
-    def _page_link_annotation_object(link: _PDFPageLinkAnnotation, page_ids_by_number: Mapping[int, int]) -> str:
+    def _page_link_annotation_object(
+        link: _PDFPageLinkAnnotation,
+        page_ids_by_number: Mapping[int, int],
+        source_unit_scale: float,
+        target_unit_scale: float,
+    ) -> str:
         """Return a PDF internal page link annotation object dictionary."""
-        left, bottom, right, top = link.rect
-        rect = f"[{_number(left)} {_number(bottom)} {_number(right)} {_number(top)}]"
+        rect = _scaled_pdf_rectangle(link.rect, source_unit_scale)
         page_id = page_ids_by_number[link.target_page_number]
         destination = (
-            f"[{page_id} 0 R /XYZ {_number(link.left)} "
-            f"{_coerce_pdf_outline_destination_token(link.top)} {_coerce_pdf_outline_destination_token(link.zoom)}]"
+            f"[{page_id} 0 R /XYZ {_scaled_pdf_number(link.left, target_unit_scale)} "
+            f"{_scaled_pdf_destination_token(link.top, target_unit_scale)} {_coerce_pdf_outline_destination_token(link.zoom)}]"
         )
         return f"<< /Type /Annot /Subtype /Link /Rect {rect} /Border [0 0 0] /Dest {destination} >>"
 
@@ -3075,27 +3099,38 @@ class DocumentPDF(Document):
         return {page_number: tuple(links) for page_number, links in links_by_page.items()}
 
     @staticmethod
-    def _named_destination_object(destination: _PDFNamedDestination, page_ids_by_number: Mapping[int, int]) -> str:
+    def _named_destination_object(
+        destination: _PDFNamedDestination,
+        page_ids_by_number: Mapping[int, int],
+        unit_scale: float,
+    ) -> str:
         """Return a PDF destination array for a named destination."""
         page_id = page_ids_by_number[destination.page_number]
         return (
-            f"[{page_id} 0 R /XYZ {_number(destination.left)} "
-            f"{_coerce_pdf_outline_destination_token(destination.top)} {_coerce_pdf_outline_destination_token(destination.zoom)}]"
+            f"[{page_id} 0 R /XYZ {_scaled_pdf_number(destination.left, unit_scale)} "
+            f"{_scaled_pdf_destination_token(destination.top, unit_scale)} {_coerce_pdf_outline_destination_token(destination.zoom)}]"
         )
 
-    def _names_dictionary(self, page_ids_by_number: Mapping[int, int]) -> str:
+    def _names_dictionary(
+        self,
+        page_ids_by_number: Mapping[int, int],
+        unit_scales_by_page: Mapping[int, float],
+    ) -> str:
         """Return a PDF Names dictionary for named destinations."""
         destination_entries = " ".join(
-            f"({_escape_pdf_string(destination.name)}) {self._named_destination_object(destination, page_ids_by_number)}"
+            f"({_escape_pdf_string(destination.name)}) "
+            f"{self._named_destination_object(destination, page_ids_by_number, unit_scales_by_page[destination.page_number])}"
             for destination in self._sorted_named_destinations()
         )
         return f"<< /Dests << /Names [{destination_entries}] >> >>"
 
     @staticmethod
-    def _named_destination_link_annotation_object(link: _PDFNamedDestinationLinkAnnotation) -> str:
+    def _named_destination_link_annotation_object(
+        link: _PDFNamedDestinationLinkAnnotation,
+        unit_scale: float,
+    ) -> str:
         """Return a PDF link annotation object targeting a named destination."""
-        left, bottom, right, top = link.rect
-        rect = f"[{_number(left)} {_number(bottom)} {_number(right)} {_number(top)}]"
+        rect = _scaled_pdf_rectangle(link.rect, unit_scale)
         destination = _escape_pdf_string(link.destination_name)
         return f"<< /Type /Annot /Subtype /Link /Rect {rect} /Border [0 0 0] /Dest ({destination}) >>"
 
@@ -3121,10 +3156,9 @@ class DocumentPDF(Document):
         return {page_number: tuple(annotations) for page_number, annotations in annotations_by_page.items()}
 
     @staticmethod
-    def _text_annotation_object(annotation: _PDFTextAnnotation) -> str:
+    def _text_annotation_object(annotation: _PDFTextAnnotation, unit_scale: float) -> str:
         """Return a PDF text annotation object dictionary."""
-        left, bottom, right, top = annotation.rect
-        rect = f"[{_number(left)} {_number(bottom)} {_number(right)} {_number(top)}]"
+        rect = _scaled_pdf_rectangle(annotation.rect, unit_scale)
         title = f" /T ({_escape_pdf_string(annotation.title)})" if annotation.title is not None else ""
         open_state = " /Open true" if annotation.open else ""
         contents = _escape_pdf_string(annotation.contents)
@@ -3149,13 +3183,12 @@ class DocumentPDF(Document):
         return {page_number: tuple(annotations) for page_number, annotations in annotations_by_page.items()}
 
     @staticmethod
-    def _free_text_annotation_object(annotation: _PDFFreeTextAnnotation) -> str:
+    def _free_text_annotation_object(annotation: _PDFFreeTextAnnotation, unit_scale: float) -> str:
         """Return a PDF free-text annotation object dictionary."""
-        left, bottom, right, top = annotation.rect
-        rect = f"[{_number(left)} {_number(bottom)} {_number(right)} {_number(top)}]"
+        rect = _scaled_pdf_rectangle(annotation.rect, unit_scale)
         contents = _escape_pdf_string(annotation.contents)
         color = f"{_number(annotation.text_color[0])} {_number(annotation.text_color[1])} {_number(annotation.text_color[2])}"
-        default_appearance = f"/Helv {_number(annotation.font_size)} Tf {color} rg"
+        default_appearance = f"/Helv {_scaled_pdf_number(annotation.font_size, unit_scale)} Tf {color} rg"
         default_resources = "<< /Font << /Helv << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >> >> >>"
         return (
             f"<< /Type /Annot /Subtype /FreeText /Rect {rect} /Contents ({contents}) "
@@ -3182,11 +3215,14 @@ class DocumentPDF(Document):
         return {page_number: tuple(annotations) for page_number, annotations in annotations_by_page.items()}
 
     @staticmethod
-    def _highlight_annotation_object(annotation: _PDFHighlightAnnotation) -> str:
+    def _highlight_annotation_object(annotation: _PDFHighlightAnnotation, unit_scale: float) -> str:
         """Return a PDF highlight annotation object dictionary."""
         left, bottom, right, top = annotation.rect
-        rect = f"[{_number(left)} {_number(bottom)} {_number(right)} {_number(top)}]"
-        quad_points = f"[{_number(left)} {_number(top)} {_number(right)} {_number(top)} {_number(left)} {_number(bottom)} {_number(right)} {_number(bottom)}]"
+        rect = _scaled_pdf_rectangle(annotation.rect, unit_scale)
+        quad_points = _scaled_pdf_rectangle(
+            (left, top, right, top, left, bottom, right, bottom),
+            unit_scale,
+        )
         color = f"[{_number(annotation.color[0])} {_number(annotation.color[1])} {_number(annotation.color[2])}]"
         contents = f" /Contents ({_escape_pdf_string(annotation.contents)})" if annotation.contents is not None else ""
         return f"<< /Type /Annot /Subtype /Highlight /Rect {rect} /QuadPoints {quad_points} /C {color}{contents} >>"
@@ -3211,13 +3247,13 @@ class DocumentPDF(Document):
         return {page_number: tuple(annotations) for page_number, annotations in annotations_by_page.items()}
 
     @staticmethod
-    def _square_annotation_object(annotation: _PDFSquareAnnotation) -> str:
+    def _square_annotation_object(annotation: _PDFSquareAnnotation, unit_scale: float) -> str:
         """Return a PDF square annotation object dictionary."""
-        left, bottom, right, top = annotation.rect
-        rect = f"[{_number(left)} {_number(bottom)} {_number(right)} {_number(top)}]"
+        rect = _scaled_pdf_rectangle(annotation.rect, unit_scale)
         color = f"[{_number(annotation.color[0])} {_number(annotation.color[1])} {_number(annotation.color[2])}]"
         contents = f" /Contents ({_escape_pdf_string(annotation.contents)})" if annotation.contents is not None else ""
-        return f"<< /Type /Annot /Subtype /Square /Rect {rect} /C {color} /Border [0 0 1]{contents} >>"
+        border_width = _scaled_pdf_number(1.0, unit_scale)
+        return f"<< /Type /Annot /Subtype /Square /Rect {rect} /C {color} /Border [0 0 {border_width}]{contents} >>"
 
     @staticmethod
     def _circle_annotation_payload(annotation: _PDFCircleAnnotation) -> dict[str, object]:
@@ -3239,13 +3275,13 @@ class DocumentPDF(Document):
         return {page_number: tuple(annotations) for page_number, annotations in annotations_by_page.items()}
 
     @staticmethod
-    def _circle_annotation_object(annotation: _PDFCircleAnnotation) -> str:
+    def _circle_annotation_object(annotation: _PDFCircleAnnotation, unit_scale: float) -> str:
         """Return a PDF circle annotation object dictionary."""
-        left, bottom, right, top = annotation.rect
-        rect = f"[{_number(left)} {_number(bottom)} {_number(right)} {_number(top)}]"
+        rect = _scaled_pdf_rectangle(annotation.rect, unit_scale)
         color = f"[{_number(annotation.color[0])} {_number(annotation.color[1])} {_number(annotation.color[2])}]"
         contents = f" /Contents ({_escape_pdf_string(annotation.contents)})" if annotation.contents is not None else ""
-        return f"<< /Type /Annot /Subtype /Circle /Rect {rect} /C {color} /Border [0 0 1]{contents} >>"
+        border_width = _scaled_pdf_number(1.0, unit_scale)
+        return f"<< /Type /Annot /Subtype /Circle /Rect {rect} /C {color} /Border [0 0 {border_width}]{contents} >>"
 
     @staticmethod
     def _line_annotation_payload(annotation: _PDFLineAnnotation) -> dict[str, object]:
@@ -3268,14 +3304,14 @@ class DocumentPDF(Document):
         return {page_number: tuple(annotations) for page_number, annotations in annotations_by_page.items()}
 
     @staticmethod
-    def _line_annotation_object(annotation: _PDFLineAnnotation) -> str:
+    def _line_annotation_object(annotation: _PDFLineAnnotation, unit_scale: float) -> str:
         """Return a PDF line annotation object dictionary."""
-        left, bottom, right, top = annotation.rect
-        rect = f"[{_number(left)} {_number(bottom)} {_number(right)} {_number(top)}]"
-        line = f"[{_number(annotation.start[0])} {_number(annotation.start[1])} {_number(annotation.end[0])} {_number(annotation.end[1])}]"
+        rect = _scaled_pdf_rectangle(annotation.rect, unit_scale)
+        line = _scaled_pdf_rectangle((*annotation.start, *annotation.end), unit_scale)
         color = f"[{_number(annotation.color[0])} {_number(annotation.color[1])} {_number(annotation.color[2])}]"
         contents = f" /Contents ({_escape_pdf_string(annotation.contents)})" if annotation.contents is not None else ""
-        return f"<< /Type /Annot /Subtype /Line /Rect {rect} /L {line} /C {color} /Border [0 0 1]{contents} >>"
+        border_width = _scaled_pdf_number(1.0, unit_scale)
+        return f"<< /Type /Annot /Subtype /Line /Rect {rect} /L {line} /C {color} /Border [0 0 {border_width}]{contents} >>"
 
     def create_pdf(self, filepath: str | os.PathLike[str]) -> None:
         """Create a deterministic PDF file at the requested path."""
@@ -3402,6 +3438,7 @@ class DocumentPDF(Document):
         resources = f"<< {' '.join(resource_sections)} >>" if resource_sections else "<< >>"
 
         page_ids_by_number: dict[int, int] = {}
+        unit_scales_by_page: dict[int, float] = {}
         uri_links_by_page = self._uri_links_by_page()
         page_links_by_page = self._page_links_by_page()
         named_destination_links_by_page = self._named_destination_links_by_page()
@@ -3431,15 +3468,16 @@ class DocumentPDF(Document):
             object_id += 2 + len(page_annotations)
             page_ids.append(page_id)
             page_ids_by_number[page_number] = page_id
+            unit_scales_by_page[page_number] = _pdf_points_per_canvas_unit(page._canvas.units)
             page_plans.append((page_number, page, content_bytes, content_id, page_id, page_annotations, annotation_ids))
 
         for page_number, page, content_bytes, content_id, page_id, page_annotations, annotation_ids in page_plans:
-            page_box_entries = self._page_box_operators(page_number)
+            unit_scale = unit_scales_by_page[page_number]
+            page_box_entries = self._page_box_operators(page_number, unit_scale)
             page_boxes = f" {page_box_entries}" if page_box_entries else ""
             page_rotation = self._page_rotation_operator(page_number)
             rotation = f" {page_rotation}" if page_rotation else ""
             annotations = f" /Annots [{' '.join(f'{annotation_id} 0 R' for annotation_id in annotation_ids)}]" if annotation_ids else ""
-            user_unit = _number(_pdf_points_per_canvas_unit(page._canvas.units))
             writer.set_object(
                 content_id, b"<< /Length " + str(len(content_bytes)).encode("ascii") + b" >>\nstream\n" + content_bytes + b"\nendstream"
             )
@@ -3447,38 +3485,46 @@ class DocumentPDF(Document):
                 page_id,
                 (
                     f"<< /Type /Page /Parent {pages_id} 0 R "
-                    f"/MediaBox [0 0 {_number(page._canvas.width)} {_number(page._canvas.height)}] "
-                    f"/UserUnit {user_unit}{page_boxes}{rotation} "
+                    f"/MediaBox [0 0 {_scaled_pdf_number(page._canvas.width, unit_scale)} "
+                    f"{_scaled_pdf_number(page._canvas.height, unit_scale)}]{page_boxes}{rotation} "
                     f"/Resources {resources} "
                     f"/Contents {content_id} 0 R{annotations} >>"
                 ),
             )
             for annotation_id, link in zip(annotation_ids, page_annotations, strict=True):
                 if isinstance(link, _PDFUriLinkAnnotation):
-                    writer.set_object(annotation_id, self._uri_link_annotation_object(link))
+                    writer.set_object(annotation_id, self._uri_link_annotation_object(link, unit_scale))
                 elif isinstance(link, _PDFPageLinkAnnotation):
-                    writer.set_object(annotation_id, self._page_link_annotation_object(link, page_ids_by_number))
+                    writer.set_object(
+                        annotation_id,
+                        self._page_link_annotation_object(
+                            link,
+                            page_ids_by_number,
+                            unit_scale,
+                            unit_scales_by_page[link.target_page_number],
+                        ),
+                    )
                 elif isinstance(link, _PDFNamedDestinationLinkAnnotation):
-                    writer.set_object(annotation_id, self._named_destination_link_annotation_object(link))
+                    writer.set_object(annotation_id, self._named_destination_link_annotation_object(link, unit_scale))
                 elif isinstance(link, _PDFTextAnnotation):
-                    writer.set_object(annotation_id, self._text_annotation_object(link))
+                    writer.set_object(annotation_id, self._text_annotation_object(link, unit_scale))
                 elif isinstance(link, _PDFFreeTextAnnotation):
-                    writer.set_object(annotation_id, self._free_text_annotation_object(link))
+                    writer.set_object(annotation_id, self._free_text_annotation_object(link, unit_scale))
                 elif isinstance(link, _PDFHighlightAnnotation):
-                    writer.set_object(annotation_id, self._highlight_annotation_object(link))
+                    writer.set_object(annotation_id, self._highlight_annotation_object(link, unit_scale))
                 elif isinstance(link, _PDFSquareAnnotation):
-                    writer.set_object(annotation_id, self._square_annotation_object(link))
+                    writer.set_object(annotation_id, self._square_annotation_object(link, unit_scale))
                 elif isinstance(link, _PDFCircleAnnotation):
-                    writer.set_object(annotation_id, self._circle_annotation_object(link))
+                    writer.set_object(annotation_id, self._circle_annotation_object(link, unit_scale))
                 elif isinstance(link, _PDFLineAnnotation):
-                    writer.set_object(annotation_id, self._line_annotation_object(link))
+                    writer.set_object(annotation_id, self._line_annotation_object(link, unit_scale))
                 else:  # pragma: no cover - page plans are built from closed annotation lists.
                     raise TypeError(f"Unsupported PDF annotation type: {link.__class__.__name__}")
 
         kids = " ".join(f"{page_id} 0 R" for page_id in page_ids)
         writer.set_object(pages_id, f"<< /Type /Pages /Kids [{kids}] /Count {len(page_ids)} >>")
         page_labels = f" /PageLabels {self._page_label_dictionary()}" if self._pdf_page_labels else ""
-        names = f" /Names {self._names_dictionary(page_ids_by_number)}" if self._pdf_named_destinations else ""
+        names = f" /Names {self._names_dictionary(page_ids_by_number, unit_scales_by_page)}" if self._pdf_named_destinations else ""
         outlines = ""
         if self._pdf_outlines:
             outline_root_id = object_id
@@ -3489,6 +3535,7 @@ class DocumentPDF(Document):
                 outline_item_ids=outline_item_ids,
                 outlines=self._pdf_outlines,
                 page_ids_by_number=page_ids_by_number,
+                unit_scales_by_page=unit_scales_by_page,
             ).items():
                 writer.set_object(outline_object_id, outline_payload)
             outlines = f" /Outlines {outline_root_id} 0 R /PageMode /UseOutlines"
@@ -3508,7 +3555,12 @@ class DocumentPDF(Document):
             image_registry=image_registry,
             graphics_state_registry=graphics_state_registry,
         )
-        operators = ["q", f"1 0 0 -1 0 {_number(page._canvas.height)} cm"]
+        unit_scale = _pdf_points_per_canvas_unit(page._canvas.units)
+        operators = [
+            "q",
+            f"{_number(unit_scale)} 0 0 {_number(unit_scale)} 0 0 cm",
+            f"1 0 0 -1 0 {_number(page._canvas.height)} cm",
+        ]
         for layer_name in page.layers:
             layer = page.layer(layer_name)
             for group in self._iter_layer_groups(layer):

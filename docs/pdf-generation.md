@@ -19,11 +19,14 @@ stays upright. PDF metadata dates and object ordering are fixed so repeated
 renders of the same document produce deterministic bytes.
 
 PDF output honors `Canvas.units`. Millimeter canvases use `72 / 25.4` points per
-unit and inch canvases use `72` points per unit through the PDF 1.6 page
-`/UserUnit` entry. The media box, drawing operators, links, annotations, page
-boxes, and destinations stay in canvas coordinates and are scaled together by
-the page. Extraction-truth and grammar-truth bboxes are emitted in physical PDF
-points. Callers must not pre-scale PDF geometry; doing so scales output twice.
+unit and inch canvases use `72` points per unit. `MediaBox`, other page boxes,
+links, annotations, and destinations are emitted directly in physical points.
+The content stream begins with a uniform page-scale matrix, so component drawing
+operators remain in canvas coordinates and are scaled exactly once. The writer
+does not depend on PDF 1.6 `/UserUnit`, which improves behavior in browser and
+lightweight consumers that ignore that optional page entry. Extraction-truth
+and grammar-truth bboxes are also emitted in physical PDF points. Callers must
+not pre-scale PDF geometry; doing so scales output twice.
 
 PDF text uses `TextStyle.font` to choose deterministic font resources. Generic
 families keep the built-in PDF Standard behavior: Helvetica/sans-serif,

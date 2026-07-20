@@ -97,7 +97,7 @@ def test_paragraph_materializes_to_svg_and_pdf_groups() -> None:
     assert isinstance(pdf_group, ComponentGroupPDF)
     assert {type(component).__name__ for component in svg_group.components()} == {"TextSVG"}
     assert {type(component).__name__ for component in pdf_group.components()} == {"TextPDF"}
-    assert document.to_pdf_bytes().startswith(b"%PDF-1.6\n")
+    assert document.to_pdf_bytes().startswith(b"%PDF-1.4\n")
 
 
 @pytest.mark.condition("PDF-P3")
