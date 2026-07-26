@@ -78,6 +78,7 @@ class ExtractionTruthRecord:
     is_truth: bool
     instance_id: str | None
     coordinate_frame: str = COORDINATE_FRAME_PDF
+    parameters: dict[str, object] | None = None
 
     @classmethod
     def from_annotation(
@@ -86,6 +87,7 @@ class ExtractionTruthRecord:
         *,
         page: int,
         bbox: list[float] | None,
+        parameters: dict[str, object] | None = None,
     ) -> ExtractionTruthRecord:
         """Create an emitted record from an annotation and rendered geometry."""
         return cls(
@@ -97,11 +99,12 @@ class ExtractionTruthRecord:
             source_channel=annotation.source_channel,
             is_truth=annotation.is_truth,
             instance_id=annotation.instance_id,
+            parameters=parameters,
         )
 
     def to_dict(self) -> dict[str, object]:
         """Serialize this record into the public extraction-truth schema."""
-        return {
+        payload = {
             "field": self.field,
             "value": self.value,
             "role": self.role,
@@ -112,6 +115,9 @@ class ExtractionTruthRecord:
             "instance_id": self.instance_id,
             "coordinate_frame": self.coordinate_frame,
         }
+        if self.parameters is not None:
+            payload["parameters"] = self.parameters
+        return payload
 
 
 def annotate_extraction_truth(
@@ -174,12 +180,20 @@ def records_for_annotated_target(
 ) -> list[ExtractionTruthRecord]:
     """Build emitted truth records for one annotated target."""
     records: list[ExtractionTruthRecord] = []
+    parameters = _target_truth_parameters(target)
     for annotation in get_extraction_truth_annotations(target):
         record_page = page if annotation.source_channel == BODY_SOURCE_CHANNEL else 0
         bbox = None
         if annotation.source_channel == BODY_SOURCE_CHANNEL:
             bbox = bbox_to_pdf_points(getattr(target, "bbox", None), canvas_height)
-        records.append(ExtractionTruthRecord.from_annotation(annotation, page=record_page, bbox=bbox))
+        records.append(
+            ExtractionTruthRecord.from_annotation(
+                annotation,
+                page=record_page,
+                bbox=bbox,
+                parameters=parameters,
+            )
+        )
     return records
 
 
@@ -225,6 +239,7 @@ def sort_extraction_truth_records(records: Iterable[ExtractionTruthRecord]) -> l
             "" if record.instance_id is None else record.instance_id,
             record.value,
             "" if record.bbox is None else ",".join(f"{value:.6f}" for value in record.bbox),
+            "" if record.parameters is None else json.dumps(record.parameters, sort_keys=True, separators=(",", ":")),
             record.is_truth,
         ),
     )
@@ -240,6 +255,21 @@ def _coerce_annotation(annotation: ExtractionTruthAnnotation | dict[str, object]
     if isinstance(annotation, ExtractionTruthAnnotation):
         return annotation
     return ExtractionTruthAnnotation.from_dict(annotation)
+
+
+def _target_truth_parameters(target: object) -> dict[str, object] | None:
+    """Return optional renderer-owned parameters for a truth record."""
+    provider = getattr(target, "extraction_truth_parameters", None)
+    if provider is None:
+        return None
+    if not callable(provider):
+        raise TypeError("extraction_truth_parameters must be callable")
+    parameters = provider()
+    if parameters is None:
+        return None
+    if not isinstance(parameters, Mapping):
+        raise TypeError("extraction_truth_parameters must return a mapping or None")
+    return dict(parameters)
 
 
 def _annotation_payload(data: object) -> Mapping[str, object]:

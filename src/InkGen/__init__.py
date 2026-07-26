@@ -38,6 +38,7 @@ from .extraction_truth import (
     annotate_extraction_truth,
     extraction_truth_json,
 )
+from .gradients import GradientStop, LinearGradientFill
 from .grammar_truth import (
     GrammarTruthAnnotation,
     GrammarTruthRecord,
@@ -142,6 +143,7 @@ __all__ = [
     "Font",
     "GrammarTruthAnnotation",
     "GrammarTruthRecord",
+    "GradientStop",
     "IncludeLayer",
     "ImageDrawing",
     "ImagePDF",
@@ -158,6 +160,7 @@ __all__ = [
     "LineDrawing",
     "LinePDF",
     "LineSpacingRule",
+    "LinearGradientFill",
     "OutputFormat",
     "PDFGeneratorInterface",
     "PDFRenderContext",

@@ -62,7 +62,9 @@ named-destination links, text annotations, FreeText annotations, highlight
 annotations, square annotations, circle annotations, line annotations,
 rectangular and closed path group clipping, stroke/fill opacity through PDF
 ExtGState resources, group blend modes through PDF ExtGState resources, and
-stroke dash/cap/join/miter operators.
+stroke dash/cap/join/miter operators. Rectangle fills may use deterministic
+two-stop or N-stop axial gradients with user-space angle semantics, rounded-path
+clipping, and extraction-truth parameters.
 
 The remaining gaps that keep the backend from being a fully featured PDF
 creation system are:
@@ -71,7 +73,7 @@ creation system are:
 |---|---|---|
 | Text encoding | Single-byte literal strings over defined CP1252/WinAnsi bytes 32-255, installed-font embedding, fail-fast text and metadata string-domain validation, octal-escaped non-ASCII text bytes, and WinAnsi `/ToUnicode` CMaps for font text | Unicode/CID fonts, glyph subsetting, UTF-16BE document strings, and full complex-script text extraction maps |
 | Text layout | Positioned text components with explicit line-break output using `TextStyle.line_spacing` and per-line `TextStyle.text_align` | Automatic wrapping, tabs, columns, kerning, and complex-script shaping |
-| Graphics state | Basic stroke/fill primitives, rectangular and closed path group clipping with nonzero/even-odd clip rules, group blend modes, stroke/fill alpha ExtGState resources, and stroke dash/cap/join/miter operators | Opacity groups, gradients, and patterns |
+| Graphics state | Basic stroke/fill primitives, rectangle axial gradients, rectangular and closed path group clipping with nonzero/even-odd clip rules, group blend modes, stroke/fill alpha ExtGState resources, and stroke dash/cap/join/miter operators | Opacity groups, non-rectangle/radial/mesh gradients, and patterns |
 | Document structure | Pages, deterministic metadata, page labels, page rotations, Crop/Bleed/Trim/Art boxes, flat and arbitrary-depth nested outlines/bookmarks, URI links, internal page links, named destinations, named-destination links, text annotations, FreeText annotations, highlight annotations, square annotations, circle annotations, and line annotations | Rich annotation appearances, replies/widgets, raw generic annotations, and tagged PDF structure |
 | Color/profile support | Device RGB/CMYK and JPEG ICC profile objects | Broader calibrated color spaces and selectable PDF/A-style archival constraints |
 | Import/conversion | SVG input remains SVG-only | Arbitrary SVG-to-PDF conversion and external PDF embedding are out of scope until explicitly approved |

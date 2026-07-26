@@ -41,6 +41,7 @@ from InkGen.component import CubicBezier as CubicBezierComponent
 from InkGen.component import Path as PathComponent
 from InkGen.component import QuadraticBezier as QuadraticBezierComponent
 from InkGen.document import Document, Layer, Layers
+from InkGen.gradients import LinearGradientFill, coerce_linear_gradient
 from InkGen.image_assets import RasterImageAsset, RasterImageComponent
 from InkGen.style import DrawingStyle, Font, TextStyle
 from InkGen.svg_utils import flatten_svg
@@ -194,10 +195,21 @@ def _coerce_command_points(points: list[tuple[float, float]]) -> list[str]:
     return [f"{float(x)},{float(y)}" for x, y in points]
 
 
-def _style_properties(style: DrawingStyle, *, include_fill: bool = True, include_stroke: bool = True) -> str:
+def _svg_number(value: float) -> str:
+    """Return a compact deterministic SVG number."""
+    return f"{float(value):.12g}"
+
+
+def _style_properties(
+    style: DrawingStyle,
+    *,
+    include_fill: bool = True,
+    include_stroke: bool = True,
+    fill_override: str | None = None,
+) -> str:
     parts = []
     if include_fill:
-        fill = getattr(style, "fill", "none")
+        fill = fill_override if fill_override is not None else getattr(style, "fill", "none")
         parts.append(f"fill:{fill}")
         if fill.lower() != "none" and hasattr(style, "fill_opacity"):
             parts.append(f"fill-opacity:{style.fill_opacity}")
@@ -310,7 +322,8 @@ class RectangleSVG(WidthHeightDrawingComponent, DrawingGeneratorInterface):
                  width: float | int,
                  height: float | int,
                  corner_radii: float | tuple[float, float],
-                 style: DrawingStyle):
+                 style: DrawingStyle,
+                 fill_gradient: LinearGradientFill | Mapping[str, object] | None = None):
         """ Instantiate a new rectangle object.
 
         Parameters
@@ -335,6 +348,7 @@ class RectangleSVG(WidthHeightDrawingComponent, DrawingGeneratorInterface):
 
         super().__init__(position, width, height, style)
         self.corner_radii = corner_radii
+        self.fill_gradient = fill_gradient
 
 
     @classmethod
@@ -355,7 +369,8 @@ class RectangleSVG(WidthHeightDrawingComponent, DrawingGeneratorInterface):
                         _svg_required_field(payload, "width", "RectangleSVG"),
                         _svg_required_field(payload, "height", "RectangleSVG"),
                         _svg_required_field(payload, "corner_radii", "RectangleSVG"),
-                        style)
+                        style,
+                        payload.get("fill_gradient"))
         return component
 
     @property
@@ -367,12 +382,16 @@ class RectangleSVG(WidthHeightDrawingComponent, DrawingGeneratorInterface):
             includes a dictionary with each parameter name as key and
             value as value.
         """
-        parameter_dict = {"RectangleSVG":
-                       {"position": self.position,
-                        "width": self.width,
-                        "height": self.height,
-                        "corner_radii": self.corner_radii,
-                        "style": self.style.parameters}}
+        payload = {
+            "position": self.position,
+            "width": self.width,
+            "height": self.height,
+            "corner_radii": self.corner_radii,
+            "style": self.style.parameters,
+        }
+        if self.fill_gradient is not None:
+            payload["fill_gradient"] = self.fill_gradient.parameters
+        parameter_dict = {"RectangleSVG": payload}
         return parameter_dict
 
     def _radius_check(self,
@@ -418,6 +437,50 @@ class RectangleSVG(WidthHeightDrawingComponent, DrawingGeneratorInterface):
         self._radius_check(value, self.width, self.height)
         self._corner_radii = value
 
+    @property
+    def fill_gradient(self) -> LinearGradientFill | None:
+        """Return the optional linear-gradient fill."""
+        return self._fill_gradient
+
+    @fill_gradient.setter
+    def fill_gradient(self, value: LinearGradientFill | Mapping[str, object] | None) -> None:
+        """Validate and update the optional linear-gradient fill."""
+        gradient = coerce_linear_gradient(value)
+        if gradient is not None:
+            gradient.axis_for_box(self.position, self.width, self.height)
+        self._fill_gradient = gradient
+
+    def extraction_truth_parameters(self) -> dict[str, object] | None:
+        """Return gradient parameters for extraction-truth records."""
+        if self.fill_gradient is None:
+            return None
+        return {"fill_gradient": self.fill_gradient.parameters}
+
+    def _gradient_id(self) -> str:
+        """Return the document-unique SVG paint-server identifier."""
+        return f"linearGradient{self.id}"
+
+    def _gradient_definition(self) -> str:
+        """Return the SVG paint-server definition for this rectangle."""
+        if self.fill_gradient is None:
+            return ""
+        x1, y1, x2, y2 = self.fill_gradient.axis_for_box(self.position, self.width, self.height)
+        stops = "\n".join(
+            f'                <stop offset="{stop.offset}" stop-color="{stop.color}" />' for stop in self.fill_gradient.stops
+        )
+        return f"""<defs>
+            <linearGradient
+                id="{self._gradient_id()}"
+                gradientUnits="userSpaceOnUse"
+                x1="{_svg_number(x1)}"
+                y1="{_svg_number(y1)}"
+                x2="{_svg_number(x2)}"
+                y2="{_svg_number(y2)}">
+{stops}
+            </linearGradient>
+        </defs>
+        """
+
     def generate_svg(self) -> str:
         """ Creates a single rect object in XML for a SVG file.
 
@@ -436,7 +499,8 @@ class RectangleSVG(WidthHeightDrawingComponent, DrawingGeneratorInterface):
         str
             XML line for SVG file
         """
-        style = _style_properties(self.style)
+        gradient_fill = None if self.fill_gradient is None else f"url(#{self._gradient_id()})"
+        style = _style_properties(self.style, fill_override=gradient_fill)
 
         rx, ry = normalize_rectangle_corner_radii(self.corner_radii, self.width, self.height)
         radius_attributes = " "
@@ -445,7 +509,7 @@ class RectangleSVG(WidthHeightDrawingComponent, DrawingGeneratorInterface):
             rx="{rx}"
             ry="{ry}" """
 
-        return f"""<rect
+        return f"""{self._gradient_definition()}<rect
             style="{style}"
             id="rect{self.id}"
             width="{self.width}"

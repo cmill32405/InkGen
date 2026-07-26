@@ -44,6 +44,7 @@ from InkGen.extraction_truth import (
 from InkGen.extraction_truth import (
     records_for_annotated_target as extraction_records_for_annotated_target,
 )
+from InkGen.gradients import GradientStop, LinearGradientFill, coerce_linear_gradient
 from InkGen.grammar_truth import (
     grammar_truth_json,
     restore_grammar_truth_annotations,
@@ -247,6 +248,7 @@ class PDFRenderContext:
     font_registry: _PDFFontRegistry | None = None
     image_registry: _PDFImageRegistry | None = None
     graphics_state_registry: _PDFGraphicsStateRegistry | None = None
+    shading_registry: _PDFShadingRegistry | None = None
 
     def font_resource_name(self, style: TextStyle) -> str:
         """Return the PDF font resource name for a text style."""
@@ -271,6 +273,16 @@ class PDFRenderContext:
         if self.graphics_state_registry is None:
             return None
         return self.graphics_state_registry.resource_name_for_blend_mode(blend_mode)
+
+    def shading_resource_name(
+        self,
+        gradient: LinearGradientFill,
+        coords: tuple[float, float, float, float],
+    ) -> str:
+        """Return a PDF shading resource name for a gradient axis."""
+        if self.shading_registry is None:
+            return "Sh1"
+        return self.shading_registry.resource_name_for_gradient(gradient, coords)
 
 
 @dataclass(frozen=True)
@@ -413,6 +425,45 @@ class _PDFGraphicsStateRegistry:
         """Return blend-mode resource definitions in deterministic order."""
         by_name = {name: mode for mode, name in self._resource_by_blend_mode.items()}
         return tuple((name, by_name[name]) for name in sorted(by_name, key=lambda value: int(value[2:])))
+
+
+@dataclass(frozen=True)
+class _PDFShadingResource:
+    """One registered axial-shading resource."""
+
+    resource_name: str
+    gradient: LinearGradientFill
+    coords: tuple[float, float, float, float]
+
+
+class _PDFShadingRegistry:
+    """Deterministic registry for PDF axial-shading resources."""
+
+    def __init__(self) -> None:
+        self._resource_by_key: dict[tuple[tuple[tuple[float, str], ...], float, tuple[float, ...]], _PDFShadingResource] = {}
+
+    def resource_name_for_gradient(
+        self,
+        gradient: LinearGradientFill,
+        coords: tuple[float, float, float, float],
+    ) -> str:
+        """Return a stable resource name for one gradient and axis."""
+        key = (
+            tuple((stop.offset, stop.color) for stop in gradient.stops),
+            gradient.angle_deg,
+            tuple(float(value) for value in coords),
+        )
+        if key not in self._resource_by_key:
+            self._resource_by_key[key] = _PDFShadingResource(
+                resource_name=f"Sh{len(self._resource_by_key) + 1}",
+                gradient=gradient,
+                coords=coords,
+            )
+        return self._resource_by_key[key].resource_name
+
+    def resources(self) -> tuple[_PDFShadingResource, ...]:
+        """Return axial-shading resources in deterministic insertion order."""
+        return tuple(self._resource_by_key.values())
 
 
 class _PDFObjectWriter:
@@ -889,6 +940,45 @@ def _pdf_blend_mode_extgstate_object(blend_mode: str) -> str:
     if mode is None:
         raise ValueError("PDF blend ExtGState requires a non-default blend mode")
     return f"<< /Type /ExtGState /BM /{mode} >>"
+
+
+def _pdf_gradient_color(stop: GradientStop) -> str:
+    """Return one gradient-stop color as a PDF RGB array."""
+    color = _color_components(stop.color)
+    if color is None:  # pragma: no cover - GradientStop validates #rrggbb.
+        raise ValueError("gradient stop color must resolve to RGB")
+    return f"[{_number(color[0])} {_number(color[1])} {_number(color[2])}]"
+
+
+def _pdf_gradient_segment_function(start: GradientStop, end: GradientStop) -> str:
+    """Return a type-2 interpolation function for two adjacent stops."""
+    return (
+        f"<< /FunctionType 2 /Domain [0 1] /C0 {_pdf_gradient_color(start)} "
+        f"/C1 {_pdf_gradient_color(end)} /N 1 >>"
+    )
+
+
+def _pdf_gradient_function(gradient: LinearGradientFill) -> str:
+    """Return a PDF interpolation or stitching function for all stops."""
+    stops = gradient.extended_stops()
+    if len(stops) == 2:
+        return _pdf_gradient_segment_function(stops[0], stops[1])
+    functions = " ".join(_pdf_gradient_segment_function(start, end) for start, end in zip(stops, stops[1:], strict=False))
+    bounds = " ".join(_number(stop.offset) for stop in stops[1:-1])
+    encode = " ".join("0 1" for _ in range(len(stops) - 1))
+    return (
+        f"<< /FunctionType 3 /Domain [0 1] /Functions [{functions}] "
+        f"/Bounds [{bounds}] /Encode [{encode}] >>"
+    )
+
+
+def _pdf_linear_gradient_shading_object(resource: _PDFShadingResource) -> str:
+    """Build an axial PDF shading dictionary for a registered gradient."""
+    coords = " ".join(_number(value) for value in resource.coords)
+    return (
+        f"<< /ShadingType 2 /ColorSpace /DeviceRGB /Coords [{coords}] "
+        f"/Function {_pdf_gradient_function(resource.gradient)} /Extend [true true] >>"
+    )
 
 
 def _pdf_stroke_presentation_operators(style: DrawingStyle) -> list[str]:
@@ -1490,10 +1580,12 @@ class RectanglePDF(WidthHeightDrawingComponent, PDFGeneratorInterface):
         height: float | int,
         corner_radii: float | tuple[float, float],
         style: DrawingStyle,
+        fill_gradient: LinearGradientFill | Mapping[str, object] | None = None,
     ) -> None:
         """Create a PDF rectangle with position, size, corner radii, and style."""
         super().__init__(position, width, height, style)
         self.corner_radii = corner_radii
+        self.fill_gradient = fill_gradient
 
     @classmethod
     def create_from_dict(cls, data: dict, style: DrawingStyle | None = None) -> RectanglePDF:
@@ -1507,20 +1599,22 @@ class RectanglePDF(WidthHeightDrawingComponent, PDFGeneratorInterface):
             _pdf_required_field(payload, "height", "RectanglePDF"),
             _pdf_required_field(payload, "corner_radii", "RectanglePDF"),
             style,
+            payload.get("fill_gradient"),
         )
 
     @property
     def parameters(self) -> dict[str, dict[str, object]]:
         """Return serialized geometry/style information."""
-        return {
-            "RectanglePDF": {
-                "position": self.position,
-                "width": self.width,
-                "height": self.height,
-                "corner_radii": self.corner_radii,
-                "style": self.style.parameters,
-            }
+        payload = {
+            "position": self.position,
+            "width": self.width,
+            "height": self.height,
+            "corner_radii": self.corner_radii,
+            "style": self.style.parameters,
         }
+        if self.fill_gradient is not None:
+            payload["fill_gradient"] = self.fill_gradient.parameters
+        return {"RectanglePDF": payload}
 
     @property
     def corner_radii(self) -> float | tuple[float, float]:
@@ -1533,10 +1627,44 @@ class RectanglePDF(WidthHeightDrawingComponent, PDFGeneratorInterface):
         normalize_rectangle_corner_radii(value, self.width, self.height)
         self._corner_radii = value
 
+    @property
+    def fill_gradient(self) -> LinearGradientFill | None:
+        """Return the optional linear-gradient fill."""
+        return self._fill_gradient
+
+    @fill_gradient.setter
+    def fill_gradient(self, value: LinearGradientFill | Mapping[str, object] | None) -> None:
+        """Validate and update the optional linear-gradient fill."""
+        gradient = coerce_linear_gradient(value)
+        if gradient is not None:
+            gradient.axis_for_box(self.position, self.width, self.height)
+        self._fill_gradient = gradient
+
+    def extraction_truth_parameters(self) -> dict[str, object] | None:
+        """Return gradient parameters for extraction-truth records."""
+        if self.fill_gradient is None:
+            return None
+        return {"fill_gradient": self.fill_gradient.parameters}
+
     def generate_pdf(self, context: PDFRenderContext | None = None) -> str:
         """Generate PDF operators for this rectangle."""
         rx, ry = normalize_rectangle_corner_radii(self.corner_radii, self.width, self.height)
         path = _rounded_rectangle_path(self.position[0], self.position[1], self.width, self.height, rx, ry)
+        if self.fill_gradient is not None:
+            coords = self.fill_gradient.axis_for_box(self.position, self.width, self.height)
+            shading_name = "Sh1" if context is None else context.shading_resource_name(self.fill_gradient, coords)
+            operators = ["q"]
+            if context is not None:
+                graphics_state = context.graphics_state_resource_name(
+                    fill_opacity=self.style.fill_opacity,
+                )
+                if graphics_state is not None:
+                    operators.append(f"/{graphics_state} gs")
+            operators.extend(path)
+            operators.extend(("W", "n", f"/{shading_name} sh", "Q"))
+            if _color_components(self.style.stroke) is not None:
+                operators.append(_drawing_pdf(self.style, path, fill=False, context=context))
+            return "\n".join(operators)
         return _drawing_pdf(self.style, path, context=context)
 
 
@@ -3330,6 +3458,7 @@ class DocumentPDF(Document):
         font_registry = _PDFFontRegistry()
         image_registry = _PDFImageRegistry()
         graphics_state_registry = _PDFGraphicsStateRegistry()
+        shading_registry = _PDFShadingRegistry()
         rendered_pages: list[tuple[Layers, str]] = []
 
         writer.set_object(
@@ -3342,7 +3471,13 @@ class DocumentPDF(Document):
 
         for page_number in range(1, self.pages + 1):
             page = self.page(page_number)
-            content = self._render_page_content(page, font_registry, image_registry, graphics_state_registry)
+            content = self._render_page_content(
+                page,
+                font_registry,
+                image_registry,
+                graphics_state_registry,
+                shading_registry,
+            )
             rendered_pages.append((page, content))
 
         font_object_ids: dict[str, int] = {}
@@ -3423,6 +3558,12 @@ class DocumentPDF(Document):
             writer.set_object(object_id, _pdf_blend_mode_extgstate_object(blend_mode))
             object_id += 1
 
+        shading_object_ids: dict[str, int] = {}
+        for resource in shading_registry.resources():
+            shading_object_ids[resource.resource_name] = object_id
+            writer.set_object(object_id, _pdf_linear_gradient_shading_object(resource))
+            object_id += 1
+
         resource_sections: list[str] = []
         if font_object_ids:
             font_entries = " ".join(f"/{resource_name} {font_object_ids[resource_name]} 0 R" for resource_name in font_object_ids)
@@ -3435,6 +3576,9 @@ class DocumentPDF(Document):
                 f"/{resource_name} {graphics_state_object_ids[resource_name]} 0 R" for resource_name in graphics_state_object_ids
             )
             resource_sections.append(f"/ExtGState << {graphics_state_entries} >>")
+        if shading_object_ids:
+            shading_entries = " ".join(f"/{resource_name} {shading_object_ids[resource_name]} 0 R" for resource_name in shading_object_ids)
+            resource_sections.append(f"/Shading << {shading_entries} >>")
         resources = f"<< {' '.join(resource_sections)} >>" if resource_sections else "<< >>"
 
         page_ids_by_number: dict[int, int] = {}
@@ -3548,12 +3692,14 @@ class DocumentPDF(Document):
         font_registry: _PDFFontRegistry | None = None,
         image_registry: _PDFImageRegistry | None = None,
         graphics_state_registry: _PDFGraphicsStateRegistry | None = None,
+        shading_registry: _PDFShadingRegistry | None = None,
     ) -> str:
         context = PDFRenderContext(
             canvas_height=page._canvas.height,
             font_registry=font_registry,
             image_registry=image_registry,
             graphics_state_registry=graphics_state_registry,
+            shading_registry=shading_registry,
         )
         unit_scale = _pdf_points_per_canvas_unit(page._canvas.units)
         operators = [

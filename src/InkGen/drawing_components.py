@@ -22,6 +22,7 @@ from InkGen.component import (
     TextComponent,
     normalize_rectangle_corner_radii,
 )
+from InkGen.gradients import LinearGradientFill, coerce_linear_gradient
 from InkGen.image_assets import RasterImageAsset
 from InkGen.style import DrawingStyle, TextStyle
 
@@ -160,6 +161,7 @@ class RectangleDrawing:
     height: float
     corner_radii: float | tuple[float, float]
     style: DrawingStyle
+    fill_gradient: LinearGradientFill | Mapping[str, object] | None = None
 
     def __post_init__(self) -> None:
         """Validate the neutral rectangle geometry and style boundary."""
@@ -172,6 +174,10 @@ class RectangleDrawing:
         object.__setattr__(self, "height", height)
         object.__setattr__(self, "corner_radii", corner_radii)
         _require_drawing_style(self.style, "RectangleDrawing")
+        gradient = coerce_linear_gradient(self.fill_gradient)
+        if gradient is not None:
+            gradient.axis_for_box(position, width, height)
+        object.__setattr__(self, "fill_gradient", None if gradient is None else gradient.parameters)
 
     def to_component(self, output_format: OutputFormat | str) -> Component:
         """Create a rectangle component for the requested backend."""
@@ -180,10 +186,10 @@ class RectangleDrawing:
         if target is OutputFormat.SVG:
             from InkGen.svg_generator import RectangleSVG
 
-            return RectangleSVG(self.position, self.width, self.height, corner_radii, self.style)
+            return RectangleSVG(self.position, self.width, self.height, corner_radii, self.style, self.fill_gradient)
         from InkGen.pdf_generator import RectanglePDF
 
-        return RectanglePDF(self.position, self.width, self.height, corner_radii, self.style)
+        return RectanglePDF(self.position, self.width, self.height, corner_radii, self.style, self.fill_gradient)
 
 
 @dataclass(frozen=True)

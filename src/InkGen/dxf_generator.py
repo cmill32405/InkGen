@@ -196,6 +196,8 @@ def _component_to_entities(
     if isinstance(component, LineDrawing):
         return [_line_entity(component.point_1, component.point_2, context, style=component.style)]
     if isinstance(component, RectangleDrawing):
+        if component.fill_gradient is not None:
+            raise ValueError("DXF does not support linear-gradient rectangle fills")
         points = _rectangle_points(component)
         return _closed_shape_entities(points, context, style=component.style)
     if isinstance(component, CircleDrawing):
