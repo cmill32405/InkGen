@@ -2044,6 +2044,11 @@ class TextPDF(TextComponent, PDFGeneratorInterface):
         """Create a PDF text component."""
         super().__init__(text=_coerce_pdf_text_content(text), position=position, style=style)
 
+    def _outline_font_sizes(self) -> tuple[float, float]:
+        """Return PDF text size in page content canvas units."""
+        size_units = float(self.style.font.size)
+        return size_units, size_units
+
     @classmethod
     def create_from_dict(cls, data: dict, style: TextStyle | None = None) -> TextPDF:
         """Recreate a TextPDF from serialized parameters."""

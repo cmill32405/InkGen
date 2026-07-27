@@ -1992,15 +1992,13 @@ class TextComponent(Component):
         if self._outline_cache is not None:
             return self._outline_cache
 
-        # Canvas is in millimeters; TextStyle.Font.size is **points**
-        size_pt = float(self.style.font.size)
-        size_px = size_pt * (96.0 / 72.0)  # pt -> CSS px (1pt=1/72in, 1px=1/96in)
+        outline_size, fallback_size = self._outline_font_sizes()
 
         try:
             outline = outline_for_text(
                 text=self._text,
                 font_path=self.style.font.font_file,
-                size_px=size_px,
+                size_px=outline_size,
                 x=self.position[0],
                 y=self.position[1],
                 dpi=96.0,
@@ -2013,18 +2011,22 @@ class TextComponent(Component):
             outline = None
 
         if not outline or not any(outline.get(key) for key in ("points", "convex_hull", "bbox", "path_bbox")):
-            outline = self._fallback_outline(size_pt)
+            outline = self._fallback_outline(fallback_size)
         else:
             outline = self._align_outline_to_anchor(outline)
 
         self._outline_cache = outline
         return self._outline_cache
 
-    def _fallback_outline(self, size_pt: float) -> dict:
+    def _outline_font_sizes(self) -> tuple[float, float]:
+        """Return precise and fallback sizes in component coordinate units."""
+        size_points = float(self.style.font.size)
+        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)
+
+    def _fallback_outline(self, size_units: float) -> dict:
         """Return an approximate rectangular outline when precise shaping fails."""
-        mm_per_point = 25.4 / 72.0
-        height = max(size_pt * mm_per_point, 0.5)
-        width = max(len(self._text) * size_pt * mm_per_point * 0.6, height * 0.5)
+        height = max(size_units, 0.5)
+        width = max(len(self._text) * size_units * 0.6, height * 0.5)
 
         anchor_x, anchor_y = float(self.position[0]), float(self.position[1])
         align = getattr(self.style, "text_align", "start") or "start"
