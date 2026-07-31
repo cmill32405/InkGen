@@ -2022,14 +2022,20 @@ class CirclePDF(SingleDimensionDrawingComponent, PDFGeneratorInterface):
         return _drawing_pdf(self.style, path, context=context)
 
 
-def _pdf_text_line_width(line: str, font_size: float) -> float:
+def _pdf_text_line_width(line: str, font_size: float, character_spacing: float) -> float:
     """Return InkGen's deterministic PDF text-line width estimate."""
-    return len(line) * font_size * 0.6
+    return len(line) * font_size * 0.6 + max(len(line) - 1, 0) * character_spacing
 
 
-def _pdf_text_aligned_x(anchor_x: float, line: str, font_size: float, text_align: str) -> float:
+def _pdf_text_aligned_x(
+    anchor_x: float,
+    line: str,
+    font_size: float,
+    text_align: str,
+    character_spacing: float,
+) -> float:
     """Return the PDF text origin for an InkGen text alignment value."""
-    line_width = _pdf_text_line_width(line, font_size)
+    line_width = _pdf_text_line_width(line, font_size, character_spacing)
     if text_align == "center":
         return anchor_x - (line_width / 2.0)
     if text_align == "end":
@@ -2070,20 +2076,28 @@ class TextPDF(TextComponent, PDFGeneratorInterface):
         x, y = self.position
         line_spacing = float(getattr(self.style, "line_spacing", 1.0))
         text_align = getattr(self.style, "text_align", "start") or "start"
+        visible = self.style.visible
+        character_spacing = self.style.character_spacing
         lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
         text_operators: list[str] = []
         for index, line in enumerate(lines):
             line_y = y + (index * size * line_spacing)
-            line_x = _pdf_text_aligned_x(x, line, size, text_align)
+            line_x = _pdf_text_aligned_x(x, line, size, text_align, character_spacing)
             text_operators.append(f"1 0 0 -1 {_number(line_x)} {_number(line_y)} Tm")
             text_operators.append(f"({_escape_pdf_text_string(line)}) Tj")
         font_resource = context.font_resource_name(self.style) if context is not None else "F1"
+        presentation_operators = []
+        if not visible:
+            presentation_operators.append("3 Tr")
+        if character_spacing != 0.0:
+            presentation_operators.append(f"{_number(character_spacing)} Tc")
         return "\n".join(
             [
                 "q",
                 f"{_number(color[0])} {_number(color[1])} {_number(color[2])} rg",
                 "BT",
                 f"/{font_resource} {_number(size)} Tf",
+                *presentation_operators,
                 *text_operators,
                 "ET",
                 "Q",

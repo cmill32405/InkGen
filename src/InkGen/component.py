@@ -1852,6 +1852,7 @@ class TextComponent(Component):
         """
 
         self._outline_cache = None
+        self._outline_cache_key = None
         self.text = text
         self.position = position
         self.style = style
@@ -1914,6 +1915,7 @@ class TextComponent(Component):
         if isinstance(value, (str, int, float, complex, bool)):
             self._text = str(value)
             self._outline_cache = None
+            self._outline_cache_key = None
         else:
             raise TypeError("Text argument should be a string or a non-iterable built in type.")
 
@@ -1940,6 +1942,7 @@ class TextComponent(Component):
 
         self._position = self._coerce_position(value)
         self._outline_cache = None
+        self._outline_cache_key = None
 
     def _coerce_position(self, value: tuple[float, float]) -> tuple[float, float]:
         """Return a finite numeric text position pair."""
@@ -1984,12 +1987,14 @@ class TextComponent(Component):
         if isinstance(value, TextStyle):
             self._style = value
             self._outline_cache = None
+            self._outline_cache_key = None
         else:
             raise TypeError("style attribute requires a TextStyle object")
 
     def _compute_outline(self):
         """Compute and cache the outline information for this text."""
-        if self._outline_cache is not None:
+        cache_key = self._outline_style_key()
+        if self._outline_cache is not None and self._outline_cache_key == cache_key:
             return self._outline_cache
 
         outline_size, fallback_size = self._outline_font_sizes()
@@ -2013,10 +2018,69 @@ class TextComponent(Component):
         if not outline or not any(outline.get(key) for key in ("points", "convex_hull", "bbox", "path_bbox")):
             outline = self._fallback_outline(fallback_size)
         else:
+            outline = self._apply_character_spacing_bounds(outline)
             outline = self._align_outline_to_anchor(outline)
 
         self._outline_cache = outline
+        self._outline_cache_key = cache_key
         return self._outline_cache
+
+    def _outline_style_key(self) -> tuple[object, ...]:
+        """Return style values that can change cached outline geometry."""
+        font = self.style.font
+        return (
+            repr(font.parameters),
+            getattr(self.style, "text_align", "start"),
+            self.style.character_spacing,
+        )
+
+    def _character_spacing_intervals(self) -> int:
+        """Return the largest number of inter-character gaps on any text line."""
+        lines = self._text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        return max(max(len(line) - 1, 0) for line in lines)
+
+    def _apply_character_spacing_bounds(self, outline: dict) -> dict:
+        """Return conservative bounds for tracked text without changing glyph paths."""
+        spacing = self.style.character_spacing
+        offset = spacing * self._character_spacing_intervals()
+        if offset == 0.0:
+            return outline
+
+        span = self._outline_span(outline)
+        vertical_span = self._outline_vertical_span(outline)
+        if span is None or vertical_span is None:
+            return outline
+        left, right = span
+        top, bottom = vertical_span
+        expanded_left = left + min(offset, 0.0)
+        expanded_right = right + max(offset, 0.0)
+        rect = [
+            (expanded_left, top),
+            (expanded_right, top),
+            (expanded_right, bottom),
+            (expanded_left, bottom),
+        ]
+        spaced = deepcopy(outline)
+        spaced["points"] = rect
+        spaced["convex_hull"] = rect
+        spaced["bbox"] = rect
+        spaced["path_bbox"] = (expanded_left, top, expanded_right, bottom)
+        return spaced
+
+    @staticmethod
+    def _outline_vertical_span(outline: dict) -> tuple[float, float] | None:
+        """Return the minimum and maximum y coordinates represented by an outline."""
+        for key in ("convex_hull", "bbox", "points"):
+            points = outline.get(key)
+            if points:
+                coordinates = [float(point[1]) for point in points]
+                if coordinates:
+                    return min(coordinates), max(coordinates)
+        path_bbox = outline.get("path_bbox")
+        if path_bbox:
+            _, minimum, _, maximum = path_bbox
+            return float(minimum), float(maximum)
+        return None
 
     def _outline_font_sizes(self) -> tuple[float, float]:
         """Return precise and fallback sizes in component coordinate units."""
@@ -2026,7 +2090,10 @@ class TextComponent(Component):
     def _fallback_outline(self, size_units: float) -> dict:
         """Return an approximate rectangular outline when precise shaping fails."""
         height = max(size_units, 0.5)
-        width = max(len(self._text) * size_units * 0.6, height * 0.5)
+        lines = self._text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)
+        spacing_offset = self.style.character_spacing * self._character_spacing_intervals()
+        width += abs(spacing_offset)
 
         anchor_x, anchor_y = float(self.position[0]), float(self.position[1])
         align = getattr(self.style, "text_align", "start") or "start"
@@ -2036,6 +2103,7 @@ class TextComponent(Component):
             left = anchor_x - width
         else:
             left = anchor_x
+        left += min(spacing_offset, 0.0)
         top = anchor_y - height
 
         rect = [

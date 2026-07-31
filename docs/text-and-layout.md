@@ -81,6 +81,30 @@ convex_hull = outline["convex_hull"]
 
 This data is useful for collision checking and annotation overlays.
 
+## PDF Text Visibility And Tracking
+
+`TextStyle` can preserve searchable text without painting glyphs and can adjust
+the distance between characters in PDF output:
+
+```python
+from InkGen.pdf_generator import TextPDF
+from InkGen.style import Font, TextStyle
+
+overlay_style = TextStyle(
+    "ChartLabels",
+    Font("Arial", size=4.2),
+    visible=False,
+    character_spacing=-0.08,
+)
+overlay = TextPDF("usage comparison", (24.0, 61.0), overlay_style)
+```
+
+The PDF backend maps `visible=False` to text render mode 3 (`3 Tr`) and maps
+nonzero `character_spacing` to `Tc`. Tracking uses PDF canvas units and may be
+positive or negative. These settings serialize with the style; older payloads
+default to visible text with zero spacing. Other output backends do not yet map
+these two fields.
+
 ## Paragraphs
 
 `Paragraph` stores Word-like paragraph settings separately from any renderer.

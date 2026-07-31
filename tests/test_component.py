@@ -402,6 +402,8 @@ def test_text_component(text_style):
     assert text_comp.convex_hull
     cached_points = list(text_comp.points)
     text_comp.style.text_align = "center"
+    assert text_comp.points != cached_points
+    text_comp.style.text_align = "start"
     assert text_comp.points == cached_points
 
 def test_text_component_errors():

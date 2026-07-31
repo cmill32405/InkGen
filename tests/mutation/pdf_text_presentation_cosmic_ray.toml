@@ -1,0 +1,24 @@
+[cosmic-ray]
+module-path = [
+  "src/InkGen/style.py",
+  "src/InkGen/component.py",
+  "src/InkGen/pdf_generator.py",
+]
+timeout = 120.0
+excluded-modules = []
+test-command = "env PYTHONPATH=src /home/ubuntu/.cache/inkgen_mutation_venv/bin/python -m pytest -x -q tests/test_pdf_text_presentation_contract.py -k 'not invisible_text_is_extractable_without_painting_pixels and not character_spacing_changes_live_extracted_span_width'"
+
+[cosmic-ray.distributor]
+name = "local"
+
+[cosmic-ray.execution-engine]
+name = "local"
+
+[cosmic-ray.cloning]
+method = "copy"
+
+[cosmic-ray.filters.operators-filter]
+exclude-operators = [
+  "core/ReplaceBinaryOperator_BitOr_UnChecked",
+  "core/ReplaceBinaryOperator_BitOr_Checked",
+]

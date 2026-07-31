@@ -1,5 +1,9 @@
 # Text Style Contract Proof Obligations
 
+PDF visibility and character-spacing extensions are specified separately by
+condition `PDF-TEXT-PRESENTATION-P3` in
+[`pdf-text-presentation-contract.md`](pdf-text-presentation-contract.md).
+
 This note applies the InkGen Definition of Done to the TEXT-STYLE-P1 text style
 slice. It focuses on font ownership, color normalization, script flags,
 alignment/anchor mapping, finite line spacing, serialized hydration, and live

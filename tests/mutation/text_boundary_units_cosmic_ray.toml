@@ -5,10 +5,16 @@ module-path = [
 ]
 timeout = 60.0
 excluded-modules = []
-test-command = "C:/Users/chris/.cache/inkgen_mutation_venv/Scripts/python.exe -X utf8 -m pytest -x tests/test_text_boundary_unit_contract.py"
+test-command = "env PYTHONPATH=src /home/ubuntu/.cache/inkgen_mutation_venv/bin/python -m pytest -x -q tests/test_text_boundary_unit_contract.py"
 
 [cosmic-ray.distributor]
 name = "local"
+
+[cosmic-ray.execution-engine]
+name = "local"
+
+[cosmic-ray.cloning]
+method = "copy"
 
 [cosmic-ray.filters.operators-filter]
 exclude-operators = [

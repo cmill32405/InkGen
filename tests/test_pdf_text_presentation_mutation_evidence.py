@@ -1,4 +1,4 @@
-"""Mutation evidence for drawing-text canvas-unit consistency."""
+"""Source-fresh mutation evidence for PDF text presentation."""
 
 from __future__ import annotations
 
@@ -9,22 +9,35 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
-from hypothesis import given, settings
-from hypothesis import strategies as st
 
-from InkGen.style import Font
+from InkGen.pdf_generator import TextPDF
+from InkGen.style import Font, TextStyle
 
-CONDITION = "TEXT-BOUNDARY-UNITS-P1"
+CONDITION = "PDF-TEXT-PRESENTATION-P3"
 ROOT = Path(__file__).resolve().parents[1]
-MANIFEST = ROOT / "tests" / "mutation" / "text_boundary_units_v5_evidence.json"
-DATABASE_SHA256 = "841C6912D5187146EED8A4AE9AC16057E822861345048480458949DEB141C00C"
+MANIFEST = ROOT / "tests" / "mutation" / "pdf_text_presentation_v4_evidence.json"
+DATABASE_SHA256 = "55DC8A415B47FFFF03141CF972D8CB607781B47A324B8D9513B77278E548261D"
 EQUIVALENT_SURVIVORS = {
     (
-        "3770b238c9074419836c94c373c0401b",
+        "9325f6b5ad2d44a7ad1b2686fe2e0ebd",
         "src/InkGen/component.py",
-        2092,
-        33,
-        "core/NumberReplacer",
+        2051,
+        24,
+        "core/ReplaceOrWithAnd",
+    ),
+    (
+        "86145d13ebe748078d2e067944a1238f",
+        "src/InkGen/pdf_generator.py",
+        2039,
+        18,
+        "core/ReplaceComparisonOperator_Eq_LtE",
+    ),
+    (
+        "d9fa7a6414f1444b890e1d8479215cbe",
+        "src/InkGen/pdf_generator.py",
+        2041,
+        18,
+        "core/ReplaceComparisonOperator_Eq_LtE",
     ),
 }
 
@@ -36,8 +49,8 @@ def _canonical_source_sha256(path: Path) -> str:
 
 
 @pytest.mark.condition(CONDITION)
-def test_text_boundary_unit_mutation_database_is_complete() -> None:
-    """All scoped workers finish normally with source-fresh pinned evidence."""
+def test_pdf_text_presentation_mutation_database_is_complete() -> None:
+    """All scoped mutants have normal, source-fresh, explicitly classified outcomes."""
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     generated_at = datetime.fromisoformat(manifest["evidence_generated_utc"])
     assert manifest["condition"] == CONDITION
@@ -50,8 +63,8 @@ def test_text_boundary_unit_mutation_database_is_complete() -> None:
         assert datetime.fromisoformat(source_evidence["last_write_utc"]) <= generated_at
 
     work_items = manifest["work_items"]
-    assert len(work_items) == 91
-    assert len({item["job_id"] for item in work_items}) == 91
+    assert len(work_items) == 271
+    assert len({item["job_id"] for item in work_items}) == 271
     outcomes = Counter((item["test_outcome"], item["worker_outcome"]) for item in work_items)
     survivors = {
         (
@@ -65,29 +78,15 @@ def test_text_boundary_unit_mutation_database_is_complete() -> None:
         if item["test_outcome"] == "SURVIVED"
     }
 
-    assert outcomes == Counter({("KILLED", "NORMAL"): 90, ("SURVIVED", "NORMAL"): 1})
+    assert outcomes == Counter({("KILLED", "NORMAL"): 268, ("SURVIVED", "NORMAL"): 3})
     assert survivors == EQUIVALENT_SURVIVORS
 
 
 @pytest.mark.condition(CONDITION)
-@settings(deadline=None)
-@given(st.floats(min_value=0.0, max_value=240.0, exclude_min=True))
-def test_survivor_floor_replacement_is_exact_over_numeric_font_sizes(size: float) -> None:
-    """Reachable numeric font sizes make the mutated negative floor equivalent."""
-    normalized = Font(family="DejaVu Sans", size=size).size
+def test_character_spacing_bounds_preserve_an_unsupported_empty_outline() -> None:
+    """A missing outline surface remains unchanged instead of inventing geometry."""
+    style = TextStyle("empty_outline_evidence", Font(size=12.0), character_spacing=2.0)
+    component = TextPDF("ABC", (10.0, 20.0), style)
+    outline: dict[str, object] = {}
 
-    assert normalized >= 1.0
-    assert max(normalized, 0.5) == max(normalized, -0.5)
-
-
-@pytest.mark.condition(CONDITION)
-@pytest.mark.parametrize(
-    "size",
-    ["xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large"],
-)
-def test_survivor_floor_replacement_is_exact_over_named_font_sizes(size: str) -> None:
-    """Reachable named font sizes make the mutated negative floor equivalent."""
-    normalized = Font(family="DejaVu Sans", size=size).size
-
-    assert normalized >= 1.0
-    assert max(normalized, 0.5) == max(normalized, -0.5)
+    assert component._apply_character_spacing_bounds(outline) is outline  # noqa: SLF001

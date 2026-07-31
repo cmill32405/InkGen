@@ -1,5 +1,9 @@
 # Text Renderer Contract Proof Obligations
 
+PDF invisible-text and character-spacing operators are specified separately by
+condition `PDF-TEXT-PRESENTATION-P3` in
+[`pdf-text-presentation-contract.md`](pdf-text-presentation-contract.md).
+
 This note applies the InkGen Definition of Done to the TEXT-P1 text
 renderer-contract slice. It focuses on finite text-anchor validation and
 preserving text, position, and style through SVG, PDF, neutral drawing recipes,

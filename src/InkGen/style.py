@@ -1006,10 +1006,22 @@ class Font:
 
 class TextStyle(Style):
     """Style information for text including font, color, anchor, subscript,
-    superscript, and line spacing.
+    superscript, spacing, and whether glyphs are painted.
     """
 
-    def __init__(self, name: str, font: Font) -> None:
+    def __init__(
+        self,
+        name: str,
+        font: Font,
+        *,
+        visible: bool = True,
+        character_spacing: float = 0.0,
+    ) -> None:
+        """Create a validated text style.
+
+        Character spacing uses the text coordinate units interpreted by each
+        renderer. Invisible PDF text remains present in the extraction layer.
+        """
 
         if not isinstance(font, Font):
             raise TypeError("Font must be set with a Font type")
@@ -1022,6 +1034,8 @@ class TextStyle(Style):
         self.subscript = False
         self.text_align = "start"
         self.line_spacing = 1.0
+        self.visible = visible
+        self.character_spacing = character_spacing
 
     @classmethod
     def create_from_dict(cls, data: object) -> TextStyle:
@@ -1041,6 +1055,8 @@ class TextStyle(Style):
         style.subscript = _style_required_field(payload, "subscript", "TextStyle")
         style.text_align = _style_required_field(payload, "text_align", "TextStyle")
         style.line_spacing = _style_required_field(payload, "line_spacing", "TextStyle")
+        style.visible = payload.get("visible", True)
+        style.character_spacing = payload.get("character_spacing", 0.0)
 
         return style
 
@@ -1061,6 +1077,8 @@ class TextStyle(Style):
                 "subscript": self.subscript,
                 "text_align": self.text_align,
                 "line_spacing": self.line_spacing,
+                "visible": self.visible,
+                "character_spacing": self.character_spacing,
                 "font": self.font.parameters,
             }
         }
@@ -1266,3 +1284,25 @@ class TextStyle(Style):
             raise TypeError("Line Spacing must be a non-negative finite float") from exc
         except ValueError as exc:
             raise ValueError("Line Spacing must be a non-negative finite float") from exc
+
+    @property
+    def visible(self) -> bool:
+        """Return whether renderers should paint the text glyphs."""
+        return self._visible
+
+    @visible.setter
+    def visible(self, value: bool) -> None:
+        """Set whether glyphs are painted while preserving text semantics."""
+        if not isinstance(value, bool):
+            raise TypeError("visible must be a boolean.")
+        self._visible = value
+
+    @property
+    def character_spacing(self) -> float:
+        """Return the additional distance between adjacent characters."""
+        return self._character_spacing
+
+    @character_spacing.setter
+    def character_spacing(self, value: float | int) -> None:
+        """Set finite positive or negative inter-character spacing."""
+        self._character_spacing = _coerce_finite_float(value, "character_spacing")

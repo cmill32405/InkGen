@@ -58,7 +58,7 @@ def test_text_outline_matches_canvas_units_and_layer_rejects_only_real_overflow(
         dpi=96.0,
         add_one_pixel_margin=False,
     )
-    expected_width = expected["path_bbox"][2] - expected["path_bbox"][0]
+    expected_width = max(x for x, _ in expected["convex_hull"]) - min(x for x, _ in expected["convex_hull"])
     actual_width = max(x for x, _ in component.points) - min(x for x, _ in component.points)
 
     assert actual_width == pytest.approx(expected_width)
@@ -74,7 +74,7 @@ def test_text_outline_matches_canvas_units_and_layer_rejects_only_real_overflow(
         dpi=96.0,
         add_one_pixel_margin=False,
     )
-    svg_expected_width = svg_expected["path_bbox"][2] - svg_expected["path_bbox"][0]
+    svg_expected_width = max(x for x, _ in svg_expected["convex_hull"]) - min(x for x, _ in svg_expected["convex_hull"])
     svg_actual_width = max(x for x, _ in svg_component.points) - min(x for x, _ in svg_component.points)
     assert svg_actual_width == pytest.approx(svg_expected_width)
 
