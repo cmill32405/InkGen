@@ -83,6 +83,19 @@ available from the package root for caller-facing failure handling:
 
 - `TextBlock`, `TextFitter`, `FittingResult`.
 - Helper functions for outlining text (`outline_for_text`, `sample_path_points`).
+- `outline_for_text_bytes()` produces the same outline contract directly from
+  an in-memory TrueType/OpenType font program.
+
+## Standalone SVG Regions (`InkGen.region_svg`)
+
+- `SvgClipWindow`: finite, positive rectangular SVG user-space viewport.
+- `PositionedTextRun`: text, position, size, paint, and one exact font source.
+- `emit_svg_region()`: emits a complete clipped SVG containing outlined text
+  and existing SVG-materializable InkGen primitives.
+
+The emitter never substitutes a system font. Primitive fragments may contain
+only internal references or embedded `data:` resources; external resources and
+ordinary SVG text fail closed.
 
 ## Paragraphs (`InkGen.paragraph`)
 

@@ -81,6 +81,51 @@ convex_hull = outline["convex_hull"]
 
 This data is useful for collision checking and annotation overlays.
 
+Embedded TrueType/OpenType bytes can use the same outline path without a
+temporary file:
+
+```python
+from InkGen import outline_for_text_bytes
+
+outline = outline_for_text_bytes(
+    text="Original glyphs",
+    font_program=embedded_font_bytes,
+    size_px=18,
+    x=40,
+    y=72,
+    units="px",
+)
+```
+
+## Standalone Clipped SVG Regions
+
+`emit_svg_region()` combines exact text outlines, existing InkGen drawing
+primitives, and a clip window into one self-contained SVG document:
+
+```python
+from InkGen import PositionedTextRun, SvgClipWindow, emit_svg_region
+
+svg = emit_svg_region(
+    clip_window=SvgClipWindow(x=36, y=54, width=240, height=96),
+    text_runs=[
+        PositionedTextRun(
+            text="ITEM NUMBER",
+            position=(44, 76),
+            font_size_px=12,
+            font_program=embedded_font_bytes,
+        )
+    ],
+    vector_primitives=rules_and_boxes,
+    background="#ffffff",
+)
+```
+
+Text is emitted as glyph paths, so the result does not depend on viewer fonts.
+The source string remains in `<title>` and `aria-label` metadata. The result
+contains no network references and does not require a rasterizer. Unsupported
+font-program formats fail rather than falling back to a substitute face.
+
+
 ## PDF Text Visibility And Tracking
 
 `TextStyle` can preserve searchable text without painting glyphs and can adjust

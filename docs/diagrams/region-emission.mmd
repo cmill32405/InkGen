@@ -1,0 +1,35 @@
+%% Standalone SVG region composition and exact font-byte outline flow.
+classDiagram
+    class SvgClipWindow {
+        <<dataclass>>
+        +x: float
+        +y: float
+        +width: float
+        +height: float
+    }
+    class PositionedTextRun {
+        <<dataclass>>
+        +text: str
+        +position: tuple
+        +font_size_px: float
+        +outline() dict
+    }
+    class _NeutralDrawingPrimitive {
+        <<protocol>>
+        +to_component(output_format)
+    }
+    class _SvgGeneratingComponent {
+        <<protocol>>
+        +generate_svg() str
+    }
+    class TextOutline
+    class RegionEmitter {
+        <<function>>
+        +emit_svg_region() str
+    }
+
+    RegionEmitter --> SvgClipWindow : clips to
+    RegionEmitter --> PositionedTextRun : outlines
+    RegionEmitter --> _NeutralDrawingPrimitive : materializes
+    _NeutralDrawingPrimitive --> _SvgGeneratingComponent : creates
+    PositionedTextRun --> TextOutline : shapes exact font

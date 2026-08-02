@@ -72,6 +72,7 @@ from .pdf_generator import (
     RegularPolygonPDF,
     TextPDF,
 )
+from .region_svg import PositionedTextRun, SvgClipWindow, emit_svg_region
 from .style import DrawingStyle, Font, Style, TextStyle
 from .svg_generator import (
     ArcSVG,
@@ -100,7 +101,7 @@ from .text_fitter import (
     TextFitter,
     component_to_fitter_shape,
 )
-from .text_outline import outline_for_text
+from .text_outline import outline_for_text, outline_for_text_bytes
 
 __version__ = "0.1.0"
 
@@ -164,6 +165,7 @@ __all__ = [
     "OutputFormat",
     "PDFGeneratorInterface",
     "PDFRenderContext",
+    "PositionedTextRun",
     "ParserStressBOMRow",
     "ParserStressFixtureSpec",
     "PathSVG",
@@ -190,6 +192,7 @@ __all__ = [
     "StandardDrawingComponent",
     "Style",
     "SVGComponent",
+    "SvgClipWindow",
     "ScannedParserStressFixtureSpec",
     "Table",
     "TableSVG",
@@ -210,7 +213,9 @@ __all__ = [
     "component_to_fitter_shape",
     "DEFAULT_PARSER_STRESS_BOM_ROWS",
     "extraction_truth_json",
+    "emit_svg_region",
     "flatten_svg",
     "grammar_truth_json",
     "outline_for_text",
+    "outline_for_text_bytes",
 ]

@@ -1,4 +1,5 @@
 import math
+from io import BytesIO
 
 import uharfbuzz as hb  # shaping
 from fontTools.misc.transform import Transform
@@ -212,14 +213,83 @@ def outline_for_text(
         "convex_hull": [(x,y), ...]                 # document units (e.g., mm)
       }
     """
+    with open(font_path, "rb") as f:
+        font_bytes = f.read()
+    return _outline_for_loaded_font(
+        text=text,
+        font_bytes=font_bytes,
+        tt=TTFont(font_path),
+        size_px=size_px,
+        x=x,
+        y=y,
+        dpi=dpi,
+        units=units,
+        add_one_pixel_margin=add_one_pixel_margin,
+        y_down=y_down,
+        features=features,
+        sampling_step_px=sampling_step_px,
+    )
+
+
+def outline_for_text_bytes(
+    text: str,
+    font_program: bytes,
+    size_px: float,
+    x: float = 0.0,
+    y: float = 0.0,
+    dpi: float = 96.0,
+    units: str = "mm",
+    add_one_pixel_margin: bool | None = None,
+    y_down: bool = True,
+    features: dict[str, bool] | None = None,
+    sampling_step_px: float = 0.75,
+) -> dict[str, object]:
+    """Outline text directly from an sfnt-compatible embedded font program.
+
+    The byte program is consumed in memory. TrueType and OpenType programs
+    supported by ``fontTools.ttLib.TTFont`` are accepted; unsupported PDF font
+    program formats fail explicitly rather than substituting a system font.
+    """
+    if not isinstance(font_program, bytes):
+        raise TypeError("font_program must be bytes")
+    if not font_program:
+        raise ValueError("font_program must not be empty")
+    return _outline_for_loaded_font(
+        text=text,
+        font_bytes=font_program,
+        tt=TTFont(BytesIO(font_program)),
+        size_px=size_px,
+        x=x,
+        y=y,
+        dpi=dpi,
+        units=units,
+        add_one_pixel_margin=add_one_pixel_margin,
+        y_down=y_down,
+        features=features,
+        sampling_step_px=sampling_step_px,
+    )
+
+
+def _outline_for_loaded_font(
+    *,
+    text: str,
+    font_bytes: bytes,
+    tt: TTFont,
+    size_px: float,
+    x: float,
+    y: float,
+    dpi: float,
+    units: str,
+    add_one_pixel_margin: bool | None,
+    y_down: bool,
+    features: dict[str, bool] | None,
+    sampling_step_px: float,
+) -> dict[str, object]:
+    """Build outline evidence from an already loaded font program."""
     if add_one_pixel_margin is None:
         add_one_pixel_margin = ADD_ONE_PIXEL_MARGIN_DEFAULT
     else:
         add_one_pixel_margin = _require_bool(add_one_pixel_margin, name="add_one_pixel_margin")
-
-    tt = TTFont(font_path)
-    with open(font_path, "rb") as f:
-        font_bytes = f.read()
 
     # 1) Shape with HarfBuzz (positions returned in font units)
     gids, pos_fu, upem = _shape_with_harfbuzz(font_bytes, text, features)

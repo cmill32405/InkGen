@@ -109,6 +109,7 @@ tests and, where appropriate, recording an ADR.
 | `document_outputs.py -> PDF materialized point surfaces` | DOCX DrawingML uses existing neutral/PDF point geometry for linework instead of owning another drawing geometry model. | PDF point-surface contract changes can alter DOCX vector output. |
 | `pdf_generator.py -> extraction_truth.py/grammar_truth.py` | PDF documents emit parser-facing truth records in PDF coordinates. | Truth schema changes can break downstream parser fixtures. |
 | `parser_stress_fixtures.py -> pdf_generator.py/image_assets.py/extraction_truth.py/grammar_truth.py` | Parser stress fixtures compose public PDF/image primitives and truth annotations into repeatable technical drawings and image-only scan fixtures. | Fixture helpers must not reach into PDF object writer internals, own raster decoding policy, or become a second renderer. |
+| `region_svg.py -> drawing_components.py/component.py/text_outline.py` | Standalone evidence regions materialize neutral SVG primitives, reject font-dependent text components, and outline explicit font sources. | The composition layer must not become a second geometry engine, font finder, PDF parser, or rasterizer. |
 | `pdf_generator.py -> pdf_render_contract.py` | The PDF render path delegates proof-critical closed-domain checks to a small mutation-tested contract module. | Bypassing the helper weakens PO-GT-004 and can hide custom render paths. |
 | `DocumentPDF -> ComponentGroupPDF -> built-in PDF components` | The PDF render path is intentionally closed so noninterference properties can be proven. | Arbitrary custom PDF render components are outside the proven contract. |
 | `pdf_generator.py -> fonttools` | PDF named-font embedding reads installed font metrics and embeds font-file streams without adding a PDF dependency. | Font parsing errors must fail back to Standard 14 behavior rather than corrupting PDF output. |
@@ -142,6 +143,7 @@ These contracts are more important than individual implementation details.
 | Flow document DrawingML vectors | DOCX exports and Google Docs/Word synthetic fixtures | DOCX falls back to VML, vector positions drift, or document outputs start owning drawing geometry |
 | Public exports in `__init__.py` | External callers and examples | Imports from `InkGen` break |
 | Parser stress fixture builders | Document Intelligence fixture generation | Fixtures stop exercising title blocks, BOM tables, rotations, transparency, page metadata, image-only scan pages, or truth labels |
+| Standalone SVG region emission | Document verification, redaction preview, citation evidence, audit trails, and visual diffs | Output depends on viewer fonts/network state, clip coordinates drift, or parser-provided font bytes cannot be consumed |
 
 ## Dependency Review Checklist
 
