@@ -296,7 +296,7 @@ def _validate_render_domain(components: Sequence[RasterPrimitive]) -> None:
         if isinstance(component, PathDrawing):
             if component.style.fill != "none" and component.style.fill_opacity != 0.0:
                 raise ValueError("path fills are not supported by raster renderer P5")
-            _linear_path_subpaths(component)
+            _sampled_path_subpaths(component)
         style = getattr(component, "style", None)
         if isinstance(style, DrawingStyle):
             if isinstance(component, ArcDrawing) and style.fill != "none" and style.fill_opacity != 0.0:
@@ -360,7 +360,7 @@ def _render_component(
             _draw_curve(draw, points, scale, stroke, stroke_width)
     elif isinstance(component, PathDrawing):
         if stroke is not None:
-            for subpath in _linear_path_subpaths(component):
+            for subpath in _sampled_path_subpaths(component):
                 _draw_curve(draw, subpath, scale, stroke, stroke_width)
     elif isinstance(component, PolygonalDrawing):
         _draw_polygon(draw, component.points, scale, fill, stroke, stroke_width)
@@ -395,8 +395,16 @@ def _render_component(
         _draw_polygon(draw, points, scale, fill, stroke, stroke_width)
 
 
-def _linear_path_subpaths(component: PathDrawing) -> list[list[tuple[float, float]]]:
-    """Validate and expand the closed P5 M/L/H/V/Z command domain."""
+def _reflect_path_control(
+    control: tuple[float, float],
+    current: tuple[float, float],
+) -> tuple[float, float]:
+    """Reflect a smooth path control around the current point."""
+    return 2.0 * current[0] - control[0], 2.0 * current[1] - control[1]
+
+
+def _sampled_path_subpaths(component: PathDrawing) -> list[list[tuple[float, float]]]:
+    """Validate and sample the closed P5/P6 stroke-path command domain."""
     commands = component.commands
     if commands is None:
         return []
@@ -405,19 +413,23 @@ def _linear_path_subpaths(component: PathDrawing) -> list[list[tuple[float, floa
 
     subpaths: list[list[tuple[float, float]]] = []
     current: list[tuple[float, float]] | None = None
+    previous_cubic_control: tuple[float, float] | None = None
+    previous_quadratic_control: tuple[float, float] | None = None
     for command in commands:
         if not isinstance(command, PathCommand):
             raise TypeError("PathDrawing commands must contain only PathCommand objects")
         command_type = command.type
         points = command.points
-        if command_type not in {"M", "L", "H", "V", "Z"}:
-            raise ValueError(f"path command {command_type} is not supported by raster renderer P5")
+        if command_type not in {"M", "L", "H", "V", "Z", "C", "S", "Q", "T"}:
+            raise ValueError(f"path command {command_type} is not supported by raster renderer P6")
         if command_type == "M":
             if len(points) != 1:
                 raise ValueError("path command M requires exactly one point")
             if current is not None:
                 subpaths.append(current)
             current = [points[0]]
+            previous_cubic_control = None
+            previous_quadratic_control = None
             continue
         if current is None:
             message = "new subpath must begin with M" if subpaths else "path must begin with M"
@@ -429,15 +441,66 @@ def _linear_path_subpaths(component: PathDrawing) -> list[list[tuple[float, floa
                 current.append(current[0])
             subpaths.append(current)
             current = None
+            previous_cubic_control = None
+            previous_quadratic_control = None
             continue
-        if not points:
+        if command_type == "C" and len(points) % 3:
+            raise ValueError("path command C requires points in groups of three")
+        if command_type == "S" and len(points) % 2:
+            raise ValueError("path command S requires points in groups of two")
+        if command_type == "Q" and len(points) % 2:
+            raise ValueError("path command Q requires points in groups of two")
+        if command_type == "T" and not points:
+            raise ValueError("path command T requires an endpoint")
+        if command_type in {"L", "H", "V"} and not points:
             raise ValueError(f"path command {command_type} requires at least one point")
         if command_type == "L":
             current.extend(points)
+            previous_cubic_control = None
+            previous_quadratic_control = None
         elif command_type == "H":
             current.extend((point[0], current[-1][1]) for point in points)
-        else:
+            previous_cubic_control = None
+            previous_quadratic_control = None
+        elif command_type == "V":
             current.extend((current[-1][0], point[1]) for point in points)
+            previous_cubic_control = None
+            previous_quadratic_control = None
+        elif command_type == "C":
+            for index in range(0, len(points), 3):
+                control_1, control_2, end = points[index : index + 3]
+                sampled = SampledCubicBezier(current[-1], control_1, control_2, end, component.style).points
+                current.extend(sampled[1:])
+                previous_cubic_control = control_2
+                previous_quadratic_control = None
+        elif command_type == "S":
+            for index in range(0, len(points), 2):
+                control_2, end = points[index : index + 2]
+                control_1 = (
+                    _reflect_path_control(previous_cubic_control, current[-1]) if previous_cubic_control is not None else current[-1]
+                )
+                sampled = SampledCubicBezier(current[-1], control_1, control_2, end, component.style).points
+                current.extend(sampled[1:])
+                previous_cubic_control = control_2
+                previous_quadratic_control = None
+        elif command_type == "Q":
+            for index in range(0, len(points), 2):
+                control, end = points[index : index + 2]
+                sampled = SampledQuadraticBezier(current[-1], control, end, component.style).points
+                current.extend(sampled[1:])
+                previous_cubic_control = None
+                previous_quadratic_control = control
+        else:
+            for end in points:
+                control = (
+                    _reflect_path_control(previous_quadratic_control, current[-1])
+                    if previous_quadratic_control is not None
+                    else current[-1]
+                )
+                sampled = SampledQuadraticBezier(current[-1], control, end, component.style).points
+                current.extend(sampled[1:])
+                previous_cubic_control = None
+                previous_quadratic_control = control
 
     if current is not None:
         subpaths.append(current)

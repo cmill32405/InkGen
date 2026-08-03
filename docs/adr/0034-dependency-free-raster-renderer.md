@@ -4,7 +4,7 @@
 
 Accepted for `RASTER-RENDERER-P1`, `RASTER-BAIRD-P1`,
 `RASTER-CURVE-P2`, `RASTER-TEXT-P3`, `RASTER-ARC-P4`, and
-`RASTER-PATH-P5`.
+`RASTER-PATH-P5`, and `RASTER-PATH-CURVE-P6`.
 
 ## Context
 
@@ -67,6 +67,15 @@ explicit segment back to the current subpath's starting point. Visible fills
 and nonlinear `C`, `S`, `Q`, `T`, and `A` commands fail explicitly until their
 geometry and fill-rule semantics are separately owned.
 
+P6 admits the sampled Bezier path commands `C`, `S`, `Q`, and `T`. Cubic and
+quadratic segments reuse the established 33-point neutral component samplers.
+Smooth commands reflect the previous applicable control around the current
+point and reset that state after linear commands, opposite curve families,
+closure, or a new subpath. Complete grouped commands may contain multiple
+segments; empty `C`, `S`, and `Q` groups are no-ops. Elliptical `A` commands
+remain rejected because SVG endpoint-arc flags are not represented by the
+existing sampled `Arc` contract.
+
 ## Dependencies And Contracts
 
 | Dependency | Consumed contract | Failure if changed |
@@ -98,8 +107,10 @@ PDF, SVG, DXF, and document outputs do not depend on the raster renderer.
   without materializing PDF or SVG.
 - Linear paths preserve subpath boundaries, axis commands, and explicit
   closure without changing existing output-format dispatch.
-- Later multiline text, nonlinear path, path-fill, and clipping slices can
-  extend a proven boundary without weakening existing rejection contracts.
+- Bezier paths preserve canonical sampling and smooth-control reflection
+  without duplicating curve equations in the raster backend.
+- Later multiline text, elliptical path-arc, path-fill, and clipping slices
+  can extend a proven boundary without weakening existing rejection contracts.
 
 ## Alternatives Rejected
 

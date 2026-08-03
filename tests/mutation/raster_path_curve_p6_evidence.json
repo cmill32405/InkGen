@@ -1,0 +1,68 @@
+{
+  "condition": "RASTER-PATH-CURVE-P6",
+  "evidence_generated_utc": "2026-08-03T16:15:23.3842687Z",
+  "source": {
+    "path": "src/InkGen/raster_renderer.py",
+    "sha256": "557F9E57B1F65F65E276FAB334083C428D0E24F9EF6AE418732EC2DB8DC70422"
+  },
+  "tests": [
+    {
+      "path": "tests/test_raster_path_contract.py",
+      "sha256": "A49F078744890CC33BABA5855AB81902E69C19662F4A408732E817F33D72BA27"
+    },
+    {
+      "path": "tests/test_raster_path_curve_contract.py",
+      "sha256": "FF1228E50DF962DB4F67D7FAD59B72001567FBFFBBD6FFE4475AB3EBB34D7A8F"
+    }
+  ],
+  "test_command": "env PYTHONPATH=src /home/ubuntu/.cache/inkgen_mutation_venv/bin/python -m pytest -x tests/test_raster_path_contract.py tests/test_raster_path_curve_contract.py",
+  "config": {
+    "path": "tests/mutation/raster_path_curve_p6_cosmic_ray.toml",
+    "sha256": "C1A393C616B89724FE0AFDD32A75285E863534313501E1E659C3F9BAE5CEA680"
+  },
+  "filter": {
+    "path": "tests/mutation/filter_raster_path_curve_p6_work_items.py",
+    "sha256": "0BE21225869C737FF3B7B1132F0435DFC77A163E3D9687221660B1D0A3859DBB"
+  },
+  "campaign": {
+    "generated_candidates": 1430,
+    "selected_work_items": 267,
+    "completed_results": 267,
+    "initial_killed": 260,
+    "late_killed_after_test_strengthening": 2,
+    "killed": 262,
+    "survived": 5,
+    "equivalent_survivors": 5,
+    "worker_errors": 0,
+    "worker_timeouts": 0,
+    "raw_mutation_coverage": 0.9812734082397003,
+    "effective_mutation_coverage": 1.0
+  },
+  "equivalent_survivor_proofs": [
+    {
+      "job_id": "8e6098f28d1e49c8ae9d78a9c13a53ef",
+      "mutation": "style.fill_opacity != 0.0 to style.fill_opacity > 0.0",
+      "proof": "DrawingStyle constrains fill_opacity to [0.0, 1.0]. Both predicates are false exactly at 0.0 and true for every other valid opacity."
+    },
+    {
+      "job_id": "c691bf7eb8fe479ba2a99e087af94317",
+      "mutation": "command_type == 'C' to command_type <= 'C' at cardinality validation",
+      "proof": "The supported-command check and earlier M/Z branches leave L, H, V, C, S, Q, or T. C is lexicographically smaller than every other remaining command, so <= C is true exactly for C."
+    },
+    {
+      "job_id": "7a8aa8be05ca4623b9205d5a223bf8ce",
+      "mutation": "command_type == 'V' to command_type >= 'V'",
+      "proof": "At this dispatch branch M/Z have continued and L/H have been handled. Among V, C, S, Q, and T, only V is lexicographically greater than or equal to V."
+    },
+    {
+      "job_id": "c6f3effac170417c86fcb8a2449d0fe0",
+      "mutation": "command_type == 'C' to command_type <= 'C' at segment dispatch",
+      "proof": "After M/Z/L/H/V handling, the remaining commands are C, S, Q, and T. Only C is lexicographically less than or equal to C."
+    },
+    {
+      "job_id": "3246b374197a4e2da03d6bba89e4caeb",
+      "mutation": "command_type == 'Q' to command_type <= 'Q'",
+      "proof": "After the C and S branches, the remaining commands are Q and T. Q <= Q is true and T <= Q is false, exactly matching equality with Q."
+    }
+  ]
+}

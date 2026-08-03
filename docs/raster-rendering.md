@@ -67,6 +67,14 @@ transparent no-ops. A command after `Z` must begin a new subpath with `M`.
 Visible path fills and nonlinear `C`, `S`, `Q`, `T`, and `A` commands fail
 before surface allocation rather than receiving approximate semantics.
 
+P6 additionally renders `C`, `S`, `Q`, and `T` as sampled stroke segments.
+Each cubic or quadratic segment reuses the same deterministic 33-point neutral
+sampler as the standalone Bezier primitives. Multiple complete groups in one
+command are supported. `S` and `T` reflect the previous applicable control;
+linear commands, opposite curve families, closure, and a new subpath reset that
+state. Empty `C`, `S`, and `Q` commands are no-ops, while incomplete groups and
+an empty `T` fail before allocation.
+
 Fill and stroke colors, widths, and independent opacity values are preserved.
 P1 supports solid strokes with butt caps, miter joins, the default miter limit,
 and zero dash offset. Other cap, join, miter-limit, dash, or dash-offset values
@@ -88,8 +96,8 @@ The supersampled working surface is limited to 64,000,000 pixels and the
 supersampling factor is limited to 1 through 8. Invalid or unsupported inputs
 fail before surface allocation.
 
-The renderer deliberately rejects nonlinear path commands, visible path fills,
-zoning overlays, rounded corners, gradients, dashed strokes, unsupported
+The renderer deliberately rejects elliptical `A` path commands, visible path
+fills, zoning overlays, rounded corners, gradients, dashed strokes, unsupported
 stroke controls, and text presentation outside the P3 domain. Later slices can
 add these features without weakening the closed-domain behavior. The Baird
 composition API below consumes `RasterRenderResult.asset` without a PDF or SVG

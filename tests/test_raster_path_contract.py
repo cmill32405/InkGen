@@ -140,7 +140,7 @@ def test_linear_path_expansion_is_exact(
     """RASTER-PATH-P5: Minimal witnesses prove current-point and closure rules."""
     path = PathDrawing(_style(stroke="#123456"), commands)
 
-    assert raster_renderer._linear_path_subpaths(path) == expected
+    assert raster_renderer._sampled_path_subpaths(path) == expected
 
 
 @pytest.mark.condition("RASTER-PATH-P5")
@@ -204,12 +204,12 @@ def test_transparent_path_fill_is_admitted() -> None:
 
 
 @pytest.mark.condition("RASTER-PATH-P5")
-@pytest.mark.parametrize("command_type", ["C", "S", "Q", "T", "A"])
-def test_curve_and_arc_path_commands_fail_before_surface_allocation(
+@pytest.mark.parametrize("command_type", ["A"])
+def test_arc_path_commands_fail_before_surface_allocation(
     monkeypatch: pytest.MonkeyPatch,
     command_type: str,
 ) -> None:
-    """RASTER-PATH-P5: Nonlinear commands remain explicit follow-on work."""
+    """RASTER-PATH-P5: Arc commands remain explicit follow-on work."""
     monkeypatch.setattr(raster_renderer.Image, "new", lambda *args, **kwargs: pytest.fail("surface allocated"))
     path = PathDrawing(
         _style(stroke="#123456"),
