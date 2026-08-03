@@ -1,0 +1,116 @@
+{
+  "condition": "RASTER-PATH-ARC-P7",
+  "evidence_generated_utc": "2026-08-03T17:49:31.1597448Z",
+  "source": {
+    "path": "src/InkGen/raster_renderer.py",
+    "sha256": "9A370C3EAC0C115FF5ABDE127351300059B6EC114BA574058FD3DCDDE41BB582"
+  },
+  "tests": [
+    {
+      "path": "tests/test_raster_path_contract.py",
+      "sha256": "67C12D42D0C0EBC0C2D2A8B28A8DE67C7CEEF94E8D8FA9137329EC39507472EC"
+    },
+    {
+      "path": "tests/test_raster_path_curve_contract.py",
+      "sha256": "B5BD155E67EF4DA1D5A3DFB4ACF1A969ED52341A1827B17C53EB5573B105A3E4"
+    },
+    {
+      "path": "tests/test_raster_path_arc_contract.py",
+      "sha256": "46F9F3F02A56968DDCDFC9D1ABEDFF63E53BDE9B6B4F8B1862984EB844E3ECF9"
+    }
+  ],
+  "test_command": "env PYTHONPATH=src /home/ubuntu/.cache/inkgen_mutation_venv/bin/python -m pytest -x tests/test_raster_path_contract.py tests/test_raster_path_curve_contract.py tests/test_raster_path_arc_contract.py",
+  "config": {
+    "path": "tests/mutation/raster_path_arc_p7_cosmic_ray.toml",
+    "sha256": "96346FE91F33A3501F751C09C2568E24D21BD511ED598381EA56F93D498C253C"
+  },
+  "filter": {
+    "path": "tests/mutation/filter_raster_path_arc_p7_work_items.py",
+    "sha256": "0656A4C859F8F17CE64EBA982A543A0A4D3D5A16E425524A4F3027EACC2E895F"
+  },
+  "campaign": {
+    "generated_candidates": 2167,
+    "selected_work_items": 450,
+    "completed_results": 450,
+    "initial_test_sha256": "A49905B7E65E55C8642D323C739B4C31DA3B9944F1C92F7E509A5B145080E368",
+    "strengthened_test_sha256": "46F9F3F02A56968DDCDFC9D1ABEDFF63E53BDE9B6B4F8B1862984EB844E3ECF9",
+    "initial_killed": 437,
+    "late_killed_after_test_strengthening": 1,
+    "killed": 438,
+    "survived": 12,
+    "equivalent_survivors": 12,
+    "worker_errors": 0,
+    "worker_timeouts": 0,
+    "raw_mutation_coverage": 0.9733333333333334,
+    "effective_mutation_coverage": 1.0
+  },
+  "late_kills": [
+    {
+      "job_id": "6789731b9b0048988ae6bcb9e784a588",
+      "mutation": "clamp normalized_square with min(2.0, value) instead of min(1.0, value)",
+      "witness": "Finite radius correction can recompute normalized_square as 1.0000000000000004; without the unit clamp, sqrt remains greater than one and asin fails."
+    }
+  ],
+  "equivalent_survivor_proofs": [
+    {
+      "job_id": "089e41393a464e03a843b3ceca4fafb7",
+      "mutation": "default radii (0.0, 0.0) to (1.0, 0.0)",
+      "proof": "When radii is absent, both forms retain radius_y equal to zero. The zero-axis SVG rule returns [start, end] before any use of radius_x."
+    },
+    {
+      "job_id": "a9dee02161d84014b136ce4e9d79b379",
+      "mutation": "default radii (0.0, 0.0) to (-1.0, 0.0)",
+      "proof": "The negative first radius is normalized with abs, while radius_y remains zero. Both forms take the same zero-axis [start, end] branch."
+    },
+    {
+      "job_id": "85cc7a2f0fc34e1a91ff920fdd3d1971",
+      "mutation": "default radii (0.0, 0.0) to (0.0, 1.0)",
+      "proof": "When radii is absent, both forms retain radius_x equal to zero. The zero-axis SVG rule returns [start, end] before any use of radius_y."
+    },
+    {
+      "job_id": "83f524b0895c462eb9d6ac0c8ec5bcf4",
+      "mutation": "default radii (0.0, 0.0) to (0.0, -1.0)",
+      "proof": "The negative second radius is normalized with abs, while radius_x remains zero. Both forms take the same zero-axis [start, end] branch."
+    },
+    {
+      "job_id": "5b730b7778324cf789307137b1579c8b",
+      "mutation": "radius_x == 0.0 to radius_x <= 0.0",
+      "proof": "_path_arc_parameters applies abs to radius_x, so every live radius_x is nonnegative and equality with zero is equivalent to less-than-or-equal zero."
+    },
+    {
+      "job_id": "c07982a6987a40d8950d6f28c5d91207",
+      "mutation": "radius_y == 0.0 to radius_y <= 0.0",
+      "proof": "_path_arc_parameters applies abs to radius_y, so every live radius_y is nonnegative and equality with zero is equivalent to less-than-or-equal zero."
+    },
+    {
+      "job_id": "51b7b79b28c84ba8a9a3e09f3d8118cf",
+      "mutation": "radius_scale > 1.0 to radius_scale >= 1.0",
+      "proof": "The only added case is radius_scale exactly one, where multiplying both radii by one leaves every subsequent operand unchanged."
+    },
+    {
+      "job_id": "6233f87e089941dfaae9b8492d8afc42",
+      "mutation": "normalized_square <= 0.0 to normalized_square == 0.0",
+      "proof": "normalized_square is the sum of two floating-point squares and cannot be negative. Non-finite values are rejected by the unchanged second disjunct, so both predicates accept and reject the same values."
+    },
+    {
+      "job_id": "40b6306202ab4f4c9e4b102b711c482d",
+      "mutation": "max(0.0, center_ratio) to max(-1.0, center_ratio)",
+      "proof": "Before this expression, normalized_square is constrained to 0 < value <= 1. Therefore center_ratio = (1 - value) / value is nonnegative and both maxima return center_ratio."
+    },
+    {
+      "job_id": "95962517402c4a38950413ab0dc01877",
+      "mutation": "len(sampled) == 1 to len(sampled) <= 1",
+      "proof": "Arc.points returns either [start] or one point for every integer step from zero through _samples, where _samples is at least one. Its result is never empty, so both predicates are true exactly at length one."
+    },
+    {
+      "job_id": "9d02710e6a284505a741e4311d457d99",
+      "mutation": "command_type == 'A' to command_type <= 'A' at empty-command validation",
+      "proof": "The supported-command guard and earlier M/Z branches leave A, C, H, L, Q, S, T, or V. Every remaining tag except A is lexicographically greater than A."
+    },
+    {
+      "job_id": "7390f461ac5d44d2a5d03eec40e88e4c",
+      "mutation": "command_type == 'A' to command_type <= 'A' at segment dispatch",
+      "proof": "After L, H, V, C, S, and Q branches, only A and T can reach this comparison. A <= A is true and T <= A is false, exactly matching equality with A."
+    }
+  ]
+}

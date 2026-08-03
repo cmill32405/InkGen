@@ -5,7 +5,7 @@ from __future__ import annotations
 import io
 import logging
 import math
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from PIL import Image, ImageDraw, ImageFont
@@ -403,8 +403,120 @@ def _reflect_path_control(
     return 2.0 * current[0] - control[0], 2.0 * current[1] - control[1]
 
 
+def _coerce_path_arc_number(value: object, name: str) -> float:
+    """Return a finite SVG endpoint-arc number."""
+    if isinstance(value, bool):
+        raise TypeError(f"path arc {name} must be numeric")
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise TypeError(f"path arc {name} must be numeric") from exc
+    if not math.isfinite(number):
+        raise ValueError(f"path arc {name} must be finite")
+    return number
+
+
+def _coerce_path_arc_flag(value: object, name: str) -> int:
+    """Return an SVG arc flag normalized to zero or one."""
+    if isinstance(value, bool):
+        return int(value)
+    if not isinstance(value, int):
+        raise TypeError(f"path arc {name} must be an integer flag")
+    if value not in (0, 1):
+        raise ValueError(f"path arc {name} must be 0 or 1")
+    return value
+
+
+def _path_arc_parameters(command: PathCommand) -> tuple[float, float, float, int, int]:
+    """Validate live SVG endpoint-arc flags and return canonical parameters."""
+    flags = getattr(command, "flags", {})
+    if not isinstance(flags, Mapping):
+        raise TypeError("path arc flags must be a mapping")
+    radii = flags.get("radii", (0.0, 0.0))
+    if isinstance(radii, (str, bytes)) or not isinstance(radii, Sequence):
+        raise TypeError("path arc radii must be a two-value sequence")
+    if len(radii) != 2:
+        raise ValueError("path arc radii must contain exactly two values")
+    radius_x = abs(_coerce_path_arc_number(radii[0], "radius"))
+    radius_y = abs(_coerce_path_arc_number(radii[1], "radius"))
+    rotation = _coerce_path_arc_number(flags.get("rotation", 0.0), "rotation")
+    large_arc = _coerce_path_arc_flag(flags.get("large_arc", 0), "large_arc")
+    sweep = _coerce_path_arc_flag(flags.get("sweep", 0), "sweep")
+    return radius_x, radius_y, rotation, large_arc, sweep
+
+
+def _sampled_svg_endpoint_arc(
+    start: tuple[float, float],
+    end: tuple[float, float],
+    command: PathCommand,
+    style: DrawingStyle,
+) -> list[tuple[float, float]]:
+    """Convert one SVG endpoint arc to the canonical sampled center form."""
+    radius_x, radius_y, rotation, large_arc, sweep = _path_arc_parameters(command)
+    if start == end:
+        return [start]
+    if radius_x == 0.0 or radius_y == 0.0:
+        return [start, end]
+
+    normalized_rotation = rotation % 360.0
+    phi = math.radians(normalized_rotation)
+    cos_phi = math.cos(phi)
+    sin_phi = math.sin(phi)
+    half_dx = start[0] / 2.0 - end[0] / 2.0
+    half_dy = start[1] / 2.0 - end[1] / 2.0
+    transformed_x = cos_phi * half_dx + sin_phi * half_dy
+    transformed_y = -sin_phi * half_dx + cos_phi * half_dy
+    radius_scale = math.hypot(transformed_x / radius_x, transformed_y / radius_y)
+    if not math.isfinite(radius_scale):
+        raise ValueError("path arc geometry must remain finite during radius correction")
+    if radius_scale > 1.0:
+        radius_x *= radius_scale
+        radius_y *= radius_scale
+
+    normalized_x = transformed_x / radius_x
+    normalized_y = transformed_y / radius_y
+    normalized_square = normalized_x * normalized_x + normalized_y * normalized_y
+    if normalized_square <= 0.0 or not math.isfinite(normalized_square):
+        raise ValueError("path arc geometry must remain finite during center conversion")
+    normalized_square = min(1.0, normalized_square)
+    sign = -1.0 if large_arc == sweep else 1.0
+    center_scale = sign * math.sqrt(max(0.0, (1.0 - normalized_square) / normalized_square))
+    center_x_prime = center_scale * radius_x * normalized_y
+    center_y_prime = -center_scale * radius_y * normalized_x
+    center = (
+        cos_phi * center_x_prime - sin_phi * center_y_prime + start[0] / 2.0 + end[0] / 2.0,
+        sin_phi * center_x_prime + cos_phi * center_y_prime + start[1] / 2.0 + end[1] / 2.0,
+    )
+    if not all(math.isfinite(value) for value in center):
+        raise ValueError("path arc geometry must remain finite during center conversion")
+
+    start_vector = (
+        (transformed_x - center_x_prime) / radius_x,
+        (transformed_y - center_y_prime) / radius_y,
+    )
+    start_angle = math.atan2(start_vector[1], start_vector[0])
+    small_span = 2.0 * math.asin(math.sqrt(normalized_square))
+    span_magnitude = math.tau - small_span if large_arc else small_span
+    delta_angle = span_magnitude if sweep else -span_magnitude
+
+    sampled = SampledArc(
+        center,
+        radius_x,
+        radius_y,
+        math.degrees(start_angle),
+        math.degrees(start_angle + delta_angle),
+        style,
+        normalized_rotation,
+    ).points
+    if len(sampled) == 1:
+        return [start, end]
+    sampled[0] = start
+    sampled[-1] = end
+    return sampled
+
+
 def _sampled_path_subpaths(component: PathDrawing) -> list[list[tuple[float, float]]]:
-    """Validate and sample the closed P5/P6 stroke-path command domain."""
+    """Validate and sample the closed P5/P6/P7 stroke-path command domain."""
     commands = component.commands
     if commands is None:
         return []
@@ -420,8 +532,8 @@ def _sampled_path_subpaths(component: PathDrawing) -> list[list[tuple[float, flo
             raise TypeError("PathDrawing commands must contain only PathCommand objects")
         command_type = command.type
         points = command.points
-        if command_type not in {"M", "L", "H", "V", "Z", "C", "S", "Q", "T"}:
-            raise ValueError(f"path command {command_type} is not supported by raster renderer P6")
+        if command_type not in {"M", "L", "H", "V", "Z", "C", "S", "Q", "T", "A"}:
+            raise ValueError(f"path command {command_type} is not supported by raster renderer P7")
         if command_type == "M":
             if len(points) != 1:
                 raise ValueError("path command M requires exactly one point")
@@ -452,6 +564,8 @@ def _sampled_path_subpaths(component: PathDrawing) -> list[list[tuple[float, flo
             raise ValueError("path command Q requires points in groups of two")
         if command_type == "T" and not points:
             raise ValueError("path command T requires an endpoint")
+        if command_type == "A" and not points:
+            raise ValueError("path command A requires an endpoint")
         if command_type in {"L", "H", "V"} and not points:
             raise ValueError(f"path command {command_type} requires at least one point")
         if command_type == "L":
@@ -490,6 +604,11 @@ def _sampled_path_subpaths(component: PathDrawing) -> list[list[tuple[float, flo
                 current.extend(sampled[1:])
                 previous_cubic_control = None
                 previous_quadratic_control = control
+        elif command_type == "A":
+            sampled = _sampled_svg_endpoint_arc(current[-1], points[-1], command, component.style)
+            current.extend(sampled[1:])
+            previous_cubic_control = None
+            previous_quadratic_control = None
         else:
             for end in points:
                 control = (

@@ -165,7 +165,6 @@ def test_empty_grouped_bezier_commands_are_transparent_noops() -> None:
         (PathCommand("S", [(1.0, 1.0)]), "S requires points in groups of two"),
         (PathCommand("Q", [(1.0, 1.0)]), "Q requires points in groups of two"),
         (PathCommand("T"), "T requires an endpoint"),
-        (PathCommand("A", [(1.0, 1.0)]), "A is not supported"),
     ],
 )
 def test_invalid_or_unsupported_curve_commands_fail_before_surface_allocation(

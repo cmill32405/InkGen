@@ -64,8 +64,8 @@ P5 additionally renders stroke-only `PathDrawing` values containing `M`, `L`,
 inherit the current orthogonal coordinate, and `Z` paints an explicit segment
 to the current subpath's starting point. Empty and move-only paths are
 transparent no-ops. A command after `Z` must begin a new subpath with `M`.
-Visible path fills and nonlinear `C`, `S`, `Q`, `T`, and `A` commands fail
-before surface allocation rather than receiving approximate semantics.
+Visible path fills and nonlinear commands fail before surface allocation
+rather than receiving approximate semantics.
 
 P6 additionally renders `C`, `S`, `Q`, and `T` as sampled stroke segments.
 Each cubic or quadratic segment reuses the same deterministic 33-point neutral
@@ -74,6 +74,17 @@ command are supported. `S` and `T` reflect the previous applicable control;
 linear commands, opposite curve families, closure, and a new subpath reset that
 state. Empty `C`, `S`, and `Q` commands are no-ops, while incomplete groups and
 an empty `T` fail before allocation.
+
+P7 additionally renders absolute SVG endpoint-arc `A` commands. Arc parameters
+come from the command's optional `flags` mapping: `radii`, `rotation`,
+`large_arc`, and `sweep`. The last command point is the endpoint, matching the
+existing SVG and PDF serialization contract. The renderer applies SVG radius
+correction and a chord-derived, flag-selected sweep, then reuses the canonical
+`Arc` sampler. Ordinary spans use 33 points; a sub-resolution small span uses
+its exact two endpoints so the path current point is preserved. Negative radii
+are treated as absolute values, either zero radius produces a line segment, and
+equal endpoints add no segment. Malformed flags or non-finite derived geometry
+fail before surface allocation.
 
 Fill and stroke colors, widths, and independent opacity values are preserved.
 P1 supports solid strokes with butt caps, miter joins, the default miter limit,
@@ -96,12 +107,11 @@ The supersampled working surface is limited to 64,000,000 pixels and the
 supersampling factor is limited to 1 through 8. Invalid or unsupported inputs
 fail before surface allocation.
 
-The renderer deliberately rejects elliptical `A` path commands, visible path
-fills, zoning overlays, rounded corners, gradients, dashed strokes, unsupported
-stroke controls, and text presentation outside the P3 domain. Later slices can
-add these features without weakening the closed-domain behavior. The Baird
-composition API below consumes `RasterRenderResult.asset` without a PDF or SVG
-intermediary.
+The renderer deliberately rejects visible path fills, zoning overlays, rounded
+corners, gradients, dashed strokes, unsupported stroke controls, and text
+presentation outside the P3 domain. Later slices can add these features without
+weakening the closed-domain behavior. The Baird composition API below consumes
+`RasterRenderResult.asset` without a PDF or SVG intermediary.
 
 ## Baird Composition
 

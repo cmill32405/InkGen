@@ -17,7 +17,8 @@ materializing SVG or PDF.
 - `Q` points occur in groups of two `(control, end)`.
 - `T` contains at least one endpoint.
 - Empty `C`, `S`, and `Q` commands are no-ops.
-- Elliptical `A` commands and visible path fills remain outside the domain.
+- Elliptical `A` commands and visible path fills are outside the P6 domain;
+  endpoint arcs are admitted by the follow-on P7 condition.
 
 ## Dependency And Contract Review
 
@@ -75,7 +76,7 @@ physical pixel transform.
 | New subpath and `Z` | reset state, preserve independent closure | cross-family test |
 | Empty `C`/`S`/`Q` | transparent no-op | grouped no-op test |
 | Incomplete groups or empty `T` | reject before allocation | failure-mode matrix |
-| Elliptical `A` | reject before allocation | retained P5/P6 boundary test |
+| Elliptical `A` | outside P6; admitted by P7 | P7 proof suite |
 | Public clean-to-Baird path | emit clean and degraded assets | live-path test |
 
 ## Verification Status

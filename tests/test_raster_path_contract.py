@@ -204,23 +204,6 @@ def test_transparent_path_fill_is_admitted() -> None:
 
 
 @pytest.mark.condition("RASTER-PATH-P5")
-@pytest.mark.parametrize("command_type", ["A"])
-def test_arc_path_commands_fail_before_surface_allocation(
-    monkeypatch: pytest.MonkeyPatch,
-    command_type: str,
-) -> None:
-    """RASTER-PATH-P5: Arc commands remain explicit follow-on work."""
-    monkeypatch.setattr(raster_renderer.Image, "new", lambda *args, **kwargs: pytest.fail("surface allocated"))
-    path = PathDrawing(
-        _style(stroke="#123456"),
-        [PathCommand("M", [(0.0, 0.0)]), PathCommand(command_type, [(1.0, 1.0)])],
-    )
-
-    with pytest.raises(ValueError, match=f"path command {command_type} is not supported"):
-        render_drawing_group(DrawingComponentGroup("nonlinear", [path]), Canvas(2, 2, "in"), dpi=20)
-
-
-@pytest.mark.condition("RASTER-PATH-P5")
 @pytest.mark.parametrize(
     ("commands", "message"),
     [

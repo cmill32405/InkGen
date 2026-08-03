@@ -4,7 +4,7 @@
 
 Accepted for `RASTER-RENDERER-P1`, `RASTER-BAIRD-P1`,
 `RASTER-CURVE-P2`, `RASTER-TEXT-P3`, `RASTER-ARC-P4`, and
-`RASTER-PATH-P5`, and `RASTER-PATH-CURVE-P6`.
+`RASTER-PATH-P5`, `RASTER-PATH-CURVE-P6`, and `RASTER-PATH-ARC-P7`.
 
 ## Context
 
@@ -64,17 +64,26 @@ P5 admits stroke-only `PathDrawing` values containing the linear `M`, `L`,
 collection before surface allocation, expanded into independent subpaths, and
 painted through the established open-polyline operation. `Z` contributes the
 explicit segment back to the current subpath's starting point. Visible fills
-and nonlinear `C`, `S`, `Q`, `T`, and `A` commands fail explicitly until their
-geometry and fill-rule semantics are separately owned.
+and nonlinear commands fail explicitly until their geometry and fill-rule
+semantics are separately owned.
 
 P6 admits the sampled Bezier path commands `C`, `S`, `Q`, and `T`. Cubic and
 quadratic segments reuse the established 33-point neutral component samplers.
 Smooth commands reflect the previous applicable control around the current
 point and reset that state after linear commands, opposite curve families,
 closure, or a new subpath. Complete grouped commands may contain multiple
-segments; empty `C`, `S`, and `Q` groups are no-ops. Elliptical `A` commands
-remain rejected because SVG endpoint-arc flags are not represented by the
-existing sampled `Arc` contract.
+segments; empty `C`, `S`, and `Q` groups are no-ops.
+
+P7 admits absolute SVG endpoint-arc `A` commands. The raster backend validates
+the live flag mapping, converts the last command point from SVG endpoint form
+to center form, and then reuses the established `Arc` sampler. Ordinary spans
+produce its 33-point sequence; sub-resolution small spans use an exact
+two-point fallback so the path current point still advances.
+Negative radii are normalized to their absolute values, undersized radii are
+scaled by the SVG correction rule, a zero radius produces a line, and equal
+endpoints produce no segment. Exact path endpoints replace the reconstructed
+sampler endpoints after conversion. `A` clears both smooth-control histories.
+Visible path fills remain outside the closed renderer domain.
 
 ## Dependencies And Contracts
 
@@ -109,7 +118,9 @@ PDF, SVG, DXF, and document outputs do not depend on the raster renderer.
   closure without changing existing output-format dispatch.
 - Bezier paths preserve canonical sampling and smooth-control reflection
   without duplicating curve equations in the raster backend.
-- Later multiline text, elliptical path-arc, path-fill, and clipping slices
+- Endpoint arcs preserve SVG radius correction, flag-selected sweep, rotation,
+  and exact endpoints while reusing the canonical center-arc sampler.
+- Later multiline text, path-fill, and clipping slices
   can extend a proven boundary without weakening existing rejection contracts.
 
 ## Alternatives Rejected
