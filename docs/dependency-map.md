@@ -20,6 +20,7 @@ flowchart TD
     Truth["Truth annotations\nextraction_truth.py\ngrammar_truth.py"]
     Model["Document model\ndocument.py"]
     Images["Raster image assets\nimage_assets.py"]
+    Degradation["Raster degradation\nbaird.py"]
     Components["Component model\ncomponent.py"]
     Core["Core primitives\nboundary.py\nstyle.py\nerrors.py"]
     Text["Text shaping/layout\ntext_outline.py\ntext_fitter.py\nsvg_utils.py"]
@@ -29,6 +30,7 @@ flowchart TD
     PublicAPI --> Renderers
     PublicAPI --> FlowDocs
     PublicAPI --> Truth
+    PublicAPI --> Degradation
     Authoring --> Components
     Authoring --> Core
     Authoring --> Renderers
@@ -47,6 +49,7 @@ flowchart TD
     Model --> Components
     Model --> Core
     Images --> Components
+    Degradation --> Images
     Components --> Core
     Components --> Text
     Text --> Core
@@ -63,6 +66,7 @@ flowchart TD
 | Core primitives | Canvas bounds, styles, project exceptions | Renderer behavior or generated file formats |
 | Component model | Geometry, points, bboxes, convex hulls, text components, component groups | File writing, PDF/SVG/DXF syntax, document-flow policy |
 | Raster image assets | Pillow-decodable raster bytes, EXIF orientation normalization, dimensions, format metadata, shared image geometry | SVG/PDF/DOCX serialization policy or document-flow ownership |
+| Raster degradation | Baird parameters, deterministic raster degradation, physical blur conversion, and degradation provenance | PDF/vector rendering, non-Baird artifact policy, or output-format serialization |
 | Document model | Pages, layers, group containment, collision checks, YAML recipes | Renderer-specific classes or truth schema rules |
 | Renderer-neutral authoring | Drawing recipes that can materialize to supported drawing outputs | Persistent renderer state or generated file bytes |
 | Parser stress fixtures | Deterministic parser-facing PDF fixture recipes composed from public PDF primitives and truth annotations | PDF object serialization, document-output rendering, or private renderer internals |
@@ -81,18 +85,20 @@ Use these default rules unless an ADR says otherwise.
 2. Components may depend on core primitives and text helpers.
 3. Raster image assets may depend on components and Pillow, but not on concrete
    renderers or document outputs.
-4. Documents may depend on components and core primitives.
-5. Renderers may depend on documents, components, core primitives, image assets, and truth
+4. Raster degradation may depend on image assets, NumPy, and Pillow, but not on
+   concrete renderers, PDF parsing, system fonts, or document outputs.
+5. Documents may depend on components and core primitives.
+6. Renderers may depend on documents, components, core primitives, image assets, and truth
    emitters.
-6. Render contracts may depend on component abstractions and simple runtime
+7. Render contracts may depend on component abstractions and simple runtime
    type/domain checks. They should stay small enough to mutation-test directly.
-7. Renderer-neutral drawing recipes may materialize into concrete renderers, but
+8. Renderer-neutral drawing recipes may materialize into concrete renderers, but
    should not store concrete renderer instances as their own state.
-8. Flow document outputs may consume paragraphs, tables, renderer-neutral
+9. Flow document outputs may consume paragraphs, tables, renderer-neutral
    drawing recipes, and image assets needed to package native DOCX media.
-9. Truth emitters may read annotation attributes and geometry from any target,
+10. Truth emitters may read annotation attributes and geometry from any target,
    but must not alter rendered output.
-10. `__init__.py` re-exports public APIs. It should not introduce behavior.
+11. `__init__.py` re-exports public APIs. It should not introduce behavior.
 
 ## Known Cross-Layer Edges
 
@@ -110,6 +116,7 @@ tests and, where appropriate, recording an ADR.
 | `pdf_generator.py -> extraction_truth.py/grammar_truth.py` | PDF documents emit parser-facing truth records in PDF coordinates. | Truth schema changes can break downstream parser fixtures. |
 | `parser_stress_fixtures.py -> pdf_generator.py/image_assets.py/extraction_truth.py/grammar_truth.py` | Parser stress fixtures compose public PDF/image primitives and truth annotations into repeatable technical drawings and image-only scan fixtures. | Fixture helpers must not reach into PDF object writer internals, own raster decoding policy, or become a second renderer. |
 | `region_svg.py -> drawing_components.py/component.py/text_outline.py` | Standalone evidence regions materialize neutral SVG primitives, reject font-dependent text components, and outline explicit font sources. | The composition layer must not become a second geometry engine, font finder, PDF parser, or rasterizer. |
+| `baird.py -> image_assets.py` | Baird can consume and return renderer-ready raster assets while preserving the existing image boundary. | Degradation must not absorb raster rendering, format serialization, or unrelated artifact models. |
 | `pdf_generator.py -> pdf_render_contract.py` | The PDF render path delegates proof-critical closed-domain checks to a small mutation-tested contract module. | Bypassing the helper weakens PO-GT-004 and can hide custom render paths. |
 | `DocumentPDF -> ComponentGroupPDF -> built-in PDF components` | The PDF render path is intentionally closed so noninterference properties can be proven. | Arbitrary custom PDF render components are outside the proven contract. |
 | `pdf_generator.py -> fonttools` | PDF named-font embedding reads installed font metrics and embeds font-file streams without adding a PDF dependency. | Font parsing errors must fail back to Standard 14 behavior rather than corrupting PDF output. |

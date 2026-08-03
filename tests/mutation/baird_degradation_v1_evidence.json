@@ -1,0 +1,17 @@
+{
+  "condition_ids": [
+    "BAIRD-P1",
+    "BAIRD-P2",
+    "BAIRD-P3"
+  ],
+  "source": "src/InkGen/baird.py",
+  "generated_candidates": 1496,
+  "selected_work_items": 894,
+  "completed_results": 894,
+  "killed": 894,
+  "survived": 0,
+  "timeouts": 0,
+  "test_command": "env PYTHONPATH=src /home/ubuntu/.cache/inkgen_mutation_venv/bin/python -m pytest -x tests/test_baird_degradation_contract.py",
+  "filter": "tests/mutation/filter_baird_degradation_work_items.py",
+  "config": "tests/mutation/baird_degradation_cosmic_ray.toml"
+}

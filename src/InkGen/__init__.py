@@ -1,5 +1,14 @@
 """Top-level package for InkGen."""
 
+from .baird import (
+    BAIRD_INCH_MICRONS,
+    BairdDegradationResult,
+    BairdParams,
+    baird_degrade,
+    baird_degrade_asset,
+    sigma_px_to_um,
+    sigma_um_to_px,
+)
 from .boundary import Boundary, Canvas
 from .cad_component_groups import Zoning
 from .component import Component, ComponentGroup, StandardDrawingComponent, TextComponent
@@ -110,6 +119,9 @@ __all__ = [
     "ArcDrawing",
     "ArcPDF",
     "AutoFitRule",
+    "BAIRD_INCH_MICRONS",
+    "BairdDegradationResult",
+    "BairdParams",
     "Boundary",
     "Canvas",
     "Cell",
@@ -210,6 +222,8 @@ __all__ = [
     "annotate_grammar_truth",
     "build_parser_stress_pdf",
     "build_scanned_parser_stress_pdf",
+    "baird_degrade",
+    "baird_degrade_asset",
     "component_to_fitter_shape",
     "DEFAULT_PARSER_STRESS_BOM_ROWS",
     "extraction_truth_json",
@@ -218,4 +232,6 @@ __all__ = [
     "grammar_truth_json",
     "outline_for_text",
     "outline_for_text_bytes",
+    "sigma_px_to_um",
+    "sigma_um_to_px",
 ]

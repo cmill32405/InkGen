@@ -151,6 +151,19 @@ ordinary SVG text fail closed.
 - `FlattenedPath`: Dataclass representing flattened path results.
 - `flatten_svg()`: Converts SVG files into flattened path data.
 
+## Baird Degradation (`InkGen.baird`)
+
+- `BairdParams`: immutable validated parameters for Baird's document image
+  defect model, including deterministic distribution sampling and `as_dict()`.
+- `BairdDegradationResult`: degraded `RasterImageAsset` plus reproducibility
+  manifest.
+- `baird_degrade()`: applies the model to a normalized NumPy grayscale or RGB
+  array.
+- `baird_degrade_asset()`: applies the model to a raster asset and emits a
+  normalized RGB PNG. Alpha sources require an explicit background.
+- `sigma_um_to_px()` and `sigma_px_to_um()`: physical Gaussian blur conversion
+  helpers. `BAIRD_INCH_MICRONS` is the exact inch-to-micron constant.
+
 ## Usage Patterns
 
 ### Creating a Simple Drawing

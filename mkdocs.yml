@@ -13,6 +13,7 @@ nav:
   - Examples: examples.md
   - PDF Generation: pdf-generation.md
   - Linear Gradients: linear-gradients.md
+  - Baird Degradation: baird-degradation.md
   - Extraction Truth: extraction-truth.md
   - Definition of Done: Definition_of_Done.md
   - Proof Workflow: Proof_Workflow.md
@@ -49,6 +50,7 @@ nav:
       - ADR-0030 PDF Text Outline Canvas Units: adr/0030-pdf-text-outline-canvas-unit-sizing.md
       - ADR-0031 PDF Text Presentation Controls: adr/0031-pdf-text-presentation-controls.md
       - ADR-0032 Standalone SVG Region Emission: adr/0032-standalone-svg-region-emission.md
+      - ADR-0033 Standalone Baird Degradation: adr/0033-standalone-baird-degradation.md
   - Proof Notes:
       - Grammar Truth: proofs/grammar-truth.md
       - Extraction Truth Contract: proofs/extraction-truth-contract.md
@@ -124,6 +126,7 @@ nav:
       - DXF Renderer Contract: proofs/dxf-renderer-contract.md
       - Parser Stress Fixture Contract: proofs/parser-stress-fixture-contract.md
       - Standalone SVG Region Emission: proofs/svg-region-emission-contract.md
+      - Baird Degradation Contract: proofs/baird-degradation-contract.md
   - Architecture Diagrams: architecture-diagrams.md
   - Notes:
       - Mask Alignment Findings: mask_alignment_findings.md

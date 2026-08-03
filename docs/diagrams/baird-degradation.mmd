@@ -1,0 +1,30 @@
+classDiagram
+    class BairdParams {
+        +int supersample
+        +float blur
+        +float threshold
+        +bool binarize
+        +float sensitivity
+        +float jitter
+        +float skew_deg
+        +float x_scale
+        +float y_scale
+        +float baseline
+        +float kern
+        +clean() BairdParams
+        +sample(rng) BairdParams
+        +as_dict() dict
+    }
+
+    class BairdDegradationResult {
+        +RasterImageAsset asset
+        +BairdParams parameters
+        +int seed
+        +tuple background_rgb
+        +manifest dict
+    }
+
+    class RasterImageAsset
+
+    BairdDegradationResult --> BairdParams
+    BairdDegradationResult --> RasterImageAsset

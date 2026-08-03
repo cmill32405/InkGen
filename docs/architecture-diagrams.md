@@ -11,6 +11,7 @@ This document provides class diagrams for the InkGen architecture in both Markdo
 - [svg-generators.mmd](diagrams/svg-generators.mmd) - Complete SVG Generator Classes
 - [text-fitting.mmd](diagrams/text-fitting.mmd) - Text Fitting Classes
 - [utilities.mmd](diagrams/utilities.mmd) - Utility Classes
+- [baird-degradation.mmd](diagrams/baird-degradation.mmd) - Standalone Baird parameters and raster-asset relationships
 
 ## Diagram 1: Base Classes
 
