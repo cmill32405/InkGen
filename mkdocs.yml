@@ -14,6 +14,7 @@ nav:
   - PDF Generation: pdf-generation.md
   - Linear Gradients: linear-gradients.md
   - Baird Degradation: baird-degradation.md
+  - Raster Rendering: raster-rendering.md
   - Extraction Truth: extraction-truth.md
   - Definition of Done: Definition_of_Done.md
   - Proof Workflow: Proof_Workflow.md
@@ -51,6 +52,7 @@ nav:
       - ADR-0031 PDF Text Presentation Controls: adr/0031-pdf-text-presentation-controls.md
       - ADR-0032 Standalone SVG Region Emission: adr/0032-standalone-svg-region-emission.md
       - ADR-0033 Standalone Baird Degradation: adr/0033-standalone-baird-degradation.md
+      - ADR-0034 Dependency-Free Raster Renderer: adr/0034-dependency-free-raster-renderer.md
   - Proof Notes:
       - Grammar Truth: proofs/grammar-truth.md
       - Extraction Truth Contract: proofs/extraction-truth-contract.md
@@ -127,6 +129,7 @@ nav:
       - Parser Stress Fixture Contract: proofs/parser-stress-fixture-contract.md
       - Standalone SVG Region Emission: proofs/svg-region-emission-contract.md
       - Baird Degradation Contract: proofs/baird-degradation-contract.md
+      - Raster Renderer Contract: proofs/raster-renderer-contract.md
   - Architecture Diagrams: architecture-diagrams.md
   - Notes:
       - Mask Alignment Findings: mask_alignment_findings.md

@@ -81,6 +81,7 @@ from .pdf_generator import (
     RegularPolygonPDF,
     TextPDF,
 )
+from .raster_renderer import RasterRenderResult, render_drawing_group
 from .region_svg import PositionedTextRun, SvgClipWindow, emit_svg_region
 from .style import DrawingStyle, Font, Style, TextStyle
 from .svg_generator import (
@@ -194,6 +195,7 @@ __all__ = [
     "QuadraticBezierPDF",
     "RasterImageAsset",
     "RasterImageComponent",
+    "RasterRenderResult",
     "RectangleSVG",
     "RectangleDrawing",
     "RectanglePDF",
@@ -232,6 +234,7 @@ __all__ = [
     "grammar_truth_json",
     "outline_for_text",
     "outline_for_text_bytes",
+    "render_drawing_group",
     "sigma_px_to_um",
     "sigma_um_to_px",
 ]

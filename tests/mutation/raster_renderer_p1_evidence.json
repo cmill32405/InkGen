@@ -1,0 +1,109 @@
+{
+  "condition": "RASTER-RENDERER-P1",
+  "evidence_generated_utc": "2026-08-03T02:55:40.1829752Z",
+  "source": {
+    "path": "src/InkGen/raster_renderer.py",
+    "sha256": "3F7D62A6C7C724A043F25011B48C4F25F111DF81640805ADA14E2118204DF6F4"
+  },
+  "test": {
+    "path": "tests/test_raster_renderer_contract.py",
+    "sha256": "76D1E88AD55884E9ECC2957D87B2E7563F16FE6B7229D7B451CC8851261A0516",
+    "command": "env PYTHONPATH=src /home/ubuntu/.cache/inkgen_mutation_venv/bin/python -m pytest -x tests/test_raster_renderer_contract.py"
+  },
+  "config": {
+    "path": "tests/mutation/raster_renderer_cosmic_ray.toml",
+    "sha256": "0CA913DD3FB38A71FA6F9E0075A7C9905DFFB70AFCB1A30D09160D82992DB872"
+  },
+  "filter": {
+    "path": "tests/mutation/filter_raster_renderer_work_items.py",
+    "sha256": "2F08D524209E304687A034F62998CD2DF8FD17CE1D7C3BF234BF45F2125C77C2"
+  },
+  "campaign": {
+    "generated_candidates": 820,
+    "selected_work_items": 473,
+    "completed_results": 473,
+    "initial_killed": 443,
+    "late_killed_after_test_strengthening": 4,
+    "killed": 447,
+    "equivalent_survivors": 26,
+    "unclassified_survivors": 0,
+    "worker_errors": 0,
+    "worker_timeouts": 0,
+    "effective_mutation_coverage": 1.0,
+    "partition_results": [
+      {"work_items": 239, "killed": 221, "survived": 18},
+      {"work_items": 117, "killed": 112, "survived": 5},
+      {"work_items": 117, "killed": 110, "survived": 7}
+    ],
+    "late_killed_job_ids": [
+      "9095bf2c3f9545c1b477a0585e9fa93b",
+      "2043d1741bc24476b10b346fc77351ea",
+      "c55dcfc50f744d52ae5fc1642feab64d",
+      "aa202a3fdc7c42f1b72ff5154eb9f951"
+    ]
+  },
+  "equivalent_groups": [
+    {
+      "reason": "Canvas normalizes units to the literal values 'in' or 'mm'; identity and lexical-less-than-or-equal substitutions select the same branch for exactly that two-value domain.",
+      "job_ids": [
+        "0272f431336c407ca05872ca1e48c5e1",
+        "9dccdb61ac3d438b82ddceb7ee71a79a"
+      ]
+    },
+    {
+      "reason": "Pillow clamps negative RGBA channels to zero; these negative-channel substitutions decode to the same transparent-black initial surface.",
+      "job_ids": [
+        "05c8af71df7743c18a399588f80606fb",
+        "5aaef57f78f4421eaa514922fe9322d7",
+        "b84d568da56b4e5bbb9d24fbc95a7731",
+        "eaa08770b2fd41c9ad5ca957352dd0b5"
+      ]
+    },
+    {
+      "reason": "RGB values beneath alpha zero in a temporary source-over layer are unobservable; Pillow clamps negative channels and alpha-compositing discards hidden RGB.",
+      "job_ids": [
+        "18519e877d814d9d97bf0fcf4aea382a",
+        "2b4f1c1b86b242338793658490b8464f",
+        "3b95dba94202469fa91a1d01e02798e6",
+        "64c645713f304498a27e039a72367a11",
+        "a5156a3e19104d80bdf976a420ec3fbc",
+        "c1616efb173a4bf4a00d5f560b832cfb",
+        "db4ee928cb1a4f3fb9f82b80b79d77e3"
+      ]
+    },
+    {
+      "reason": "The validated supersample domain is the integers 1 through 8; all three substitutions resize exactly when supersample is greater than one or perform a same-size Pillow resize at one, which is pixel-identical.",
+      "job_ids": [
+        "853b901893e84b33be46519dd392adb9",
+        "86e24879fd29435b95380dc82a3af226",
+        "fffd4fac25bb4bd192c38f1b19ff2d4c"
+      ]
+    },
+    {
+      "reason": "PNG optimize changes only valid lossless encoding choices; the contract requires deterministic bytes for repeated identical inputs, which both settings satisfy, and decoded RGBA pixels and metadata are identical.",
+      "job_ids": ["15f52f47462948d6aa5876cead926f3f"]
+    },
+    {
+      "reason": "Rectangle and regular-polygon radii, dash offsets, and stroke widths are validated nonnegative, making != 0 and > 0 identical predicates over their reachable domains.",
+      "job_ids": [
+        "55ceba31a8984faea0dfb3c402ba8cd8",
+        "ad9742b58f0f470c861f2d1048fc2213",
+        "0a4015aff7094d0f883954c4941ce09b",
+        "de2e0b55ab704b5cb2f8c317aba2683d",
+        "b9fa304cb8f14fcc9c6ebbede548c311"
+      ]
+    },
+    {
+      "reason": "The only valid nondefault line caps are 'round' and 'square', both lexically greater than 'butt'; therefore != 'butt' and > 'butt' reject the same reachable values.",
+      "job_ids": ["c849b54a767e4b72acca37274aad7ce5"]
+    },
+    {
+      "reason": "Validated colors are 'none' or seven-character hexadecimal strings, validated opacity is in [0,1], and slicing a seven-character string at index 7 or 8 yields the same blue channel.",
+      "job_ids": [
+        "7baf7b7553724312a436ff540cbe3930",
+        "aef0e7703dfa4d53a07d97e1fc0cace5",
+        "eac9869c935f49c1a718b45d483160d8"
+      ]
+    }
+  ]
+}

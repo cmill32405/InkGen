@@ -151,6 +151,13 @@ ordinary SVG text fail closed.
 - `FlattenedPath`: Dataclass representing flattened path results.
 - `flatten_svg()`: Converts SVG files into flattened path data.
 
+## Raster Rendering (`InkGen.raster_renderer`)
+
+- `RasterRenderResult`: immutable rendered `RasterImageAsset` plus physical
+  canvas, DPI, supersampling, component-count, and manifest provenance.
+- `render_drawing_group()`: renders the supported neutral drawing domain to a
+  deterministic in-memory RGBA PNG without a PDF or SVG intermediary.
+
 ## Baird Degradation (`InkGen.baird`)
 
 - `BairdParams`: immutable validated parameters for Baird's document image
