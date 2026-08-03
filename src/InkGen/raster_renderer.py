@@ -12,9 +12,11 @@ from PIL import Image, ImageDraw, ImageFont
 
 from InkGen.baird import BairdDegradationResult, BairdParams, baird_degrade_asset
 from InkGen.boundary import Canvas
+from InkGen.component import Arc as SampledArc
 from InkGen.component import CubicBezier as SampledCubicBezier
 from InkGen.component import QuadraticBezier as SampledQuadraticBezier
 from InkGen.drawing_components import (
+    ArcDrawing,
     CircleDrawing,
     CubicBezierDrawing,
     DrawingComponentGroup,
@@ -40,6 +42,7 @@ RasterPrimitive = (
     RectangleDrawing
     | LineDrawing
     | CircleDrawing
+    | ArcDrawing
     | PolygonalDrawing
     | RegularPolygonDrawing
     | ImageDrawing
@@ -218,6 +221,7 @@ def _validated_components(group: object) -> list[RasterPrimitive]:
                 RectangleDrawing,
                 LineDrawing,
                 CircleDrawing,
+                ArcDrawing,
                 PolygonalDrawing,
                 RegularPolygonDrawing,
                 ImageDrawing,
@@ -287,6 +291,8 @@ def _validate_render_domain(components: Sequence[RasterPrimitive]) -> None:
                 raise ValueError("text subscript is not supported by raster renderer P3")
         style = getattr(component, "style", None)
         if isinstance(style, DrawingStyle):
+            if isinstance(component, ArcDrawing) and style.fill != "none" and style.fill_opacity != 0.0:
+                raise ValueError("arc fills are not supported by raster renderer P4")
             if isinstance(component, (QuadraticBezierDrawing, CubicBezierDrawing)) and style.fill != "none" and style.fill_opacity != 0.0:
                 raise ValueError("curve fills are not supported by raster renderer P2")
             if style.stroke_dasharray:
@@ -332,6 +338,18 @@ def _render_component(
         x, y = component.position
         radius = component.radius
         draw.ellipse(_scaled_box(x - radius, y - radius, x + radius, y + radius, scale), fill=fill, outline=stroke, width=stroke_width)
+    elif isinstance(component, ArcDrawing):
+        if stroke is not None:
+            points = SampledArc(
+                component.center,
+                component.radius_x,
+                component.radius_y,
+                component.start_angle,
+                component.end_angle,
+                style,
+                component.rotation,
+            ).points
+            _draw_curve(draw, points, scale, stroke, stroke_width)
     elif isinstance(component, PolygonalDrawing):
         _draw_polygon(draw, component.points, scale, fill, stroke, stroke_width)
     elif isinstance(component, QuadraticBezierDrawing):
@@ -373,6 +391,8 @@ def _draw_curve(
     stroke_width: int,
 ) -> None:
     """Draw the established sampled curve as a supersampled polyline."""
+    if len(points) < 2:
+        return
     draw.line([_scaled_point(point, scale) for point in points], fill=stroke, width=stroke_width)
 
 

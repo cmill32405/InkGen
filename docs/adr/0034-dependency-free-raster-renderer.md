@@ -2,8 +2,8 @@
 
 ## Status
 
-Accepted for `RASTER-RENDERER-P1`, `RASTER-BAIRD-P1`, and
-`RASTER-CURVE-P2`, and `RASTER-TEXT-P3`.
+Accepted for `RASTER-RENDERER-P1`, `RASTER-BAIRD-P1`,
+`RASTER-CURVE-P2`, `RASTER-TEXT-P3`, and `RASTER-ARC-P4`.
 
 ## Context
 
@@ -53,12 +53,17 @@ converted independently from canvas units with `dpi * supersample / 72`, and
 the existing `Font.font_file` resolver supplies the exact installed font file.
 Unsupported presentation and font-load failures remain explicit.
 
+P4 admits open `ArcDrawing` strokes. The raster backend consumes the same
+deterministic `Arc.points` samples used by PDF and DXF, including rotation and
+reverse spans. Visible fills fail explicitly because filling would close the
+arc with an implicit chord. Zero-span arcs remain transparent move-only paths.
+
 ## Dependencies And Contracts
 
 | Dependency | Consumed contract | Failure if changed |
 |---|---|---|
 | `drawing_components.py` | Neutral primitive geometry, style ownership, and group order | Geometry or ordering renders incorrectly |
-| `component.py` | Established 33-point quadratic and cubic curve samples | Raster curves diverge from neutral/DXF geometry |
+| `component.py` | Established arc, quadratic, and cubic sampled points | Raster curves diverge from neutral/PDF/DXF geometry |
 | `boundary.py` | Positive canvas dimensions and normalized `mm`/`in` units | Physical pixel dimensions become incorrect |
 | `style.py` | Normalized drawing colors, text colors, font-file resolution, point size, visibility, and alignment | Paint, glyph source, or baseline alignment differs from SVG/PDF semantics |
 | `image_assets.py` | EXIF-normalized decoded pixels and alpha metadata | Embedded image orientation or transparency changes |
@@ -80,6 +85,8 @@ PDF, SVG, DXF, and document outputs do not depend on the raster renderer.
   serialized renderer intermediary.
 - Single-line text uses the resolved font file and physical point size without
   changing neutral component or output-format dispatch.
+- Elliptical arcs preserve shared rotation, direction, and endpoint samples
+  without materializing PDF or SVG.
 - Later multiline text, path, and clipping slices can extend a proven boundary
   without changing existing output-format dispatch.
 

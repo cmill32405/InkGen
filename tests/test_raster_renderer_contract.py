@@ -11,12 +11,12 @@ from PIL import Image
 import InkGen.raster_renderer as raster_renderer
 from InkGen.boundary import Canvas
 from InkGen.drawing_components import (
-    ArcDrawing,
     CircleDrawing,
     DrawingComponentGroup,
     ImageDrawing,
     LineDrawing,
     OutputFormat,
+    PathDrawing,
     PolygonalDrawing,
     RectangleDrawing,
     RegularPolygonDrawing,
@@ -429,7 +429,7 @@ def test_style_color_and_scale_helpers_are_exact() -> None:
 @pytest.mark.condition("RASTER-RENDERER-P1")
 def test_unsupported_primitive_and_style_features_fail_loudly() -> None:
     """RASTER-RENDERER-P1: P1 never silently approximates unsupported contracts."""
-    arc = ArcDrawing((1, 1), 1, 1, 0, 90, _style(stroke="#000000", stroke_width=1))
+    path = PathDrawing(_style(stroke="#000000", stroke_width=1))
     rounded = RectangleDrawing((1, 1), 2, 2, 0.5, _style(fill="#000000"))
     gradient = RectangleDrawing(
         (1, 1),
@@ -463,7 +463,7 @@ def test_unsupported_primitive_and_style_features_fail_loudly() -> None:
     )
 
     for component, message in [
-        (arc, "unsupported raster primitive: ArcDrawing"),
+        (path, "unsupported raster primitive: PathDrawing"),
         (rounded, "rounded rectangles are not supported"),
         (gradient, "rectangle gradients are not supported"),
         (rounded_polygon, "rounded regular polygons are not supported"),

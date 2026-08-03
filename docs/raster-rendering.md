@@ -53,6 +53,12 @@ raise a raster-specific `ValueError`. Glyph shape and byte determinism are
 scoped to the same resolved font file and Pillow runtime; cross-platform font
 substitution and complex-script equivalence are not claimed.
 
+P4 additionally renders open `ArcDrawing` strokes by reusing the canonical
+`Arc.points` sequence already consumed by PDF and DXF. Forward, reverse, and
+rotated elliptical spans preserve sample order. Visible fills fail explicitly
+because they would close the open arc with an implicit chord. Transparent
+fills remain valid, and zero-span or unpainted arcs are transparent no-ops.
+
 Fill and stroke colors, widths, and independent opacity values are preserved.
 P1 supports solid strokes with butt caps, miter joins, the default miter limit,
 and zero dash offset. Other cap, join, miter-limit, dash, or dash-offset values
@@ -74,9 +80,9 @@ The supersampled working surface is limited to 64,000,000 pixels and the
 supersampling factor is limited to 1 through 8. Invalid or unsupported inputs
 fail before surface allocation.
 
-The renderer deliberately rejects arcs, paths, zoning overlays, rounded
+The renderer deliberately rejects paths, zoning overlays, rounded
 corners, gradients, dashed strokes, unsupported stroke controls, and text
-presentation outside the P3 domain. Later slices will add these features
+presentation outside the P3 domain. Later slices can add these features
 without weakening the closed-domain behavior. The Baird composition API below
 consumes `RasterRenderResult.asset` without a PDF or SVG intermediary.
 

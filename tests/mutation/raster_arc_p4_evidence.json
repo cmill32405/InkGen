@@ -1,0 +1,47 @@
+{
+  "condition": "RASTER-ARC-P4",
+  "evidence_generated_utc": "2026-08-03T14:53:43.5910798Z",
+  "source": {
+    "path": "src/InkGen/raster_renderer.py",
+    "sha256": "0066E03A9365674883E30DB41780AE8B333DB730609A33885E4F78D3A4DD3E97"
+  },
+  "test": {
+    "path": "tests/test_raster_arc_contract.py",
+    "sha256": "9418BD11A25231BEFE47C2D87B1B67E0B49BB72F3FDB8971072DF93320591104",
+    "command": "env PYTHONPATH=src /home/ubuntu/.cache/inkgen_mutation_venv/bin/python -m pytest -x tests/test_raster_arc_contract.py"
+  },
+  "config": {
+    "path": "tests/mutation/raster_arc_p4_cosmic_ray.toml",
+    "sha256": "A48B45BFDD8650AF82C90C4F03B30A0F84C0FC2E0C73602FED1CEA9949920B4C"
+  },
+  "filter": {
+    "path": "tests/mutation/filter_raster_arc_p4_work_items.py",
+    "sha256": "76A4AF2A5E1FC4EC1455F66978FD3B89B9BD8D092AF512CCB1C741CD4702CF21"
+  },
+  "campaign": {
+    "generated_candidates": 1031,
+    "selected_work_items": 27,
+    "completed_results": 27,
+    "initial_killed": 23,
+    "late_killed_after_test_strengthening": 2,
+    "killed": 25,
+    "survived": 2,
+    "equivalent_survivors": 2,
+    "worker_errors": 0,
+    "worker_timeouts": 0,
+    "raw_mutation_coverage": 0.9259259259259259,
+    "effective_mutation_coverage": 1.0
+  },
+  "equivalent_survivor_proofs": [
+    {
+      "job_id": "4793b5973e4a46028f48576338aaf18a",
+      "mutation": "style.fill != 'none' to style.fill < 'none'",
+      "proof": "DrawingStyle normalizes valid fill values to either 'none' or a lowercase '#rrggbb' value. Equality makes both predicates false for 'none'; '#' sorts before 'n', so both predicates are true for every normalized painted fill."
+    },
+    {
+      "job_id": "2f1176fc206646cea6d8e0ea650b76e5",
+      "mutation": "style.fill_opacity != 0.0 to style.fill_opacity > 0.0",
+      "proof": "DrawingStyle constrains fill_opacity to the closed interval [0.0, 1.0]. Both predicates are false only at 0.0 and true for every other valid opacity."
+    }
+  ]
+}

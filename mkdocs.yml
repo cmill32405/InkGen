@@ -133,6 +133,7 @@ nav:
       - Raster Baird Composition Contract: proofs/raster-baird-composition-contract.md
       - Raster Curve Contract: proofs/raster-curve-contract.md
       - Raster Text Contract: proofs/raster-text-contract.md
+      - Raster Arc Contract: proofs/raster-arc-contract.md
   - Architecture Diagrams: architecture-diagrams.md
   - Notes:
       - Mask Alignment Findings: mask_alignment_findings.md
