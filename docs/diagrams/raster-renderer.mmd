@@ -1,5 +1,5 @@
 flowchart LR
-    Group[DrawingComponentGroup] --> Validate[Closed P1/P2/P3/P4/P5/P6/P7/P8/P9 domain validation]
+    Group[DrawingComponentGroup] --> Validate[Closed P1/P2/P3/P4/P5/P6/P7/P8/P9/P10 domain validation]
     Canvas[Canvas and DPI] --> Scale[Physical pixel scale]
     Validate --> Surface[Supersampled RGBA surface]
     Scale --> Surface
@@ -10,6 +10,8 @@ flowchart LR
     ArcFlags[SVG endpoint flags and radius correction] --> Paths
     Rounded[Normalized rx/ry quarter ellipses] --> Surface
     RoundedPolygon[Tangent-circle polygon samples] --> Surface
+    Gradient[Neutral gradient axis and extended stops] --> Tiles[Bounded NumPy interpolation tiles]
+    Tiles --> Surface
     Font[Resolved font file and point scale] --> Surface
     Surface --> Composite[Ordered source-over compositing]
     Composite --> Reduce[LANCZOS reduction]

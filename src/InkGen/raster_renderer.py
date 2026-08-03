@@ -8,6 +8,7 @@ import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
+import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 from InkGen.baird import BairdDegradationResult, BairdParams, baird_degrade_asset
@@ -41,6 +42,7 @@ from InkGen.drawing_components import (
     RegularPolygonDrawing,
     TextDrawing,
 )
+from InkGen.gradients import LinearGradientFill, coerce_linear_gradient
 from InkGen.image_assets import RasterImageAsset
 from InkGen.style import DrawingStyle, TextStyle
 
@@ -49,6 +51,7 @@ log = logging.getLogger(__name__)
 _INCH_MILLIMETERS = 25.4
 _MAX_SUPERSAMPLED_PIXELS = 64_000_000
 _MAX_SUPERSAMPLE = 8
+_GRADIENT_TILE_PIXELS = 1_000_000
 _RENDERER_NAME = "inkgen-raster-v1"
 
 RasterPrimitive = (
@@ -133,9 +136,9 @@ def render_drawing_group(
 
     Geometry uses the canvas's top-left, y-down coordinate system. Transparent
     output remains transparent unless the caller supplies ``background_rgba``.
-    P1 supports rectangles without gradients, solid lines, circles, polygons,
-    and raster images. Later closed slices add supported curve, text, and
-    rounded-corner domains.
+    P1 supports basic rectangles, solid lines, circles, polygons, and raster
+    images. Later closed slices add curves, text, rounded corners, and
+    rectangle gradients.
     """
     components = _validated_components(group)
     if not isinstance(canvas, Canvas):
@@ -151,8 +154,8 @@ def render_drawing_group(
     if high_width * high_height > _MAX_SUPERSAMPLED_PIXELS:
         raise ValueError(f"canvas, dpi, and supersample exceed the {_MAX_SUPERSAMPLED_PIXELS:,}-pixel supersampled limit")
 
-    _validate_render_domain(components)
     high_scale = pixels_per_unit * normalized_supersample
+    _validate_render_domain(components, high_scale)
     points_scale = normalized_dpi * normalized_supersample / 72.0
     initial = background if background is not None else (0, 0, 0, 0)
     surface = Image.new("RGBA", (high_width, high_height), initial)
@@ -285,12 +288,11 @@ def _validated_background(value: object) -> tuple[int, int, int, int] | None:
     return channels[0], channels[1], channels[2], channels[3]
 
 
-def _validate_render_domain(components: Sequence[RasterPrimitive]) -> None:
+def _validate_render_domain(components: Sequence[RasterPrimitive], scale: float) -> None:
     for component in components:
         if isinstance(component, RectangleDrawing):
             normalize_rectangle_corner_radii(component.corner_radii, component.width, component.height)
-            if component.fill_gradient is not None:
-                raise ValueError("rectangle gradients are not supported by raster renderer P1")
+            _validated_raster_gradient(component, scale)
         if isinstance(component, RegularPolygonDrawing):
             validated = RegularPolygonDrawing(
                 component.position,
@@ -361,7 +363,31 @@ def _render_component(
         pixel_height = box[3] - box[1]
         radius_x = min(pixel_width // 2, max(1, round(rx * scale))) if rx > 0.0 else 0
         radius_y = min(pixel_height // 2, max(1, round(ry * scale))) if ry > 0.0 else 0
-        if radius_x == 0 or radius_y == 0:
+        gradient_and_axis = _validated_raster_gradient(component, scale)
+        if gradient_and_axis is not None:
+            gradient, axis = gradient_and_axis
+            _render_linear_gradient_rectangle(
+                surface,
+                box,
+                radius_x,
+                radius_y,
+                gradient,
+                axis,
+                component.style.fill_opacity,
+            )
+            if radius_x == 0 or radius_y == 0:
+                draw.rectangle(box, fill=None, outline=stroke, width=stroke_width)
+            else:
+                _draw_rounded_rectangle(
+                    draw,
+                    box,
+                    radius_x,
+                    radius_y,
+                    fill=None,
+                    stroke=stroke,
+                    stroke_width=stroke_width,
+                )
+        elif radius_x == 0 or radius_y == 0:
             draw.rectangle(box, fill=fill, outline=stroke, width=stroke_width)
         else:
             _draw_rounded_rectangle(
@@ -704,14 +730,101 @@ def _render_image(surface: Image.Image, component: ImageDrawing, scale: float) -
     surface.alpha_composite(resized, dest=position)
 
 
+def _validated_raster_gradient(
+    component: RectangleDrawing,
+    scale: float,
+) -> tuple[LinearGradientFill, tuple[float, float, float, float]] | None:
+    """Return a live-validated gradient and its finite supersampled axis."""
+    gradient = coerce_linear_gradient(component.fill_gradient)
+    if gradient is None:
+        return None
+    raw_axis = gradient.axis_for_box(component.position, component.width, component.height)
+    axis = (raw_axis[0] * scale, raw_axis[1] * scale, raw_axis[2] * scale, raw_axis[3] * scale)
+    if not all(math.isfinite(value) for value in axis):
+        raise ValueError("raster gradient axis must be finite")
+    delta_x = axis[2] - axis[0]
+    delta_y = axis[3] - axis[1]
+    squared_length = delta_x * delta_x + delta_y * delta_y
+    if not math.isfinite(squared_length):
+        raise ValueError("raster gradient axis length must be finite")
+    if squared_length <= 0.0:
+        raise ValueError("raster gradient axis must have positive length")
+    return gradient, axis
+
+
+def _render_linear_gradient_rectangle(
+    surface: Image.Image,
+    box: tuple[int, int, int, int],
+    radius_x: int,
+    radius_y: int,
+    gradient: LinearGradientFill,
+    axis: tuple[float, float, float, float],
+    opacity: float,
+) -> None:
+    """Paint a clipped N-stop linear gradient in bounded two-dimensional tiles."""
+    alpha = round(opacity * 255.0)
+    if alpha == 0:
+        return
+    left, top, right, bottom = box
+    clip_left = max(0, left)
+    clip_top = max(0, top)
+    clip_right = min(surface.width - 1, right)
+    clip_bottom = min(surface.height - 1, bottom)
+    if clip_left > clip_right or clip_top > clip_bottom:
+        return
+
+    x1, y1, x2, y2 = axis
+    delta_x = x2 - x1
+    delta_y = y2 - y1
+    squared_length = delta_x * delta_x + delta_y * delta_y
+    stops = gradient.extended_stops()
+    offsets = np.asarray([stop.offset for stop in stops], dtype=np.float64)
+    colors = np.asarray(
+        [[int(stop.color[index : index + 2], 16) for index in (1, 3, 5)] for stop in stops],
+        dtype=np.float64,
+    )
+
+    tile_width_limit = max(1, _GRADIENT_TILE_PIXELS)
+    for tile_left in range(clip_left, clip_right + 1, tile_width_limit):
+        tile_right = min(clip_right + 1, tile_left + tile_width_limit)
+        tile_width = tile_right - tile_left
+        tile_height = max(1, _GRADIENT_TILE_PIXELS // tile_width)
+        x_projection = ((np.arange(tile_left, tile_right, dtype=np.float64) + 0.5 - x1) * delta_x) / squared_length
+        for tile_top in range(clip_top, clip_bottom + 1, tile_height):
+            tile_bottom = min(clip_bottom + 1, tile_top + tile_height)
+            y_projection = ((np.arange(tile_top, tile_bottom, dtype=np.float64) + 0.5 - y1) * delta_y) / squared_length
+            positions = np.clip(y_projection[:, np.newaxis] + x_projection[np.newaxis, :], 0.0, 1.0)
+            rgb = np.empty((tile_bottom - tile_top, tile_width, 3), dtype=np.uint8)
+            for channel in range(3):
+                rgb[:, :, channel] = np.rint(np.interp(positions, offsets, colors[:, channel])).astype(np.uint8)
+            tile = Image.fromarray(rgb)
+            mask = Image.new("L", tile.size, 0)
+            mask_draw = ImageDraw.Draw(mask)
+            local_box = (left - tile_left, top - tile_top, right - tile_left, bottom - tile_top)
+            if radius_x == 0 or radius_y == 0:
+                mask_draw.rectangle(local_box, fill=alpha)
+            else:
+                _draw_rounded_rectangle(
+                    mask_draw,
+                    local_box,
+                    radius_x,
+                    radius_y,
+                    fill=alpha,
+                    stroke=None,
+                    stroke_width=0,
+                )
+            tile.putalpha(mask)
+            surface.alpha_composite(tile, dest=(tile_left, tile_top))
+
+
 def _draw_rounded_rectangle(
     draw: ImageDraw.ImageDraw,
     box: tuple[int, int, int, int],
     radius_x: int,
     radius_y: int,
     *,
-    fill: tuple[int, int, int, int] | None,
-    stroke: tuple[int, int, int, int] | None,
+    fill: int | tuple[int, int, int, int] | None,
+    stroke: int | tuple[int, int, int, int] | None,
     stroke_width: int,
 ) -> None:
     """Paint an axis-aligned rectangle with elliptical rounded corners."""

@@ -105,6 +105,16 @@ apart; SVG emits native circular arcs and PDF emits tangent cubic segments from
 the same corner records. Zero radius preserves the established sharp paths.
 Malformed live polygon geometry fails before raster surface allocation.
 
+P10 additionally renders rectangle `LinearGradientFill` values. Every
+supersampled pixel center is projected onto the existing full-coverage neutral
+axis, clamped to `[0, 1]`, and interpolated between the surrounding extended
+stops in sRGB channel space. Gradient paint replaces the style's solid fill;
+the existing `fill_opacity`, rounded-corner clip, and separately painted stroke
+remain authoritative. Off-canvas clipping does not renormalize the gradient
+axis. NumPy evaluates at most 1,000,000 pixels per tile, and Pillow performs
+masking and source-over composition. Live mutable gradient payloads and
+nonrepresentable derived axes fail before surface allocation.
+
 Fill and stroke colors, widths, and independent opacity values are preserved.
 P1 supports solid strokes with butt caps, miter joins, the default miter limit,
 and zero dash offset. Other cap, join, miter-limit, dash, or dash-offset values
@@ -127,7 +137,7 @@ supersampling factor is limited to 1 through 8. Invalid or unsupported inputs
 fail before surface allocation.
 
 The renderer deliberately rejects visible path fills, zoning overlays,
-gradients, dashed strokes, unsupported stroke controls, and text
+dashed strokes, unsupported stroke controls, and text
 presentation outside the P3 domain. Later slices can add these features without
 weakening the closed-domain behavior. The Baird composition API below consumes
 `RasterRenderResult.asset` without a PDF or SVG intermediary.

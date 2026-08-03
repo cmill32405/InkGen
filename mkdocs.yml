@@ -139,6 +139,7 @@ nav:
       - Raster Path Arc Contract: proofs/raster-path-arc-contract.md
       - Raster Rounded Rectangle Contract: proofs/raster-rounded-rectangle-contract.md
       - Rounded Regular Polygon Contract: proofs/rounded-regular-polygon-contract.md
+      - Raster Gradient Contract: proofs/raster-gradient-contract.md
   - Architecture Diagrams: architecture-diagrams.md
   - Notes:
       - Mask Alignment Findings: mask_alignment_findings.md

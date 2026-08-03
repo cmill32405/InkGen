@@ -15,7 +15,7 @@ flowchart TD
     PublicAPI["__init__.py public API"]
     Authoring["Authoring recipes\ndrawing_components.py\nparagraph.py\ntable.py\nparser_stress_fixtures.py\ncad_component_groups.py"]
     FlowDocs["Flow document outputs\ndocument_outputs.py"]
-    Renderers["Concrete renderers\nsvg_generator.py\npdf_generator.py\ndxf_generator.py"]
+    Renderers["Concrete renderers\nsvg_generator.py\npdf_generator.py\ndxf_generator.py\nraster_renderer.py"]
     RenderContracts["Render contracts\npdf_render_contract.py"]
     Truth["Truth annotations\nextraction_truth.py\ngrammar_truth.py"]
     Model["Document model\ndocument.py"]
@@ -117,6 +117,7 @@ tests and, where appropriate, recording an ADR.
 | `parser_stress_fixtures.py -> pdf_generator.py/image_assets.py/extraction_truth.py/grammar_truth.py` | Parser stress fixtures compose public PDF/image primitives and truth annotations into repeatable technical drawings and image-only scan fixtures. | Fixture helpers must not reach into PDF object writer internals, own raster decoding policy, or become a second renderer. |
 | `region_svg.py -> drawing_components.py/component.py/text_outline.py` | Standalone evidence regions materialize neutral SVG primitives, reject font-dependent text components, and outline explicit font sources. | The composition layer must not become a second geometry engine, font finder, PDF parser, or rasterizer. |
 | `baird.py -> image_assets.py` | Baird can consume and return renderer-ready raster assets while preserving the existing image boundary. | Degradation must not absorb raster rendering, format serialization, or unrelated artifact models. |
+| `raster_renderer.py -> gradients.py/NumPy/Pillow` | Direct raster output projects the neutral gradient axis in bounded NumPy tiles and uses Pillow for clipping and alpha composition. | Raster output must not become an SVG/PDF intermediary, renormalize clipped axes, or allocate unbounded interpolation grids. |
 | `pdf_generator.py -> pdf_render_contract.py` | The PDF render path delegates proof-critical closed-domain checks to a small mutation-tested contract module. | Bypassing the helper weakens PO-GT-004 and can hide custom render paths. |
 | `DocumentPDF -> ComponentGroupPDF -> built-in PDF components` | The PDF render path is intentionally closed so noninterference properties can be proven. | Arbitrary custom PDF render components are outside the proven contract. |
 | `pdf_generator.py -> fonttools` | PDF named-font embedding reads installed font metrics and embeds font-file streams without adding a PDF dependency. | Font parsing errors must fail back to Standard 14 behavior rather than corrupting PDF output. |

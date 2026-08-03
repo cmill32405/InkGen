@@ -27,7 +27,7 @@ background, and only the primitive/style combinations listed in
 | Shape geometry | Rectangle, line, circle, irregular polygon, and regular polygon pixel assertions |
 | Image alpha | Semi-transparent PNG remains semi-transparent without white flattening |
 | Paint order | Overlapping opaque/transparent rectangles assert source-over result |
-| Closed P1 domain | Unknown primitives, gradients, rounded polygons, dashes, offsets, caps, joins, and miter-limit variants fail loudly; rounded rectangles are admitted only by the separate P8 proof |
+| Closed P1 domain | Unknown primitives, dashes, offsets, caps, joins, and miter-limit variants fail loudly; rounded rectangles, rounded polygons, and rectangle gradients are admitted only by the separate P8, P9, and P10 proofs |
 | Mutation-resistant live boundary | Invalid group, mutable component container, and post-construction list mutation tests |
 | Resource bound | Excessive supersampled surface fails before allocation |
 
@@ -67,10 +67,10 @@ there is no white term to introduce implicit flattening.
 - Invalid canvas, DPI, supersampling, background, group, and mutable component
   containers fail before rendering.
 - The supersampled surface is rejected above 64,000,000 pixels.
-- The base P1 domain rejects unknown primitives, zoning, gradients, and
+- The base P1 domain rejects unknown primitives, zoning, and
   unsupported stroke controls instead of producing a visually plausible
-  approximation. P2 through P8 add separately proven curve, text, arc, path,
-  and rounded-rectangle domains.
+  approximation. P2 through P10 add separately proven curve, text, arc, path,
+  rounded-shape, and rectangle-gradient domains.
 - Pixel-byte determinism is scoped to a fixed Pillow version and platform.
   Cross-version resampling kernels are not claimed bit-identical.
 

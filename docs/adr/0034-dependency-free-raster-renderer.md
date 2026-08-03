@@ -5,7 +5,8 @@
 Accepted for `RASTER-RENDERER-P1`, `RASTER-BAIRD-P1`,
 `RASTER-CURVE-P2`, `RASTER-TEXT-P3`, `RASTER-ARC-P4`, and
 `RASTER-PATH-P5`, `RASTER-PATH-CURVE-P6`, `RASTER-PATH-ARC-P7`, and
-`RASTER-ROUNDED-RECT-P8`, and `RASTER-ROUNDED-POLYGON-P9`.
+`RASTER-ROUNDED-RECT-P8`, `RASTER-ROUNDED-POLYGON-P9`, and
+`RASTER-GRADIENT-P10`.
 
 ## Context
 
@@ -103,17 +104,33 @@ approximations, and DXF and raster consume the same at-most-22.5-degree sampled
 outline. A zero radius retains every established sharp backend path. Raster
 revalidates live polygon geometry before allocating a surface.
 
+P10 admits `LinearGradientFill` on rectangles. The raster backend consumes the
+same neutral full-coverage axis and extended-stop contract as SVG and PDF. It
+projects supersampled pixel centers onto that axis and performs piecewise
+linear sRGB interpolation in bounded two-dimensional NumPy tiles. Pillow owns
+the established sharp or elliptical-rounded mask and source-over composition.
+The rectangle's style continues to own fill opacity and its separately painted
+stroke. Clipping to the canvas never changes the source axis.
+
+This does not reverse ADR-0029's rejection of rasterizing a gradient as a
+substitute for parametric SVG/PDF output. P10 is used only when a caller
+explicitly asks the standalone raster renderer for pixels; SVG and PDF retain
+their native gradient resources and no renderer uses raster output as an
+intermediary.
+
 ## Dependencies And Contracts
 
 | Dependency | Consumed contract | Failure if changed |
 |---|---|---|
 | `drawing_components.py` | Neutral primitive geometry, style ownership, and group order | Geometry or ordering renders incorrectly |
 | `component.py` | Established curve samples, normalized path commands, rectangle radii, and regular-polygon tangent-circle geometry | Raster curves, paths, or rounded shapes diverge from neutral/PDF/SVG/DXF geometry |
+| `gradients.py` | Full-coverage axis, ordered extended stops, and normalized sRGB colors | Raster direction, endpoint extension, or interpolation diverges from SVG/PDF intent |
 | `boundary.py` | Positive canvas dimensions and normalized `mm`/`in` units | Physical pixel dimensions become incorrect |
 | `style.py` | Normalized drawing colors, text colors, font-file resolution, point size, visibility, and alignment | Paint, glyph source, or baseline alignment differs from SVG/PDF semantics |
 | `image_assets.py` | EXIF-normalized decoded pixels and alpha metadata | Embedded image orientation or transparency changes |
 | `baird.py` | Seeded degradation, explicit alpha substrate, and result provenance | Scan appearance or reproducibility changes |
 | Pillow | RGBA source-over compositing, supersampled drawing, LANCZOS reduction, deterministic PNG encoding | Pixel evidence changes across backend versions |
+| NumPy | Bounded projection grids and piecewise channel interpolation | Large gradient fixtures become slow or produce different channel rounding |
 
 The dependency direction is one-way: `raster_renderer.py` consumes neutral
 recipes, image assets, and Baird's public asset bridge. Neutral primitives,
@@ -140,6 +157,9 @@ PDF, SVG, DXF, and document outputs do not depend on the raster renderer.
   and exact endpoints while reusing the canonical center-arc sampler.
 - Rounded rectangles preserve the established elliptical `rx`/`ry` contract
   without routing through SVG, PDF, or DXF.
+- Rectangle gradients preserve the neutral axis, N-stop colors, fill opacity,
+  rounded clipping, and explicit alpha without using SVG or PDF as an
+  intermediary.
 - Later multiline text, path-fill, and clipping slices
   can extend a proven boundary without weakening existing rejection contracts.
 

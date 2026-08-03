@@ -20,7 +20,6 @@ from InkGen.drawing_components import (
     RectangleDrawing,
     RegularPolygonDrawing,
 )
-from InkGen.gradients import LinearGradientFill
 from InkGen.image_assets import RasterImageAsset
 from InkGen.raster_renderer import render_drawing_group
 from InkGen.style import DrawingStyle
@@ -434,14 +433,6 @@ def test_unsupported_primitive_and_style_features_fail_loudly() -> None:
             raise AssertionError("unsupported drawing must fail before materialization")
 
     unsupported = UnsupportedDrawing()
-    gradient = RectangleDrawing(
-        (1, 1),
-        2,
-        2,
-        0,
-        _style(fill="#000000"),
-        LinearGradientFill(((0.0, "#000000"), (1.0, "#ffffff"))),
-    )
     zero_tuple = RectangleDrawing((0, 0), 1, 1, (0.0, 0.0), _style(fill="#000000"))
     dashed = LineDrawing((0, 0), (1, 1), _style(stroke="#000000", stroke_width=1, stroke_dasharray=(1, 1)))
     dash_offset = LineDrawing((0, 0), (1, 1), _style(stroke="#000000", stroke_width=1, stroke_dash_offset=1))
@@ -465,7 +456,6 @@ def test_unsupported_primitive_and_style_features_fail_loudly() -> None:
 
     for component, message in [
         (unsupported, "unsupported raster primitive: UnsupportedDrawing"),
-        (gradient, "rectangle gradients are not supported"),
         (dashed, "dashed strokes are not supported"),
         (dash_offset, "stroke dash offsets are not supported"),
         (round_cap, "only butt stroke caps are supported"),
