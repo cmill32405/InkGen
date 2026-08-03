@@ -14,6 +14,7 @@ from InkGen.baird import BairdDegradationResult, BairdParams, baird_degrade_asse
 from InkGen.boundary import Canvas
 from InkGen.component import Arc as SampledArc
 from InkGen.component import CubicBezier as SampledCubicBezier
+from InkGen.component import PathCommand
 from InkGen.component import QuadraticBezier as SampledQuadraticBezier
 from InkGen.drawing_components import (
     ArcDrawing,
@@ -22,6 +23,7 @@ from InkGen.drawing_components import (
     DrawingComponentGroup,
     ImageDrawing,
     LineDrawing,
+    PathDrawing,
     PolygonalDrawing,
     QuadraticBezierDrawing,
     RectangleDrawing,
@@ -43,6 +45,7 @@ RasterPrimitive = (
     | LineDrawing
     | CircleDrawing
     | ArcDrawing
+    | PathDrawing
     | PolygonalDrawing
     | RegularPolygonDrawing
     | ImageDrawing
@@ -222,6 +225,7 @@ def _validated_components(group: object) -> list[RasterPrimitive]:
                 LineDrawing,
                 CircleDrawing,
                 ArcDrawing,
+                PathDrawing,
                 PolygonalDrawing,
                 RegularPolygonDrawing,
                 ImageDrawing,
@@ -289,6 +293,10 @@ def _validate_render_domain(components: Sequence[RasterPrimitive]) -> None:
                 raise ValueError("text superscript is not supported by raster renderer P3")
             if component.style.subscript:
                 raise ValueError("text subscript is not supported by raster renderer P3")
+        if isinstance(component, PathDrawing):
+            if component.style.fill != "none" and component.style.fill_opacity != 0.0:
+                raise ValueError("path fills are not supported by raster renderer P5")
+            _linear_path_subpaths(component)
         style = getattr(component, "style", None)
         if isinstance(style, DrawingStyle):
             if isinstance(component, ArcDrawing) and style.fill != "none" and style.fill_opacity != 0.0:
@@ -350,6 +358,10 @@ def _render_component(
                 component.rotation,
             ).points
             _draw_curve(draw, points, scale, stroke, stroke_width)
+    elif isinstance(component, PathDrawing):
+        if stroke is not None:
+            for subpath in _linear_path_subpaths(component):
+                _draw_curve(draw, subpath, scale, stroke, stroke_width)
     elif isinstance(component, PolygonalDrawing):
         _draw_polygon(draw, component.points, scale, fill, stroke, stroke_width)
     elif isinstance(component, QuadraticBezierDrawing):
@@ -381,6 +393,55 @@ def _render_component(
             for index in range(component.sides)
         ]
         _draw_polygon(draw, points, scale, fill, stroke, stroke_width)
+
+
+def _linear_path_subpaths(component: PathDrawing) -> list[list[tuple[float, float]]]:
+    """Validate and expand the closed P5 M/L/H/V/Z command domain."""
+    commands = component.commands
+    if commands is None:
+        return []
+    if isinstance(commands, (str, bytes)) or not isinstance(commands, Sequence):
+        raise TypeError("PathDrawing commands must be a sequence of PathCommand objects")
+
+    subpaths: list[list[tuple[float, float]]] = []
+    current: list[tuple[float, float]] | None = None
+    for command in commands:
+        if not isinstance(command, PathCommand):
+            raise TypeError("PathDrawing commands must contain only PathCommand objects")
+        command_type = command.type
+        points = command.points
+        if command_type not in {"M", "L", "H", "V", "Z"}:
+            raise ValueError(f"path command {command_type} is not supported by raster renderer P5")
+        if command_type == "M":
+            if len(points) != 1:
+                raise ValueError("path command M requires exactly one point")
+            if current is not None:
+                subpaths.append(current)
+            current = [points[0]]
+            continue
+        if current is None:
+            message = "new subpath must begin with M" if subpaths else "path must begin with M"
+            raise ValueError(message)
+        if command_type == "Z":
+            if points:
+                raise ValueError("path command Z does not accept points")
+            if len(current) > 1:
+                current.append(current[0])
+            subpaths.append(current)
+            current = None
+            continue
+        if not points:
+            raise ValueError(f"path command {command_type} requires at least one point")
+        if command_type == "L":
+            current.extend(points)
+        elif command_type == "H":
+            current.extend((point[0], current[-1][1]) for point in points)
+        else:
+            current.extend((current[-1][0], point[1]) for point in points)
+
+    if current is not None:
+        subpaths.append(current)
+    return subpaths
 
 
 def _draw_curve(

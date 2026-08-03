@@ -1,0 +1,67 @@
+{
+  "condition": "RASTER-PATH-P5",
+  "evidence_generated_utc": "2026-08-03T15:35:01.6550289Z",
+  "source": {
+    "path": "src/InkGen/raster_renderer.py",
+    "sha256": "28E0C342F1E44FB8EBA4A2544F425CDD9431A2ECBFEDB0C31557574FDA52FB30"
+  },
+  "test": {
+    "path": "tests/test_raster_path_contract.py",
+    "sha256": "2D1ADC1850AFFD52AAA7C0C582BDCA8B315E0B5876E33F6E5C58D1FD586C9B84",
+    "command": "env PYTHONPATH=src /home/ubuntu/.cache/inkgen_mutation_venv/bin/python -m pytest -x tests/test_raster_path_contract.py"
+  },
+  "config": {
+    "path": "tests/mutation/raster_path_p5_cosmic_ray.toml",
+    "sha256": "494DF39A4585D95B1131D21C3CA0D2DCD96B18250AAA9FC2EA340889D8527F12"
+  },
+  "filter": {
+    "path": "tests/mutation/filter_raster_path_p5_work_items.py",
+    "sha256": "4BB38EF74E9BAF2FAAA3E5CC3729BA49DF63A575A7ADF15F111102208BA70BB8"
+  },
+  "campaign": {
+    "generated_candidates": 1154,
+    "selected_work_items": 112,
+    "completed_results": 112,
+    "initial_killed": 104,
+    "late_killed_after_test_strengthening": 2,
+    "killed": 106,
+    "survived": 6,
+    "equivalent_survivors": 6,
+    "worker_errors": 0,
+    "worker_timeouts": 0,
+    "raw_mutation_coverage": 0.9464285714285714,
+    "effective_mutation_coverage": 1.0
+  },
+  "equivalent_survivor_proofs": [
+    {
+      "job_id": "7765c26c817540969a2f58ed13ef8afe",
+      "mutation": "style.fill != 'none' to style.fill < 'none'",
+      "proof": "DrawingStyle normalizes valid fill values to 'none' or a lowercase '#rrggbb' value. Both predicates are false for 'none'; '#' sorts before 'n', so both are true for every normalized painted fill."
+    },
+    {
+      "job_id": "fd7a9c39109844f18dfecf1e31ecb367",
+      "mutation": "style.fill_opacity != 0.0 to style.fill_opacity > 0.0",
+      "proof": "DrawingStyle constrains fill_opacity to [0.0, 1.0]. Both predicates are false exactly at 0.0 and true for every other valid opacity."
+    },
+    {
+      "job_id": "9b3f511d7e0f4052a2c3ec5491cbcec3",
+      "mutation": "M points[0] to points[-1]",
+      "proof": "The immediately preceding cardinality check requires exactly one M point. Index 0 and index -1 therefore select the same sole tuple."
+    },
+    {
+      "job_id": "fe1a7a8e12204b2facb2242c530f28df",
+      "mutation": "command_type == 'Z' to command_type >= 'Z'",
+      "proof": "The supported-command check limits values to M, L, H, V, or Z, and M has already continued. Among L, H, V, and Z, only Z is lexicographically greater than or equal to Z."
+    },
+    {
+      "job_id": "8852099f23c7414bafe0e49ea79690b3",
+      "mutation": "len(current) > 1 to len(current) != 1",
+      "proof": "Every active subpath starts with exactly one M point and commands only extend it, so len(current) is always at least one. Over positive integers, greater than one and not equal to one are equivalent."
+    },
+    {
+      "job_id": "44ac834bd7204635b08a3399b41fdb9f",
+      "mutation": "command_type == 'H' to command_type <= 'H'",
+      "proof": "At this branch M and Z have continued and L has taken the prior branch, leaving only H or V. H <= H is true and V <= H is false, exactly matching equality with H."
+    }
+  ]
+}

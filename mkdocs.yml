@@ -134,6 +134,7 @@ nav:
       - Raster Curve Contract: proofs/raster-curve-contract.md
       - Raster Text Contract: proofs/raster-text-contract.md
       - Raster Arc Contract: proofs/raster-arc-contract.md
+      - Raster Path Contract: proofs/raster-path-contract.md
   - Architecture Diagrams: architecture-diagrams.md
   - Notes:
       - Mask Alignment Findings: mask_alignment_findings.md

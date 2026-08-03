@@ -3,7 +3,8 @@
 ## Status
 
 Accepted for `RASTER-RENDERER-P1`, `RASTER-BAIRD-P1`,
-`RASTER-CURVE-P2`, `RASTER-TEXT-P3`, and `RASTER-ARC-P4`.
+`RASTER-CURVE-P2`, `RASTER-TEXT-P3`, `RASTER-ARC-P4`, and
+`RASTER-PATH-P5`.
 
 ## Context
 
@@ -58,12 +59,20 @@ deterministic `Arc.points` samples used by PDF and DXF, including rotation and
 reverse spans. Visible fills fail explicitly because filling would close the
 arc with an implicit chord. Zero-span arcs remain transparent move-only paths.
 
+P5 admits stroke-only `PathDrawing` values containing the linear `M`, `L`,
+`H`, `V`, and `Z` commands. Commands are revalidated from the live mutable
+collection before surface allocation, expanded into independent subpaths, and
+painted through the established open-polyline operation. `Z` contributes the
+explicit segment back to the current subpath's starting point. Visible fills
+and nonlinear `C`, `S`, `Q`, `T`, and `A` commands fail explicitly until their
+geometry and fill-rule semantics are separately owned.
+
 ## Dependencies And Contracts
 
 | Dependency | Consumed contract | Failure if changed |
 |---|---|---|
 | `drawing_components.py` | Neutral primitive geometry, style ownership, and group order | Geometry or ordering renders incorrectly |
-| `component.py` | Established arc, quadratic, and cubic sampled points | Raster curves diverge from neutral/PDF/DXF geometry |
+| `component.py` | Established arc, quadratic, and cubic sampled points plus normalized path commands | Raster curves or paths diverge from neutral/PDF/DXF geometry |
 | `boundary.py` | Positive canvas dimensions and normalized `mm`/`in` units | Physical pixel dimensions become incorrect |
 | `style.py` | Normalized drawing colors, text colors, font-file resolution, point size, visibility, and alignment | Paint, glyph source, or baseline alignment differs from SVG/PDF semantics |
 | `image_assets.py` | EXIF-normalized decoded pixels and alpha metadata | Embedded image orientation or transparency changes |
@@ -87,8 +96,10 @@ PDF, SVG, DXF, and document outputs do not depend on the raster renderer.
   changing neutral component or output-format dispatch.
 - Elliptical arcs preserve shared rotation, direction, and endpoint samples
   without materializing PDF or SVG.
-- Later multiline text, path, and clipping slices can extend a proven boundary
-  without changing existing output-format dispatch.
+- Linear paths preserve subpath boundaries, axis commands, and explicit
+  closure without changing existing output-format dispatch.
+- Later multiline text, nonlinear path, path-fill, and clipping slices can
+  extend a proven boundary without weakening existing rejection contracts.
 
 ## Alternatives Rejected
 

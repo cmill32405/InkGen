@@ -16,7 +16,6 @@ from InkGen.drawing_components import (
     ImageDrawing,
     LineDrawing,
     OutputFormat,
-    PathDrawing,
     PolygonalDrawing,
     RectangleDrawing,
     RegularPolygonDrawing,
@@ -429,7 +428,12 @@ def test_style_color_and_scale_helpers_are_exact() -> None:
 @pytest.mark.condition("RASTER-RENDERER-P1")
 def test_unsupported_primitive_and_style_features_fail_loudly() -> None:
     """RASTER-RENDERER-P1: P1 never silently approximates unsupported contracts."""
-    path = PathDrawing(_style(stroke="#000000", stroke_width=1))
+
+    class UnsupportedDrawing:
+        def to_component(self, output_format: object) -> object:
+            raise AssertionError("unsupported drawing must fail before materialization")
+
+    unsupported = UnsupportedDrawing()
     rounded = RectangleDrawing((1, 1), 2, 2, 0.5, _style(fill="#000000"))
     gradient = RectangleDrawing(
         (1, 1),
@@ -463,7 +467,7 @@ def test_unsupported_primitive_and_style_features_fail_loudly() -> None:
     )
 
     for component, message in [
-        (path, "unsupported raster primitive: PathDrawing"),
+        (unsupported, "unsupported raster primitive: UnsupportedDrawing"),
         (rounded, "rounded rectangles are not supported"),
         (gradient, "rectangle gradients are not supported"),
         (rounded_polygon, "rounded regular polygons are not supported"),
