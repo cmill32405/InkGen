@@ -5,7 +5,7 @@
 Accepted for `RASTER-RENDERER-P1`, `RASTER-BAIRD-P1`,
 `RASTER-CURVE-P2`, `RASTER-TEXT-P3`, `RASTER-ARC-P4`, and
 `RASTER-PATH-P5`, `RASTER-PATH-CURVE-P6`, `RASTER-PATH-ARC-P7`, and
-`RASTER-ROUNDED-RECT-P8`.
+`RASTER-ROUNDED-RECT-P8`, and `RASTER-ROUNDED-POLYGON-P9`.
 
 ## Context
 
@@ -94,12 +94,21 @@ four quarter-ellipse arcs. If either logical radius is zero, or the rounded
 corner cannot occupy a positive pixel radius after scaling, the established
 sharp rectangle path is used. Live radii are revalidated before allocation.
 
+P9 admits rounded `RegularPolygonDrawing` values and closes a pre-existing
+cross-backend defect: SVG, PDF, and DXF previously validated and serialized
+`corner_radius` but emitted sharp vertices. Shared component geometry now owns
+the tangent entry/exit points, circle centers, signed corner sweeps, and bounded
+arc samples. SVG emits native circular arcs, PDF emits tangent cubic arc
+approximations, and DXF and raster consume the same at-most-22.5-degree sampled
+outline. A zero radius retains every established sharp backend path. Raster
+revalidates live polygon geometry before allocating a surface.
+
 ## Dependencies And Contracts
 
 | Dependency | Consumed contract | Failure if changed |
 |---|---|---|
 | `drawing_components.py` | Neutral primitive geometry, style ownership, and group order | Geometry or ordering renders incorrectly |
-| `component.py` | Established arc, quadratic, and cubic samples, normalized path commands, and validated rectangle corner radii | Raster curves, paths, or rounded rectangles diverge from neutral/PDF/DXF geometry |
+| `component.py` | Established curve samples, normalized path commands, rectangle radii, and regular-polygon tangent-circle geometry | Raster curves, paths, or rounded shapes diverge from neutral/PDF/SVG/DXF geometry |
 | `boundary.py` | Positive canvas dimensions and normalized `mm`/`in` units | Physical pixel dimensions become incorrect |
 | `style.py` | Normalized drawing colors, text colors, font-file resolution, point size, visibility, and alignment | Paint, glyph source, or baseline alignment differs from SVG/PDF semantics |
 | `image_assets.py` | EXIF-normalized decoded pixels and alpha metadata | Embedded image orientation or transparency changes |

@@ -79,6 +79,7 @@ classDiagram
         +List[Tuple] points*
         +Tuple bbox*
     }
+    class RoundedPolygonCorner
     
     class PolygonalDrawingComponent {
         -List[Tuple[float, float]] _points
@@ -181,4 +182,5 @@ classDiagram
     StandardDrawingComponent <|-- WidthHeightDrawingComponent
     StandardDrawingComponent <|-- PolarCoordinateDrawingComponent
     PolarCoordinateDrawingComponent <|-- RegularPolygonDrawingComponent
+    RegularPolygonDrawingComponent ..> RoundedPolygonCorner : materializes
     Path --> PathCommand : contains

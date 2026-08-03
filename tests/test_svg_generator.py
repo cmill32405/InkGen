@@ -262,7 +262,7 @@ def test_save_and_recreate_polygon_svg(style_obj):
     assert params == poly_3.parameters
 
 def test_output_svg_from_regular_polygon_svg(style_obj):
-    poly = RegularPolygonSVG((0, 0), 5, 10, style_obj, 15.0, 1.0)
+    poly = RegularPolygonSVG((0, 0), 5, 10, style_obj, 15.0, 0.0)
     svg_output = poly.generate_svg()
     assert svg_output.strip().startswith("<path")
     assert "stroke:#000000" in svg_output

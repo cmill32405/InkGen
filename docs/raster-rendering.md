@@ -27,11 +27,11 @@ unit. Output dimensions are rounded once after physical conversion.
 
 P1 renders these neutral primitives:
 
-- `RectangleDrawing` with square corners and no gradient;
+- `RectangleDrawing` without a gradient (rounded corners are added by P8);
 - `LineDrawing` with a solid stroke;
 - `CircleDrawing`;
 - `PolygonalDrawing`;
-- `RegularPolygonDrawing` without rounded corners; and
+- `RegularPolygonDrawing` (rounded corners are added by P9); and
 - `ImageDrawing`, including source alpha.
 
 P2 additionally renders open `QuadraticBezierDrawing` and
@@ -95,6 +95,15 @@ rectangle semantics. Positive logical radii that cannot occupy a positive
 half-width and half-height in the target pixel grid also use the sharp pixel
 path rather than constructing invalid Pillow boxes. Live radius mutation is
 revalidated before surface allocation.
+
+P9 additionally renders rounded `RegularPolygonDrawing` values. The shared
+component geometry constructs a circle tangent to both incident edges at every
+vertex, with the requested `corner_radius`. The legal half-circumradius bound
+guarantees adjacent tangent points do not cross. Raster and DXF consume the
+same deterministic outline whose circular samples are at most 22.5 degrees
+apart; SVG emits native circular arcs and PDF emits tangent cubic segments from
+the same corner records. Zero radius preserves the established sharp paths.
+Malformed live polygon geometry fails before raster surface allocation.
 
 Fill and stroke colors, widths, and independent opacity values are preserved.
 P1 supports solid strokes with butt caps, miter joins, the default miter limit,

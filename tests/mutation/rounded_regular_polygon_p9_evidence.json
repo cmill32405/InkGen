@@ -1,0 +1,114 @@
+{
+  "condition": "RASTER-ROUNDED-POLYGON-P9",
+  "evidence_generated_utc": "2026-08-03T21:07:40.2380361Z",
+  "tool": {
+    "name": "Cosmic Ray",
+    "version": "8.4.6",
+    "execution_environment": "WSL isolated worker copies"
+  },
+  "sources": [
+    {"path": "src/InkGen/component.py", "sha256": "E0C8C81AF46B7E080D9C2E1C7462D1E370BA5984F9C8F649A6392DA62A6FC850"},
+    {"path": "src/InkGen/svg_generator.py", "sha256": "4A5B1C90611EA92737C1BBB0D8621246435DC3083A301D5EDDA3C575225E7130"},
+    {"path": "src/InkGen/pdf_generator.py", "sha256": "60866E2EB29CEB1FEF7DBD5D88DE21A8E21FFF097E58E974454ECCEE391F03F8"},
+    {"path": "src/InkGen/dxf_generator.py", "sha256": "5725A93E6991D2A5F4EF7E36A6FCA0212EE30EA2B3E337003DA528D9910631D0"},
+    {"path": "src/InkGen/raster_renderer.py", "sha256": "9FA211476E0983B1278F19336390AF3F84FBFD49560173367C56347F1D7D1484"}
+  ],
+  "tests": [
+    {"path": "tests/test_rounded_regular_polygon_contract.py", "sha256": "4966A27F8EB15318182FA68D950D503161D8427B7EEE68F0F7B719D37B9F1AF7"},
+    {"path": "tests/test_regular_polygon_contract.py", "sha256": "C8457BEBFE843C4E48317E61A5D5C4E0CD669A718C5740C9B6C5F834125750EF"},
+    {"path": "tests/test_raster_renderer_contract.py", "sha256": "C4B017919D710143ACE7ECF16599EA8FE21A2305AB991C2BACA258D0BD5656B4"}
+  ],
+  "test_command": "env PYTHONPATH=src /home/ubuntu/.cache/inkgen_mutation_venv/bin/python -m pytest -x tests/test_rounded_regular_polygon_contract.py tests/test_regular_polygon_contract.py tests/test_raster_renderer_contract.py",
+  "config": {
+    "path": "tests/mutation/rounded_regular_polygon_p9_cosmic_ray.toml",
+    "sha256": "A86881ECFC026EE0C777254C481BB07B7967F4FED75E0C23E8FA6510A9AA5AD1"
+  },
+  "filter": {
+    "path": "tests/mutation/filter_rounded_regular_polygon_p9_work_items.py",
+    "sha256": "C5314C05A781245AF379E7AB4E862E37B7E1FA65582FAA28EF13700157CB1FF7"
+  },
+  "campaign": {
+    "generated_candidates": 17546,
+    "selected_work_items": 770,
+    "completed_results": 770,
+    "initial_killed": 737,
+    "late_killed_after_test_strengthening": 16,
+    "killed": 753,
+    "survived": 17,
+    "equivalent_survivors": 17,
+    "worker_errors": 0,
+    "worker_timeouts": 0,
+    "raw_mutation_coverage": 0.9779220779220779,
+    "effective_mutation_coverage": 1.0
+  },
+  "execution_artifacts": [9224, 9225, 9226, 9227, 9228, 9229, 9231, 9232, 9233, 9234, 9235, 9236],
+  "post_campaign_normalization": {
+    "path": "src/InkGen/raster_renderer.py",
+    "change": "Ruff joined two wrapped arithmetic expressions after the campaign",
+    "pre_format_sha256": "A5F2F8D90B432F6D47A67AE32BAC029765D99512FD500A7F4CF4A954F5E67DA0",
+    "post_format_sha256": "9FA211476E0983B1278F19336390AF3F84FBFD49560173367C56347F1D7D1484",
+    "pre_format_ast_sha256": "28C7C3022EE517DADC6B9DF8D15C3199E54384DBABA90BB5AFC1DC828C2B78CF",
+    "post_format_ast_sha256": "28C7C3022EE517DADC6B9DF8D15C3199E54384DBABA90BB5AFC1DC828C2B78CF",
+    "conclusion": "The normalized source has the identical Python AST, so the campaign's mutation operators and outcomes transfer unchanged."
+  },
+  "late_kill_witnesses": [
+    "Exact fixed-coordinate SVG arc and PDF cubic command witnesses",
+    "Every malformed point arity, coordinate type, nonfinite coordinate, duplicate edge, and degenerate angle partition",
+    "Deterministic lower and upper floating-point cosine-clamp counterexamples",
+    "Sub-unit DXF and raster rounded-radius dispatch",
+    "Radius-two rotated PDF tangent controls and small signed sweeps",
+    "Three-sided default sampling bound, 300-sided corner joining, and a valid tiny sweep"
+  ],
+  "equivalent_survivor_proofs": [
+    {
+      "job_ids": ["c110d27655e944f5ae6e3988f8899f1d", "099609fa9682442c9c3e95c55ed93bca"],
+      "mutation": "shoelace second index i+1 changed to i+0 or i*1",
+      "proof": "For a regular n-gon, write vertex i as c + R(cos(theta_i), sin(theta_i)) with theta_(i+1)=theta_i+delta. Translation terms cancel. The original signed double area is n*R^2*sin(delta); either mutant is n*R^2*sin(delta)/2. For n>=3 both expressions have exactly the same zero status, finiteness class, and sign used by P9."
+    },
+    {
+      "job_ids": ["2592ad16b778424baa8a80c8e02d7e1c"],
+      "mutation": "signed area greater-than zero changed to greater-than-or-equal",
+      "proof": "The immediately preceding guard rejects signed_double_area == 0.0, so > 0.0 and >= 0.0 are identical on every continuing execution."
+    },
+    {
+      "job_ids": ["0e803b49e4624a3ca716f9557a4cbbe6", "7406e0b5089140a88f2a1abaf607c25b"],
+      "mutation": "edge length less-than-or-equal zero changed to equality",
+      "proof": "math.hypot is nonnegative. Therefore length <= 0.0 if and only if length == 0.0."
+    },
+    {
+      "job_ids": ["7b2d0cb3c8194de580ccf0b18c41c215", "2679234ca0b5476d9149157c03f1fd7b"],
+      "mutation": "half-angle endpoint inequality changed to equality",
+      "proof": "The clamped cosine lies in [-1, 1], so acos(cosine)/2 lies in [0, pi/2]. Within that closed range, <= 0 equals == 0 and >= pi/2 equals == pi/2."
+    },
+    {
+      "job_ids": ["1f476d75206642bc9d61ce6777fd17f9"],
+      "mutation": "corner sweep >= pi changed to > pi",
+      "proof": "For a regular n-gon with n>=3, the canonical sweep magnitude is 2*pi/n. It is positive and strictly less than pi; equality would require n=2, which the polygon contract rejects."
+    },
+    {
+      "job_ids": ["79b37f25e00f42fb99f1d61df91ad92b"],
+      "mutation": "overlap test > changed to >= at half-edge plus tolerance",
+      "proof": "The validated public contract requires corner_radius <= circumradius/2. The P9 non-overlap proof gives tangent_distance <= half_edge, which is strictly below half_edge + 1e-9. Both comparisons are false for every in-domain polygon."
+    },
+    {
+      "job_ids": ["7c941063ccf841b483f91fe530321014", "c74d99772d0641d982a44aee2db381cc"],
+      "mutation": "corner join index < length changed to != length",
+      "proof": "enumerate(corners) yields exactly 0 <= index < len(corners). Thus index+1 < len(corners) if and only if index+1 != len(corners). The 300-side witness separately kills identity-based substitutions."
+    },
+    {
+      "job_ids": ["4ba84267143c4e3795fefbd6dbad6e20", "0b552060991b42138b2042c1a9e81b35", "63f355b3a15849d78fa8a617fd6a3027"],
+      "mutation": "positive rounded-radius test > 0 changed to != 0",
+      "proof": "RegularPolygonDrawingComponent validates corner_radius in [0, radius/2], and raster reconstructs that value before allocation. On a nonnegative domain, > 0.0 and != 0.0 are identical."
+    },
+    {
+      "job_ids": ["85ce5337b02941a8bc19ac9d19238e02", "e4cd8f9878334f79844fa5dc87ea90fa"],
+      "mutation": "sharp-radius test == 0 changed to <= 0",
+      "proof": "The same validated corner-radius domain is nonnegative, so == 0.0 and <= 0.0 select the same sharp polygons."
+    },
+    {
+      "job_ids": ["36e31f33c7974e048661fdfb3e5f2193"],
+      "mutation": "PDF sweep direction > 0 changed to >= 0",
+      "proof": "Canonical regular-polygon corners have sweep magnitude 2*pi/n for n>=3, so sweep is never zero. Greater-than and greater-than-or-equal therefore select the same direction."
+    }
+  ]
+}

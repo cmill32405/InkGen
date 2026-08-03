@@ -36,6 +36,7 @@ from InkGen.component import (
     TextComponent,
     WidthHeightDrawingComponent,
     normalize_rectangle_corner_radii,
+    regular_polygon_corner_geometry,
 )
 from InkGen.component import CubicBezier as CubicBezierComponent
 from InkGen.component import Path as PathComponent
@@ -909,16 +910,34 @@ class RegularPolygonSVG(RegularPolygonDrawingComponent, DrawingGeneratorInterfac
             XML line for SVG file
         """
 
-        points = ""
-        for p in self._get_points():
-            points += f"{p[0]}, {p[1]} "
-
         style = _style_properties(self.style)
         style = f"{style};stroke-linecap:butt;stroke-linejoin:miter"
 
-        return f"""<path
+        if self.corner_radius == 0.0:
+            points = ""
+            for p in self._get_points():
+                points += f"{p[0]}, {p[1]} "
+
+            return f"""<path
             style="{style}"
             d="M {points} Z"
+            id="path{self.id}" />"""
+
+        corners = regular_polygon_corner_geometry(self._get_points(), self.corner_radius)
+        first = corners[0].entry
+        commands = [f"M {_svg_number(first[0])},{_svg_number(first[1])}"]
+        for index, corner in enumerate(corners):
+            commands.append(
+                f"A {_svg_number(self.corner_radius)},{_svg_number(self.corner_radius)} 0 0 1 "
+                f"{_svg_number(corner.exit[0])},{_svg_number(corner.exit[1])}"
+            )
+            if index + 1 < len(corners):
+                next_entry = corners[index + 1].entry
+                commands.append(f"L {_svg_number(next_entry[0])},{_svg_number(next_entry[1])}")
+
+        return f"""<path
+            style="{style}"
+            d="{' '.join(commands)} Z"
             id="path{self.id}" />"""
 
 

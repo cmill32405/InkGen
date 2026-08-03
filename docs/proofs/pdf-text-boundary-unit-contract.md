@@ -47,17 +47,19 @@ The condition test reproduces that boundary and passes after the fix.
 
 ## Mutation Evidence
 
-The final scoped Cosmic Ray v5 campaign covers the base conversion/fallback
+The refreshed scoped Cosmic Ray v6 campaign covers the base conversion/fallback
 arithmetic and the PDF-specific outline hook. All 91 workers completed
 normally: 90 mutations were killed and one survived. The database SHA-256 is
-`841C6912D5187146EED8A4AE9AC16057E822861345048480458949DEB141C00C`.
+`7662A0D7F316547B7B376B6C820BB8B752B6D2141725BB4431AF7396B791D573`.
 
 The survivor changes the fallback height floor from `0.5` to `-0.5`.
 `Font.size` normalizes every accepted numeric or named input to at least
 `1.0`, so both floors return the same reachable height. Property and named
 domain tests pin that equivalence. `test_text_boundary_unit_mutation_evidence.py`
 also pins the database digest, mutation-input hashes, outcome counts, and
-survivor identity in `text_boundary_units_v5_evidence.json`.
+survivor identity in `text_boundary_units_v6_evidence.json`. Source additions
+outside a recorded mutation hunk no longer invalidate that hunk's result, while
+changed mutation sites and immutable evidence inputs still fail freshness.
 
 ## Residuals
 

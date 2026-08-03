@@ -7,7 +7,7 @@ import os
 from dataclasses import dataclass
 from hashlib import sha256
 
-from InkGen.component import normalize_rectangle_corner_radii
+from InkGen.component import normalize_rectangle_corner_radii, regular_polygon_corner_geometry, sample_rounded_polygon_path
 from InkGen.drawing_components import (
     ArcDrawing,
     CircleDrawing,
@@ -209,7 +209,10 @@ def _component_to_entities(
         return _closed_shape_entities(component.points, context, style=component.style)
     if isinstance(component, RegularPolygonDrawing):
         concrete = component.to_component(OutputFormat.PDF)
-        return _closed_shape_entities(concrete.points, context, style=component.style)
+        points = concrete.points
+        if concrete.corner_radius > 0.0:
+            points = sample_rounded_polygon_path(regular_polygon_corner_geometry(points, concrete.corner_radius))
+        return _closed_shape_entities(points, context, style=component.style)
     if isinstance(component, (ArcDrawing, QuadraticBezierDrawing, CubicBezierDrawing)):
         concrete = component.to_component(OutputFormat.PDF)
         return [_lwpolyline_entity(concrete.points, context, closed=False, style=component.style)]

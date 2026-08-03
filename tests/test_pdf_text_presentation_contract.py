@@ -138,6 +138,22 @@ def test_pdf_text_width_and_alignment_helpers_use_exact_inter_character_interval
 
 
 @pytest.mark.condition(CONDITION)
+def test_multiline_pdf_baselines_use_font_size_and_line_spacing() -> None:
+    """PDF-TEXT-PRESENTATION-P3: Every baseline advances by size times line spacing."""
+    style = TextStyle(name=f"multiline_baseline_{uuid4().hex}", font=Font(size=4.0))
+    style.line_spacing = 3.0
+
+    operators = TextPDF("first\nsecond\nthird", (10.0, 20.0), style).generate_pdf().splitlines()
+    matrices = [operator for operator in operators if operator.endswith(" Tm")]
+
+    assert matrices == [
+        "1 0 0 -1 10 20 Tm",
+        "1 0 0 -1 10 32 Tm",
+        "1 0 0 -1 10 44 Tm",
+    ]
+
+
+@pytest.mark.condition(CONDITION)
 def test_character_spacing_bounds_are_exact_for_fixed_outlines_and_multiline_text() -> None:
     """PDF-TEXT-PRESENTATION-P3: Conservative bounds include the largest tracked line."""
     style = _style(character_spacing=2.0)

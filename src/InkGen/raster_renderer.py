@@ -21,6 +21,8 @@ from InkGen.component import (
 from InkGen.component import (
     PathCommand,
     normalize_rectangle_corner_radii,
+    regular_polygon_corner_geometry,
+    sample_rounded_polygon_path,
 )
 from InkGen.component import (
     QuadraticBezier as SampledQuadraticBezier,
@@ -131,9 +133,9 @@ def render_drawing_group(
 
     Geometry uses the canvas's top-left, y-down coordinate system. Transparent
     output remains transparent unless the caller supplies ``background_rgba``.
-    P1 supports rectangles without rounded corners or gradients, solid lines,
-    circles, polygons without rounded corners, and raster images. Later closed
-    slices add supported curve and text domains.
+    P1 supports rectangles without gradients, solid lines, circles, polygons,
+    and raster images. Later closed slices add supported curve, text, and
+    rounded-corner domains.
     """
     components = _validated_components(group)
     if not isinstance(canvas, Canvas):
@@ -289,8 +291,17 @@ def _validate_render_domain(components: Sequence[RasterPrimitive]) -> None:
             normalize_rectangle_corner_radii(component.corner_radii, component.width, component.height)
             if component.fill_gradient is not None:
                 raise ValueError("rectangle gradients are not supported by raster renderer P1")
-        if isinstance(component, RegularPolygonDrawing) and component.corner_radius != 0.0:
-            raise ValueError("rounded regular polygons are not supported by raster renderer P1")
+        if isinstance(component, RegularPolygonDrawing):
+            validated = RegularPolygonDrawing(
+                component.position,
+                component.sides,
+                component.radius,
+                component.style,
+                component.angle,
+                component.corner_radius,
+            )
+            if validated.corner_radius > 0.0:
+                regular_polygon_corner_geometry(_regular_polygon_points(validated), validated.corner_radius)
         if isinstance(component, TextDrawing):
             if "\n" in component.text or "\r" in component.text:
                 raise ValueError("multiline text is not supported by raster renderer P3")
@@ -408,14 +419,21 @@ def _render_component(
             _draw_curve(draw, points, scale, stroke, stroke_width)
     else:
         # The validated RasterPrimitive union leaves only RegularPolygonDrawing.
-        points = [
-            (
-                component.position[0] + component.radius * math.cos(math.radians(component.angle + 90.0 + index * 360.0 / component.sides)),
-                component.position[1] + component.radius * math.sin(math.radians(component.angle + 90.0 + index * 360.0 / component.sides)),
-            )
-            for index in range(component.sides)
-        ]
+        points = _regular_polygon_points(component)
+        if component.corner_radius > 0.0:
+            points = sample_rounded_polygon_path(regular_polygon_corner_geometry(points, component.corner_radius))
         _draw_polygon(draw, points, scale, fill, stroke, stroke_width)
+
+
+def _regular_polygon_points(component: RegularPolygonDrawing) -> list[tuple[float, float]]:
+    """Return the established neutral regular-polygon vertex formula."""
+    return [
+        (
+            component.position[0] + component.radius * math.cos(math.radians(component.angle + 90.0 + index * 360.0 / component.sides)),
+            component.position[1] + component.radius * math.sin(math.radians(component.angle + 90.0 + index * 360.0 / component.sides)),
+        )
+        for index in range(component.sides)
+    ]
 
 
 def _reflect_path_control(

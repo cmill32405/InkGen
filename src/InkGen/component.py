@@ -7,6 +7,7 @@ import math
 import sys
 from collections.abc import Iterator, Mapping, MutableMapping, Sequence
 from copy import deepcopy
+from dataclasses import dataclass
 
 import numpy as np
 from shapely import MultiPoint, Point, Polygon, get_coordinates
@@ -18,6 +19,119 @@ from InkGen.text_outline import ADD_ONE_PIXEL_MARGIN_DEFAULT, outline_for_text
 
 PRECISION = 3
 DEFAULT_CURVE_SAMPLES = 32
+
+
+@dataclass(frozen=True)
+class RoundedPolygonCorner:
+    """Tangent geometry for one circular corner of a convex polygon."""
+
+    entry: tuple[float, float]
+    exit: tuple[float, float]
+    center: tuple[float, float]
+    sweep_radians: float
+
+
+def regular_polygon_corner_geometry(points: Sequence[tuple[float, float]], corner_radius: float | int) -> tuple[RoundedPolygonCorner, ...]:
+    """Return circular tangent geometry for a regular polygon vertex sequence."""
+    if isinstance(corner_radius, bool) or not isinstance(corner_radius, (float, int)):
+        raise TypeError("Regular polygon corner radius must be numeric.")
+    radius = float(corner_radius)
+    if not math.isfinite(radius):
+        raise ValueError("Regular polygon corner radius must be finite.")
+    if radius <= 0.0:
+        raise ValueError("Regular polygon corner radius must be greater than zero.")
+    if len(points) < 3:
+        raise ValueError("Regular polygon corner geometry requires at least three points.")
+
+    normalized: list[tuple[float, float]] = []
+    for point in points:
+        if isinstance(point, (str, bytes)) or not isinstance(point, Sequence) or len(point) != 2:
+            raise TypeError("Regular polygon points must be coordinate pairs.")
+        if any(isinstance(value, bool) or not isinstance(value, (float, int)) for value in point):
+            raise TypeError("Regular polygon point coordinates must be numeric.")
+        x, y = float(point[0]), float(point[1])
+        if not math.isfinite(x) or not math.isfinite(y):
+            raise ValueError("Regular polygon point coordinates must be finite.")
+        normalized.append((x, y))
+
+    signed_double_area = sum(
+        point[0] * normalized[(index + 1) % len(normalized)][1] - normalized[(index + 1) % len(normalized)][0] * point[1]
+        for index, point in enumerate(normalized)
+    )
+    if not math.isfinite(signed_double_area) or signed_double_area == 0.0:
+        raise ValueError("Regular polygon points must enclose a nonzero area.")
+    counterclockwise = signed_double_area > 0.0
+
+    corners: list[RoundedPolygonCorner] = []
+    for index, vertex in enumerate(normalized):
+        previous = normalized[index - 1]
+        following = normalized[(index + 1) % len(normalized)]
+        previous_vector = (previous[0] - vertex[0], previous[1] - vertex[1])
+        following_vector = (following[0] - vertex[0], following[1] - vertex[1])
+        previous_length = math.hypot(*previous_vector)
+        following_length = math.hypot(*following_vector)
+        if previous_length <= 0.0 or following_length <= 0.0:
+            raise ValueError("Regular polygon edges must have positive length.")
+        previous_unit = (previous_vector[0] / previous_length, previous_vector[1] / previous_length)
+        following_unit = (following_vector[0] / following_length, following_vector[1] / following_length)
+        cosine = max(-1.0, min(1.0, previous_unit[0] * following_unit[0] + previous_unit[1] * following_unit[1]))
+        interior_angle = math.acos(cosine)
+        half_angle = interior_angle / 2.0
+        if half_angle <= 0.0 or half_angle >= math.pi / 2.0:
+            raise ValueError("Regular polygon vertices must define finite convex corners.")
+        tangent_distance = radius / math.tan(half_angle)
+        if tangent_distance > min(previous_length, following_length) / 2.0 + 1e-9:
+            raise ValueError("Regular polygon corner radius causes adjacent corners to overlap.")
+        entry = (
+            vertex[0] + previous_unit[0] * tangent_distance,
+            vertex[1] + previous_unit[1] * tangent_distance,
+        )
+        exit_point = (
+            vertex[0] + following_unit[0] * tangent_distance,
+            vertex[1] + following_unit[1] * tangent_distance,
+        )
+        bisector = (previous_unit[0] + following_unit[0], previous_unit[1] + following_unit[1])
+        bisector_length = math.hypot(*bisector)
+        center_distance = radius / math.sin(half_angle)
+        center = (
+            vertex[0] + bisector[0] / bisector_length * center_distance,
+            vertex[1] + bisector[1] / bisector_length * center_distance,
+        )
+        start_angle = math.atan2(entry[1] - center[1], entry[0] - center[0])
+        end_angle = math.atan2(exit_point[1] - center[1], exit_point[0] - center[0])
+        if counterclockwise:
+            sweep = (end_angle - start_angle) % math.tau
+        else:
+            sweep = -((start_angle - end_angle) % math.tau)
+        if abs(sweep) >= math.pi:
+            raise ValueError("Regular polygon corner sweep must be less than 180 degrees.")
+        corners.append(RoundedPolygonCorner(entry, exit_point, center, sweep))
+    return tuple(corners)
+
+
+def sample_rounded_polygon_path(
+    corners: Sequence[RoundedPolygonCorner], max_arc_step_radians: float = math.pi / 8.0
+) -> list[tuple[float, float]]:
+    """Sample a rounded polygon with a bounded angular step per circular corner."""
+    if not corners:
+        raise ValueError("Rounded polygon sampling requires at least one corner.")
+    if isinstance(max_arc_step_radians, bool) or not isinstance(max_arc_step_radians, (float, int)):
+        raise TypeError("Rounded polygon arc step must be numeric.")
+    arc_step = float(max_arc_step_radians)
+    if not math.isfinite(arc_step) or arc_step <= 0.0 or arc_step >= math.pi:
+        raise ValueError("Rounded polygon arc step must be finite and between zero and pi.")
+
+    sampled: list[tuple[float, float]] = []
+    for corner in corners:
+        sampled.append(corner.entry)
+        start_vector = (corner.entry[0] - corner.center[0], corner.entry[1] - corner.center[1])
+        radius = math.hypot(*start_vector)
+        start_angle = math.atan2(start_vector[1], start_vector[0])
+        segments = max(1, math.ceil(abs(corner.sweep_radians) / arc_step - 1e-12))
+        for segment in range(1, segments + 1):
+            angle = start_angle + corner.sweep_radians * segment / segments
+            sampled.append((corner.center[0] + radius * math.cos(angle), corner.center[1] + radius * math.sin(angle)))
+    return sampled
 
 
 def _component_payload(data: object, key: str) -> Mapping[str, object]:

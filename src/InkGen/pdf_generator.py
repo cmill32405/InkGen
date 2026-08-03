@@ -25,11 +25,13 @@ from InkGen.component import (
     PathCommand,
     PolygonalDrawingComponent,
     RegularPolygonDrawingComponent,
+    RoundedPolygonCorner,
     SingleDimensionDrawingComponent,
     StandardDrawingComponent,
     TextComponent,
     WidthHeightDrawingComponent,
     normalize_rectangle_corner_radii,
+    regular_polygon_corner_geometry,
 )
 from InkGen.component import CubicBezier as CubicBezierComponent
 from InkGen.component import Path as PathComponent
@@ -1301,6 +1303,37 @@ def _path_from_points(points: list[tuple[float, float]], *, close: bool) -> list
     return commands
 
 
+def _rounded_polygon_path(corners: Sequence[RoundedPolygonCorner]) -> list[str]:
+    """Build PDF line and cubic operators for circular polygon corners."""
+    commands = [f"{_number(corners[0].entry[0])} {_number(corners[0].entry[1])} m"]
+    for index, corner in enumerate(corners):
+        start_radius = (corner.entry[0] - corner.center[0], corner.entry[1] - corner.center[1])
+        end_radius = (corner.exit[0] - corner.center[0], corner.exit[1] - corner.center[1])
+        radius = math.hypot(*start_radius)
+        direction = 1.0 if corner.sweep_radians > 0.0 else -1.0
+        control_distance = radius * (4.0 / 3.0) * math.tan(abs(corner.sweep_radians) / 4.0)
+        start_tangent = (-direction * start_radius[1] / radius, direction * start_radius[0] / radius)
+        end_tangent = (-direction * end_radius[1] / radius, direction * end_radius[0] / radius)
+        control_1 = (
+            corner.entry[0] + start_tangent[0] * control_distance,
+            corner.entry[1] + start_tangent[1] * control_distance,
+        )
+        control_2 = (
+            corner.exit[0] - end_tangent[0] * control_distance,
+            corner.exit[1] - end_tangent[1] * control_distance,
+        )
+        commands.append(
+            f"{_number(control_1[0])} {_number(control_1[1])} "
+            f"{_number(control_2[0])} {_number(control_2[1])} "
+            f"{_number(corner.exit[0])} {_number(corner.exit[1])} c"
+        )
+        if index + 1 < len(corners):
+            next_entry = corners[index + 1].entry
+            commands.append(f"{_number(next_entry[0])} {_number(next_entry[1])} l")
+    commands.append("h")
+    return commands
+
+
 def _rounded_rectangle_path(x: float, y: float, width: float, height: float, rx: float, ry: float) -> list[str]:
     """Build PDF path operators for a rounded rectangle."""
     if rx == 0.0 or ry == 0.0:
@@ -1941,7 +1974,12 @@ class RegularPolygonPDF(RegularPolygonDrawingComponent, PDFGeneratorInterface):
 
     def generate_pdf(self, context: PDFRenderContext | None = None) -> str:
         """Generate PDF operators for this regular polygon."""
-        return _drawing_pdf(self.style, _path_from_points(self._get_points(), close=True), context=context)
+        points = self._get_points()
+        if self.corner_radius == 0.0:
+            path = _path_from_points(points, close=True)
+        else:
+            path = _rounded_polygon_path(regular_polygon_corner_geometry(points, self.corner_radius))
+        return _drawing_pdf(self.style, path, context=context)
 
 
 class PolygonalPDF(PolygonalDrawingComponent, PDFGeneratorInterface):

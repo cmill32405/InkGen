@@ -135,7 +135,8 @@ translated by `position`.
 | Invalid radius or corner radius | Reject non-positive radius, negative corner radius, and corner radius greater than half radius | PO-REGPOLY-002 | `test_regular_polygon_rejects_invalid_boundaries` | Must be killed or proven equivalent |
 | PDF regular polygon rendering | Emit a closed PDF path from component vertices | PO-REGPOLY-003 | `test_regular_polygon_pdf_emits_closed_path_from_component_points` | Must be killed or proven equivalent |
 | Renderer-neutral regular polygon exported to DXF | Materialize to PDF and emit DXF closed polyline vertices from the same points | PO-REGPOLY-004 | `test_regular_polygon_drawing_materializes_pdf_component`; `test_dxf_regular_polygon_reuses_pdf_points_as_closed_polyline` | Must be killed or proven equivalent |
-| Negative base coordinates, hostile mutation of private fields, monkey-patched renderers, rounded-corner geometry, and native DXF polygon entities | Excluded from proven domain | Explicit exclusions in PO-REGPOLY-001 through PO-REGPOLY-004 | none | Out of scope |
+| Negative base coordinates, hostile mutation of private fields, monkey-patched renderers, and native DXF polygon entities | Excluded from proven domain | Explicit exclusions in PO-REGPOLY-001 through PO-REGPOLY-004 | none | Out of scope |
+| Rounded-corner geometry | Canonical tangent-circle geometry and all four drawing backends | `RASTER-ROUNDED-POLYGON-P9` | `test_rounded_regular_polygon_contract.py` | Separate P9 mutation gate |
 
 ## Test Applicability Matrix
 
@@ -302,8 +303,9 @@ Static/algebraic reasoning over `_get_points()`:
 ### Counterexamples And Exclusions
 
 - Negative base coordinates are outside the existing base component domain.
-- Rounded-corner rendering is not implemented by current SVG/PDF/DXF regular
-  polygon renderers, so this proof covers the validation invariant only.
+- Rounded-corner rendering is proved separately by
+  `docs/proofs/rounded-regular-polygon-contract.md`; this obligation continues
+  to define the sharp control polygon and validation invariant.
 - Direct mutation of private fields is outside the public construction/setter
   contract.
 
@@ -405,4 +407,5 @@ plus live-path evidence for neutral recipe and DXF dependency propagation.
 
 The main design constraint is that DXF regular polygon export intentionally
 depends on PDF-materialized component points, not a separate DXF vertex
-implementation. That edge is now explicit and tested.
+implementation. Rounded P9 output applies shared corner geometry to those
+points before DXF serialization. Both edges are explicit and tested.

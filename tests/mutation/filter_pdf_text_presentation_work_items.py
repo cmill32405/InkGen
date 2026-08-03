@@ -22,14 +22,14 @@ AND (
   OR (
     module_path = 'src/InkGen/component.py'
     AND (
-      (definition_name = '_compute_outline' AND start_pos_row = 1997)
+      (definition_name = '_compute_outline' AND start_pos_row = 2111)
       OR definition_name IN (
         '_outline_style_key', '_character_spacing_intervals',
         '_apply_character_spacing_bounds', '_outline_vertical_span'
       )
       OR (
         definition_name = '_fallback_outline'
-        AND (start_pos_row BETWEEN 2093 AND 2096 OR start_pos_row = 2106)
+        AND (start_pos_row BETWEEN 2207 AND 2210 OR start_pos_row = 2220)
       )
     )
   )
@@ -40,7 +40,7 @@ AND (
       OR definition_name = '_pdf_text_aligned_x'
       OR (
         definition_name = 'generate_pdf'
-        AND (start_pos_row BETWEEN 2079 AND 2080 OR start_pos_row BETWEEN 2090 AND 2093)
+        AND (start_pos_row BETWEEN 2122 AND 2123 OR start_pos_row BETWEEN 2128 AND 2131)
       )
     )
   )

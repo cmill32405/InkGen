@@ -30,6 +30,11 @@ available from the package root for caller-facing failure handling:
 - `Component`: Base class with identifiers and serialization.
 - `DrawingComponent` and subclasses (`StandardDrawingComponent`, `SingleDimensionDrawingComponent`, `PolygonalDrawingComponent`, etc.).
 - Geometry-specific classes such as `Arc`, `QuadraticBezier`, `CubicBezier`, `Path`.
+- `RoundedPolygonCorner`: immutable tangent-circle geometry for one rounded
+  regular-polygon corner.
+- `regular_polygon_corner_geometry()` and `sample_rounded_polygon_path()`:
+  validate rounded polygon geometry and produce the canonical sampled outline
+  shared by DXF and raster output.
 - `ComponentGroup`: Collection of components with shared metadata.
   `add_component()` accepts only `Component` instances and raises `TypeError`
   for invalid objects instead of silently omitting them.

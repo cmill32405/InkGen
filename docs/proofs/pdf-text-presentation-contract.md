@@ -54,10 +54,10 @@ deterministic, serialized, extraction-safe, and wired through the public
 
 ## Mutation Evidence
 
-The source-and-test-fresh Cosmic Ray v4 campaign contains 271 scoped mutants.
-All workers completed normally: 268 were killed and three survived as exact
+The source-and-test-fresh Cosmic Ray v5 campaign contains 304 scoped mutants.
+All workers completed normally: 301 were killed and three survived as exact
 equivalents. Database SHA-256:
-`55DC8A415B47FFFF03141CF972D8CB607781B47A324B8D9513B77278E548261D`.
+`8CA54247BF7E8AFAB385D0A8DA9317A4A09EDFF6BACBD83471E803B499EFCFFC`.
 
 The survivors are pinned by job id in
 `test_pdf_text_presentation_mutation_evidence.py`:
@@ -70,9 +70,14 @@ The survivors are pinned by job id in
 3. The end comparison is reached only for `{start, end}` after the center
    branch; equality and lexical `<=` are identical on that set.
 
+The refreshed filter also covers multiline baseline arithmetic. An exact
+three-line operator witness with non-unit font size and line spacing killed
+nine subtraction, division, floor-division, modulo, and exponentiation
+mutants that the earlier campaign did not select.
+
 The evidence manifest records source/config/test hashes, timestamps, database
 identity, all work-item outcomes, and survivor diffs in
-`tests/mutation/pdf_text_presentation_v4_evidence.json`.
+`tests/mutation/pdf_text_presentation_v5_evidence.json`.
 
 ## Verification Gate
 

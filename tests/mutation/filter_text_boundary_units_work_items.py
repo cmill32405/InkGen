@@ -11,14 +11,14 @@ FILTER_SQL = """
   (
     module_path IN ('src/InkGen/component.py', 'src\\InkGen\\component.py')
     AND (
-      (definition_name = '_outline_font_sizes' AND start_pos_row = 2088)
-      OR (definition_name = '_fallback_outline' AND start_pos_row IN (2092, 2094))
+      (definition_name = '_outline_font_sizes' AND start_pos_row = 2202)
+      OR (definition_name = '_fallback_outline' AND start_pos_row IN (2206, 2208))
     )
   )
   OR (
     module_path IN ('src/InkGen/pdf_generator.py', 'src\\InkGen\\pdf_generator.py')
     AND definition_name = '_outline_font_sizes'
-    AND start_pos_row = 2056
+    AND start_pos_row = 2094
   )
 )
 AND operator_name NOT LIKE 'core/ReplaceBinaryOperator_BitOr_%'

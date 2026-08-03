@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 from collections import Counter
 from datetime import datetime
@@ -13,26 +12,21 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from InkGen.style import Font
+from tests.mutation_evidence_freshness import assert_manifest_sources_current
 
 CONDITION = "TEXT-BOUNDARY-UNITS-P1"
 ROOT = Path(__file__).resolve().parents[1]
-MANIFEST = ROOT / "tests" / "mutation" / "text_boundary_units_v5_evidence.json"
-DATABASE_SHA256 = "841C6912D5187146EED8A4AE9AC16057E822861345048480458949DEB141C00C"
+MANIFEST = ROOT / "tests" / "mutation" / "text_boundary_units_v6_evidence.json"
+DATABASE_SHA256 = "7662A0D7F316547B7B376B6C820BB8B752B6D2141725BB4431AF7396B791D573"
 EQUIVALENT_SURVIVORS = {
     (
-        "3770b238c9074419836c94c373c0401b",
+        "d0cd1d0d69544c3599242017351fa260",
         "src/InkGen/component.py",
-        2092,
+        2206,
         33,
         "core/NumberReplacer",
     ),
 }
-
-
-def _canonical_source_sha256(path: Path) -> str:
-    """Hash UTF-8 source with platform-independent newlines."""
-    source = path.read_text(encoding="utf-8").replace("\r\n", "\n").replace("\r", "\n")
-    return hashlib.sha256(source.encode("utf-8")).hexdigest().upper()
 
 
 @pytest.mark.condition(CONDITION)
@@ -44,10 +38,7 @@ def test_text_boundary_unit_mutation_database_is_complete() -> None:
     assert manifest["database"]["sha256"] == DATABASE_SHA256
     assert datetime.fromisoformat(manifest["database"]["last_write_utc"]) <= generated_at
 
-    for relative_path, source_evidence in manifest["source_files"].items():
-        source_path = ROOT / relative_path
-        assert _canonical_source_sha256(source_path) == source_evidence["sha256"]
-        assert datetime.fromisoformat(source_evidence["last_write_utc"]) <= generated_at
+    assert_manifest_sources_current(ROOT, manifest, generated_at)
 
     work_items = manifest["work_items"]
     assert len(work_items) == 91
