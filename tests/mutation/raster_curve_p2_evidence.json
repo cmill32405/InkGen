@@ -1,0 +1,47 @@
+{
+  "condition": "RASTER-CURVE-P2",
+  "evidence_generated_utc": "2026-08-03T13:48:40.7384205Z",
+  "source": {
+    "path": "src/InkGen/raster_renderer.py",
+    "sha256": "BA48F80B402E97ABBC19C80B37E60C2CC14BF3DF2ED55059DBBAF6EF7FB5F0A4"
+  },
+  "test": {
+    "path": "tests/test_raster_curve_contract.py",
+    "sha256": "9AC23DFA9F2E72D046F4A3AC384040CFF0BFE86FB2BAB17DAF0861996F6AEF84",
+    "command": "env PYTHONPATH=src /home/ubuntu/.cache/inkgen_mutation_venv/bin/python -m pytest -x tests/test_raster_curve_contract.py"
+  },
+  "config": {
+    "path": "tests/mutation/raster_curve_p2_cosmic_ray.toml",
+    "sha256": "1B4F9A6677686D0E03769E9F9648E4CCB2AA0926D3B59B74B6CC3A0716FCB138"
+  },
+  "filter": {
+    "path": "tests/mutation/filter_raster_curve_p2_work_items.py",
+    "sha256": "B89A90AA164D64F11FB5D9472FC4F785026BE3AADFE7186F6CDA84E767F66F3E"
+  },
+  "campaign": {
+    "generated_candidates": 897,
+    "selected_work_items": 23,
+    "completed_results": 23,
+    "initial_killed": 19,
+    "late_killed_after_test_strengthening": 2,
+    "killed": 21,
+    "survived": 2,
+    "equivalent_survivors": 2,
+    "worker_errors": 0,
+    "worker_timeouts": 0,
+    "raw_mutation_coverage": 0.9130434782608695,
+    "effective_mutation_coverage": 1.0
+  },
+  "equivalent_survivor_proofs": [
+    {
+      "job_id": "100c5e6ac908492899df330c36d7d328",
+      "mutation": "style.fill != 'none' to style.fill < 'none'",
+      "proof": "DrawingStyle normalizes valid fill values to either 'none' or a lowercase '#rrggbb' value. Equality makes both predicates false for 'none'; '#' sorts before 'n', so both predicates are true for every normalized painted fill."
+    },
+    {
+      "job_id": "09ec4606578345ac8a4ace7e19d18b55",
+      "mutation": "style.fill_opacity != 0.0 to style.fill_opacity > 0.0",
+      "proof": "DrawingStyle constrains fill_opacity to the closed interval [0.0, 1.0]. Both predicates are false only at 0.0 and true for every other valid opacity."
+    }
+  ]
+}

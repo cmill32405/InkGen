@@ -131,6 +131,7 @@ nav:
       - Baird Degradation Contract: proofs/baird-degradation-contract.md
       - Raster Renderer Contract: proofs/raster-renderer-contract.md
       - Raster Baird Composition Contract: proofs/raster-baird-composition-contract.md
+      - Raster Curve Contract: proofs/raster-curve-contract.md
   - Architecture Diagrams: architecture-diagrams.md
   - Notes:
       - Mask Alignment Findings: mask_alignment_findings.md

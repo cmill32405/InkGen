@@ -34,6 +34,11 @@ P1 renders these neutral primitives:
 - `RegularPolygonDrawing` without rounded corners; and
 - `ImageDrawing`, including source alpha.
 
+P2 additionally renders open `QuadraticBezierDrawing` and
+`CubicBezierDrawing` strokes. Both consume InkGen's established 33-point curve
+samples and are painted as supersampled polylines. Visible fills on these open
+curves fail explicitly rather than silently closing the geometry.
+
 Fill and stroke colors, widths, and independent opacity values are preserved.
 P1 supports solid strokes with butt caps, miter joins, the default miter limit,
 and zero dash offset. Other cap, join, miter-limit, dash, or dash-offset values
@@ -55,8 +60,8 @@ The supersampled working surface is limited to 64,000,000 pixels and the
 supersampling factor is limited to 1 through 8. Invalid or unsupported inputs
 fail before surface allocation.
 
-P1 deliberately rejects text, arcs, Bézier curves, paths, zoning overlays,
-rounded corners, gradients, dashed strokes, and unsupported stroke controls.
+The renderer deliberately rejects text, arcs, paths, zoning overlays, rounded
+corners, gradients, dashed strokes, and unsupported stroke controls.
 Later slices will add these features without weakening the closed-domain
 behavior. The Baird composition API below consumes `RasterRenderResult.asset`
 without a PDF or SVG intermediary.

@@ -12,12 +12,16 @@ from PIL import Image, ImageDraw
 
 from InkGen.baird import BairdDegradationResult, BairdParams, baird_degrade_asset
 from InkGen.boundary import Canvas
+from InkGen.component import CubicBezier as SampledCubicBezier
+from InkGen.component import QuadraticBezier as SampledQuadraticBezier
 from InkGen.drawing_components import (
     CircleDrawing,
+    CubicBezierDrawing,
     DrawingComponentGroup,
     ImageDrawing,
     LineDrawing,
     PolygonalDrawing,
+    QuadraticBezierDrawing,
     RectangleDrawing,
     RegularPolygonDrawing,
 )
@@ -31,7 +35,16 @@ _MAX_SUPERSAMPLED_PIXELS = 64_000_000
 _MAX_SUPERSAMPLE = 8
 _RENDERER_NAME = "inkgen-raster-v1"
 
-RasterPrimitive = RectangleDrawing | LineDrawing | CircleDrawing | PolygonalDrawing | RegularPolygonDrawing | ImageDrawing
+RasterPrimitive = (
+    RectangleDrawing
+    | LineDrawing
+    | CircleDrawing
+    | PolygonalDrawing
+    | RegularPolygonDrawing
+    | ImageDrawing
+    | QuadraticBezierDrawing
+    | CubicBezierDrawing
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -197,7 +210,16 @@ def _validated_components(group: object) -> list[RasterPrimitive]:
             raise TypeError("component must implement to_component(output_format)")
         if not isinstance(
             component,
-            (RectangleDrawing, LineDrawing, CircleDrawing, PolygonalDrawing, RegularPolygonDrawing, ImageDrawing),
+            (
+                RectangleDrawing,
+                LineDrawing,
+                CircleDrawing,
+                PolygonalDrawing,
+                RegularPolygonDrawing,
+                ImageDrawing,
+                QuadraticBezierDrawing,
+                CubicBezierDrawing,
+            ),
         ):
             raise ValueError(f"unsupported raster primitive: {component.__class__.__name__}")
     return components
@@ -251,6 +273,8 @@ def _validate_render_domain(components: Sequence[RasterPrimitive]) -> None:
             raise ValueError("rounded regular polygons are not supported by raster renderer P1")
         style = getattr(component, "style", None)
         if isinstance(style, DrawingStyle):
+            if isinstance(component, (QuadraticBezierDrawing, CubicBezierDrawing)) and style.fill != "none" and style.fill_opacity != 0.0:
+                raise ValueError("curve fills are not supported by raster renderer P2")
             if style.stroke_dasharray:
                 raise ValueError("dashed strokes are not supported by raster renderer P1")
             if style.stroke_dash_offset != 0.0:
@@ -285,7 +309,27 @@ def _render_component(surface: Image.Image, component: RasterPrimitive, scale: f
         draw.ellipse(_scaled_box(x - radius, y - radius, x + radius, y + radius, scale), fill=fill, outline=stroke, width=stroke_width)
     elif isinstance(component, PolygonalDrawing):
         _draw_polygon(draw, component.points, scale, fill, stroke, stroke_width)
+    elif isinstance(component, QuadraticBezierDrawing):
+        if stroke is not None:
+            points = SampledQuadraticBezier(
+                component.start_point,
+                component.control_point,
+                component.end_point,
+                style,
+            ).points
+            _draw_curve(draw, points, scale, stroke, stroke_width)
+    elif isinstance(component, CubicBezierDrawing):
+        if stroke is not None:
+            points = SampledCubicBezier(
+                component.start_point,
+                component.control_point1,
+                component.control_point2,
+                component.end_point,
+                style,
+            ).points
+            _draw_curve(draw, points, scale, stroke, stroke_width)
     else:
+        # The validated RasterPrimitive union leaves only RegularPolygonDrawing.
         points = [
             (
                 component.position[0] + component.radius * math.cos(math.radians(component.angle + 90.0 + index * 360.0 / component.sides)),
@@ -294,6 +338,17 @@ def _render_component(surface: Image.Image, component: RasterPrimitive, scale: f
             for index in range(component.sides)
         ]
         _draw_polygon(draw, points, scale, fill, stroke, stroke_width)
+
+
+def _draw_curve(
+    draw: ImageDraw.ImageDraw,
+    points: Sequence[tuple[float, float]],
+    scale: float,
+    stroke: tuple[int, int, int, int],
+    stroke_width: int,
+) -> None:
+    """Draw the established sampled curve as a supersampled polyline."""
+    draw.line([_scaled_point(point, scale) for point in points], fill=stroke, width=stroke_width)
 
 
 def _draw_polygon(

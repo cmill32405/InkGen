@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted for `RASTER-RENDERER-P1` and `RASTER-BAIRD-P1`.
+Accepted for `RASTER-RENDERER-P1`, `RASTER-BAIRD-P1`, and
+`RASTER-CURVE-P2`.
 
 ## Context
 
@@ -39,11 +40,18 @@ RGBA. The caller must name the RGB substrate used for the opaque Baird scan;
 there is no implicit white background. `RasterBairdResult` retains both result
 objects and nests their manifests without duplicating either algorithm.
 
+P2 admits open `QuadraticBezierDrawing` and `CubicBezierDrawing` strokes. The
+raster backend consumes the same deterministic 33-point samples already owned
+by the neutral component layer and paints them as supersampled polylines.
+Visible curve fills remain outside the closed domain and fail explicitly;
+silently closing an open curve would change its geometry.
+
 ## Dependencies And Contracts
 
 | Dependency | Consumed contract | Failure if changed |
 |---|---|---|
 | `drawing_components.py` | Neutral primitive geometry, style ownership, and group order | Geometry or ordering renders incorrectly |
+| `component.py` | Established 33-point quadratic and cubic curve samples | Raster curves diverge from neutral/DXF geometry |
 | `boundary.py` | Positive canvas dimensions and normalized `mm`/`in` units | Physical pixel dimensions become incorrect |
 | `style.py` | Normalized RGB colors, opacity, and stroke width | Paint differs from SVG/PDF semantics |
 | `image_assets.py` | EXIF-normalized decoded pixels and alpha metadata | Embedded image orientation or transparency changes |
@@ -61,6 +69,8 @@ PDF, SVG, DXF, and document outputs do not depend on the raster renderer.
 - Physical resolution is tied to canvas units and DPI.
 - Unsupported rendering cannot silently approximate the source drawing.
 - Clean and Baird-degraded assets can be produced in one standalone call.
+- Quadratic and cubic curves reuse established neutral samples without a
+  serialized renderer intermediary.
 - Later text, curve, path, and clipping slices can extend a proven boundary
   without changing existing output-format dispatch.
 
