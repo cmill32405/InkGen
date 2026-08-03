@@ -86,6 +86,16 @@ are treated as absolute values, either zero radius produces a line segment, and
 equal endpoints add no segment. Malformed flags or non-finite derived geometry
 fail before surface allocation.
 
+P8 additionally renders `RectangleDrawing` values with scalar or asymmetric
+elliptical corner radii. The existing neutral radius contract requires
+nonnegative finite values no greater than half the rectangle width and height.
+Each rounded corner is painted as a quarter ellipse joined to horizontal and
+vertical cardinal edges. A zero horizontal or vertical radius preserves sharp
+rectangle semantics. Positive logical radii that cannot occupy a positive
+half-width and half-height in the target pixel grid also use the sharp pixel
+path rather than constructing invalid Pillow boxes. Live radius mutation is
+revalidated before surface allocation.
+
 Fill and stroke colors, widths, and independent opacity values are preserved.
 P1 supports solid strokes with butt caps, miter joins, the default miter limit,
 and zero dash offset. Other cap, join, miter-limit, dash, or dash-offset values
@@ -107,8 +117,8 @@ The supersampled working surface is limited to 64,000,000 pixels and the
 supersampling factor is limited to 1 through 8. Invalid or unsupported inputs
 fail before surface allocation.
 
-The renderer deliberately rejects visible path fills, zoning overlays, rounded
-corners, gradients, dashed strokes, unsupported stroke controls, and text
+The renderer deliberately rejects visible path fills, zoning overlays,
+gradients, dashed strokes, unsupported stroke controls, and text
 presentation outside the P3 domain. Later slices can add these features without
 weakening the closed-domain behavior. The Baird composition API below consumes
 `RasterRenderResult.asset` without a PDF or SVG intermediary.

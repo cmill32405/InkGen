@@ -12,10 +12,19 @@ from PIL import Image, ImageDraw, ImageFont
 
 from InkGen.baird import BairdDegradationResult, BairdParams, baird_degrade_asset
 from InkGen.boundary import Canvas
-from InkGen.component import Arc as SampledArc
-from InkGen.component import CubicBezier as SampledCubicBezier
-from InkGen.component import PathCommand
-from InkGen.component import QuadraticBezier as SampledQuadraticBezier
+from InkGen.component import (
+    Arc as SampledArc,
+)
+from InkGen.component import (
+    CubicBezier as SampledCubicBezier,
+)
+from InkGen.component import (
+    PathCommand,
+    normalize_rectangle_corner_radii,
+)
+from InkGen.component import (
+    QuadraticBezier as SampledQuadraticBezier,
+)
 from InkGen.drawing_components import (
     ArcDrawing,
     CircleDrawing,
@@ -277,9 +286,7 @@ def _validated_background(value: object) -> tuple[int, int, int, int] | None:
 def _validate_render_domain(components: Sequence[RasterPrimitive]) -> None:
     for component in components:
         if isinstance(component, RectangleDrawing):
-            radii = component.corner_radii
-            if (isinstance(radii, tuple) and radii != (0.0, 0.0)) or (not isinstance(radii, tuple) and radii != 0.0):
-                raise ValueError("rounded rectangles are not supported by raster renderer P1")
+            normalize_rectangle_corner_radii(component.corner_radii, component.width, component.height)
             if component.fill_gradient is not None:
                 raise ValueError("rectangle gradients are not supported by raster renderer P1")
         if isinstance(component, RegularPolygonDrawing) and component.corner_radius != 0.0:
@@ -338,7 +345,23 @@ def _render_component(
     if isinstance(component, RectangleDrawing):
         x, y = component.position
         box = _scaled_box(x, y, x + component.width, y + component.height, scale)
-        draw.rectangle(box, fill=fill, outline=stroke, width=stroke_width)
+        rx, ry = normalize_rectangle_corner_radii(component.corner_radii, component.width, component.height)
+        pixel_width = box[2] - box[0]
+        pixel_height = box[3] - box[1]
+        radius_x = min(pixel_width // 2, max(1, round(rx * scale))) if rx > 0.0 else 0
+        radius_y = min(pixel_height // 2, max(1, round(ry * scale))) if ry > 0.0 else 0
+        if radius_x == 0 or radius_y == 0:
+            draw.rectangle(box, fill=fill, outline=stroke, width=stroke_width)
+        else:
+            _draw_rounded_rectangle(
+                draw,
+                box,
+                radius_x,
+                radius_y,
+                fill=fill,
+                stroke=stroke,
+                stroke_width=stroke_width,
+            )
     elif isinstance(component, LineDrawing):
         if stroke is not None:
             draw.line([_scaled_point(component.point_1, scale), _scaled_point(component.point_2, scale)], fill=stroke, width=stroke_width)
@@ -661,6 +684,46 @@ def _render_image(surface: Image.Image, component: ImageDrawing, scale: float) -
         resized = decoded.convert("RGBA").resize((width, height), Image.Resampling.LANCZOS)
     position = _scaled_point(component.position, scale)
     surface.alpha_composite(resized, dest=position)
+
+
+def _draw_rounded_rectangle(
+    draw: ImageDraw.ImageDraw,
+    box: tuple[int, int, int, int],
+    radius_x: int,
+    radius_y: int,
+    *,
+    fill: tuple[int, int, int, int] | None,
+    stroke: tuple[int, int, int, int] | None,
+    stroke_width: int,
+) -> None:
+    """Paint an axis-aligned rectangle with elliptical rounded corners."""
+    left, top, right, bottom = box
+    left_center = left + radius_x
+    right_center = right - radius_x
+    top_center = top + radius_y
+    bottom_center = bottom - radius_y
+    top_left = (left, top, left + 2 * radius_x, top + 2 * radius_y)
+    top_right = (right - 2 * radius_x, top, right, top + 2 * radius_y)
+    bottom_right = (right - 2 * radius_x, bottom - 2 * radius_y, right, bottom)
+    bottom_left = (left, bottom - 2 * radius_y, left + 2 * radius_x, bottom)
+
+    if fill is not None:
+        draw.rectangle((left_center, top, right_center, bottom), fill=fill)
+        draw.rectangle((left, top_center, right, bottom_center), fill=fill)
+        draw.pieslice(top_left, 180, 270, fill=fill)
+        draw.pieslice(top_right, 270, 360, fill=fill)
+        draw.pieslice(bottom_right, 0, 90, fill=fill)
+        draw.pieslice(bottom_left, 90, 180, fill=fill)
+
+    if stroke is not None:
+        draw.line([(left_center, top), (right_center, top)], fill=stroke, width=stroke_width)
+        draw.line([(right, top_center), (right, bottom_center)], fill=stroke, width=stroke_width)
+        draw.line([(right_center, bottom), (left_center, bottom)], fill=stroke, width=stroke_width)
+        draw.line([(left, bottom_center), (left, top_center)], fill=stroke, width=stroke_width)
+        draw.arc(top_left, 180, 270, fill=stroke, width=stroke_width)
+        draw.arc(top_right, 270, 360, fill=stroke, width=stroke_width)
+        draw.arc(bottom_right, 0, 90, fill=stroke, width=stroke_width)
+        draw.arc(bottom_left, 90, 180, fill=stroke, width=stroke_width)
 
 
 def _render_text(surface: Image.Image, component: TextDrawing, scale: float, points_scale: float) -> None:

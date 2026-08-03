@@ -137,6 +137,7 @@ nav:
       - Raster Path Contract: proofs/raster-path-contract.md
       - Raster Path Curve Contract: proofs/raster-path-curve-contract.md
       - Raster Path Arc Contract: proofs/raster-path-arc-contract.md
+      - Raster Rounded Rectangle Contract: proofs/raster-rounded-rectangle-contract.md
   - Architecture Diagrams: architecture-diagrams.md
   - Notes:
       - Mask Alignment Findings: mask_alignment_findings.md

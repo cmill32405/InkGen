@@ -1,0 +1,94 @@
+{
+  "condition": "RASTER-ROUNDED-RECT-P8",
+  "evidence_generated_utc": "2026-08-03T19:29:00.6118013Z",
+  "source": {
+    "path": "src/InkGen/raster_renderer.py",
+    "sha256": "CA5DA2D23C97BB9B0B349E4A6F922A24D05842B63BC0505DB60BC161BA591D64"
+  },
+  "tests": [
+    {
+      "path": "tests/test_raster_rounded_rectangle_contract.py",
+      "sha256": "90FC8ABEFB5082895ED1EE8CBE0A798DE4E6B2D0F3917645BE7D5028DBCC3730"
+    },
+    {
+      "path": "tests/test_raster_renderer_contract.py",
+      "sha256": "2D9FF3EA1210DDB0C15F5F7ECDBC4C740FBDD2DC823BC15669B1E0183FC9BBD1"
+    },
+    {
+      "path": "tests/test_raster_baird_composition_contract.py",
+      "sha256": "988BC943BAC10FCAB4904555FFEE3CBA0CF26C799F64C057B66BEEC3FB0289B5"
+    }
+  ],
+  "test_command": "env PYTHONPATH=src /home/ubuntu/.cache/inkgen_mutation_venv/bin/python -m pytest -x tests/test_raster_rounded_rectangle_contract.py tests/test_raster_renderer_contract.py tests/test_raster_baird_composition_contract.py",
+  "config": {
+    "path": "tests/mutation/raster_rounded_rectangle_p8_cosmic_ray.toml",
+    "sha256": "94792806D158AC164E98F145090087A7954A521B19D84C9124EC0321602AB6A7"
+  },
+  "filter": {
+    "path": "tests/mutation/filter_raster_rounded_rectangle_p8_work_items.py",
+    "sha256": "380182F70501E40AAD1762016D5884EAF458880D582F93EEAE760F93D9A4BFDB"
+  },
+  "campaign": {
+    "generated_candidates": 2567,
+    "selected_work_items": 243,
+    "completed_results": 243,
+    "initial_killed": 234,
+    "late_killed_after_test_strengthening": 4,
+    "killed": 238,
+    "survived": 5,
+    "equivalent_survivors": 5,
+    "worker_errors": 0,
+    "worker_timeouts": 0,
+    "raw_mutation_coverage": 0.9794238683127572,
+    "effective_mutation_coverage": 1.0
+  },
+  "late_kills": [
+    {
+      "job_id": "67d6cf1276494512ba59ff5d3b983727",
+      "mutation": "minimum horizontal pixel radius from one to zero",
+      "witness": "A positive 0.1-unit radius at scale two lies on a four-pixel rectangle. P8 preserves a one-pixel radius; the mutant collapses it to the sharp branch."
+    },
+    {
+      "job_id": "d1a7d0658c6448998856637d942e687f",
+      "mutation": "minimum horizontal pixel radius from one to two",
+      "witness": "The same four-pixel rectangle requires a one-pixel horizontal radius; the mutant expands it to two pixels."
+    },
+    {
+      "job_id": "273175fe2423465aad21020356233ec8",
+      "mutation": "minimum vertical pixel radius from one to zero",
+      "witness": "A positive 0.1-unit radius at scale two lies on a four-pixel rectangle. P8 preserves a one-pixel radius; the mutant collapses it to the sharp branch."
+    },
+    {
+      "job_id": "3f3b35e1ff4a477296f1f51f85fa955a",
+      "mutation": "minimum vertical pixel radius from one to two",
+      "witness": "The same four-pixel rectangle requires a one-pixel vertical radius; the mutant expands it to two pixels."
+    }
+  ],
+  "equivalent_survivor_proofs": [
+    {
+      "job_id": "5990fca8bb494cb4a1c4448f352c61c0",
+      "mutation": "horizontal radius test greater-than zero to not-equal zero",
+      "proof": "normalize_rectangle_corner_radii returns a nonnegative horizontal radius, so greater-than zero and not-equal zero select exactly the same values."
+    },
+    {
+      "job_id": "2542cf160e97447cb3eb325a913c95e5",
+      "mutation": "vertical radius test greater-than zero to not-equal zero",
+      "proof": "normalize_rectangle_corner_radii returns a nonnegative vertical radius, so greater-than zero and not-equal zero select exactly the same values."
+    },
+    {
+      "job_id": "f06f7fbd453842acb6d95f002b1cc31b",
+      "mutation": "horizontal zero-pixel test equality to less-than-or-equal",
+      "proof": "pixel_width is nonnegative by monotone scaled-box rounding. radius_x is the minimum of its nonnegative half-width and a positive rounded-radius floor, or explicit zero. It cannot be negative."
+    },
+    {
+      "job_id": "84e6e8061d294ff48a10691748805877",
+      "mutation": "vertical zero-pixel test equality to less-than-or-equal",
+      "proof": "pixel_height is nonnegative by monotone scaled-box rounding. radius_y is the minimum of its nonnegative half-height and a positive rounded-radius floor, or explicit zero. It cannot be negative."
+    },
+    {
+      "job_id": "f2c88fb13bab4f3f949692689ec9d79e",
+      "mutation": "private helper keyword-only separator changed to positional-only separator",
+      "proof": "The declared P8 call domain invokes the four geometry arguments positionally and all paint arguments by keyword. Both signatures bind every in-domain call identically; the helper is private and has no external calling contract."
+    }
+  ]
+}

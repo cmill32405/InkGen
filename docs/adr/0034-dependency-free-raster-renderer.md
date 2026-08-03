@@ -4,7 +4,8 @@
 
 Accepted for `RASTER-RENDERER-P1`, `RASTER-BAIRD-P1`,
 `RASTER-CURVE-P2`, `RASTER-TEXT-P3`, `RASTER-ARC-P4`, and
-`RASTER-PATH-P5`, `RASTER-PATH-CURVE-P6`, and `RASTER-PATH-ARC-P7`.
+`RASTER-PATH-P5`, `RASTER-PATH-CURVE-P6`, `RASTER-PATH-ARC-P7`, and
+`RASTER-ROUNDED-RECT-P8`.
 
 ## Context
 
@@ -85,12 +86,20 @@ endpoints produce no segment. Exact path endpoints replace the reconstructed
 sampler endpoints after conversion. `A` clears both smooth-control histories.
 Visible path fills remain outside the closed renderer domain.
 
+P8 admits `RectangleDrawing` values with validated horizontal and vertical
+corner radii. The renderer maps the logical box and radii to the supersampled
+pixel domain, paints the fill as two interior rectangles plus four elliptical
+quarter-disks, and paints the boundary as four cardinal line segments plus
+four quarter-ellipse arcs. If either logical radius is zero, or the rounded
+corner cannot occupy a positive pixel radius after scaling, the established
+sharp rectangle path is used. Live radii are revalidated before allocation.
+
 ## Dependencies And Contracts
 
 | Dependency | Consumed contract | Failure if changed |
 |---|---|---|
 | `drawing_components.py` | Neutral primitive geometry, style ownership, and group order | Geometry or ordering renders incorrectly |
-| `component.py` | Established arc, quadratic, and cubic sampled points plus normalized path commands | Raster curves or paths diverge from neutral/PDF/DXF geometry |
+| `component.py` | Established arc, quadratic, and cubic samples, normalized path commands, and validated rectangle corner radii | Raster curves, paths, or rounded rectangles diverge from neutral/PDF/DXF geometry |
 | `boundary.py` | Positive canvas dimensions and normalized `mm`/`in` units | Physical pixel dimensions become incorrect |
 | `style.py` | Normalized drawing colors, text colors, font-file resolution, point size, visibility, and alignment | Paint, glyph source, or baseline alignment differs from SVG/PDF semantics |
 | `image_assets.py` | EXIF-normalized decoded pixels and alpha metadata | Embedded image orientation or transparency changes |
@@ -120,6 +129,8 @@ PDF, SVG, DXF, and document outputs do not depend on the raster renderer.
   without duplicating curve equations in the raster backend.
 - Endpoint arcs preserve SVG radius correction, flag-selected sweep, rotation,
   and exact endpoints while reusing the canonical center-arc sampler.
+- Rounded rectangles preserve the established elliptical `rx`/`ry` contract
+  without routing through SVG, PDF, or DXF.
 - Later multiline text, path-fill, and clipping slices
   can extend a proven boundary without weakening existing rejection contracts.
 
