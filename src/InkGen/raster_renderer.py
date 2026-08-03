@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 from PIL import Image, ImageDraw
 
+from InkGen.baird import BairdDegradationResult, BairdParams, baird_degrade_asset
 from InkGen.boundary import Canvas
 from InkGen.drawing_components import (
     CircleDrawing,
@@ -61,6 +62,29 @@ class RasterRenderResult:
             "background_rgba": list(self.background_rgba) if self.background_rgba is not None else None,
             "output_pixels": [self.asset.width, self.asset.height],
             "component_count": self.component_count,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RasterBairdResult:
+    """A clean raster render paired with its Baird-degraded scan."""
+
+    clean: RasterRenderResult
+    degraded: BairdDegradationResult
+
+    def __post_init__(self) -> None:
+        """Reject invalid result envelopes at the public boundary."""
+        if not isinstance(self.clean, RasterRenderResult):
+            raise TypeError("clean must be a RasterRenderResult")
+        if not isinstance(self.degraded, BairdDegradationResult):
+            raise TypeError("degraded must be a BairdDegradationResult")
+
+    @property
+    def manifest(self) -> dict[str, object]:
+        """Return the complete render and degradation provenance."""
+        return {
+            "render": self.clean.manifest,
+            "degradation": self.degraded.manifest,
         }
 
 
@@ -125,6 +149,41 @@ def render_drawing_group(
         background_rgba=background,
         component_count=len(components),
     )
+
+
+def render_and_degrade_drawing_group(
+    group: DrawingComponentGroup,
+    canvas: Canvas,
+    params: BairdParams,
+    *,
+    seed: int,
+    background_rgb: tuple[int, int, int],
+    dpi: float = 300.0,
+    render_supersample: int = 2,
+    source: str | None = None,
+) -> RasterBairdResult:
+    """Render neutral drawings and apply Baird degradation without PDF or SVG.
+
+    The clean result remains transparent RGBA. ``background_rgb`` names the
+    physical substrate used only when converting that clean asset into Baird's
+    opaque scan domain.
+    """
+    clean = render_drawing_group(
+        group,
+        canvas,
+        dpi=dpi,
+        supersample=render_supersample,
+        background_rgba=None,
+        source=source,
+    )
+    degraded = baird_degrade_asset(
+        clean.asset,
+        params,
+        seed=seed,
+        background_rgb=background_rgb,
+        source=source,
+    )
+    return RasterBairdResult(clean, degraded)
 
 
 def _validated_components(group: object) -> list[RasterPrimitive]:

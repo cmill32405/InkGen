@@ -155,8 +155,12 @@ ordinary SVG text fail closed.
 
 - `RasterRenderResult`: immutable rendered `RasterImageAsset` plus physical
   canvas, DPI, supersampling, component-count, and manifest provenance.
+- `RasterBairdResult`: clean raster result paired with its Baird-degraded result
+  and complete nested provenance.
 - `render_drawing_group()`: renders the supported neutral drawing domain to a
   deterministic in-memory RGBA PNG without a PDF or SVG intermediary.
+- `render_and_degrade_drawing_group()`: composes the clean renderer with Baird
+  using a required explicit RGB substrate.
 
 ## Baird Degradation (`InkGen.baird`)
 

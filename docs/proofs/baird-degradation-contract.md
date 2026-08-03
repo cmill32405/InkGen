@@ -56,7 +56,7 @@ supported by 100 generated counterexample-search cases at `1e-12` tolerance.
 
 ## Dependency Review
 
-- Incoming: package-root exports, future raster rendering, synthetic fixture
+- Incoming: package-root exports, neutral raster rendering, synthetic fixture
   builders, and existing `RasterImageAsset` output consumers.
 - Outgoing: NumPy, Pillow, and `image_assets.py` only.
 - New edge: `baird.py -> image_assets.py`.

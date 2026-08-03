@@ -9,4 +9,9 @@ flowchart LR
     Composite --> Reduce[LANCZOS reduction]
     Reduce --> PNG[Deterministic RGBA PNG]
     PNG --> Result[RasterRenderResult]
-    Result --> Future[Future Baird composition]
+    Result --> Pair[RasterBairdResult]
+    Result --> Baird[Baird degradation]
+    Params[BairdParams and seed] --> Baird
+    Substrate[Explicit RGB substrate] --> Baird
+    Baird --> Scan[Opaque degraded PNG]
+    Scan --> Pair

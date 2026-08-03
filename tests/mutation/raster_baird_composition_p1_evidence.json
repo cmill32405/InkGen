@@ -1,0 +1,33 @@
+{
+  "condition": "RASTER-BAIRD-P1",
+  "evidence_generated_utc": "2026-08-03T03:40:25.0769276Z",
+  "source": {
+    "path": "src/InkGen/raster_renderer.py",
+    "sha256": "56F3A5F68921B35B47B73063887490949B68DFD15F71A0CED3AF97F0971E97E5"
+  },
+  "test": {
+    "path": "tests/test_raster_baird_composition_contract.py",
+    "sha256": "988BC943BAC10FCAB4904555FFEE3CBA0CF26C799F64C057B66BEEC3FB0289B5",
+    "command": "env PYTHONPATH=src /home/ubuntu/.cache/inkgen_mutation_venv/bin/python -m pytest -x tests/test_raster_baird_composition_contract.py"
+  },
+  "config": {
+    "path": "tests/mutation/raster_baird_composition_cosmic_ray.toml",
+    "sha256": "B12D1B654D81422F2263896E0978D90A44D2B40D2818116FB7992C264B3D159F"
+  },
+  "filter": {
+    "path": "tests/mutation/filter_raster_baird_composition_work_items.py",
+    "sha256": "3CDD098DC32D913258850725E37849CCFB7F23DE4BBA968488FA3512ACC161C6"
+  },
+  "campaign": {
+    "generated_candidates": 854,
+    "selected_work_items": 13,
+    "completed_results": 13,
+    "initial_killed": 8,
+    "late_killed_after_test_strengthening": 5,
+    "killed": 13,
+    "survived": 0,
+    "worker_errors": 0,
+    "worker_timeouts": 0,
+    "effective_mutation_coverage": 1.0
+  }
+}

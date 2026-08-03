@@ -58,5 +58,30 @@ fail before surface allocation.
 P1 deliberately rejects text, arcs, Bézier curves, paths, zoning overlays,
 rounded corners, gradients, dashed strokes, and unsupported stroke controls.
 Later slices will add these features without weakening the closed-domain
-behavior. The Baird composition API will consume `RasterRenderResult.asset`
-after the clean renderer covers the required primitive and text domain.
+behavior. The Baird composition API below consumes `RasterRenderResult.asset`
+without a PDF or SVG intermediary.
+
+## Baird Composition
+
+`render_and_degrade_drawing_group()` returns both the clean transparent render
+and its Baird-degraded opaque scan:
+
+```python
+from InkGen import BairdParams, render_and_degrade_drawing_group
+
+scan = render_and_degrade_drawing_group(
+    group,
+    Canvas(210, 297, "mm"),
+    BairdParams.sample(rng),
+    seed=42,
+    background_rgb=(245, 248, 250),
+    dpi=300,
+)
+clean_asset = scan.clean.asset
+degraded_asset = scan.degraded.asset
+```
+
+`background_rgb` is required and has no implicit white default. It is the
+physical substrate used when Baird converts the clean RGBA asset to its opaque
+scan domain. `RasterBairdResult.manifest` nests the complete render and
+degradation manifests so the output can be reproduced.

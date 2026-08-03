@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted for `RASTER-RENDERER-P1`.
+Accepted for `RASTER-RENDERER-P1` and `RASTER-BAIRD-P1`.
 
 ## Context
 
@@ -33,6 +33,12 @@ Use Pillow, an existing dependency, for pixel surfaces, compositing, geometric
 drawing, image resizing, and PNG encoding. Do not add PyMuPDF, OpenCV, Cairo,
 or another rendering library.
 
+Add `render_and_degrade_drawing_group()` as a thin composition of the clean
+renderer and `baird_degrade_asset()`. The clean result remains transparent
+RGBA. The caller must name the RGB substrate used for the opaque Baird scan;
+there is no implicit white background. `RasterBairdResult` retains both result
+objects and nests their manifests without duplicating either algorithm.
+
 ## Dependencies And Contracts
 
 | Dependency | Consumed contract | Failure if changed |
@@ -41,11 +47,12 @@ or another rendering library.
 | `boundary.py` | Positive canvas dimensions and normalized `mm`/`in` units | Physical pixel dimensions become incorrect |
 | `style.py` | Normalized RGB colors, opacity, and stroke width | Paint differs from SVG/PDF semantics |
 | `image_assets.py` | EXIF-normalized decoded pixels and alpha metadata | Embedded image orientation or transparency changes |
+| `baird.py` | Seeded degradation, explicit alpha substrate, and result provenance | Scan appearance or reproducibility changes |
 | Pillow | RGBA source-over compositing, supersampled drawing, LANCZOS reduction, deterministic PNG encoding | Pixel evidence changes across backend versions |
 
 The dependency direction is one-way: `raster_renderer.py` consumes neutral
-recipes and image assets. Neutral primitives, PDF, SVG, DXF, and document
-outputs do not depend on the raster renderer.
+recipes, image assets, and Baird's public asset bridge. Neutral primitives,
+PDF, SVG, DXF, and document outputs do not depend on the raster renderer.
 
 ## Consequences
 
@@ -53,8 +60,9 @@ outputs do not depend on the raster renderer.
 - Transparent and colored-background fixtures are explicit and testable.
 - Physical resolution is tied to canvas units and DPI.
 - Unsupported rendering cannot silently approximate the source drawing.
-- Later text, curve, path, clipping, and Baird-composition slices can extend a
-  proven boundary without changing existing output-format dispatch.
+- Clean and Baird-degraded assets can be produced in one standalone call.
+- Later text, curve, path, and clipping slices can extend a proven boundary
+  without changing existing output-format dispatch.
 
 ## Alternatives Rejected
 

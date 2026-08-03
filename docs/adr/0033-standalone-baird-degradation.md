@@ -42,8 +42,8 @@ the public boundary.
 
 - InkGen can generate scanner-like degradation without another repository.
 - The output remains compatible with existing `RasterImageAsset` consumers.
-- A future primitive-to-raster renderer can feed Baird directly without a PDF
-  round trip.
+- The neutral primitive raster renderer can feed Baird directly without a PDF
+  or SVG intermediary.
 - The NumPy implementation is not promised to be bit-identical to OpenCV.
   Reference statistics and parameter-direction tests bound numerical drift.
 - Non-Baird defects remain separate named stages and must not be presented as
