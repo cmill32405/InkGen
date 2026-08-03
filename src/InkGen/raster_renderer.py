@@ -8,7 +8,7 @@ import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 from InkGen.baird import BairdDegradationResult, BairdParams, baird_degrade_asset
 from InkGen.boundary import Canvas
@@ -24,9 +24,10 @@ from InkGen.drawing_components import (
     QuadraticBezierDrawing,
     RectangleDrawing,
     RegularPolygonDrawing,
+    TextDrawing,
 )
 from InkGen.image_assets import RasterImageAsset
-from InkGen.style import DrawingStyle
+from InkGen.style import DrawingStyle, TextStyle
 
 log = logging.getLogger(__name__)
 
@@ -44,6 +45,7 @@ RasterPrimitive = (
     | ImageDrawing
     | QuadraticBezierDrawing
     | CubicBezierDrawing
+    | TextDrawing
 )
 
 
@@ -115,7 +117,8 @@ def render_drawing_group(
     Geometry uses the canvas's top-left, y-down coordinate system. Transparent
     output remains transparent unless the caller supplies ``background_rgba``.
     P1 supports rectangles without rounded corners or gradients, solid lines,
-    circles, polygons without rounded corners, and raster images.
+    circles, polygons without rounded corners, and raster images. Later closed
+    slices add supported curve and text domains.
     """
     components = _validated_components(group)
     if not isinstance(canvas, Canvas):
@@ -133,6 +136,7 @@ def render_drawing_group(
 
     _validate_render_domain(components)
     high_scale = pixels_per_unit * normalized_supersample
+    points_scale = normalized_dpi * normalized_supersample / 72.0
     initial = background if background is not None else (0, 0, 0, 0)
     surface = Image.new("RGBA", (high_width, high_height), initial)
     log.debug(
@@ -144,7 +148,7 @@ def render_drawing_group(
     )
     for component in components:
         layer = Image.new("RGBA", surface.size, (0, 0, 0, 0))
-        _render_component(layer, component, high_scale)
+        _render_component(layer, component, high_scale, points_scale=points_scale)
         surface = Image.alpha_composite(surface, layer)
 
     if normalized_supersample != 1:
@@ -219,6 +223,7 @@ def _validated_components(group: object) -> list[RasterPrimitive]:
                 ImageDrawing,
                 QuadraticBezierDrawing,
                 CubicBezierDrawing,
+                TextDrawing,
             ),
         ):
             raise ValueError(f"unsupported raster primitive: {component.__class__.__name__}")
@@ -271,6 +276,15 @@ def _validate_render_domain(components: Sequence[RasterPrimitive]) -> None:
                 raise ValueError("rectangle gradients are not supported by raster renderer P1")
         if isinstance(component, RegularPolygonDrawing) and component.corner_radius != 0.0:
             raise ValueError("rounded regular polygons are not supported by raster renderer P1")
+        if isinstance(component, TextDrawing):
+            if "\n" in component.text or "\r" in component.text:
+                raise ValueError("multiline text is not supported by raster renderer P3")
+            if component.style.character_spacing != 0.0:
+                raise ValueError("text character spacing is not supported by raster renderer P3")
+            if component.style.superscript:
+                raise ValueError("text superscript is not supported by raster renderer P3")
+            if component.style.subscript:
+                raise ValueError("text subscript is not supported by raster renderer P3")
         style = getattr(component, "style", None)
         if isinstance(style, DrawingStyle):
             if isinstance(component, (QuadraticBezierDrawing, CubicBezierDrawing)) and style.fill != "none" and style.fill_opacity != 0.0:
@@ -287,9 +301,20 @@ def _validate_render_domain(components: Sequence[RasterPrimitive]) -> None:
                 raise ValueError("nondefault stroke miter limits are not supported by raster renderer P1")
 
 
-def _render_component(surface: Image.Image, component: RasterPrimitive, scale: float) -> None:
+def _render_component(
+    surface: Image.Image,
+    component: RasterPrimitive,
+    scale: float,
+    *,
+    points_scale: float | None = None,
+) -> None:
     if isinstance(component, ImageDrawing):
         _render_image(surface, component, scale)
+        return
+    if isinstance(component, TextDrawing):
+        if points_scale is None:
+            raise ValueError("points_scale is required to render text")
+        _render_text(surface, component, scale, points_scale)
         return
     draw = ImageDraw.Draw(surface)
     style = component.style
@@ -373,6 +398,26 @@ def _render_image(surface: Image.Image, component: ImageDrawing, scale: float) -
         resized = decoded.convert("RGBA").resize((width, height), Image.Resampling.LANCZOS)
     position = _scaled_point(component.position, scale)
     surface.alpha_composite(resized, dest=position)
+
+
+def _render_text(surface: Image.Image, component: TextDrawing, scale: float, points_scale: float) -> None:
+    style: TextStyle = component.style
+    color = _style_color(style.color, 1.0)
+    if not component.text or not style.visible or color is None:
+        return
+    font_size = max(1, round(style.font.size * points_scale))
+    try:
+        font = ImageFont.truetype(style.font.font_file, font_size)
+    except (OSError, ValueError) as exc:
+        raise ValueError("raster text font could not be loaded") from exc
+    anchor = {"start": "ls", "center": "ms", "end": "rs"}[style.text_align]
+    ImageDraw.Draw(surface).text(
+        _scaled_point(component.position, scale),
+        component.text,
+        font=font,
+        fill=color,
+        anchor=anchor,
+    )
 
 
 def _style_color(color: str, opacity: float) -> tuple[int, int, int, int] | None:

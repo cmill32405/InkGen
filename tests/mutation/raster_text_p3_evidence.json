@@ -1,0 +1,33 @@
+{
+  "condition": "RASTER-TEXT-P3",
+  "evidence_generated_utc": "2026-08-03T14:23:43.3231730Z",
+  "source": {
+    "path": "src/InkGen/raster_renderer.py",
+    "sha256": "F5090F74F4E0606F10F5317064563B1681289BD6DE870268E2643B0125865F82"
+  },
+  "test": {
+    "path": "tests/test_raster_text_contract.py",
+    "sha256": "856B0E82C80E2A2CC93EEF3AA8C01988C8CCC971DE40CCE97343111D28533910",
+    "command": "env PYTHONPATH=src /home/ubuntu/.cache/inkgen_mutation_venv/bin/python -m pytest -x tests/test_raster_text_contract.py"
+  },
+  "config": {
+    "path": "tests/mutation/raster_text_p3_cosmic_ray.toml",
+    "sha256": "11D0E4108716C009E4D8A02B1EC9C24464217343ED25DC7299C73F7BD788307E"
+  },
+  "filter": {
+    "path": "tests/mutation/filter_raster_text_p3_work_items.py",
+    "sha256": "01CAE25BB3A86446B1B637F17B0101C13E73CA3A079326021796E36401E20F44"
+  },
+  "campaign": {
+    "generated_candidates": 993,
+    "selected_work_items": 45,
+    "completed_results": 45,
+    "initial_killed": 42,
+    "late_killed_after_test_strengthening": 3,
+    "killed": 45,
+    "survived": 0,
+    "worker_errors": 0,
+    "worker_timeouts": 0,
+    "effective_mutation_coverage": 1.0
+  }
+}

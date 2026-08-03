@@ -39,6 +39,20 @@ P2 additionally renders open `QuadraticBezierDrawing` and
 samples and are painted as supersampled polylines. Visible fills on these open
 curves fail explicitly rather than silently closing the geometry.
 
+P3 additionally renders visible, single-line `TextDrawing` values. The text
+position is a baseline anchor: `start`, `center`, and `end` alignment map to
+left, middle, and right baseline anchors. Font size is interpreted in points
+and converted with `dpi * supersample / 72`, independently of whether canvas
+coordinates use inches or millimeters. The existing cross-platform
+`Font.font_file` resolver supplies the exact installed font file. Empty,
+invisible, and `none`-colored text are transparent no-ops.
+
+P3 rejects multiline text, nonzero character spacing, superscript, and
+subscript rather than silently dropping those semantics. Font-load failures
+raise a raster-specific `ValueError`. Glyph shape and byte determinism are
+scoped to the same resolved font file and Pillow runtime; cross-platform font
+substitution and complex-script equivalence are not claimed.
+
 Fill and stroke colors, widths, and independent opacity values are preserved.
 P1 supports solid strokes with butt caps, miter joins, the default miter limit,
 and zero dash offset. Other cap, join, miter-limit, dash, or dash-offset values
@@ -60,11 +74,11 @@ The supersampled working surface is limited to 64,000,000 pixels and the
 supersampling factor is limited to 1 through 8. Invalid or unsupported inputs
 fail before surface allocation.
 
-The renderer deliberately rejects text, arcs, paths, zoning overlays, rounded
-corners, gradients, dashed strokes, and unsupported stroke controls.
-Later slices will add these features without weakening the closed-domain
-behavior. The Baird composition API below consumes `RasterRenderResult.asset`
-without a PDF or SVG intermediary.
+The renderer deliberately rejects arcs, paths, zoning overlays, rounded
+corners, gradients, dashed strokes, unsupported stroke controls, and text
+presentation outside the P3 domain. Later slices will add these features
+without weakening the closed-domain behavior. The Baird composition API below
+consumes `RasterRenderResult.asset` without a PDF or SVG intermediary.
 
 ## Baird Composition
 

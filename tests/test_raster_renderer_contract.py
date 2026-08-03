@@ -11,6 +11,7 @@ from PIL import Image
 import InkGen.raster_renderer as raster_renderer
 from InkGen.boundary import Canvas
 from InkGen.drawing_components import (
+    ArcDrawing,
     CircleDrawing,
     DrawingComponentGroup,
     ImageDrawing,
@@ -19,12 +20,11 @@ from InkGen.drawing_components import (
     PolygonalDrawing,
     RectangleDrawing,
     RegularPolygonDrawing,
-    TextDrawing,
 )
 from InkGen.gradients import LinearGradientFill
 from InkGen.image_assets import RasterImageAsset
 from InkGen.raster_renderer import render_drawing_group
-from InkGen.style import DrawingStyle, Font, TextStyle
+from InkGen.style import DrawingStyle
 
 
 def _style(
@@ -429,7 +429,7 @@ def test_style_color_and_scale_helpers_are_exact() -> None:
 @pytest.mark.condition("RASTER-RENDERER-P1")
 def test_unsupported_primitive_and_style_features_fail_loudly() -> None:
     """RASTER-RENDERER-P1: P1 never silently approximates unsupported contracts."""
-    text = TextDrawing("not yet", (1, 1), TextStyle(f"text_{uuid4().hex}", Font()))
+    arc = ArcDrawing((1, 1), 1, 1, 0, 90, _style(stroke="#000000", stroke_width=1))
     rounded = RectangleDrawing((1, 1), 2, 2, 0.5, _style(fill="#000000"))
     gradient = RectangleDrawing(
         (1, 1),
@@ -463,7 +463,7 @@ def test_unsupported_primitive_and_style_features_fail_loudly() -> None:
     )
 
     for component, message in [
-        (text, "unsupported raster primitive: TextDrawing"),
+        (arc, "unsupported raster primitive: ArcDrawing"),
         (rounded, "rounded rectangles are not supported"),
         (gradient, "rectangle gradients are not supported"),
         (rounded_polygon, "rounded regular polygons are not supported"),

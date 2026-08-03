@@ -3,7 +3,7 @@
 ## Status
 
 Accepted for `RASTER-RENDERER-P1`, `RASTER-BAIRD-P1`, and
-`RASTER-CURVE-P2`.
+`RASTER-CURVE-P2`, and `RASTER-TEXT-P3`.
 
 ## Context
 
@@ -46,6 +46,13 @@ by the neutral component layer and paints them as supersampled polylines.
 Visible curve fills remain outside the closed domain and fail explicitly;
 silently closing an open curve would change its geometry.
 
+P3 admits visible, single-line `TextDrawing` values with zero character
+spacing and no super/subscript transformation. The neutral baseline position
+is mapped to Pillow's left, middle, or right baseline anchor. Font points are
+converted independently from canvas units with `dpi * supersample / 72`, and
+the existing `Font.font_file` resolver supplies the exact installed font file.
+Unsupported presentation and font-load failures remain explicit.
+
 ## Dependencies And Contracts
 
 | Dependency | Consumed contract | Failure if changed |
@@ -53,7 +60,7 @@ silently closing an open curve would change its geometry.
 | `drawing_components.py` | Neutral primitive geometry, style ownership, and group order | Geometry or ordering renders incorrectly |
 | `component.py` | Established 33-point quadratic and cubic curve samples | Raster curves diverge from neutral/DXF geometry |
 | `boundary.py` | Positive canvas dimensions and normalized `mm`/`in` units | Physical pixel dimensions become incorrect |
-| `style.py` | Normalized RGB colors, opacity, and stroke width | Paint differs from SVG/PDF semantics |
+| `style.py` | Normalized drawing colors, text colors, font-file resolution, point size, visibility, and alignment | Paint, glyph source, or baseline alignment differs from SVG/PDF semantics |
 | `image_assets.py` | EXIF-normalized decoded pixels and alpha metadata | Embedded image orientation or transparency changes |
 | `baird.py` | Seeded degradation, explicit alpha substrate, and result provenance | Scan appearance or reproducibility changes |
 | Pillow | RGBA source-over compositing, supersampled drawing, LANCZOS reduction, deterministic PNG encoding | Pixel evidence changes across backend versions |
@@ -71,7 +78,9 @@ PDF, SVG, DXF, and document outputs do not depend on the raster renderer.
 - Clean and Baird-degraded assets can be produced in one standalone call.
 - Quadratic and cubic curves reuse established neutral samples without a
   serialized renderer intermediary.
-- Later text, curve, path, and clipping slices can extend a proven boundary
+- Single-line text uses the resolved font file and physical point size without
+  changing neutral component or output-format dispatch.
+- Later multiline text, path, and clipping slices can extend a proven boundary
   without changing existing output-format dispatch.
 
 ## Alternatives Rejected
