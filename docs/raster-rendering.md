@@ -135,11 +135,15 @@ Fill and stroke colors, widths, and independent opacity values are preserved.
 Paths support solid fills under the SVG/PDF nonzero winding rule, including
 implicit closure, nested holes, self-intersections, curves, and off-canvas
 clipping. Filled-path strokes are source-over composited after their fill.
-P1 supports solid strokes with butt caps, miter joins, the default miter limit,
-and zero dash offset. Other cap, join, miter-limit, dash, or dash-offset values
-fail explicitly rather than being approximated. Components paint in group order
-with source-over alpha compositing. The output remains RGBA even when a fully
-opaque background is supplied.
+Raster `LineDrawing` supports `butt`, `round`, and `square` caps for solid and
+dashed strokes. Round and square geometry is applied to every positive dash
+and to zero-length on-dashes, so `(0, gap)` patterns produce bounded dotted
+lines. A zero-length butt line is transparent, a round line is a centered
+circle, and a square line is a centered square with a deterministic horizontal
+tangent fallback. Caps on other primitives, non-miter joins, and nondefault
+miter limits fail explicitly rather than being approximated. Components paint
+in group order with source-over alpha compositing. The output remains RGBA even
+when a fully opaque background is supplied.
 
 The default output is transparent. Supply `background_rgba=(r, g, b, a)` only
 when a specific substrate is part of the fixture contract. InkGen does not
@@ -155,10 +159,11 @@ The supersampled working surface is limited to 64,000,000 pixels and the
 supersampling factor is limited to 1 through 8. Invalid or unsupported inputs
 fail before surface allocation.
 
-The renderer deliberately rejects zoning overlays, dashed strokes outside the
-P13 line domain, unsupported stroke controls, and text presentation outside
-the P3/P11 domain. Later slices can add these features without weakening the
-closed-domain behavior. The Baird composition API below consumes
+The renderer deliberately rejects zoning overlays, dashed strokes and
+non-butt caps outside their line domains, unsupported joins and miter limits,
+and text presentation outside the P3/P11 domain. Later slices can add these
+features without weakening the closed-domain behavior. The Baird composition
+API below consumes
 `RasterRenderResult.asset` without a PDF or SVG intermediary.
 
 ## Baird Composition

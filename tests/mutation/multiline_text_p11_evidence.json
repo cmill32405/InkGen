@@ -1,6 +1,6 @@
 {
   "condition": "TEXT-MULTILINE-P11",
-  "evidence_generated_utc": "2026-08-04T00:25:19.3901870Z",
+  "evidence_generated_utc": "2026-08-04T22:42:53.6753368Z",
   "tool": {
     "name": "Cosmic Ray",
     "version": "8.4.6",
@@ -10,7 +10,7 @@
     {"path": "src/InkGen/drawing_components.py", "sha256": "6679A6E3AE03E74F0EFC329C95B0D968D96ABCF2433A06FC564999828F7D38EB"},
     {"path": "src/InkGen/pdf_generator.py", "sha256": "426D67585F253129EAB35A35226921F99963A922E4788EDCA4CF98B8684F31C9"},
     {"path": "src/InkGen/svg_generator.py", "sha256": "C5091B8F99A71F6936369990143D46A98A465BDE80190A1439A6AFF643A745C0"},
-    {"path": "src/InkGen/raster_renderer.py", "sha256": "6340A7F7AD501E7073BC04942DF6A1A3800044EA97A33751759ACD26206A31BB"}
+    {"path": "src/InkGen/raster_renderer.py", "sha256": "0A0835182BC33EB184584F693CF3800775FB5C3C1F4CB6FD2A804D1875601480"}
   ],
   "tests": [
     {"path": "tests/test_raster_text_contract.py", "sha256": "7CE5E5CFA6A0637960FDDD8E6D9025E1126A069C2E7F17D9F2293A120866D681"},
@@ -42,8 +42,8 @@
   },
   "execution_artifacts": [9385],
   "dependency_refresh": {
-    "reason": "RASTER-LINE-DASH-P13 changed raster_renderer.py and invalidated the retained whole-source freshness hash",
-    "method": "P13 changed only the DrawingStyle dash validation, LineDrawing dispatch, and new dash helpers outside every P11 mutation range. The P11 focused raster/text suite was rerun before re-attesting the whole-source hash.",
+    "reason": "RASTER-LINE-CAP-P14 changed raster_renderer.py and invalidated the retained whole-source freshness hash",
+    "method": "P14 changed stroke-cap/dash validation and LineDrawing cap helpers outside every P11 text mutation range. The P11 raster/text dependency suite was rerun before re-attesting the hash (artifact 9606).",
     "scoped_definitions": ["normalize_text_lines", "generate_svg", "_validate_render_domain text branch", "_validated_raster_text", "_render_text"]
   },
   "late_kill_witnesses": [

@@ -14,11 +14,13 @@ and PDF dash cadence, in logical canvas units, subject to a deterministic
 - finite line endpoints accepted by `LineDrawing`;
 - a nonempty finite, nonnegative dash array with at least one positive value;
 - a finite, nonnegative phase;
-- butt caps, a positive stroke width, and the existing raster canvas domain.
+- a positive stroke width and the existing raster canvas domain.
 
-Odd arrays are repeated once. A zero-length source line emits no dash. A phase
-without an array and dash styling on non-line primitives are excluded and fail
-before surface allocation. Other cap, join, and miter-limit variants remain
+Odd arrays are repeated once. A zero-length source line emits no dash under
+P13's butt-cap condition. A phase without an array and dash styling on non-line
+primitives are excluded and fail before surface allocation. P14 separately
+proves round and square caps over the same cadence without changing P13's
+interval partition. Other primitives, joins, and miter-limit variants remain
 outside the raster domain.
 
 ## Dependency And Contract Review

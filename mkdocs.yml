@@ -144,6 +144,7 @@ nav:
       - Raster Gradient Contract: proofs/raster-gradient-contract.md
       - Raster Path Fill Contract: proofs/raster-path-fill-contract.md
       - Raster Line Dash Contract: proofs/raster-line-dash-contract.md
+      - Raster Line Cap Contract: proofs/raster-line-cap-contract.md
   - Architecture Diagrams: architecture-diagrams.md
   - Notes:
       - Mask Alignment Findings: mask_alignment_findings.md

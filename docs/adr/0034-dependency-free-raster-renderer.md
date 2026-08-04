@@ -7,7 +7,8 @@ Accepted for `RASTER-RENDERER-P1`, `RASTER-BAIRD-P1`,
 `RASTER-PATH-P5`, `RASTER-PATH-CURVE-P6`, `RASTER-PATH-ARC-P7`, and
 `RASTER-ROUNDED-RECT-P8`, `RASTER-ROUNDED-POLYGON-P9`, and
 `RASTER-GRADIENT-P10`, `RASTER-TEXT-MULTILINE-P11`, and
-`RASTER-PATH-FILL-P12`, and `RASTER-LINE-DASH-P13`.
+`RASTER-PATH-FILL-P12`, `RASTER-LINE-DASH-P13`, and
+`RASTER-LINE-CAP-P14`.
 
 ## Context
 
@@ -143,13 +144,24 @@ operation bound is checked before Pillow allocation. Other primitives retain
 the established dash rejection until their closed-outline and subpath phase
 continuity contracts are separately proven.
 
+P14 admits `round` and `square` caps for solid and dashed `LineDrawing`
+strokes. Cap geometry is constructed directly in the supersampled pixel
+domain from the rounded raster stroke width. Round caps add endpoint disks;
+square caps add the exact tangent-aligned half-width projection. Zero-length
+on-dashes receive caps because their source-line tangent is known. A
+zero-length solid square uses a deterministic horizontal tangent fallback;
+this follows SVG's centered-square rule, while PDF's documented degenerate
+square-path no-op remains a backend-specific difference. Positive dash
+segments and unique zero-dash cap centers share a 100,000-operation bound
+before allocation. Non-line primitives retain explicit non-butt-cap rejection.
+
 ## Dependencies And Contracts
 
 | Dependency | Consumed contract | Failure if changed |
 |---|---|---|
 | `drawing_components.py` | Neutral primitive geometry, style ownership, and group order | Geometry or ordering renders incorrectly |
 | `component.py` | Established curve samples, normalized path commands, rectangle radii, and regular-polygon tangent-circle geometry | Raster curves, paths, or rounded shapes diverge from neutral/PDF/SVG/DXF geometry |
-| `style.py` | Validated nonnegative dash arrays, phase, stroke width, opacity, and butt-cap default | Raster line cadence or paint differs from SVG/PDF intent |
+| `style.py` | Validated nonnegative dash arrays, phase, stroke width, opacity, and `butt`/`round`/`square` cap selectors | Raster line cadence or cap paint differs from neutral intent |
 | `gradients.py` | Full-coverage axis, ordered extended stops, and normalized sRGB colors | Raster direction, endpoint extension, or interpolation diverges from SVG/PDF intent |
 | `boundary.py` | Positive canvas dimensions and normalized `mm`/`in` units | Physical pixel dimensions become incorrect |
 | `style.py` | Normalized drawing colors, text colors, font-file resolution, point size, visibility, and alignment | Paint, glyph source, or baseline alignment differs from SVG/PDF semantics |
@@ -191,6 +203,8 @@ PDF, SVG, DXF, and document outputs do not depend on the raster renderer.
   SVG/PDF nonzero rule.
 - Dashed lines preserve neutral logical lengths, odd-pattern repetition,
   modulo phase, alpha, and deterministic resource bounds.
+- Solid and dashed lines preserve butt, round, and projecting-square endpoint
+  geometry, including bounded zero-length dotted caps.
 - Later clipping slices can extend a proven boundary without weakening
   existing rejection contracts.
 

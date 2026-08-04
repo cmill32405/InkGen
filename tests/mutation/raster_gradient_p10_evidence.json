@@ -1,6 +1,6 @@
 {
   "condition": "RASTER-GRADIENT-P10",
-  "evidence_generated_utc": "2026-08-04T00:59:43.4348425Z",
+  "evidence_generated_utc": "2026-08-04T22:42:53.6753368Z",
   "tool": {
     "name": "Cosmic Ray",
     "version": "8.4.6",
@@ -8,11 +8,11 @@
   },
   "source": {
     "path": "src/InkGen/raster_renderer.py",
-    "sha256": "6340A7F7AD501E7073BC04942DF6A1A3800044EA97A33751759ACD26206A31BB"
+    "sha256": "0A0835182BC33EB184584F693CF3800775FB5C3C1F4CB6FD2A804D1875601480"
   },
   "tests": [
     {"path": "tests/test_raster_gradient_contract.py", "sha256": "B9817E950D60F2B6D5C181039A697D321617441E10140331F95CC3AC60025141"},
-    {"path": "tests/test_raster_renderer_contract.py", "sha256": "5C2EBA402CAD4F5D4C977B93FC2186A3FDEA19CFF43708CA2522018C40764FE7"},
+    {"path": "tests/test_raster_renderer_contract.py", "sha256": "FD770DA84D40DB178839B4B2553ADBE76654AC5C29479BC7BB8AA2C60EAF13D5"},
     {"path": "tests/test_linear_gradient_contract.py", "sha256": "F854DE89870D16E279CCCF9F4F93D3AE6C44BAE729DA4E4C8440B8DAE3032A81"},
     {"path": "tests/test_raster_rounded_rectangle_contract.py", "sha256": "90FC8ABEFB5082895ED1EE8CBE0A798DE4E6B2D0F3917645BE7D5028DBCC3730"},
     {"path": "tests/test_rounded_regular_polygon_contract.py", "sha256": "4966A27F8EB15318182FA68D950D503161D8427B7EEE68F0F7B719D37B9F1AF7"},
@@ -44,8 +44,8 @@
   },
   "execution_artifacts": [9396, 9399, 9402],
   "dependency_refresh": {
-    "reason": "RASTER-LINE-DASH-P13 changed raster_renderer.py and invalidated the retained whole-source freshness hash",
-    "method": "P13 changed only DrawingStyle dash validation, LineDrawing dispatch, and new dash helpers outside the P10 gradient expressions. The complete P10 focused dependency suite was rerun before re-attesting the whole-source hash.",
+    "reason": "RASTER-LINE-CAP-P14 changed raster_renderer.py and one shared renderer condition test, invalidating retained whole-file freshness hashes",
+    "method": "P14 changed stroke-cap/dash validation and LineDrawing cap helpers outside the P10 gradient mutation ranges. The complete P10 dependency suite was rerun before re-attesting both hashes (artifact 9606).",
     "scoped_definitions": ["_validate_render_domain", "_render_component", "_validated_raster_gradient", "_render_linear_gradient_rectangle"]
   },
   "late_kill_witnesses": [

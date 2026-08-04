@@ -1,0 +1,131 @@
+{
+  "condition": "RASTER-LINE-CAP-P14",
+  "evidence_generated_utc": "2026-08-04T22:36:11.4752513Z",
+  "tool": {
+    "name": "Cosmic Ray",
+    "version": "8.4.6",
+    "execution_environment": "eight disjoint WSL ext4 source-copy shards followed by survivor-only master reruns"
+  },
+  "source_files": [
+    {"path": "src/InkGen/raster_renderer.py", "sha256": "0A0835182BC33EB184584F693CF3800775FB5C3C1F4CB6FD2A804D1875601480"}
+  ],
+  "condition_tests": [
+    {"path": "tests/test_raster_line_cap_contract.py", "sha256": "1174419EC68077FFBF430AB628A34A09310558B3E74F4D7A2781C4B427A5FF86"}
+  ],
+  "mutation_tests": [
+    {"path": "tests/mutation/check_raster_line_cap_p14.py", "sha256": "C41980822377C5B49B5ED33BB8FAA5CCB07F959ED7E4629106274D9549747F3F"}
+  ],
+  "config": {
+    "path": "tests/mutation/raster_line_cap_p14_cosmic_ray.toml",
+    "sha256": "B8D72BADD5ED4F58A95E706D8DAC794734D8CBC33A997D9EB7F394CA0325476C"
+  },
+  "filter": {
+    "path": "tests/mutation/filter_raster_line_cap_p14_work_items.py",
+    "sha256": "A6B78C367F20FBD237B452C29BC68952ECE7E67EB4FE2002F4C7B0501E131B96"
+  },
+  "partition": {
+    "path": "tests/mutation/partition_cosmic_ray_work_items.py",
+    "sha256": "D41FD32FD30C61EFC16ABC54DFF13DC9E82A3BD825E7E7D0A437EB28441F89FE"
+  },
+  "merge": {
+    "path": "tests/mutation/merge_cosmic_ray_shards.py",
+    "sha256": "E3F601D439D91E919E8F29394459492920B2D751C2801E122D96543DB1B607B1"
+  },
+  "database": {
+    "path": "tests/mutation/raster_line_cap_p14.sqlite",
+    "sha256": "F5211036E52914623D3432715EC9E4B8A5A70A8F33AC4A08EECEE29B94DE5799"
+  },
+  "campaign": {
+    "generated_candidates": 4834,
+    "initial_selected_work_items": 476,
+    "selected_work_items": 431,
+    "completed_results": 431,
+    "killed": 415,
+    "survived": 16,
+    "equivalent_survivors": 16,
+    "worker_errors": 0,
+    "worker_timeouts": 0,
+    "raw_mutation_coverage": 0.962877030162413,
+    "effective_mutation_coverage": 1.0
+  },
+  "scope_refinement": "The final filter removes pre-existing P13 dash-normalization and P1 join/miter validation branches from the initially sharded P14 candidate set.",
+  "generation_artifact": 9570,
+  "execution_artifacts": [9586, 9587, 9588, 9589, 9590, 9591, 9592, 9593, 9594, 9600, 9602],
+  "initial_shard_sizes": [60, 60, 60, 60, 59, 59, 59, 59],
+  "equivalent_survivor_proofs": [
+    {
+      "job_ids": [
+        "7ee51eded8d647cca84868a4086ba0b9",
+        "9badc09da2844ac68d6579b284e575a8",
+        "1610fca2cfb54bb280140c02e1fd34b5",
+        "044170b38a4644c98478d2647a497529"
+      ],
+      "mutation": "Cap equality or inequality changes to a lexicographic ordering comparison.",
+      "premises": [
+        "Live validation restricts cap values to butt, round, or square.",
+        "The capped-segment helper receives only round or square.",
+        "Python orders these values as butt < round < square."
+      ],
+      "proof": "On the validated set, cap != butt is identical to cap > butt, cap == butt is identical to cap <= butt, and within the capped helper cap == square is identical to cap >= square. Every branch decision is unchanged."
+    },
+    {
+      "job_ids": [
+        "9e0cde3a8dcb4f2fb1eae947d3b8f288",
+        "36303c8c9e7a4a74829539d70c2eac93"
+      ],
+      "mutation": "Round-cap coordinate equality changes to object identity.",
+      "premises": [
+        "Equal coordinate tuples describe a zero-length segment.",
+        "The endpoint disk uses the same bounds and RGBA fill for every repeated center.",
+        "ImageDraw fill assignment is idempotent for an identical disk."
+      ],
+      "proof": "For unequal values, identity and value comparisons select the same nonzero body and two centers. For equal distinct tuples, the mutant may draw a degenerate body or the same endpoint disk twice; the required disk covers the body and repeating the identical fill does not change any output pixel."
+    },
+    {
+      "job_ids": [
+        "99041d4903964df38f83fea58bcc8779",
+        "c5bd31ec8d6e4f72a48f51911a20c8b9",
+        "85c39abbd3c647bb863a26005f4592f3",
+        "916271a641a54c3f93946a5f54896f30",
+        "8b2311075be547039bdf0c4987f72b48"
+      ],
+      "mutation": "A zero equality changes to less-than-or-equal zero.",
+      "premises": [
+        "math.hypot is nonnegative.",
+        "Validated dash values are nonnegative.",
+        "Modulo two of a nonnegative index is zero or one."
+      ],
+      "proof": "On each stated domain, x == 0 if and only if x <= 0. The tangent fallback, zero-length branch, zero dash selection, and even-slot selections are unchanged."
+    },
+    {
+      "job_ids": ["4e0aa7a160b94f86872e8fda048701bb"],
+      "mutation": "The negative-distance normalization guard changes from distance < 0 to distance <= 0.",
+      "premises": ["The validated dash period is finite and strictly positive."],
+      "proof": "The predicates differ only at distance zero. At zero, the mutant adds ceil(-0 / period) * period = 0, so distance and all emitted centers remain unchanged."
+    },
+    {
+      "job_ids": [
+        "c529eb68f30441488403ce7b69ac1504",
+        "d5b004a1d6a04b81876396640085c9ca"
+      ],
+      "mutation": "Operation-budget comparisons change from >= to == or from == 0 to <= 0.",
+      "premises": [
+        "The caller supplies limit = MAX_DASH_STEPS - segment_count with 0 <= segment_count <= MAX_DASH_STEPS.",
+        "The unique-center count starts at zero and grows by exactly one after the pre-addition guard."
+      ],
+      "proof": "Limit is nonnegative, so limit == 0 and limit <= 0 agree. The pre-addition invariant len(distances) <= limit means len >= limit and len == limit first become true at the same count; the function raises before a count above limit can exist."
+    },
+    {
+      "job_ids": [
+        "d4d7cb0d506c4f168e11a8c7ab5dfaec",
+        "d233aceebc4246d88ca73f8e68eb9e59"
+      ],
+      "mutation": "The zero-length branch inserts positive or negative one instead of zero into the private distance set.",
+      "premises": [
+        "This branch runs only when source length is zero.",
+        "After insertion the set is consumed only through its truth value, and the function returns the original start coordinate."
+      ],
+      "proof": "Zero, positive one, and negative one each make an empty set nonempty and do not make a nonempty set empty. Therefore the branch returns [start] in exactly the same cases and never exposes the inserted sentinel."
+    }
+  ]
+}

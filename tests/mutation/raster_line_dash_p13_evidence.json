@@ -1,13 +1,13 @@
 {
   "condition": "RASTER-LINE-DASH-P13",
-  "evidence_generated_utc": "2026-08-04T19:35:12.3989769Z",
+  "evidence_generated_utc": "2026-08-04T22:42:53.6753368Z",
   "tool": {
     "name": "Cosmic Ray",
     "version": "8.4.6",
     "execution_environment": "four disjoint WSL ext4 source-copy shards"
   },
   "source_files": [
-    {"path": "src/InkGen/raster_renderer.py", "sha256": "6340A7F7AD501E7073BC04942DF6A1A3800044EA97A33751759ACD26206A31BB"}
+    {"path": "src/InkGen/raster_renderer.py", "sha256": "0A0835182BC33EB184584F693CF3800775FB5C3C1F4CB6FD2A804D1875601480"}
   ],
   "condition_tests": [
     {"path": "tests/test_raster_line_dash_contract.py", "sha256": "BADBDBC0DB2A1D4E646A05ABB6C799C66D3C7C392D9677D8609BEB88F3500223"}
@@ -49,6 +49,11 @@
   },
   "execution_artifacts": [9535, 9536, 9537, 9538],
   "shard_sizes": [58, 58, 58, 57],
+  "dependency_refresh": {
+    "reason": "RASTER-LINE-CAP-P14 changed raster_renderer.py and invalidated the retained whole-source freshness hash",
+    "method": "P14 preserved P13 cadence/phase segmentation and independently mutation-tested its new aggregate-period guard. The P13 condition suite and fast mutation witness were rerun before re-attesting the hash (artifact 9606).",
+    "scoped_definitions": ["_validated_line_dash", "_line_dash_segments", "_dash_cursor", "_next_dash_slot", "_draw_dashed_line"]
+  },
   "equivalent_survivor_proofs": [
     {
       "job_ids": ["f78a3c352b03442089c4dbeb1872a163", "9cffc252190b40a89bd7f6668c22c109", "511213f9b4b04d0da7ae9be16945e382"],

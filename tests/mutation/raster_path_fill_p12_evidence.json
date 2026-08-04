@@ -1,6 +1,6 @@
 {
   "condition": "RASTER-PATH-FILL-P12",
-  "evidence_generated_utc": "2026-08-04T15:50:43.2745593Z",
+  "evidence_generated_utc": "2026-08-04T22:42:53.6753368Z",
   "tool": {
     "name": "Cosmic Ray",
     "version": "8.4.6",
@@ -9,7 +9,7 @@
   "source_files": [
     {
       "path": "src/InkGen/raster_renderer.py",
-      "sha256": "6340A7F7AD501E7073BC04942DF6A1A3800044EA97A33751759ACD26206A31BB"
+      "sha256": "0A0835182BC33EB184584F693CF3800775FB5C3C1F4CB6FD2A804D1875601480"
     }
   ],
   "mutation_tests": [
@@ -50,8 +50,8 @@
   },
   "execution_artifacts": [9479, 9484],
   "dependency_refresh": {
-    "reason": "RASTER-LINE-DASH-P13 changed raster_renderer.py and invalidated the retained whole-source freshness hash",
-    "method": "P13 changed only DrawingStyle dash validation, LineDrawing dispatch, and new dash helpers outside every P12 filter range. The P12 condition suite and fast mutation witness were rerun before re-attesting the whole-source hash.",
+    "reason": "RASTER-LINE-CAP-P14 changed raster_renderer.py and invalidated the retained whole-source freshness hash",
+    "method": "P14 changed stroke-cap/dash validation and LineDrawing cap helpers outside every P12 path-fill mutation range. The P12 condition suite and fast mutation witness were rerun before re-attesting the hash (artifact 9606).",
     "scoped_definitions": ["_render_path_component", "_scaled_path_subpaths", "_render_nonzero_path_fill"]
   },
   "late_kill_witnesses": [

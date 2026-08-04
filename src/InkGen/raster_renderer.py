@@ -318,21 +318,34 @@ def _validate_render_domain(components: Sequence[RasterPrimitive], scale: float)
             _scaled_path_subpaths(component, scale)
         style = getattr(component, "style", None)
         if isinstance(style, DrawingStyle):
-            if isinstance(component, ArcDrawing) and style.fill != "none" and style.fill_opacity != 0.0:
-                raise ValueError("arc fills are not supported by raster renderer P4")
-            if isinstance(component, (QuadraticBezierDrawing, CubicBezierDrawing)) and style.fill != "none" and style.fill_opacity != 0.0:
-                raise ValueError("curve fills are not supported by raster renderer P2")
-            dash = _validated_line_dash(style)
-            if dash is not None:
-                if not isinstance(component, LineDrawing):
-                    raise ValueError("dashed strokes are supported only for raster LineDrawing P13")
-                _line_dash_segments(component.point_1, component.point_2, *dash)
-            if style.stroke_linecap != "butt":
-                raise ValueError("only butt stroke caps are supported by raster renderer P1")
-            if style.stroke_linejoin != "miter":
-                raise ValueError("only miter stroke joins are supported by raster renderer P1")
-            if style.stroke_miterlimit != 10.0:
-                raise ValueError("nondefault stroke miter limits are not supported by raster renderer P1")
+            _validate_raster_fill_style(component, style)
+            _validate_raster_stroke_style(component, style)
+
+
+def _validate_raster_fill_style(component: RasterPrimitive, style: DrawingStyle) -> None:
+    """Validate primitive-specific raster fill exclusions before allocation."""
+    if isinstance(component, ArcDrawing) and style.fill != "none" and style.fill_opacity != 0.0:
+        raise ValueError("arc fills are not supported by raster renderer P4")
+    if isinstance(component, (QuadraticBezierDrawing, CubicBezierDrawing)) and style.fill != "none" and style.fill_opacity != 0.0:
+        raise ValueError("curve fills are not supported by raster renderer P2")
+
+
+def _validate_raster_stroke_style(component: RasterPrimitive, style: DrawingStyle) -> None:
+    """Validate the closed raster stroke-presentation domain before allocation."""
+    line_cap = _validated_line_cap(style)
+    dash = _validated_line_dash(style)
+    if dash is not None:
+        if not isinstance(component, LineDrawing):
+            raise ValueError("dashed strokes are supported only for raster LineDrawing P13")
+        _line_dash_segments(component.point_1, component.point_2, *dash)
+        if line_cap != "butt":
+            _line_cap_dash_geometry(component.point_1, component.point_2, *dash)
+    if line_cap != "butt" and not isinstance(component, LineDrawing):
+        raise ValueError("non-butt stroke caps are supported only for raster LineDrawing P14")
+    if style.stroke_linejoin != "miter":
+        raise ValueError("only miter stroke joins are supported by raster renderer P1")
+    if style.stroke_miterlimit != 10.0:
+        raise ValueError("nondefault stroke miter limits are not supported by raster renderer P1")
 
 
 def _render_component(
@@ -400,7 +413,7 @@ def _render_component(
                 stroke_width=stroke_width,
             )
     elif isinstance(component, LineDrawing):
-        _draw_line_component(draw, component, scale, stroke, stroke_width)
+        _draw_dispatched_line_component(draw, component, scale, stroke, stroke_width)
     elif isinstance(component, CircleDrawing):
         x, y = component.position
         radius = component.radius
@@ -474,7 +487,19 @@ def _validated_line_dash(style: DrawingStyle) -> tuple[tuple[float, ...], float]
         raise ValueError("stroke dash array must contain a positive value")
     if len(pattern) % 2:
         pattern *= 2
+    if not math.isfinite(sum(pattern)):
+        raise ValueError("stroke dash period must be finite")
     return pattern, offset
+
+
+def _validated_line_cap(style: DrawingStyle) -> str:
+    """Return a live-validated raster line-cap selector."""
+    line_cap = style.stroke_linecap
+    if not isinstance(line_cap, str):
+        raise TypeError("stroke line cap must be a string")
+    if line_cap not in {"butt", "round", "square"}:
+        raise ValueError("stroke line cap must be butt, round, or square")
+    return line_cap
 
 
 def _nonnegative_finite_number(value: object, name: str) -> float:
@@ -592,6 +617,174 @@ def _draw_line_component(
         )
         return
     _draw_dashed_line(draw, component.point_1, component.point_2, scale, stroke, stroke_width, *dash)
+
+
+def _draw_dispatched_line_component(
+    draw: ImageDraw.ImageDraw,
+    component: LineDrawing,
+    scale: float,
+    stroke: tuple[int, int, int, int] | None,
+    stroke_width: int,
+) -> None:
+    """Dispatch one line to its proven butt or non-butt cap path."""
+    if component.style.stroke_linecap == "butt":
+        if component.point_1 != component.point_2:
+            _draw_line_component(draw, component, scale, stroke, stroke_width)
+        return
+    _draw_capped_line_component(draw, component, scale, stroke, stroke_width)
+
+
+def _line_cap_dash_geometry(
+    start: tuple[float, float],
+    end: tuple[float, float],
+    pattern: tuple[float, ...],
+    offset: float,
+) -> tuple[
+    list[tuple[tuple[float, float], tuple[float, float]]],
+    list[tuple[float, float]],
+]:
+    """Return positive dash segments and zero-dash cap centers within one bound."""
+    segments = _line_dash_segments(start, end, pattern, offset)
+    centers = _zero_length_dash_centers(
+        start,
+        end,
+        pattern,
+        offset,
+        _MAX_DASH_STEPS - len(segments),
+    )
+    return segments, centers
+
+
+def _zero_length_dash_centers(
+    start: tuple[float, float],
+    end: tuple[float, float],
+    pattern: tuple[float, ...],
+    offset: float,
+    limit: int,
+) -> list[tuple[float, float]]:
+    """Locate zero-length on-dashes whose non-butt caps must be painted."""
+    delta_x = end[0] - start[0]
+    delta_y = end[1] - start[1]
+    length = math.hypot(delta_x, delta_y)
+    period = sum(pattern)
+    phase = offset % period
+    distances: set[float] = set()
+    prefix = 0.0
+    for index, value in enumerate(pattern):
+        if index % 2 == 0 and value == 0.0:
+            distance = prefix - phase
+            if distance < 0.0:
+                distance += math.ceil(-distance / period) * period
+            while distance <= length:
+                if distance not in distances:
+                    if len(distances) >= limit:
+                        raise ValueError(f"raster line cap geometry exceeds the {_MAX_DASH_STEPS:,}-operation limit")
+                    distances.add(distance)
+                distance += period
+        prefix += value
+    if length == 0.0:
+        pattern_index, _ = _dash_cursor(pattern, phase)
+        if pattern_index % 2 == 0:
+            if not distances and limit == 0:
+                raise ValueError(f"raster line cap geometry exceeds the {_MAX_DASH_STEPS:,}-operation limit")
+            distances.add(0.0)
+        return [start] if distances else []
+    return [_point_along_line(start, delta_x, delta_y, distance / length) for distance in sorted(distances)]
+
+
+def _unit_tangent(start: tuple[float, float], end: tuple[float, float]) -> tuple[float, float]:
+    """Return the segment unit tangent or the neutral horizontal fallback."""
+    delta_x = end[0] - start[0]
+    delta_y = end[1] - start[1]
+    length = math.hypot(delta_x, delta_y)
+    if length == 0.0:
+        return 1.0, 0.0
+    return delta_x / length, delta_y / length
+
+
+def _square_cap_polygon(
+    start: tuple[float, float],
+    end: tuple[float, float],
+    stroke_width: int,
+    tangent: tuple[float, float] | None = None,
+) -> list[tuple[float, float]]:
+    """Return the four corners of one square-capped raster segment."""
+    unit_x, unit_y = tangent if start == end and tangent is not None else _unit_tangent(start, end)
+    normal_x, normal_y = -unit_y, unit_x
+    radius = stroke_width / 2.0
+    start_x = start[0] - unit_x * radius
+    start_y = start[1] - unit_y * radius
+    end_x = end[0] + unit_x * radius
+    end_y = end[1] + unit_y * radius
+    return [
+        (start_x + normal_x * radius, start_y + normal_y * radius),
+        (end_x + normal_x * radius, end_y + normal_y * radius),
+        (end_x - normal_x * radius, end_y - normal_y * radius),
+        (start_x - normal_x * radius, start_y - normal_y * radius),
+    ]
+
+
+def _draw_capped_segment(
+    draw: ImageDraw.ImageDraw,
+    start: tuple[float, float],
+    end: tuple[float, float],
+    stroke: tuple[int, int, int, int],
+    stroke_width: int,
+    line_cap: str,
+    tangent: tuple[float, float] | None = None,
+) -> None:
+    """Paint one raster segment with SVG-compatible round or square caps."""
+    if line_cap == "square":
+        draw.polygon(_square_cap_polygon(start, end, stroke_width, tangent), fill=stroke)
+        return
+    if start != end:
+        draw.line([start, end], fill=stroke, width=stroke_width)
+    radius = stroke_width / 2.0
+    centers = (start,) if start == end else (start, end)
+    for center_x, center_y in centers:
+        draw.ellipse(
+            (center_x - radius, center_y - radius, center_x + radius, center_y + radius),
+            fill=stroke,
+        )
+
+
+def _draw_capped_line_component(
+    draw: ImageDraw.ImageDraw,
+    component: LineDrawing,
+    scale: float,
+    stroke: tuple[int, int, int, int] | None,
+    stroke_width: int,
+) -> None:
+    """Paint one solid or dashed line with non-butt cap geometry."""
+    if stroke is None:
+        return
+    line_cap = _validated_line_cap(component.style)
+    dash = _validated_line_dash(component.style)
+    if dash is None:
+        _draw_capped_segment(
+            draw,
+            _scaled_point(component.point_1, scale),
+            _scaled_point(component.point_2, scale),
+            stroke,
+            stroke_width,
+            line_cap,
+        )
+        return
+    segments, centers = _line_cap_dash_geometry(component.point_1, component.point_2, *dash)
+    tangent = _unit_tangent(_scaled_point(component.point_1, scale), _scaled_point(component.point_2, scale))
+    for segment_start, segment_end in segments:
+        _draw_capped_segment(
+            draw,
+            _scaled_point(segment_start, scale),
+            _scaled_point(segment_end, scale),
+            stroke,
+            stroke_width,
+            line_cap,
+            tangent,
+        )
+    for center in centers:
+        scaled_center = _scaled_point(center, scale)
+        _draw_capped_segment(draw, scaled_center, scaled_center, stroke, stroke_width, line_cap, tangent)
 
 
 def _reflect_path_control(

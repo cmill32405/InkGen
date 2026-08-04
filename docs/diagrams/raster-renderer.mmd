@@ -1,11 +1,12 @@
 flowchart LR
-    Group[DrawingComponentGroup] --> Validate[Closed P1 through P13 domain validation]
+    Group[DrawingComponentGroup] --> Validate[Closed P1 through P14 domain validation]
     Canvas[Canvas and DPI] --> Scale[Physical pixel scale]
     Validate --> Surface[Supersampled RGBA surface]
     Scale --> Surface
     Style[DrawingStyle] --> Surface
     Style --> Dashes[Bounded logical line-dash segments]
-    Dashes --> Surface
+    Dashes --> Caps[Butt, round, or square line caps]
+    Caps --> Surface
     Assets[RasterImageAsset] --> Surface
     Curves[Shared arc and Bezier samples] --> Surface
     Paths[Validated linear, Bezier, endpoint-arc, and nonzero-fill subpaths] --> Surface
