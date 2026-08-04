@@ -1,0 +1,97 @@
+{
+  "condition": "RASTER-PATH-FILL-P12",
+  "evidence_generated_utc": "2026-08-04T15:50:43.2745593Z",
+  "tool": {
+    "name": "Cosmic Ray",
+    "version": "8.4.6",
+    "execution_environment": "WSL isolated source copy"
+  },
+  "source_files": [
+    {
+      "path": "src/InkGen/raster_renderer.py",
+      "sha256": "47858E8377D0610068AD673FABCF18A50E684ADF81DC2D46D7079393CB2710D0"
+    }
+  ],
+  "mutation_tests": [
+    {
+      "path": "tests/mutation/check_raster_path_fill_p12.py",
+      "sha256": "B239107C834DDCDC246E7220E88E5FC3D6395F3F9A500CC6F2A5A923EA4BE460"
+    }
+  ],
+  "condition_tests": [
+    {
+      "path": "tests/test_raster_path_fill_contract.py",
+      "sha256": "F9F7A5C7B9FCED3BBA36F292E7CD638C3132FF79847D597BC3905F2E9DA1DC0E"
+    }
+  ],
+  "config": {
+    "path": "tests/mutation/raster_path_fill_p12_cosmic_ray.toml",
+    "sha256": "9148FFB6F4A3C144E0D5CCEB26606140129AD0938DC81CA3D9B6E17461A8DDE8"
+  },
+  "filter": {
+    "path": "tests/mutation/filter_raster_path_fill_p12_work_items.py",
+    "sha256": "EE74E93796F38A35904A4D6565379C9690306D27E003149AFC68252F631A649B"
+  },
+  "database": {
+    "path": "tests/mutation/raster_path_fill_p12.sqlite",
+    "sha256": "21E4242D57CCD070ADFF32A279C5EB3153DF93246E117673A261340F0B5C2ABC"
+  },
+  "campaign": {
+    "generated_candidates": 3747,
+    "selected_work_items": 292,
+    "completed_results": 292,
+    "killed": 279,
+    "survived": 13,
+    "equivalent_survivors": 13,
+    "worker_errors": 0,
+    "worker_timeouts": 0,
+    "raw_mutation_coverage": 0.9554794520547946,
+    "effective_mutation_coverage": 1.0
+  },
+  "execution_artifacts": [9479, 9484],
+  "late_kill_witnesses": [
+    "Exact SHA-256 raster witnesses for translated and fractional geometry",
+    "Allocation sentinels for transparent no-op and scaled overflow paths",
+    "Tall, clipped, tangent, and beyond-small-integer-cache geometry",
+    "Exact fill-only, stroke-only, and translucent fill-plus-stroke paint-order witnesses"
+  ],
+  "equivalent_survivor_proofs": [
+    {
+      "job_ids": [
+        "f0c7455d5d0e475e8474756d1222108c",
+        "b68b5ea3fc0d4add8576a47d65b784f5",
+        "a13fdad9bdd94027820f29d34ff1e442",
+        "5c7bb966eef54a438952f321f21bc657"
+      ],
+      "mutation": "The non-horizontal edge winding-delta predicate is changed among four equivalent comparison/addition forms.",
+      "proof": "The preceding horizontal-edge guard establishes y_1 != y_2. On that domain each mutant negates every edge delta from +1/-1 to -1/+1. Therefore every accumulated winding is globally negated, and the fill predicate winding != 0 is invariant."
+    },
+    {
+      "job_ids": ["1b32863214384dafaf4ec7f93e70b514"],
+      "mutation": "The active-edge retention test end_row > row is changed to end_row != row.",
+      "proof": "Edges enter the active set only at start_row and are filtered on every row. The half-open interval construction gives start_row < end_row for every inserted edge, so an active edge can have end_row equal to the current row or greater, never less. Thus > and != retain exactly the same edges."
+    },
+    {
+      "job_ids": ["c127bcb39ed842378632d6b57178793e"],
+      "mutation": "The positive fill-run test run_start < run_end is changed to run_start != run_end.",
+      "proof": "Intersections are sorted in nondecreasing x order. Applying the monotone ceil operation and monotone left/right clipping preserves run_start <= run_end. Therefore inequality differs from strict less-than only in an impossible run_start > run_end case."
+    },
+    {
+      "job_ids": [
+        "34b5a8be548d46139bb5f3cd7b5e5849",
+        "20391d47b80a4f7893d7174a954179bd",
+        "4eac14039ff044d8b8b091babd742d50",
+        "52497cfd1b504277b00edd205bfa444c",
+        "0abba770ea374600b2684c1a90df1ea0",
+        "9f187906b78947dfbc4f867ceb46461a"
+      ],
+      "mutation": "A transparent stroke-layer background RGB channel changes from zero to plus or minus one.",
+      "proof": "Every background pixel has source alpha zero. In source-over composition its RGB contribution is multiplied by zero, so changing an unassociated RGB channel cannot change any destination RGBA pixel. The drawn stroke overwrites the affected source pixels before composition."
+    },
+    {
+      "job_ids": ["2d9db18e068048c38f9392e1022722e8"],
+      "mutation": "The transparent stroke-layer background alpha changes from zero to minus one.",
+      "proof": "Pillow clamps an RGBA channel initialized with -1 to byte zero. The layer bytes are therefore identical before stroke drawing."
+    }
+  ]
+}

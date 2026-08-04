@@ -76,7 +76,7 @@ deterministic transform already proven for P1.
 | Public clean-to-Baird path | emit clean and degraded assets | live-path test |
 | Empty and move-only paths | transparent no-op | parameterized tests |
 | Missing stroke | transparent no-op | boundary test |
-| Visible fill | reject before allocation | failure-mode test |
+| Visible fill | admitted under the nonzero winding rule by P12 | `raster-path-fill-contract.md` |
 | `C`, `S`, `Q`, `T`, `A` | outside P5; admitted by the follow-on P6/P7 conditions | P6/P7 proof suites |
 | Malformed order or cardinality | reject before allocation | failure-mode matrix |
 | Mutated command container | revalidate and reject before allocation | live-boundary tests |

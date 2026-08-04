@@ -314,9 +314,7 @@ def _validate_render_domain(components: Sequence[RasterPrimitive], scale: float)
             if component.style.subscript:
                 raise ValueError("text subscript is not supported by raster renderer P3")
         if isinstance(component, PathDrawing):
-            if component.style.fill != "none" and component.style.fill_opacity != 0.0:
-                raise ValueError("path fills are not supported by raster renderer P5")
-            _sampled_path_subpaths(component)
+            _scaled_path_subpaths(component, scale)
         style = getattr(component, "style", None)
         if isinstance(style, DrawingStyle):
             if isinstance(component, ArcDrawing) and style.fill != "none" and style.fill_opacity != 0.0:
@@ -419,9 +417,7 @@ def _render_component(
             ).points
             _draw_curve(draw, points, scale, stroke, stroke_width)
     elif isinstance(component, PathDrawing):
-        if stroke is not None:
-            for subpath in _sampled_path_subpaths(component):
-                _draw_curve(draw, subpath, scale, stroke, stroke_width)
+        _render_path_component(surface, draw, component, scale, fill, stroke, stroke_width)
     elif isinstance(component, PolygonalDrawing):
         _draw_polygon(draw, component.points, scale, fill, stroke, stroke_width)
     elif isinstance(component, QuadraticBezierDrawing):
@@ -691,6 +687,109 @@ def _sampled_path_subpaths(component: PathDrawing) -> list[list[tuple[float, flo
     if current is not None:
         subpaths.append(current)
     return subpaths
+
+
+def _render_path_component(
+    surface: Image.Image,
+    draw: ImageDraw.ImageDraw,
+    component: PathDrawing,
+    scale: float,
+    fill: tuple[int, int, int, int] | None,
+    stroke: tuple[int, int, int, int] | None,
+    stroke_width: int,
+) -> None:
+    """Render one sampled path's fill and stroke in paint order."""
+    subpaths = _sampled_path_subpaths(component)
+    if fill is not None:
+        _render_nonzero_path_fill(surface, subpaths, scale, fill)
+    if stroke is None:
+        return
+    if fill is None:
+        for subpath in subpaths:
+            _draw_curve(draw, subpath, scale, stroke, stroke_width)
+        return
+
+    stroke_layer = Image.new("RGBA", surface.size, (0, 0, 0, 0))
+    stroke_draw = ImageDraw.Draw(stroke_layer)
+    for subpath in subpaths:
+        _draw_curve(stroke_draw, subpath, scale, stroke, stroke_width)
+    surface.alpha_composite(stroke_layer)
+
+
+def _scaled_path_subpaths(component: PathDrawing, scale: float) -> list[list[tuple[float, float]]]:
+    """Return sampled path points in the finite supersampled pixel domain."""
+    scaled_subpaths: list[list[tuple[float, float]]] = []
+    for subpath in _sampled_path_subpaths(component):
+        scaled_subpath: list[tuple[float, float]] = []
+        for x, y in subpath:
+            scaled = x * scale, y * scale
+            if not all(math.isfinite(value) for value in scaled):
+                raise ValueError("raster path geometry must remain finite after scaling")
+            scaled_subpath.append(scaled)
+        scaled_subpaths.append(scaled_subpath)
+    return scaled_subpaths
+
+
+def _render_nonzero_path_fill(
+    surface: Image.Image,
+    subpaths: Sequence[Sequence[tuple[float, float]]],
+    scale: float,
+    fill: tuple[int, int, int, int],
+) -> None:
+    """Fill sampled path subpaths with the SVG/PDF nonzero winding rule."""
+    scaled_subpaths = [[(x * scale, y * scale) for x, y in subpath] for subpath in subpaths]
+    points = [point for subpath in scaled_subpaths for point in subpath]
+    if not points:
+        return
+
+    left = max(0, math.ceil(min(point[0] for point in points) - 0.5))
+    top = max(0, math.ceil(min(point[1] for point in points) - 0.5))
+    right = min(surface.width, math.ceil(max(point[0] for point in points) - 0.5))
+    bottom = min(surface.height, math.ceil(max(point[1] for point in points) - 0.5))
+    if left >= right or top >= bottom:
+        return
+
+    starts: dict[int, list[list[float | int]]] = {}
+    for subpath in scaled_subpaths:
+        vertices = [*subpath, subpath[0]]
+        for (x_1, y_1), (x_2, y_2) in zip(vertices, vertices[1:], strict=False):
+            if y_1 == y_2:
+                continue
+            start_row = max(top, math.ceil(min(y_1, y_2) - 0.5))
+            end_row = min(bottom, math.ceil(max(y_1, y_2) - 0.5))
+            slope = (x_2 - x_1) / (y_2 - y_1)
+            start_x = x_1 + (start_row + 0.5 - y_1) * slope
+            winding_delta = 1 if y_1 < y_2 else -1
+            starts.setdefault(start_row, []).append([start_x, slope, winding_delta, end_row])
+
+    mask = Image.new("L", (right - left, bottom - top))
+    mask_draw = ImageDraw.Draw(mask)
+    active: list[list[float | int]] = []
+    for row in range(top, bottom):
+        active.extend(starts.get(row, ()))
+        active = [edge for edge in active if int(edge[3]) > row]
+        active.sort(key=lambda edge: float(edge[0]))
+        if active:
+            previous_x = float(active[0][0])
+            winding = int(active[0][2])
+            for edge in active[1:]:
+                intersection_x = float(edge[0])
+                if winding != 0:
+                    run_start = max(left, math.ceil(previous_x - 0.5))
+                    run_end = min(right, math.ceil(intersection_x - 0.5))
+                    if run_start < run_end:
+                        mask_draw.line(
+                            (run_start - left, row - top, run_end - left - 1, row - top),
+                            fill=fill[3],
+                        )
+                winding += int(edge[2])
+                previous_x = intersection_x
+        for edge in active:
+            edge[0] = float(edge[0]) + float(edge[1])
+
+    tile = Image.new("RGB", mask.size, fill[:3])
+    tile.putalpha(mask)
+    surface.alpha_composite(tile, dest=(left, top))
 
 
 def _draw_curve(

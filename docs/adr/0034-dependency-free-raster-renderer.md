@@ -6,7 +6,8 @@ Accepted for `RASTER-RENDERER-P1`, `RASTER-BAIRD-P1`,
 `RASTER-CURVE-P2`, `RASTER-TEXT-P3`, `RASTER-ARC-P4`, and
 `RASTER-PATH-P5`, `RASTER-PATH-CURVE-P6`, `RASTER-PATH-ARC-P7`, and
 `RASTER-ROUNDED-RECT-P8`, `RASTER-ROUNDED-POLYGON-P9`, and
-`RASTER-GRADIENT-P10`, and `RASTER-TEXT-MULTILINE-P11`.
+`RASTER-GRADIENT-P10`, `RASTER-TEXT-MULTILINE-P11`, and
+`RASTER-PATH-FILL-P12`.
 
 ## Context
 
@@ -123,6 +124,17 @@ renderer preserves CRLF/CR/LF line boundaries, empty lines, per-line baseline
 alignment, and point-scaled `TextStyle.line_spacing`. Live text and spacing are
 validated before surface allocation.
 
+P12 admits solid `PathDrawing` fills under the nonzero winding rule already
+used by InkGen's SVG and PDF paths. Every sampled subpath is implicitly closed
+for fill without changing its stroke geometry. A bounded scanline active-edge
+table evaluates supersampled pixel centers over the path's canvas-clipped
+bounding box. Half-open edge intervals prevent shared vertices from being
+counted twice; upward and downward crossings contribute opposite winding
+deltas. Fill pixels are selected exactly when the accumulated winding is
+nonzero. The fill is source-over composited before a separately painted stroke,
+so independent fill and stroke opacity remain meaningful. No dependency or
+renderer intermediary is added.
+
 ## Dependencies And Contracts
 
 | Dependency | Consumed contract | Failure if changed |
@@ -165,8 +177,11 @@ PDF, SVG, DXF, and document outputs do not depend on the raster renderer.
 - Rectangle gradients preserve the neutral axis, N-stop colors, fill opacity,
   rounded clipping, and explicit alpha without using SVG or PDF as an
   intermediary.
-- Later path-fill and clipping slices can extend a proven boundary without
-  weakening existing rejection contracts.
+- Path fills preserve implicit closure, nested-hole orientation,
+  self-intersections, clipping, and independent fill/stroke alpha under the
+  SVG/PDF nonzero rule.
+- Later clipping slices can extend a proven boundary without weakening
+  existing rejection contracts.
 
 ## Alternatives Rejected
 

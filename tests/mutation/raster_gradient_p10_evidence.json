@@ -8,7 +8,7 @@
   },
   "source": {
     "path": "src/InkGen/raster_renderer.py",
-    "sha256": "06E101B19AA0C38BDBE76BABA60BD37469E40FCF9D09340774C869FF6424AC49"
+    "sha256": "47858E8377D0610068AD673FABCF18A50E684ADF81DC2D46D7079393CB2710D0"
   },
   "tests": [
     {"path": "tests/test_raster_gradient_contract.py", "sha256": "B9817E950D60F2B6D5C181039A697D321617441E10140331F95CC3AC60025141"},
@@ -44,8 +44,8 @@
   },
   "execution_artifacts": [9396, 9399, 9402],
   "dependency_refresh": {
-    "reason": "TEXT-MULTILINE-P11 changed raster_renderer.py and invalidated the retained whole-source freshness hash",
-    "method": "Regenerated the final-source campaign, resumed incomplete work from a clean index snapshot, and reran the one non-equivalent survivor after adding its exact-boundary witness",
+    "reason": "TEXT-MULTILINE-P11 and RASTER-PATH-FILL-P12 changed raster_renderer.py and invalidated the retained whole-source freshness hash",
+    "method": "P11 regenerated the final-source campaign and reran its non-equivalent survivor. P12 changed only the PathDrawing validation/render branches and added path-fill helpers outside every P10 filter range; the P10 focused regression suite and certificate were rerun before re-attesting the whole-source hash.",
     "scoped_definitions": ["_validate_render_domain", "_render_component", "_validated_raster_gradient", "_render_linear_gradient_rectangle"]
   },
   "late_kill_witnesses": [

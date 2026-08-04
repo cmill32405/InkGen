@@ -175,19 +175,6 @@ def test_unpainted_linear_path_is_transparent_noop() -> None:
 
 
 @pytest.mark.condition("RASTER-PATH-P5")
-def test_visible_path_fill_fails_before_surface_allocation(monkeypatch: pytest.MonkeyPatch) -> None:
-    """RASTER-PATH-P5: P5 never guesses path fill-rule semantics."""
-    monkeypatch.setattr(raster_renderer.Image, "new", lambda *args, **kwargs: pytest.fail("surface allocated"))
-
-    with pytest.raises(ValueError, match="path fills are not supported"):
-        render_drawing_group(
-            DrawingComponentGroup("filled", [_closed_path(_style(fill="#abcdef"))]),
-            Canvas(4, 3, "in"),
-            dpi=20,
-        )
-
-
-@pytest.mark.condition("RASTER-PATH-P5")
 def test_transparent_path_fill_is_admitted() -> None:
     """RASTER-PATH-P5: Zero-opacity fill does not make a stroked path unsupported."""
     result = render_drawing_group(
