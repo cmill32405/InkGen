@@ -93,7 +93,7 @@ Concurrency, network, active-content, and external-I/O checks do not apply.
 
 ## Mutation Gate
 
-Cosmic Ray 8.4.6 generated 3,186 candidates from the final raster module. The
+Cosmic Ray 8.4.6 generated 3,268 candidates from the final raster module. The
 proof-critical filter retained 311 work items covering live validation, the
 gradient rectangle render branch, finite-axis guards, projection,
 interpolation, clipping, tiling, masking, opacity, and composition. Isolated
@@ -116,9 +116,11 @@ The job IDs, exact source/test/config/filter/database hashes, late-kill
 witnesses, and individual proofs are recorded in
 `tests/mutation/raster_gradient_p10_evidence.json`. Raw mutation coverage is
 95.82%; effective coverage after equivalent-mutant proofs is 100%. A final
-public docstring correction was outside the mutation filter; the evidence
-records identical pre/post AST hashes for all four mutation-scoped definitions
-and the final module byte hash.
+P11 dependency refresh regenerated the full scoped campaign. One newly exposed
+non-equivalent survivor changed the exact-height tile stop from
+`clip_bottom + 1` to `clip_bottom + 2`; an exact-division witness killed it in
+Clarvis artifact 9402. Artifacts 9396 and 9399 contain the initial and cleanly
+resumed campaign windows. All retained worker outcomes are normal.
 
 ## Verification Status
 

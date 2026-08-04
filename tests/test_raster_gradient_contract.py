@@ -420,6 +420,35 @@ def test_gradient_tile_partition_does_not_change_png_bytes(monkeypatch: pytest.M
 
 
 @pytest.mark.condition("RASTER-GRADIENT-P10")
+def test_exact_tile_height_does_not_schedule_an_empty_trailing_tile(monkeypatch: pytest.MonkeyPatch) -> None:
+    """RASTER-GRADIENT-P10: An exact tile-height division emits no empty tile."""
+    surface = raster_renderer.Image.new("RGBA", (4, 4), (0, 0, 0, 0))
+    original_fromarray = raster_renderer.Image.fromarray
+    tile_shapes: list[tuple[int, ...]] = []
+
+    def record_nonempty_tile(array: object) -> object:
+        shape = tuple(array.shape)  # type: ignore[attr-defined]
+        assert shape[0] > 0
+        tile_shapes.append(shape)
+        return original_fromarray(array)
+
+    monkeypatch.setattr(raster_renderer, "_GRADIENT_TILE_PIXELS", 16)
+    monkeypatch.setattr(raster_renderer.Image, "fromarray", record_nonempty_tile)
+
+    raster_renderer._render_linear_gradient_rectangle(
+        surface,
+        (0, 0, 3, 3),
+        0,
+        0,
+        _gradient(),
+        (0.0, 0.0, 3.0, 0.0),
+        1.0,
+    )
+
+    assert tile_shapes == [(4, 4, 3)]
+
+
+@pytest.mark.condition("RASTER-GRADIENT-P10")
 def test_zero_opacity_returns_before_interpolation_work(monkeypatch: pytest.MonkeyPatch) -> None:
     """RASTER-GRADIENT-P10: Transparent gradients allocate no projection arrays or masks."""
     surface = raster_renderer.Image.new("RGBA", (4, 4), (0, 0, 0, 0))

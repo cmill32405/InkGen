@@ -1,0 +1,11 @@
+flowchart LR
+    TD[TextDrawing text] --> NL[normalize_text_lines]
+    NL --> PDF[TextPDF per-line matrices]
+    NL --> SVG[TextSVG per-line tspans]
+    NL --> RV[Raster pre-allocation validation]
+    RV --> RP[Pillow baseline draws]
+    RP --> RGBA[RasterImageAsset RGBA]
+    RGBA --> BAIRD[Baird degradation]
+    TS[TextStyle alignment and line spacing] --> PDF
+    TS --> SVG
+    TS --> RV

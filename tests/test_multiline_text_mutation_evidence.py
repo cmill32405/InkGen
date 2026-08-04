@@ -1,4 +1,4 @@
-"""Freshness and completeness checks for RASTER-GRADIENT-P10 mutation evidence."""
+"""Freshness and completeness checks for multiline text P11 mutation evidence."""
 
 from __future__ import annotations
 
@@ -12,32 +12,32 @@ import pytest
 from tests.mutation_evidence_freshness import _canonical_source_sha256
 
 ROOT = Path(__file__).resolve().parents[1]
-MANIFEST_PATH = ROOT / "tests" / "mutation" / "raster_gradient_p10_evidence.json"
+MANIFEST_PATH = ROOT / "tests" / "mutation" / "multiline_text_p11_evidence.json"
 
 
-@pytest.mark.condition("RASTER-GRADIENT-P10")
-def test_raster_gradient_mutation_certificate_matches_final_source_and_database() -> None:
-    """RASTER-GRADIENT-P10: The recorded complete campaign remains reproducible and current."""
+@pytest.mark.condition("TEXT-MULTILINE-P11")
+def test_multiline_text_mutation_certificate_matches_final_sources_and_database() -> None:
+    """P11: The recorded complete campaign remains reproducible and current."""
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
     campaign = manifest["campaign"]
     database_path = ROOT / manifest["database"]["path"]
 
-    assert manifest["condition"] == "RASTER-GRADIENT-P10"
+    assert manifest["condition"] == "TEXT-MULTILINE-P11"
     assert campaign == {
-        "generated_candidates": 3268,
-        "selected_work_items": 311,
-        "completed_results": 311,
-        "killed": 298,
-        "survived": 13,
-        "equivalent_survivors": 13,
+        "generated_candidates": 7872,
+        "selected_work_items": 113,
+        "completed_results": 113,
+        "killed": 111,
+        "survived": 2,
+        "equivalent_survivors": 2,
         "worker_errors": 0,
         "worker_timeouts": 0,
-        "raw_mutation_coverage": pytest.approx(298 / 311),
+        "raw_mutation_coverage": pytest.approx(111 / 113),
         "effective_mutation_coverage": 1.0,
     }
     assert hashlib.sha256(database_path.read_bytes()).hexdigest().upper() == manifest["database"]["sha256"]
 
-    text_evidence = [manifest["source"], *manifest["tests"], manifest["config"], manifest["filter"]]
+    text_evidence = [*manifest["source_files"], *manifest["tests"], manifest["config"], manifest["filter"]]
     for evidence in text_evidence:
         assert _canonical_source_sha256(ROOT / evidence["path"]).upper() == evidence["sha256"]
 

@@ -16,26 +16,26 @@ from tests.mutation_evidence_freshness import assert_manifest_sources_current
 CONDITION = "PDF-TEXT-PRESENTATION-P3"
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "tests" / "mutation" / "pdf_text_presentation_v5_evidence.json"
-DATABASE_SHA256 = "8CA54247BF7E8AFAB385D0A8DA9317A4A09EDFF6BACBD83471E803B499EFCFFC"
+DATABASE_SHA256 = "20820CAC6FBD9A74340BC75C470DBB572630D7F519223151B0928A929D48F14E"
 EQUIVALENT_SURVIVORS = {
     (
-        "2bb015c2319a4975b922374366533977",
+        "9f3326e37717443fa1d926a43d231a56",
         "src/InkGen/component.py",
         2165,
         24,
         "core/ReplaceOrWithAnd",
     ),
     (
-        "d66dec3a86c34fabb810e0f9cef4600d",
+        "de91437c45874324a1a4cef15afd89d7",
         "src/InkGen/pdf_generator.py",
-        2077,
+        2078,
         18,
         "core/ReplaceComparisonOperator_Eq_LtE",
     ),
     (
-        "da9e4b1bf7e345bd855d66c613463a98",
+        "c83bcb51eee04cb7963bf2264f42f4ff",
         "src/InkGen/pdf_generator.py",
-        2079,
+        2080,
         18,
         "core/ReplaceComparisonOperator_Eq_LtE",
     ),
@@ -56,6 +56,18 @@ def test_pdf_text_presentation_mutation_database_is_complete() -> None:
     work_items = manifest["work_items"]
     assert len(work_items) == 304
     assert len({item["job_id"] for item in work_items}) == 304
+    pdf_generate_sites = Counter(
+        (item["definition_name"], item["start_pos_row"])
+        for item in work_items
+        if item["module_path"].replace("\\", "/") == "src/InkGen/pdf_generator.py" and item["definition_name"] == "generate_pdf"
+    )
+    assert pdf_generate_sites == Counter(
+        {
+            ("generate_pdf", 2123): 33,
+            ("generate_pdf", 2129): 2,
+            ("generate_pdf", 2131): 8,
+        }
+    )
     outcomes = Counter((item["test_outcome"], item["worker_outcome"]) for item in work_items)
     survivors = {
         (

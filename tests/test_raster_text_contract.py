@@ -22,6 +22,7 @@ def _style(
     align: str = "start",
     visible: bool = True,
     character_spacing: float = 0.0,
+    line_spacing: float = 1.0,
 ) -> TextStyle:
     style = TextStyle(
         f"raster_text_{uuid4().hex}",
@@ -31,6 +32,7 @@ def _style(
     )
     style.color = color
     style.text_align = align
+    style.line_spacing = line_spacing
     return style
 
 
@@ -133,6 +135,135 @@ def test_text_uses_baseline_anchor_and_exact_font_file(
     ]
 
 
+@pytest.mark.condition("RASTER-TEXT-MULTILINE-P11")
+@pytest.mark.parametrize(
+    ("align", "anchor"),
+    [("start", "ls"), ("center", "ms"), ("end", "rs")],
+)
+def test_multiline_text_normalizes_breaks_and_positions_each_baseline(
+    monkeypatch: pytest.MonkeyPatch,
+    align: str,
+    anchor: str,
+) -> None:
+    """P11: Every normalized line retains alignment and point-scaled spacing."""
+    style = _style(size=12.0, align=align, line_spacing=1.25)
+    recorder = _RecordingDraw()
+    font_sentinel = object()
+    monkeypatch.setattr(raster_renderer.ImageFont, "truetype", lambda path, size: font_sentinel)
+    monkeypatch.setattr(raster_renderer.ImageDraw, "Draw", lambda surface: recorder)
+
+    raster_renderer._render_component(
+        object(),  # type: ignore[arg-type]
+        TextDrawing("A\r\nBBB\r", (1.25, 2.5), style),
+        10.0,
+        points_scale=2.0,
+    )
+
+    assert [(call["position"], call["text"], call["anchor"]) for call in recorder.calls] == [
+        ((12, 25), "A", anchor),
+        ((12, 55), "BBB", anchor),
+        ((12, 85), "", anchor),
+    ]
+
+
+@pytest.mark.condition("RASTER-TEXT-MULTILINE-P11")
+def test_zero_line_spacing_overlaps_baselines(monkeypatch: pytest.MonkeyPatch) -> None:
+    """P11: Zero spacing is valid and places every line on one baseline."""
+    recorder = _RecordingDraw()
+    monkeypatch.setattr(raster_renderer.ImageFont, "truetype", lambda path, size: object())
+    monkeypatch.setattr(raster_renderer.ImageDraw, "Draw", lambda surface: recorder)
+
+    raster_renderer._render_component(
+        object(),  # type: ignore[arg-type]
+        TextDrawing("A\nB\nC", (1.0, 2.0), _style(line_spacing=0.0)),
+        10.0,
+        points_scale=2.0,
+    )
+
+    assert [call["position"] for call in recorder.calls] == [(10, 20), (10, 20), (10, 20)]
+
+
+@pytest.mark.condition("RASTER-TEXT-MULTILINE-P11")
+def test_multiline_text_renders_through_public_scan_path() -> None:
+    """P11: Multiline neutral text reaches clean and degraded raster assets."""
+    group = DrawingComponentGroup(
+        "multiline_text",
+        [TextDrawing("InkGen\nP11", (0.25, 0.35), _style(size=18.0, line_spacing=1.1))],
+    )
+
+    result = render_and_degrade_drawing_group(
+        group,
+        Canvas(2, 1, "in"),
+        BairdParams.clean(),
+        seed=23,
+        background_rgb=(240, 241, 242),
+        dpi=72,
+        render_supersample=2,
+    )
+
+    with result.clean.asset.image() as clean:
+        assert clean.getbbox() is not None
+        alpha = clean.getchannel("A")
+        occupied_rows = [row for row in range(alpha.height) if alpha.crop((0, row, alpha.width, row + 1)).getbbox()]
+        assert occupied_rows
+        assert max(occupied_rows) - min(occupied_rows) > 18
+    with result.degraded.asset.image() as degraded:
+        assert degraded.getbbox() == (0, 0, 144, 72)
+
+
+@pytest.mark.condition("RASTER-TEXT-MULTILINE-P11")
+@pytest.mark.parametrize(
+    ("live_value", "error_type", "message"),
+    [
+        (True, TypeError, "line spacing must be numeric"),
+        ("1.0", TypeError, "line spacing must be numeric"),
+        (float("nan"), ValueError, "line spacing must be finite"),
+        (float("inf"), ValueError, "line spacing must be finite"),
+        (-0.1, ValueError, "line spacing must be nonnegative"),
+    ],
+)
+def test_live_invalid_line_spacing_fails_before_surface_allocation(
+    monkeypatch: pytest.MonkeyPatch,
+    live_value: object,
+    error_type: type[Exception],
+    message: str,
+) -> None:
+    """P11: Hostile live spacing mutation cannot allocate a raster surface."""
+    style = _style()
+    style._line_spacing = live_value  # type: ignore[assignment]  # noqa: SLF001
+    monkeypatch.setattr(
+        raster_renderer.Image,
+        "new",
+        lambda *args, **kwargs: pytest.fail("surface allocated before text validation"),
+    )
+
+    with pytest.raises(error_type, match=message):
+        render_drawing_group(
+            DrawingComponentGroup("invalid_spacing", [TextDrawing("A\nB", (0.25, 0.5), style)]),
+            Canvas(2, 1, "in"),
+            dpi=72,
+        )
+
+
+@pytest.mark.condition("RASTER-TEXT-MULTILINE-P11")
+def test_live_nonstr_text_fails_before_surface_allocation(monkeypatch: pytest.MonkeyPatch) -> None:
+    """P11: Hostile live text mutation cannot allocate a raster surface."""
+    drawing = TextDrawing("A\nB", (0.25, 0.5), _style())
+    object.__setattr__(drawing, "text", ["A", "B"])
+    monkeypatch.setattr(
+        raster_renderer.Image,
+        "new",
+        lambda *args, **kwargs: pytest.fail("surface allocated before text validation"),
+    )
+
+    with pytest.raises(TypeError, match="text must be a string"):
+        render_drawing_group(
+            DrawingComponentGroup("invalid_text", [drawing]),
+            Canvas(2, 1, "in"),
+            dpi=72,
+        )
+
+
 @pytest.mark.condition("RASTER-TEXT-P3")
 def test_direct_text_render_requires_physical_point_scale() -> None:
     """RASTER-TEXT-P3: Private rendering cannot guess point-to-pixel units."""
@@ -172,6 +303,7 @@ def test_subpixel_font_size_clamps_to_one_pixel(monkeypatch: pytest.MonkeyPatch)
     "drawing",
     [
         pytest.param(TextDrawing("", (0.25, 0.5), _style()), id="empty"),
+        pytest.param(TextDrawing("\r\n", (0.25, 0.5), _style()), id="empty-lines"),
         pytest.param(TextDrawing("hidden", (0.25, 0.5), _style(visible=False)), id="invisible"),
         pytest.param(TextDrawing("unpainted", (0.25, 0.5), _style(color="none")), id="no-color"),
     ],
@@ -201,7 +333,6 @@ def _subscript(style: TextStyle) -> None:
 @pytest.mark.parametrize(
     ("text", "style", "configure", "message"),
     [
-        pytest.param("line 1\nline 2", _style(), None, "multiline", id="multiline"),
         pytest.param("tracked", _style(character_spacing=0.5), None, "character spacing", id="tracking"),
         pytest.param("tracked", _style(character_spacing=-0.5), None, "character spacing", id="negative-tracking"),
         pytest.param("raised", _style(), _superscript, "superscript", id="superscript"),

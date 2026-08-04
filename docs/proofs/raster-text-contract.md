@@ -1,19 +1,22 @@
 # Raster Text Contract Proof
 
-Condition: `RASTER-TEXT-P3`.
+Conditions: `RASTER-TEXT-P3` and `RASTER-TEXT-MULTILINE-P11`.
 
 ## Claim
 
-For valid single-line neutral text in the declared P3 presentation domain,
+For valid neutral text in the declared P3/P11 presentation domain,
 the standalone raster renderer selects InkGen's resolved font file, converts
 font points independently from canvas coordinate units, maps the neutral
-baseline alignment to the corresponding Pillow baseline anchor, and produces
-a clean RGBA asset that remains valid input to the Baird composition path.
+baseline alignment to the corresponding Pillow baseline anchor, preserves the
+shared normalized multiline sequence and line spacing, and produces a clean
+RGBA asset that remains valid input to the Baird composition path.
 
 ## Domain
 
 - The component is a valid `TextDrawing` with a finite baseline position.
-- Text contains no carriage return or line feed.
+- Text line boundaries are normalized by the shared CRLF/CR/LF contract;
+  empty and trailing lines remain significant for baseline placement.
+- `TextStyle.line_spacing` is finite and nonnegative.
 - `TextStyle.character_spacing` is zero and super/subscript are false.
 - Font size, color, visibility, and alignment satisfy `TextStyle` and `Font`.
 - Canvas, DPI, supersampling, background, and runtime satisfy
@@ -33,8 +36,10 @@ T(x, y) = (round(x * p * s), round(y * p * s))
 ```
 
 where `p = d` for inches and `p = d / 25.4` for millimeters, as established by
-`RASTER-RENDERER-P1`. The renderer passes the exact resolved `font_file` and
-integer size `n` to Pillow, then emits one text operation at `T(x, y)`.
+`RASTER-RENDERER-P1`. For normalized line index `i` and line-spacing factor
+`l`, the baseline is `T_i = (round(x*p*s), round(y*p*s + i*f*q*l))`. The
+renderer passes the exact resolved `font_file` and integer size `n` to Pillow,
+then emits one text operation per normalized line at `T_i`.
 Therefore font size depends only on points, DPI, and supersampling, not on the
 canvas coordinate unit. Position depends on the existing physical coordinate
 transform exactly once.
@@ -58,14 +63,21 @@ composition proofs.
 | Domain class | Handling | Evidence |
 |---|---|---|
 | Visible single-line text | render resolved font at physical point size | public scan-path test |
+| Multiline text | normalize line breaks and render each aligned baseline | P11 exact-call and public scan-path tests |
+| Empty/trailing lines | preserve baseline positions without inventing glyphs | P11 normalization and call tests |
 | Start/center/end alignment | map to `ls`/`ms`/`rs` | exhaustive parameterized test |
 | Inch versus millimeter canvas | keep point scale independent | exact public-call test |
 | Empty/invisible/no-color text | transparent no-op | boundary tests |
-| Multiline/tracking/super/subscript | reject before surface allocation | failure-mode tests |
+| Tracking/super/subscript | reject before surface allocation | failure-mode tests |
+| Invalid live multiline text/spacing | reject before surface allocation | P11 allocation-sentinel tests |
 | Font backend failure | raise renderer-specific `ValueError` | dependency-failure test |
 | Complex-script semantic equivalence | excluded from P3 proof | documented residual boundary |
 
 ## Verification Status
+
+The P3 figures below are historical evidence for the original single-line
+slice. P11 continuation evidence is specified in
+[`multiline-text-contract.md`](multiline-text-contract.md).
 
 - Text condition tests: 16 passed.
 - Combined raster/curve/text/composition focused gate: 60 passed.

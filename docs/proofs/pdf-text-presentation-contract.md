@@ -57,7 +57,7 @@ deterministic, serialized, extraction-safe, and wired through the public
 The source-and-test-fresh Cosmic Ray v5 campaign contains 304 scoped mutants.
 All workers completed normally: 301 were killed and three survived as exact
 equivalents. Database SHA-256:
-`8CA54247BF7E8AFAB385D0A8DA9317A4A09EDFF6BACBD83471E803B499EFCFFC`.
+`20820CAC6FBD9A74340BC75C470DBB572630D7F519223151B0928A929D48F14E`.
 
 The survivors are pinned by job id in
 `test_pdf_text_presentation_mutation_evidence.py`:
@@ -78,6 +78,13 @@ mutants that the earlier campaign did not select.
 The evidence manifest records source/config/test hashes, timestamps, database
 identity, all work-item outcomes, and survivor diffs in
 `tests/mutation/pdf_text_presentation_v5_evidence.json`.
+
+P11 shifted the PDF source rows and replaced duplicated line normalization with
+the shared helper. The 304-item campaign was regenerated and rerun against that
+final dependency state in isolated executor windows (Clarvis artifacts 9398
+and 9400), preserving the 301/3 result with no worker errors or timeouts. Its
+refreshed database SHA-256 is
+`20820CAC6FBD9A74340BC75C470DBB572630D7F519223151B0928A929D48F14E`.
 
 ## Verification Gate
 

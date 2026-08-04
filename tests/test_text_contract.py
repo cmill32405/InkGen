@@ -8,7 +8,7 @@ import pytest
 
 from InkGen.component import TextComponent
 from InkGen.document_outputs import FlowDocument
-from InkGen.drawing_components import DrawingComponentGroup, OutputFormat, TextDrawing
+from InkGen.drawing_components import DrawingComponentGroup, OutputFormat, TextDrawing, normalize_text_lines
 from InkGen.dxf_generator import DXFDocument
 from InkGen.pdf_generator import TextPDF
 from InkGen.style import Font, TextStyle
@@ -96,6 +96,33 @@ def test_text_svg_emits_exact_escaped_text(text_style: TextStyle) -> None:
                 x="12.5"
                 y="7.5">A&amp;B</tspan></text>"""
     )
+
+
+@pytest.mark.condition("TEXT-MULTILINE-P11")
+def test_neutral_text_line_normalization_preserves_empty_lines() -> None:
+    """P11: CRLF, CR, and LF share one lossless line normalization contract."""
+    assert normalize_text_lines("A\r\nB\r\n\n") == ("A", "B", "", "")
+    with pytest.raises(TypeError, match="text must be a string"):
+        normalize_text_lines(["A", "B"])
+
+
+@pytest.mark.condition("TEXT-MULTILINE-P11")
+def test_text_svg_emits_one_aligned_tspan_per_normalized_line(text_style: TextStyle) -> None:
+    """P11: SVG materializes normalized lines with relative em spacing."""
+    text_style.text_align = "center"
+    text_style.line_spacing = 1.25
+    component = TextSVG("A&B\r\nMiddle\r", (12.5, 7.5), text_style)
+
+    rendered = component.generate_svg()
+
+    assert rendered.count("<tspan") == 3
+    assert f'id="tspan{component.id}"' in rendered
+    assert f'id="tspan{component.id}-1"' in rendered
+    assert f'id="tspan{component.id}-2"' in rendered
+    assert 'x="12.5"\n                y="7.5">A&amp;B</tspan>' in rendered
+    assert 'x="12.5"\n                dy="1.25em">Middle</tspan>' in rendered
+    assert 'x="12.5"\n                dy="1.25em"></tspan>' in rendered
+    assert rendered.count("text-anchor:middle;text-align:center") == 4
 
 
 @pytest.mark.condition("TEXT-P1")

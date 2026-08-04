@@ -47,11 +47,11 @@ coordinates use inches or millimeters. The existing cross-platform
 `Font.font_file` resolver supplies the exact installed font file. Empty,
 invisible, and `none`-colored text are transparent no-ops.
 
-P3 rejects multiline text, nonzero character spacing, superscript, and
-subscript rather than silently dropping those semantics. Font-load failures
-raise a raster-specific `ValueError`. Glyph shape and byte determinism are
-scoped to the same resolved font file and Pillow runtime; cross-platform font
-substitution and complex-script equivalence are not claimed.
+P3 rejects nonzero character spacing, superscript, and subscript rather than
+silently dropping those semantics. Font-load failures raise a raster-specific
+`ValueError`. Glyph shape and byte determinism are scoped to the same resolved
+font file and Pillow runtime; cross-platform font substitution and complex-
+script equivalence are not claimed.
 
 P4 additionally renders open `ArcDrawing` strokes by reusing the canonical
 `Arc.points` sequence already consumed by PDF and DXF. Forward, reverse, and
@@ -115,6 +115,14 @@ axis. NumPy evaluates at most 1,000,000 pixels per tile, and Pillow performs
 masking and source-over composition. Live mutable gradient payloads and
 nonrepresentable derived axes fail before surface allocation.
 
+P11 additionally renders multiline `TextDrawing` values. CRLF, CR, and LF are
+normalized through the shared neutral line contract, including empty and
+trailing lines. Every line uses the same baseline anchor and x coordinate; its
+y coordinate advances by the requested font size, physical point scale, and
+`TextStyle.line_spacing`. Live non-string text and nonnumeric, non-finite, or
+negative spacing fail before surface allocation. Zero spacing intentionally
+overlaps baselines.
+
 Fill and stroke colors, widths, and independent opacity values are preserved.
 P1 supports solid strokes with butt caps, miter joins, the default miter limit,
 and zero dash offset. Other cap, join, miter-limit, dash, or dash-offset values
@@ -136,10 +144,10 @@ The supersampled working surface is limited to 64,000,000 pixels and the
 supersampling factor is limited to 1 through 8. Invalid or unsupported inputs
 fail before surface allocation.
 
-The renderer deliberately rejects visible path fills, zoning overlays,
-dashed strokes, unsupported stroke controls, and text
-presentation outside the P3 domain. Later slices can add these features without
-weakening the closed-domain behavior. The Baird composition API below consumes
+The renderer deliberately rejects visible path fills, zoning overlays, dashed
+strokes, unsupported stroke controls, and text presentation outside the
+P3/P11 domain. Later slices can add these features without weakening the
+closed-domain behavior. The Baird composition API below consumes
 `RasterRenderResult.asset` without a PDF or SVG intermediary.
 
 ## Baird Composition

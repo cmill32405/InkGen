@@ -17,10 +17,10 @@ from tests.mutation_evidence_freshness import assert_manifest_sources_current
 CONDITION = "TEXT-BOUNDARY-UNITS-P1"
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "tests" / "mutation" / "text_boundary_units_v6_evidence.json"
-DATABASE_SHA256 = "7662A0D7F316547B7B376B6C820BB8B752B6D2141725BB4431AF7396B791D573"
+DATABASE_SHA256 = "058C37CA57FAE4094B951E4FA594E90536AAB0860F7C24CCE518F4F9F9CB1AF5"
 EQUIVALENT_SURVIVORS = {
     (
-        "d0cd1d0d69544c3599242017351fa260",
+        "830beb984f5a405b90e78e81ffef836a",
         "src/InkGen/component.py",
         2206,
         33,

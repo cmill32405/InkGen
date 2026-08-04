@@ -37,6 +37,7 @@ from InkGen.component import CubicBezier as CubicBezierComponent
 from InkGen.component import Path as PathComponent
 from InkGen.component import QuadraticBezier as QuadraticBezierComponent
 from InkGen.document import Document, Layer, Layers
+from InkGen.drawing_components import normalize_text_lines
 from InkGen.extraction_truth import (
     extraction_truth_json,
     restore_extraction_truth_annotations,
@@ -2116,7 +2117,7 @@ class TextPDF(TextComponent, PDFGeneratorInterface):
         text_align = getattr(self.style, "text_align", "start") or "start"
         visible = self.style.visible
         character_spacing = self.style.character_spacing
-        lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        lines = normalize_text_lines(text)
         text_operators: list[str] = []
         for index, line in enumerate(lines):
             line_y = y + (index * size * line_spacing)

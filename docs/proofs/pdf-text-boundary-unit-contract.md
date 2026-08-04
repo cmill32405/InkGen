@@ -50,7 +50,11 @@ The condition test reproduces that boundary and passes after the fix.
 The refreshed scoped Cosmic Ray v6 campaign covers the base conversion/fallback
 arithmetic and the PDF-specific outline hook. All 91 workers completed
 normally: 90 mutations were killed and one survived. The database SHA-256 is
-`7662A0D7F316547B7B376B6C820BB8B752B6D2141725BB4431AF7396B791D573`.
+`058C37CA57FAE4094B951E4FA594E90536AAB0860F7C24CCE518F4F9F9CB1AF5`.
+
+The 91-item campaign was rerun against the P11 shared multiline PDF source and
+completed without worker errors or timeouts (Clarvis artifact 9397). The same
+90/1 outcome and survivor proof hold under the updated dependency state.
 
 The survivor changes the fallback height floor from `0.5` to `-0.5`.
 `Font.size` normalizes every accepted numeric or named input to at least

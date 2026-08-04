@@ -53,6 +53,7 @@ nav:
       - ADR-0032 Standalone SVG Region Emission: adr/0032-standalone-svg-region-emission.md
       - ADR-0033 Standalone Baird Degradation: adr/0033-standalone-baird-degradation.md
       - ADR-0034 Dependency-Free Raster Renderer: adr/0034-dependency-free-raster-renderer.md
+      - ADR-0035 Shared Multiline Text Materialization: adr/0035-shared-multiline-text-materialization.md
   - Proof Notes:
       - Grammar Truth: proofs/grammar-truth.md
       - Extraction Truth Contract: proofs/extraction-truth-contract.md
@@ -133,6 +134,7 @@ nav:
       - Raster Baird Composition Contract: proofs/raster-baird-composition-contract.md
       - Raster Curve Contract: proofs/raster-curve-contract.md
       - Raster Text Contract: proofs/raster-text-contract.md
+      - Multiline Text Contract: proofs/multiline-text-contract.md
       - Raster Arc Contract: proofs/raster-arc-contract.md
       - Raster Path Contract: proofs/raster-path-contract.md
       - Raster Path Curve Contract: proofs/raster-path-curve-contract.md

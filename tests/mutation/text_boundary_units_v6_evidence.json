@@ -1,19 +1,19 @@
 {
   "condition": "TEXT-BOUNDARY-UNITS-P1",
-  "evidence_generated_utc": "2026-08-03T22:17:48.012707+00:00",
+  "evidence_generated_utc": "2026-08-04T00:43:12.874109+00:00",
   "database": {
     "path": "tests/mutation/text_boundary_units_v6.sqlite",
-    "sha256": "7662A0D7F316547B7B376B6C820BB8B752B6D2141725BB4431AF7396B791D573",
-    "last_write_utc": "2026-08-03T22:17:39.817454+00:00"
+    "sha256": "058C37CA57FAE4094B951E4FA594E90536AAB0860F7C24CCE518F4F9F9CB1AF5",
+    "last_write_utc": "2026-08-04T00:42:22.944510+00:00"
   },
   "source_files": {
     "src/InkGen/component.py": {
       "sha256": "E0C8C81AF46B7E080D9C2E1C7462D1E370BA5984F9C8F649A6392DA62A6FC850",
-      "last_write_utc": "2026-08-03T22:16:08.781601+00:00"
+      "last_write_utc": "2026-08-03T21:50:04.995132+00:00"
     },
     "src/InkGen/pdf_generator.py": {
-      "sha256": "D1EBBA4BA4E9E6FEDB66B20819AB4A3E330C349BD70EA55880B3B5D016B4319B",
-      "last_write_utc": "2026-08-03T20:29:31.811857+00:00"
+      "sha256": "426D67585F253129EAB35A35226921F99963A922E4788EDCA4CF98B8684F31C9",
+      "last_write_utc": "2026-08-04T00:29:27.607012+00:00"
     },
     "tests/mutation/filter_text_boundary_units_work_items.py": {
       "sha256": "098501DB0BA2CE2A7D16CA62E5DB0DC66B309ED766A0F8459248C6E546BBB47F",
@@ -30,7 +30,7 @@
   },
   "work_items": [
     {
-      "job_id": "ee661906c78349f398e7de72022772ac",
+      "job_id": "5c2e1e8048b2450db79f0968669eb79e",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -41,7 +41,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points + (96.0 / 72.0), size_points * (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "07392a5354f447c090bef75d3b7f9eee",
+      "job_id": "ec72f9a60d12408cbe1177b6a475e9c2",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -52,7 +52,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points & (96.0 / 72.0), size_points * (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "0730897d016640d492c1483011a510bd",
+      "job_id": "5de7a901302f4db0901ecb3681787bcc",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -63,7 +63,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points | (96.0 / 72.0), size_points * (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "202a841e400f4d068f9dc23a8411b4eb",
+      "job_id": "d202e24175c14ad8bfb737b6e057cef2",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -74,7 +74,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points ^ (96.0 / 72.0), size_points * (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "8d2de6cb3d8d40cfb6e7d148e1e6a3f2",
+      "job_id": "755d257e073e4bd49a6ee6d5d20a6d30",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -85,7 +85,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points / (96.0 / 72.0), size_points * (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "f8ef2fb9c1814fe5bf71c6d42c78eee0",
+      "job_id": "960282dbb959434bab9063ebdf8074f8",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -96,7 +96,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points // (96.0 / 72.0), size_points * (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "35db14a2220e43a1b7d35eaed17f558e",
+      "job_id": "02f8dbeffa4e4391922547d328cc3235",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -107,7 +107,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points << (96.0 / 72.0), size_points * (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "ab361b550b414bd191c11cbe4378afbe",
+      "job_id": "c28a201e64ae41378dfa72234b3079a5",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -118,7 +118,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points % (96.0 / 72.0), size_points * (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "e62437470df3452e88a2d4296f6ab500",
+      "job_id": "929d856aae094ab99d0484ea9f3559db",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -129,7 +129,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points ** (96.0 / 72.0), size_points * (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "096c2ef505404250bb2fd683edb5e423",
+      "job_id": "513d592d18e74adbac0ef38a8814e446",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -140,7 +140,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points >> (96.0 / 72.0), size_points * (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "954eda2e5f25464cb12674566f94a9b3",
+      "job_id": "ef5fd1b0afa645719c8a125ef919aeba",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -151,7 +151,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points - (96.0 / 72.0), size_points * (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "406b1bf9c6064f6f8c598ecc40addde1",
+      "job_id": "cf934897fadc460c91a9106e3d88e34a",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -162,7 +162,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * ( 97.0 / 72.0), size_points * (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "4db7fdfeec8f48c89348cba4f0f6e474",
+      "job_id": "d8bf875d548e494a8cb92a86ef598d77",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -173,7 +173,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * ( 95.0 / 72.0), size_points * (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "aaa014fb9ae941c08f1cc178720cabaf",
+      "job_id": "f450199470204767940c7808645637bc",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -184,7 +184,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 + 72.0), size_points * (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "9a1f486cfc674acc97422a92e1eb8c97",
+      "job_id": "49f12ced5d784798930366ed0ad99977",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -195,7 +195,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 & 72.0), size_points * (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "4cb981f646424ed69ef005a91b90d298",
+      "job_id": "9c990ad77b0c46c19ecf77e806633e77",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -206,7 +206,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 | 72.0), size_points * (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "8513c1bdc35743f981543a16c20c6e1d",
+      "job_id": "1db7d55448f84c34bbd40618003c44a4",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -217,7 +217,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 ^ 72.0), size_points * (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "0017eaa77e33456da9efaca13fbbe7f1",
+      "job_id": "5ae079562d244e03b2cf5b7656fd3641",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -228,7 +228,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 // 72.0), size_points * (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "9d309346d5a746c992d3c9379c71008b",
+      "job_id": "e120dca6471241d9993122b13b3b366c",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -239,7 +239,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 << 72.0), size_points * (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "9bab22f880444d8db6ed371dfc6a51eb",
+      "job_id": "3aaec38586d440e48067d38853937047",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -250,7 +250,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 % 72.0), size_points * (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "0ae6672a4cda4dd78345e20fe66b5b62",
+      "job_id": "b251e0a53dbe420aa3d9ff204bc9dc8e",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -261,7 +261,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 * 72.0), size_points * (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "c9abe04cf51e4456a5582bcd1afbb011",
+      "job_id": "ff010514846a4bf0be19faab6f90e0fd",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -272,7 +272,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 ** 72.0), size_points * (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "46bfe7f114cb46bea0257cb982d6e767",
+      "job_id": "13d66a8a3d46489590716476be87e5e1",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -283,7 +283,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 >> 72.0), size_points * (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "e05a09c4038c4daca84c344de9fd4cd2",
+      "job_id": "ef3b8368d4df42cdadd3c81eb3cab735",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -294,7 +294,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 - 72.0), size_points * (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "1391757b61214f0fb2627c63a7563692",
+      "job_id": "8907498714784f32ac3380a331a797bc",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -305,7 +305,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 / 71.0), size_points * (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "3376cd9a74d64a47925c14258b013a97",
+      "job_id": "ba6b422fd0d948d7881e499da9cfdb6a",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -316,7 +316,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 / 73.0), size_points * (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "2d47c1aea1ea41b9bba4490ec3a9cc7e",
+      "job_id": "14d5ff358a0e4cc881e17ebf1ec41957",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -327,7 +327,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 / 72.0), size_points + (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "3896ea09fa5548ed96831cc2d294c069",
+      "job_id": "d297d61f895e48b0b2efbfd9b8012559",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -338,7 +338,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 / 72.0), size_points & (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "3afd0b6c59d441469240f674d8fda66f",
+      "job_id": "fa0f42a784774b49988364996a2c8b1a",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -349,7 +349,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 / 72.0), size_points | (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "75e505585fc943bd9f9e3566b2dfd960",
+      "job_id": "eabfd370185c449ab2359e2d88ac4844",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -360,7 +360,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 / 72.0), size_points ^ (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "4c8716eccc8f402cac5e89e90b759b1c",
+      "job_id": "1c08fb2219dd4b9e9b7d8d82658af797",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -371,7 +371,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 / 72.0), size_points / (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "c63a10648520440595b9129c7ed0c573",
+      "job_id": "3ec097a9ebf749ec919d0306fa732a6a",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -382,7 +382,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 / 72.0), size_points // (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "43e18819cf534e538e79c89636f6d06f",
+      "job_id": "3a45087052454fb4bb098f6e69df45ec",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -393,7 +393,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 / 72.0), size_points << (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "510ce62e0353496ca401213a5b5adb37",
+      "job_id": "d5865ea9948d462a9d6e0ef0e0f4eb61",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -404,7 +404,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 / 72.0), size_points % (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "c44a6400c2d146f39950c578114ddd52",
+      "job_id": "efb9bb02dfd74862a73f973226be324d",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -415,7 +415,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 / 72.0), size_points ** (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "ccc3daa74e5f481f85c808e9a913b01e",
+      "job_id": "a87b8fd4747c472082ba0aea6a2149bf",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -426,7 +426,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 / 72.0), size_points >> (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "f83c4000f4484168a2e7024a54005183",
+      "job_id": "8191a8b5a0c6475dad81de3bd22aeea2",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -437,18 +437,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 / 72.0), size_points - (25.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "b633073569a24032a7c36a1dc33cfa7f",
-      "module_path": "src/InkGen/component.py",
-      "definition_name": "_outline_font_sizes",
-      "start_pos_row": 2202,
-      "start_pos_col": 59,
-      "operator_name": "core/NumberReplacer",
-      "test_outcome": "KILLED",
-      "worker_outcome": "NORMAL",
-      "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 / 72.0), size_points * ( 26.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
-    },
-    {
-      "job_id": "b89a4c6d30b84eb7b4fdac809e49b9df",
+      "job_id": "afac33d3e8cb4257981b5ef54237bdbc",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -459,7 +448,18 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 / 72.0), size_points * ( 24.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "69b10a400ee44c9da1bc1541b651903f",
+      "job_id": "d8d4cf0b643641bbbefde749cebe1567",
+      "module_path": "src/InkGen/component.py",
+      "definition_name": "_outline_font_sizes",
+      "start_pos_row": 2202,
+      "start_pos_col": 59,
+      "operator_name": "core/NumberReplacer",
+      "test_outcome": "KILLED",
+      "worker_outcome": "NORMAL",
+      "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 / 72.0), size_points * ( 26.4 / 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
+    },
+    {
+      "job_id": "5635e26a2ece4069a45b286731bd9625",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -470,7 +470,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 / 72.0), size_points * (25.4 + 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "a63f72235f834872b3a36fbc35f28d48",
+      "job_id": "35eafa3ba9dc4fb1b6f098c4daf0f4d7",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -481,7 +481,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 / 72.0), size_points * (25.4 & 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "fdc2575260c44902be132ed86a5155d5",
+      "job_id": "ba333b9ab5594b028a9afd1e10d1f9a4",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -492,7 +492,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 / 72.0), size_points * (25.4 | 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "d377a1a6398244df8d7d84fb9c81f6a7",
+      "job_id": "0796f5cd79b1471998f3541bde90ad14",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -503,7 +503,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 / 72.0), size_points * (25.4 ^ 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "3d414ff9e1ce40edb51543fa4380eaca",
+      "job_id": "344ea5e205df47b6aabc77b2f6959a7d",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -514,7 +514,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 / 72.0), size_points * (25.4 // 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "21bb5e8daab14a469ba72f24efc70a82",
+      "job_id": "84d7c213ec1541678c0f25acac5956c8",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -525,7 +525,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 / 72.0), size_points * (25.4 << 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "9257aad9c6f9431b8e02b3c73464e3f8",
+      "job_id": "ea0e68a78689468a9c1d24534350eafa",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -536,7 +536,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 / 72.0), size_points * (25.4 % 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "2a26dfba9a62472c9262a551a9bdf19c",
+      "job_id": "26b6bf608ab9402280a9880fbc910dc5",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -547,7 +547,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 / 72.0), size_points * (25.4 * 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "826e9229a4e046eb96ce91c590f5973d",
+      "job_id": "2a9257d8328d462e85b40a8022e96484",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -558,7 +558,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 / 72.0), size_points * (25.4 ** 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "619986da69f74df886529304f87ab007",
+      "job_id": "2f630cc4b42542a9ab0978d180039991",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -569,7 +569,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 / 72.0), size_points * (25.4 >> 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "62b88983c8294077b33aaa072339c12e",
+      "job_id": "b113094f001e4671ada5de9042e00972",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -580,18 +580,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 / 72.0), size_points * (25.4 - 72.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "d304d7b8f2b342d9b531e7321c8bc149",
-      "module_path": "src/InkGen/component.py",
-      "definition_name": "_outline_font_sizes",
-      "start_pos_row": 2202,
-      "start_pos_col": 66,
-      "operator_name": "core/NumberReplacer",
-      "test_outcome": "KILLED",
-      "worker_outcome": "NORMAL",
-      "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 / 72.0), size_points * (25.4 / 73.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
-    },
-    {
-      "job_id": "db697cf805ac469d9638b9945e0842bb",
+      "job_id": "16a558995eaa482889cce2b0183a2f54",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_outline_font_sizes",
       "start_pos_row": 2202,
@@ -602,18 +591,18 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 / 72.0), size_points * (25.4 / 71.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "a13776db4d32473584fe57fe7ce7b4bb",
+      "job_id": "658786b5634048d6ad825b98491254dc",
       "module_path": "src/InkGen/component.py",
-      "definition_name": "_fallback_outline",
-      "start_pos_row": 2206,
-      "start_pos_col": 33,
+      "definition_name": "_outline_font_sizes",
+      "start_pos_row": 2202,
+      "start_pos_col": 66,
       "operator_name": "core/NumberReplacer",
       "test_outcome": "KILLED",
       "worker_outcome": "NORMAL",
-      "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2203,7 +2203,7 @@\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n-        height = max(size_units, 0.5)\n+        height = max(size_units, 1.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n         width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()"
+      "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2199,7 +2199,7 @@\n     def _outline_font_sizes(self) -> tuple[float, float]:\n         \"\"\"Return precise and fallback sizes in component coordinate units.\"\"\"\n         size_points = float(self.style.font.size)\n-        return size_points * (96.0 / 72.0), size_points * (25.4 / 72.0)\n+        return size_points * (96.0 / 72.0), size_points * (25.4 / 73.0)\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\""
     },
     {
-      "job_id": "d0cd1d0d69544c3599242017351fa260",
+      "job_id": "830beb984f5a405b90e78e81ffef836a",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2206,
@@ -624,7 +613,18 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2203,7 +2203,7 @@\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n-        height = max(size_units, 0.5)\n+        height = max(size_units, -0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n         width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()"
     },
     {
-      "job_id": "c09522e2738047ad8a32d957e7ae8f84",
+      "job_id": "f0280c801bee40a6a9d5c9b1f4013057",
+      "module_path": "src/InkGen/component.py",
+      "definition_name": "_fallback_outline",
+      "start_pos_row": 2206,
+      "start_pos_col": 33,
+      "operator_name": "core/NumberReplacer",
+      "test_outcome": "KILLED",
+      "worker_outcome": "NORMAL",
+      "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2203,7 +2203,7 @@\n \n     def _fallback_outline(self, size_units: float) -> dict:\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n-        height = max(size_units, 0.5)\n+        height = max(size_units, 1.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n         width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()"
+    },
+    {
+      "job_id": "7e4278f070cb481ebc3177b9c9b1a53d",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -635,7 +635,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) + size_units * 0.6, height * 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "4caabfc7afc64eb9b6ed97db84c4408b",
+      "job_id": "b69c8fee8a4c424db00efe6d5450d3d9",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -646,7 +646,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) & size_units * 0.6, height * 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "27a1f258045947a4a142fd1427b22a95",
+      "job_id": "4e73edd610cf4c27abf4e30bbc5b5e05",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -657,7 +657,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) | size_units * 0.6, height * 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "45eff63971b74efe8b48a3656f4d6cea",
+      "job_id": "32c5be0ab18f4f439a509033f1bd8a6b",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -668,7 +668,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) ^ size_units * 0.6, height * 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "9c8aa19caae64d4295115ce5eeb5c043",
+      "job_id": "3534cda305b3411d84c6a46488702f04",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -679,7 +679,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) / size_units * 0.6, height * 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "a3adedcaf81d4035909d874699eb2773",
+      "job_id": "7a7898d1f3814e1f95d207f230446a52",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -690,7 +690,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) // size_units * 0.6, height * 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "a9c75a4282c5467698ba68d1d6e03f6c",
+      "job_id": "3c1aa34ff11d4272918578594b17cddf",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -701,7 +701,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) << size_units * 0.6, height * 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "0575317c85744b899869ff14227293a5",
+      "job_id": "81c570ed80a3420aaa1107f5f58cc731",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -712,7 +712,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) % size_units * 0.6, height * 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "55a564cd4d9c4ec08c62de28d52c45b8",
+      "job_id": "b61b7651c2904e02abdcd9fe4a1f5dd6",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -723,7 +723,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) ** size_units * 0.6, height * 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "a9b3cf3bd566465c859bc3e752ec518d",
+      "job_id": "8a22f6a839f6495ebacbcfa8706cc0f0",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -734,7 +734,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) >> size_units * 0.6, height * 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "34800aa4f0244b58bc53ff31ba1cd8c9",
+      "job_id": "4687d72d4fc2414fa287f32c87a25793",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -745,7 +745,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) - size_units * 0.6, height * 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "b12354dd417d4a3bb8e89e8d116dfac0",
+      "job_id": "e1698648f5ab4d9dacfd44ab43f74744",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -756,7 +756,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) * size_units + 0.6, height * 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "6bf5028d22fc4e339d4a3289712fad8a",
+      "job_id": "70799587c5984e74b3b967989507c127",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -767,7 +767,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) * size_units & 0.6, height * 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "c2dbf0e312c643e58924c622e2e58113",
+      "job_id": "09aa707f61d6448c8a994d69757e8371",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -778,7 +778,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) * size_units | 0.6, height * 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "1853fb65637748278fa543ef81eaa274",
+      "job_id": "28fbf7ce615a4a51bfb6a864fc7463ad",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -789,7 +789,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) * size_units ^ 0.6, height * 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "3d726c88f8a24ea787c044de99b6756b",
+      "job_id": "15bff577ff5a4f4dbe2903856f93d497",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -800,7 +800,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) * size_units / 0.6, height * 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "d82fb1b84eea4153af25fea391ee5898",
+      "job_id": "cb98260957884b198915583c9ceb41ba",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -811,7 +811,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) * size_units // 0.6, height * 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "c17f7cae078a4737a7982bb3cd3b2a77",
+      "job_id": "03ec5c9e3789407e8dca11c5780c522c",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -822,7 +822,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) * size_units << 0.6, height * 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "f61919aeaaad4527b4e568adf8bce89c",
+      "job_id": "9afac8ac488e4d4cbb7d1ab88294fe11",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -833,7 +833,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) * size_units % 0.6, height * 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "40e3fc24aa5d4071a26c8e601c99e136",
+      "job_id": "83321080aecc4f5396d1aa2664f6eebf",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -844,7 +844,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) * size_units ** 0.6, height * 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "e742f55a384943eeacc77ac46b2dbdb3",
+      "job_id": "ec12aab985e64dac86cd484db3f28d2a",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -855,7 +855,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) * size_units >> 0.6, height * 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "a16a575c089e4ca9a5c22a2ad2824340",
+      "job_id": "ec1e1c9285604948b8893102b16fcbe9",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -866,18 +866,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) * size_units - 0.6, height * 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "46af58561f7a459cac2b60f26f6f62c7",
-      "module_path": "src/InkGen/component.py",
-      "definition_name": "_fallback_outline",
-      "start_pos_row": 2208,
-      "start_pos_col": 68,
-      "operator_name": "core/NumberReplacer",
-      "test_outcome": "KILLED",
-      "worker_outcome": "NORMAL",
-      "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) * size_units * 1.6, height * 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
-    },
-    {
-      "job_id": "81c77ca5d8e642a683e8636cc7c16119",
+      "job_id": "6777965cfcda400999ae0a5d14a04632",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -888,7 +877,18 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) * size_units * -0.4, height * 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "1b44c2ea4da74865b7263dc766e92b02",
+      "job_id": "9eb3ffeca4b74891962d22e2dd2affaa",
+      "module_path": "src/InkGen/component.py",
+      "definition_name": "_fallback_outline",
+      "start_pos_row": 2208,
+      "start_pos_col": 68,
+      "operator_name": "core/NumberReplacer",
+      "test_outcome": "KILLED",
+      "worker_outcome": "NORMAL",
+      "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) * size_units * 1.6, height * 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
+    },
+    {
+      "job_id": "914ec4a01aec4acfbdb047462c45b9a6",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -899,7 +899,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) * size_units * 0.6, height + 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "04bb4dced544431e95984cf54c42f7bf",
+      "job_id": "f25b07292fb949f29694ab12d65629b6",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -910,7 +910,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) * size_units * 0.6, height & 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "4b996e00823f4ce5b90882a64cf3f0b2",
+      "job_id": "edf0dbda598949e9937cbf4b5fdc8a43",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -921,7 +921,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) * size_units * 0.6, height | 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "5e38673058954ea9bc127d2d3f023ace",
+      "job_id": "f6cf396eaa534e868fa794a83ff3b5c4",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -932,7 +932,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) * size_units * 0.6, height ^ 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "a16883a2273443929075b544a39da2d1",
+      "job_id": "3cd05c4bf2ee47b680d2b8a1ce754157",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -943,7 +943,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) * size_units * 0.6, height / 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "58a24448953646708c4f4a6daead2c68",
+      "job_id": "49aff8f4979e411888b2bf30ea87694e",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -954,7 +954,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) * size_units * 0.6, height // 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "d4f2684bcdd74c1287ce3c48472e36c4",
+      "job_id": "13cf10e5315d40da8a2f86653f0f9f52",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -965,7 +965,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) * size_units * 0.6, height << 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "55bf3f38f27140c9a92cbcca554341c2",
+      "job_id": "efd72826a83942388bc400697a4bac6e",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -976,7 +976,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) * size_units * 0.6, height % 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "0e4be7c73f9041178e53576a945b7fb6",
+      "job_id": "ad694285adc04009918e154ff61f369e",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -987,7 +987,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) * size_units * 0.6, height ** 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "a1f863146c2c424b9c349cdeb5879cfc",
+      "job_id": "aafc7db7c87145bbb7ab8924152516bc",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -998,7 +998,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) * size_units * 0.6, height >> 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "5b490abd2e1d474eb595ce93d2678281",
+      "job_id": "53cd83ccc8734f04a9f0a0be1e8fa3df",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -1009,7 +1009,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) * size_units * 0.6, height - 0.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "05443b46e64e4d2a885aad361b0fb522",
+      "job_id": "1d5a6c04f1af4d93816174b47cc19b87",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,
@@ -1020,7 +1020,7 @@
       "diff": "--- mutation diff ---\n--- asrc/InkGen/component.py\n+++ bsrc/InkGen/component.py\n@@ -2205,7 +2205,7 @@\n         \"\"\"Return an approximate rectangular outline when precise shaping fails.\"\"\"\n         height = max(size_units, 0.5)\n         lines = self._text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\").split(\"\\n\")\n-        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 0.5)\n+        width = max(max(len(line) for line in lines) * size_units * 0.6, height * 1.5)\n         spacing_offset = self.style.character_spacing * self._character_spacing_intervals()\n         width += abs(spacing_offset)\n "
     },
     {
-      "job_id": "1d5faba638b3487d92111fb7c82a20e1",
+      "job_id": "b967924f3e2a4da4a1b8952fe95fa30e",
       "module_path": "src/InkGen/component.py",
       "definition_name": "_fallback_outline",
       "start_pos_row": 2208,

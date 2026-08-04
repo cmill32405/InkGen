@@ -6,7 +6,7 @@ Accepted for `RASTER-RENDERER-P1`, `RASTER-BAIRD-P1`,
 `RASTER-CURVE-P2`, `RASTER-TEXT-P3`, `RASTER-ARC-P4`, and
 `RASTER-PATH-P5`, `RASTER-PATH-CURVE-P6`, `RASTER-PATH-ARC-P7`, and
 `RASTER-ROUNDED-RECT-P8`, `RASTER-ROUNDED-POLYGON-P9`, and
-`RASTER-GRADIENT-P10`.
+`RASTER-GRADIENT-P10`, and `RASTER-TEXT-MULTILINE-P11`.
 
 ## Context
 
@@ -118,6 +118,11 @@ explicitly asks the standalone raster renderer for pixels; SVG and PDF retain
 their native gradient resources and no renderer uses raster output as an
 intermediary.
 
+P11 admits normalized multiline `TextDrawing` values under ADR-0035. The
+renderer preserves CRLF/CR/LF line boundaries, empty lines, per-line baseline
+alignment, and point-scaled `TextStyle.line_spacing`. Live text and spacing are
+validated before surface allocation.
+
 ## Dependencies And Contracts
 
 | Dependency | Consumed contract | Failure if changed |
@@ -160,8 +165,8 @@ PDF, SVG, DXF, and document outputs do not depend on the raster renderer.
 - Rectangle gradients preserve the neutral axis, N-stop colors, fill opacity,
   rounded clipping, and explicit alpha without using SVG or PDF as an
   intermediary.
-- Later multiline text, path-fill, and clipping slices
-  can extend a proven boundary without weakening existing rejection contracts.
+- Later path-fill and clipping slices can extend a proven boundary without
+  weakening existing rejection contracts.
 
 ## Alternatives Rejected
 

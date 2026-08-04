@@ -42,6 +42,7 @@ from InkGen.component import CubicBezier as CubicBezierComponent
 from InkGen.component import Path as PathComponent
 from InkGen.component import QuadraticBezier as QuadraticBezierComponent
 from InkGen.document import Document, Layer, Layers
+from InkGen.drawing_components import normalize_text_lines
 from InkGen.gradients import LinearGradientFill, coerce_linear_gradient
 from InkGen.image_assets import RasterImageAsset, RasterImageComponent
 from InkGen.style import DrawingStyle, Font, TextStyle
@@ -1283,18 +1284,26 @@ class TextSVG(TextComponent, DrawingGeneratorInterface):
             "stroke:none",
             "stroke-dasharray:none",
         ])
-        text_content = escape(self.text)
+        lines = normalize_text_lines(self.text)
+        tspans = []
+        for index, line in enumerate(lines):
+            vertical_position = f'y="{self.position[1]}"' if index == 0 else f'dy="{line_spacing}em"'
+            suffix = "" if index == 0 else f"-{index}"
+            tspans.append(
+                f"""<tspan
+                sodipodi:role="line"
+                id="tspan{self.id}{suffix}"
+                style="{tspan_style}"
+                x="{self.position[0]}"
+                {vertical_position}>{escape(line)}</tspan>"""
+            )
+        text_content = "".join(tspans)
 
         return f"""<text
             style="{text_style}"
             x="{self.position[0]}"
             y="{self.position[1]}"
-            id="text{self.id}"><tspan
-                sodipodi:role="line"
-                id="tspan{self.id}"
-                style="{tspan_style}"
-                x="{self.position[0]}"
-                y="{self.position[1]}">{text_content}</tspan></text>"""
+            id="text{self.id}">{text_content}</text>"""
 
 
 class ImageSVG(RasterImageComponent, DrawingGeneratorInterface):

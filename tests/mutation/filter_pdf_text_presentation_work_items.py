@@ -40,7 +40,7 @@ AND (
       OR definition_name = '_pdf_text_aligned_x'
       OR (
         definition_name = 'generate_pdf'
-        AND (start_pos_row BETWEEN 2122 AND 2123 OR start_pos_row BETWEEN 2128 AND 2131)
+        AND (start_pos_row BETWEEN 2123 AND 2124 OR start_pos_row BETWEEN 2129 AND 2132)
       )
     )
   )

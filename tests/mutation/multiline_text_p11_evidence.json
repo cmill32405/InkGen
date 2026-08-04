@@ -1,0 +1,57 @@
+{
+  "condition": "TEXT-MULTILINE-P11",
+  "evidence_generated_utc": "2026-08-04T00:25:19.3901870Z",
+  "tool": {
+    "name": "Cosmic Ray",
+    "version": "8.4.6",
+    "execution_environment": "WSL isolated source copy"
+  },
+  "source_files": [
+    {"path": "src/InkGen/drawing_components.py", "sha256": "6679A6E3AE03E74F0EFC329C95B0D968D96ABCF2433A06FC564999828F7D38EB"},
+    {"path": "src/InkGen/pdf_generator.py", "sha256": "426D67585F253129EAB35A35226921F99963A922E4788EDCA4CF98B8684F31C9"},
+    {"path": "src/InkGen/svg_generator.py", "sha256": "C5091B8F99A71F6936369990143D46A98A465BDE80190A1439A6AFF643A745C0"},
+    {"path": "src/InkGen/raster_renderer.py", "sha256": "06E101B19AA0C38BDBE76BABA60BD37469E40FCF9D09340774C869FF6424AC49"}
+  ],
+  "tests": [
+    {"path": "tests/test_raster_text_contract.py", "sha256": "7CE5E5CFA6A0637960FDDD8E6D9025E1126A069C2E7F17D9F2293A120866D681"},
+    {"path": "tests/test_text_contract.py", "sha256": "0D27D631C88BD3C547243C1C724D96FC1566D80EC645EB7DFFAB3647872370FC"}
+  ],
+  "config": {
+    "path": "tests/mutation/multiline_text_p11_cosmic_ray.toml",
+    "sha256": "FCD9423B5AEE2179505F82F14B1F83DE2B31698BDEFBA26652535044F941EB3B"
+  },
+  "filter": {
+    "path": "tests/mutation/filter_multiline_text_p11_work_items.py",
+    "sha256": "6D8C2669139FF71394D79C30CDCD6B29E1743D7955CC0F09FEC0F9F3C5107221"
+  },
+  "database": {
+    "path": "tests/mutation/multiline_text_p11.sqlite",
+    "sha256": "6D3C9A3F44101E06A043EA1647114F42591D1C1EBDC20303AE52586DC55E21EF"
+  },
+  "campaign": {
+    "generated_candidates": 7872,
+    "selected_work_items": 113,
+    "completed_results": 113,
+    "killed": 111,
+    "survived": 2,
+    "equivalent_survivors": 2,
+    "worker_errors": 0,
+    "worker_timeouts": 0,
+    "raw_mutation_coverage": 0.9823008849557522,
+    "effective_mutation_coverage": 1.0
+  },
+  "execution_artifacts": [9385],
+  "late_kill_witnesses": [
+    "Explicit aligned-tspan selector added after the first scoped execution",
+    "Zero line spacing exact-overlap baseline witness",
+    "All-empty multiline transparent-noop witness",
+    "Live invalid text and spacing allocation sentinels"
+  ],
+  "equivalent_survivor_proofs": [
+    {
+      "job_ids": ["6af5e0d095b34bc986cbc3657678e3fa", "f378b271230b4db0b7511fdb2909bda3"],
+      "mutation": "SVG first-line index equality changed from index == 0 to index <= 0",
+      "proof": "The index comes exclusively from enumerate(lines), whose indices are integers in [0, len(lines)-1]. On this domain, index == 0 if and only if index <= 0, so both the absolute-y branch and empty first-ID suffix are unchanged."
+    }
+  ]
+}

@@ -41,6 +41,7 @@ from InkGen.drawing_components import (
     RectangleDrawing,
     RegularPolygonDrawing,
     TextDrawing,
+    normalize_text_lines,
 )
 from InkGen.gradients import LinearGradientFill, coerce_linear_gradient
 from InkGen.image_assets import RasterImageAsset
@@ -305,8 +306,7 @@ def _validate_render_domain(components: Sequence[RasterPrimitive], scale: float)
             if validated.corner_radius > 0.0:
                 regular_polygon_corner_geometry(_regular_polygon_points(validated), validated.corner_radius)
         if isinstance(component, TextDrawing):
-            if "\n" in component.text or "\r" in component.text:
-                raise ValueError("multiline text is not supported by raster renderer P3")
+            _validated_raster_text(component)
             if component.style.character_spacing != 0.0:
                 raise ValueError("text character spacing is not supported by raster renderer P3")
             if component.style.superscript:
@@ -859,8 +859,9 @@ def _draw_rounded_rectangle(
 
 def _render_text(surface: Image.Image, component: TextDrawing, scale: float, points_scale: float) -> None:
     style: TextStyle = component.style
+    lines, line_spacing = _validated_raster_text(component)
     color = _style_color(style.color, 1.0)
-    if not component.text or not style.visible or color is None:
+    if not any(lines) or not style.visible or color is None:
         return
     font_size = max(1, round(style.font.size * points_scale))
     try:
@@ -868,13 +869,32 @@ def _render_text(surface: Image.Image, component: TextDrawing, scale: float, poi
     except (OSError, ValueError) as exc:
         raise ValueError("raster text font could not be loaded") from exc
     anchor = {"start": "ls", "center": "ms", "end": "rs"}[style.text_align]
-    ImageDraw.Draw(surface).text(
-        _scaled_point(component.position, scale),
-        component.text,
-        font=font,
-        fill=color,
-        anchor=anchor,
-    )
+    draw = ImageDraw.Draw(surface)
+    baseline_x = round(component.position[0] * scale)
+    first_baseline_y = component.position[1] * scale
+    baseline_step = style.font.size * points_scale * line_spacing
+    for index, line in enumerate(lines):
+        draw.text(
+            (baseline_x, round(first_baseline_y + index * baseline_step)),
+            line,
+            font=font,
+            fill=color,
+            anchor=anchor,
+        )
+
+
+def _validated_raster_text(component: TextDrawing) -> tuple[tuple[str, ...], float]:
+    """Return normalized lines and finite nonnegative live line spacing."""
+    lines = normalize_text_lines(component.text)
+    line_spacing = component.style.line_spacing
+    if isinstance(line_spacing, bool) or not isinstance(line_spacing, (int, float)):
+        raise TypeError("raster text line spacing must be numeric")
+    normalized_spacing = float(line_spacing)
+    if not math.isfinite(normalized_spacing):
+        raise ValueError("raster text line spacing must be finite")
+    if normalized_spacing < 0.0:
+        raise ValueError("raster text line spacing must be nonnegative")
+    return lines, normalized_spacing
 
 
 def _style_color(color: str, opacity: float) -> tuple[int, int, int, int] | None:

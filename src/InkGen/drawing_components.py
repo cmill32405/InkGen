@@ -72,6 +72,13 @@ def _coerce_text_value(value: object) -> str:
     raise TypeError("TextDrawing text must be a string or a non-iterable built in type")
 
 
+def normalize_text_lines(text: object) -> tuple[str, ...]:
+    """Return text split on normalized CRLF, CR, or LF line boundaries."""
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    return tuple(text.replace("\r\n", "\n").replace("\r", "\n").split("\n"))
+
+
 def _coerce_point_pair(value: object, *, name: str) -> tuple[float, float]:
     """Normalize renderer-neutral point payloads to finite numeric pairs."""
     if isinstance(value, (str, bytes)) or not isinstance(value, Sequence) or len(value) != 2:
