@@ -53,6 +53,7 @@ _INCH_MILLIMETERS = 25.4
 _MAX_SUPERSAMPLED_PIXELS = 64_000_000
 _MAX_SUPERSAMPLE = 8
 _GRADIENT_TILE_PIXELS = 1_000_000
+_MAX_DASH_STEPS = 100_000
 _RENDERER_NAME = "inkgen-raster-v1"
 
 RasterPrimitive = (
@@ -321,10 +322,11 @@ def _validate_render_domain(components: Sequence[RasterPrimitive], scale: float)
                 raise ValueError("arc fills are not supported by raster renderer P4")
             if isinstance(component, (QuadraticBezierDrawing, CubicBezierDrawing)) and style.fill != "none" and style.fill_opacity != 0.0:
                 raise ValueError("curve fills are not supported by raster renderer P2")
-            if style.stroke_dasharray:
-                raise ValueError("dashed strokes are not supported by raster renderer P1")
-            if style.stroke_dash_offset != 0.0:
-                raise ValueError("stroke dash offsets are not supported by raster renderer P1")
+            dash = _validated_line_dash(style)
+            if dash is not None:
+                if not isinstance(component, LineDrawing):
+                    raise ValueError("dashed strokes are supported only for raster LineDrawing P13")
+                _line_dash_segments(component.point_1, component.point_2, *dash)
             if style.stroke_linecap != "butt":
                 raise ValueError("only butt stroke caps are supported by raster renderer P1")
             if style.stroke_linejoin != "miter":
@@ -398,8 +400,7 @@ def _render_component(
                 stroke_width=stroke_width,
             )
     elif isinstance(component, LineDrawing):
-        if stroke is not None:
-            draw.line([_scaled_point(component.point_1, scale), _scaled_point(component.point_2, scale)], fill=stroke, width=stroke_width)
+        _draw_line_component(draw, component, scale, stroke, stroke_width)
     elif isinstance(component, CircleDrawing):
         x, y = component.position
         radius = component.radius
@@ -456,6 +457,141 @@ def _regular_polygon_points(component: RegularPolygonDrawing) -> list[tuple[floa
         )
         for index in range(component.sides)
     ]
+
+
+def _validated_line_dash(style: DrawingStyle) -> tuple[tuple[float, ...], float] | None:
+    """Return a live-validated even dash pattern and phase."""
+    dasharray = style.stroke_dasharray
+    offset = _nonnegative_finite_number(style.stroke_dash_offset, "stroke dash offset")
+    if isinstance(dasharray, (str, bytes)) or not isinstance(dasharray, Sequence):
+        raise TypeError("stroke dash array must be a sequence")
+    if len(dasharray) == 0:
+        if offset != 0.0:
+            raise ValueError("stroke dash offset requires a nonempty dash array")
+        return None
+    pattern = tuple(_nonnegative_finite_number(value, "stroke dash array value") for value in dasharray)
+    if not any(pattern):
+        raise ValueError("stroke dash array must contain a positive value")
+    if len(pattern) % 2:
+        pattern *= 2
+    return pattern, offset
+
+
+def _nonnegative_finite_number(value: object, name: str) -> float:
+    """Return a finite nonnegative numeric value excluding booleans."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError(f"{name} must be numeric")
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError(f"{name} must be finite")
+    if number < 0.0:
+        raise ValueError(f"{name} must be nonnegative")
+    return number
+
+
+def _line_dash_segments(
+    start: tuple[float, float],
+    end: tuple[float, float],
+    pattern: tuple[float, ...],
+    offset: float,
+) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+    """Partition one line into its painted dash segments in logical units."""
+    delta_x = end[0] - start[0]
+    delta_y = end[1] - start[1]
+    length = math.hypot(delta_x, delta_y)
+    period = sum(pattern)
+    pattern_index, remaining = _dash_cursor(pattern, offset % period)
+    distance = 0.0
+    steps = 0
+    segments: list[tuple[tuple[float, float], tuple[float, float]]] = []
+    while distance < length:
+        steps += 1
+        if steps > _MAX_DASH_STEPS:
+            raise ValueError(f"raster line dash pattern exceeds the {_MAX_DASH_STEPS:,}-step limit")
+        step = min(remaining, length - distance)
+        if pattern_index % 2 == 0:
+            segments.append(
+                (
+                    _point_along_line(start, delta_x, delta_y, distance / length),
+                    _point_along_line(start, delta_x, delta_y, (distance + step) / length),
+                )
+            )
+        distance += step
+        pattern_index, remaining = _next_dash_slot(pattern, pattern_index, remaining - step)
+    return segments
+
+
+def _dash_cursor(pattern: tuple[float, ...], phase: float) -> tuple[int, float]:
+    """Locate a normalized phase in a positive-period dash pattern."""
+    index = 0
+    remaining = pattern[index]
+    while remaining == 0.0 or phase >= remaining:
+        if remaining > 0.0:
+            phase -= remaining
+        index = (index + 1) % len(pattern)
+        remaining = pattern[index]
+    return index, remaining - phase
+
+
+def _next_dash_slot(pattern: tuple[float, ...], index: int, remaining: float) -> tuple[int, float]:
+    """Advance past exhausted and zero-length dash slots."""
+    if remaining > 0.0:
+        return index, remaining
+    while True:
+        index = (index + 1) % len(pattern)
+        remaining = pattern[index]
+        if remaining > 0.0:
+            return index, remaining
+
+
+def _point_along_line(
+    start: tuple[float, float],
+    delta_x: float,
+    delta_y: float,
+    fraction: float,
+) -> tuple[float, float]:
+    """Return the point at one normalized distance along a line."""
+    return start[0] + delta_x * fraction, start[1] + delta_y * fraction
+
+
+def _draw_dashed_line(
+    draw: ImageDraw.ImageDraw,
+    start: tuple[float, float],
+    end: tuple[float, float],
+    scale: float,
+    stroke: tuple[int, int, int, int],
+    stroke_width: int,
+    pattern: tuple[float, ...],
+    offset: float,
+) -> None:
+    """Paint a logically segmented line through Pillow's existing stroke path."""
+    for segment_start, segment_end in _line_dash_segments(start, end, pattern, offset):
+        draw.line(
+            [_scaled_point(segment_start, scale), _scaled_point(segment_end, scale)],
+            fill=stroke,
+            width=stroke_width,
+        )
+
+
+def _draw_line_component(
+    draw: ImageDraw.ImageDraw,
+    component: LineDrawing,
+    scale: float,
+    stroke: tuple[int, int, int, int] | None,
+    stroke_width: int,
+) -> None:
+    """Paint one solid or dashed neutral line."""
+    if stroke is None:
+        return
+    dash = _validated_line_dash(component.style)
+    if dash is None:
+        draw.line(
+            [_scaled_point(component.point_1, scale), _scaled_point(component.point_2, scale)],
+            fill=stroke,
+            width=stroke_width,
+        )
+        return
+    _draw_dashed_line(draw, component.point_1, component.point_2, scale, stroke, stroke_width, *dash)
 
 
 def _reflect_path_control(

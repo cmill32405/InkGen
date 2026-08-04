@@ -7,7 +7,7 @@ Accepted for `RASTER-RENDERER-P1`, `RASTER-BAIRD-P1`,
 `RASTER-PATH-P5`, `RASTER-PATH-CURVE-P6`, `RASTER-PATH-ARC-P7`, and
 `RASTER-ROUNDED-RECT-P8`, `RASTER-ROUNDED-POLYGON-P9`, and
 `RASTER-GRADIENT-P10`, `RASTER-TEXT-MULTILINE-P11`, and
-`RASTER-PATH-FILL-P12`.
+`RASTER-PATH-FILL-P12`, and `RASTER-LINE-DASH-P13`.
 
 ## Context
 
@@ -135,12 +135,21 @@ nonzero. The fill is source-over composited before a separately painted stroke,
 so independent fill and stroke opacity remain meaningful. No dependency or
 renderer intermediary is added.
 
+P13 admits dash arrays and dash phase for `LineDrawing` only. The raster
+backend expands odd arrays once, wraps phase by the positive pattern period,
+and partitions the finite neutral segment in logical canvas units before pixel
+scaling. Zero-length entries advance without paint. An explicit 100,000-step
+operation bound is checked before Pillow allocation. Other primitives retain
+the established dash rejection until their closed-outline and subpath phase
+continuity contracts are separately proven.
+
 ## Dependencies And Contracts
 
 | Dependency | Consumed contract | Failure if changed |
 |---|---|---|
 | `drawing_components.py` | Neutral primitive geometry, style ownership, and group order | Geometry or ordering renders incorrectly |
 | `component.py` | Established curve samples, normalized path commands, rectangle radii, and regular-polygon tangent-circle geometry | Raster curves, paths, or rounded shapes diverge from neutral/PDF/SVG/DXF geometry |
+| `style.py` | Validated nonnegative dash arrays, phase, stroke width, opacity, and butt-cap default | Raster line cadence or paint differs from SVG/PDF intent |
 | `gradients.py` | Full-coverage axis, ordered extended stops, and normalized sRGB colors | Raster direction, endpoint extension, or interpolation diverges from SVG/PDF intent |
 | `boundary.py` | Positive canvas dimensions and normalized `mm`/`in` units | Physical pixel dimensions become incorrect |
 | `style.py` | Normalized drawing colors, text colors, font-file resolution, point size, visibility, and alignment | Paint, glyph source, or baseline alignment differs from SVG/PDF semantics |
@@ -180,6 +189,8 @@ PDF, SVG, DXF, and document outputs do not depend on the raster renderer.
 - Path fills preserve implicit closure, nested-hole orientation,
   self-intersections, clipping, and independent fill/stroke alpha under the
   SVG/PDF nonzero rule.
+- Dashed lines preserve neutral logical lengths, odd-pattern repetition,
+  modulo phase, alpha, and deterministic resource bounds.
 - Later clipping slices can extend a proven boundary without weakening
   existing rejection contracts.
 

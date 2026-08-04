@@ -434,7 +434,7 @@ def test_unsupported_primitive_and_style_features_fail_loudly() -> None:
 
     unsupported = UnsupportedDrawing()
     zero_tuple = RectangleDrawing((0, 0), 1, 1, (0.0, 0.0), _style(fill="#000000"))
-    dashed = LineDrawing((0, 0), (1, 1), _style(stroke="#000000", stroke_width=1, stroke_dasharray=(1, 1)))
+    dashed = RectangleDrawing((0, 0), 1, 1, 0, _style(stroke="#000000", stroke_width=1, stroke_dasharray=(1, 1)))
     dash_offset = LineDrawing((0, 0), (1, 1), _style(stroke="#000000", stroke_width=1, stroke_dash_offset=1))
     round_cap = LineDrawing((0, 0), (1, 1), _style(stroke="#000000", stroke_width=1, stroke_linecap="round"))
     round_join = PolygonalDrawing(
@@ -456,8 +456,8 @@ def test_unsupported_primitive_and_style_features_fail_loudly() -> None:
 
     for component, message in [
         (unsupported, "unsupported raster primitive: UnsupportedDrawing"),
-        (dashed, "dashed strokes are not supported"),
-        (dash_offset, "stroke dash offsets are not supported"),
+        (dashed, "dashed strokes are supported only for raster LineDrawing P13"),
+        (dash_offset, "stroke dash offset requires a nonempty dash array"),
         (round_cap, "only butt stroke caps are supported"),
         (round_join, "only miter stroke joins are supported"),
         (bevel_join, "only miter stroke joins are supported"),

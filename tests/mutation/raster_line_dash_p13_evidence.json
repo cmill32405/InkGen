@@ -1,0 +1,94 @@
+{
+  "condition": "RASTER-LINE-DASH-P13",
+  "evidence_generated_utc": "2026-08-04T19:35:12.3989769Z",
+  "tool": {
+    "name": "Cosmic Ray",
+    "version": "8.4.6",
+    "execution_environment": "four disjoint WSL ext4 source-copy shards"
+  },
+  "source_files": [
+    {"path": "src/InkGen/raster_renderer.py", "sha256": "6340A7F7AD501E7073BC04942DF6A1A3800044EA97A33751759ACD26206A31BB"}
+  ],
+  "condition_tests": [
+    {"path": "tests/test_raster_line_dash_contract.py", "sha256": "BADBDBC0DB2A1D4E646A05ABB6C799C66D3C7C392D9677D8609BEB88F3500223"}
+  ],
+  "mutation_tests": [
+    {"path": "tests/mutation/check_raster_line_dash_p13.py", "sha256": "C31F3BA432194801845F677243D3DE3191A4807AEF4C0C48DDA2AA56DFB4D617"}
+  ],
+  "config": {
+    "path": "tests/mutation/raster_line_dash_p13_cosmic_ray.toml",
+    "sha256": "631A3130DC22DB28F88A74F2C330D5A58DEE5AB02F717FAF939E38A849E8E659"
+  },
+  "filter": {
+    "path": "tests/mutation/filter_raster_line_dash_p13_work_items.py",
+    "sha256": "7C00302DA2B411C96983C6EE25DC6AB766F579F673B6105BAE8B5271D005A7B4"
+  },
+  "partition": {
+    "path": "tests/mutation/partition_cosmic_ray_work_items.py",
+    "sha256": "D41FD32FD30C61EFC16ABC54DFF13DC9E82A3BD825E7E7D0A437EB28441F89FE"
+  },
+  "merge": {
+    "path": "tests/mutation/merge_cosmic_ray_shards.py",
+    "sha256": "E3F601D439D91E919E8F29394459492920B2D751C2801E122D96543DB1B607B1"
+  },
+  "database": {
+    "path": "tests/mutation/raster_line_dash_p13.sqlite",
+    "sha256": "93677ED214375A026B9EF16FF02DB4C63AA356BE36222AAE941AC7F977073D9E"
+  },
+  "campaign": {
+    "generated_candidates": 4109,
+    "selected_work_items": 231,
+    "completed_results": 231,
+    "killed": 218,
+    "survived": 13,
+    "equivalent_survivors": 13,
+    "worker_errors": 0,
+    "worker_timeouts": 0,
+    "raw_mutation_coverage": 0.9437229437229437,
+    "effective_mutation_coverage": 1.0
+  },
+  "execution_artifacts": [9535, 9536, 9537, 9538],
+  "shard_sizes": [58, 58, 58, 57],
+  "equivalent_survivor_proofs": [
+    {
+      "job_ids": ["f78a3c352b03442089c4dbeb1872a163", "9cffc252190b40a89bd7f6668c22c109", "511213f9b4b04d0da7ae9be16945e382"],
+      "mutation": "The zero-slot equality in the cursor loop changes to less-than, less-than-or-equal, or equality with minus one.",
+      "proof": "Validated entries are nonnegative and phase is nonnegative. When remaining is zero, phase >= remaining is already true; when remaining is positive, all mutated zero predicates are false. The loop decision is unchanged."
+    },
+    {
+      "job_ids": ["077119ca60fa4a709d07fe1c177d660b", "29d0ba506e0c43d6ba05ed0ced8176f2", "529d388f717b44c2ae53bc1199ee7b7b"],
+      "mutation": "The positive-remaining subtraction guard changes to greater-than-or-equal, nonzero, or greater than minus one.",
+      "proof": "Within the cursor loop remaining is nonnegative. All guards subtract the same positive remaining value; mutants that also enter at zero subtract zero, which leaves phase unchanged."
+    },
+    {
+      "job_ids": ["8aabb34ff71048c48a94d87cae8658d1"],
+      "mutation": "The segment loop distance < length changes to distance != length.",
+      "proof": "Each iteration advances by a positive step no greater than length - distance. Distance never exceeds length and the final clamped step reaches length exactly, so less-than and inequality select the same iterations."
+    },
+    {
+      "job_ids": ["10683bbbf7074de58d36b2116642e1e3"],
+      "mutation": "Even-slot test pattern_index % 2 == 0 changes to <= 0.",
+      "proof": "Modulo two is always zero or one for the nonnegative bounded index. Equality with zero and less-than-or-equal zero are identical."
+    },
+    {
+      "job_ids": ["427610ef73da4bb59ac9e46ba0445eed"],
+      "mutation": "The next-slot remainder changes from remaining - step to remaining % step.",
+      "proof": "If a pattern slot is exhausted, remaining equals step and both expressions are zero. If the final source interval truncates the slot, the outer loop exits immediately and the computed next cursor is never observed."
+    },
+    {
+      "job_ids": ["21c07298e5a14c529f29cae7a28c1c04", "f2c78fd09b5b48d5ab60b4cfd81af7a7"],
+      "mutation": "A next-slot positive test changes from greater-than zero to nonzero.",
+      "proof": "Validated pattern entries and the carried remainder are nonnegative. On that domain x > 0 if and only if x != 0."
+    },
+    {
+      "job_ids": ["0f469963f1884c27ab082f2fa3240784"],
+      "mutation": "Dash-array length equality with zero changes to less-than-or-equal zero.",
+      "proof": "Sequence length is a nonnegative integer, so len == 0 and len <= 0 are identical."
+    },
+    {
+      "job_ids": ["34602b4b74284d4c8cc92d8f01c09442"],
+      "mutation": "Orphan phase nonzero test changes from != 0 to > 0.",
+      "proof": "Phase is validated as nonnegative before this branch. Therefore offset != 0 and offset > 0 are identical."
+    }
+  ]
+}

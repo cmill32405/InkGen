@@ -9,7 +9,7 @@
   "source_files": [
     {
       "path": "src/InkGen/raster_renderer.py",
-      "sha256": "47858E8377D0610068AD673FABCF18A50E684ADF81DC2D46D7079393CB2710D0"
+      "sha256": "6340A7F7AD501E7073BC04942DF6A1A3800044EA97A33751759ACD26206A31BB"
     }
   ],
   "mutation_tests": [
@@ -49,6 +49,11 @@
     "effective_mutation_coverage": 1.0
   },
   "execution_artifacts": [9479, 9484],
+  "dependency_refresh": {
+    "reason": "RASTER-LINE-DASH-P13 changed raster_renderer.py and invalidated the retained whole-source freshness hash",
+    "method": "P13 changed only DrawingStyle dash validation, LineDrawing dispatch, and new dash helpers outside every P12 filter range. The P12 condition suite and fast mutation witness were rerun before re-attesting the whole-source hash.",
+    "scoped_definitions": ["_render_path_component", "_scaled_path_subpaths", "_render_nonzero_path_fill"]
+  },
   "late_kill_witnesses": [
     "Exact SHA-256 raster witnesses for translated and fractional geometry",
     "Allocation sentinels for transparent no-op and scaled overflow paths",

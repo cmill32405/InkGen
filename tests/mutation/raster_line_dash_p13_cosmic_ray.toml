@@ -1,0 +1,11 @@
+[cosmic-ray]
+module-path = ["src/InkGen/raster_renderer.py"]
+timeout = 30.0
+excluded-modules = []
+test-command = "env PYTHONPATH=src OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 /home/ubuntu/.cache/inkgen_mutation_venv/bin/python tests/mutation/check_raster_line_dash_p13.py"
+
+[cosmic-ray.distributor]
+name = "local"
+
+[cosmic-ray.filters.operators-filter]
+exclude-operators = []

@@ -123,6 +123,14 @@ y coordinate advances by the requested font size, physical point scale, and
 negative spacing fail before surface allocation. Zero spacing intentionally
 overlaps baselines.
 
+P13 additionally renders dashed `LineDrawing` strokes. Dash lengths and phase
+remain in logical canvas units, odd-length arrays repeat once to form an even
+pattern, and phase wraps modulo the pattern period. Zero-length slots are
+valid when another slot is positive. A zero-length dashed line is a transparent
+butt-cap no-op. More than 100,000 positive pattern steps fails before
+surface allocation. Dash arrays on other primitives and a phase without an
+array remain outside the closed domain.
+
 Fill and stroke colors, widths, and independent opacity values are preserved.
 Paths support solid fills under the SVG/PDF nonzero winding rule, including
 implicit closure, nested holes, self-intersections, curves, and off-canvas
@@ -147,10 +155,10 @@ The supersampled working surface is limited to 64,000,000 pixels and the
 supersampling factor is limited to 1 through 8. Invalid or unsupported inputs
 fail before surface allocation.
 
-The renderer deliberately rejects zoning overlays, dashed strokes, unsupported
-stroke controls, and text presentation outside the P3/P11 domain. Later slices
-can add these features without weakening the closed-domain behavior. The Baird
-composition API below consumes
+The renderer deliberately rejects zoning overlays, dashed strokes outside the
+P13 line domain, unsupported stroke controls, and text presentation outside
+the P3/P11 domain. Later slices can add these features without weakening the
+closed-domain behavior. The Baird composition API below consumes
 `RasterRenderResult.asset` without a PDF or SVG intermediary.
 
 ## Baird Composition
