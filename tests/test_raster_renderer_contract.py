@@ -451,13 +451,13 @@ def test_unsupported_primitive_and_style_features_fail_loudly() -> None:
         (dashed, "dashed strokes are supported only for raster LineDrawing P13"),
         (dash_offset, "stroke dash offset requires a nonempty dash array"),
         (round_cap, "non-butt stroke caps are supported only for raster LineDrawing P14"),
-        (miter_limit, "nondefault stroke miter limits are not supported"),
-        (high_miter_limit, "nondefault stroke miter limits are not supported"),
     ]:
         with pytest.raises(ValueError, match=message):
             render_drawing_group(DrawingComponentGroup("unsupported", [component]), Canvas(3, 3, "in"), dpi=10)
 
     assert render_drawing_group(DrawingComponentGroup("zero tuple", [zero_tuple]), Canvas(1, 1, "in"), dpi=10).component_count == 1
+    for component in (miter_limit, high_miter_limit):
+        assert render_drawing_group(DrawingComponentGroup("miter limit", [component]), Canvas(3, 3, "in"), dpi=10).component_count == 1
 
     dynamic_defaults = LineDrawing(
         (0, 0),

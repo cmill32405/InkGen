@@ -7,13 +7,13 @@
     "execution_environment": "two sequential disjoint WSL shards followed by a complete database merge"
   },
   "source_files": [
-    {"path": "src/InkGen/raster_renderer.py", "sha256": "2FF1E75B49ECC90853E07D2F89EF011B8722A4FC2756256D397ADEA289666858"}
+    {"path": "src/InkGen/raster_renderer.py", "sha256": "9609F229AF0404328D3E8BF595D3DE4410F98165E62210C1D0064FAF9893F245"}
   ],
   "condition_tests": [
-    {"path": "tests/test_raster_line_join_contract.py", "sha256": "2B980AA7C4A9DE76ACD85DC53FAC01F7418431B1C5C301774FCB81C6BE9237E4"}
+    {"path": "tests/test_raster_line_join_contract.py", "sha256": "FD9F9EB323FF15195704C1672B91093A1209A12CD15C7014768D9D2C4357178F"}
   ],
   "mutation_tests": [
-    {"path": "tests/mutation/check_raster_line_join_p15.py", "sha256": "07F5755577A5CBCB5FD6D737406371E36E9F69616729116353D398482D31733F"}
+    {"path": "tests/mutation/check_raster_line_join_p15.py", "sha256": "EE6A2FE2731F7F83BDB79AD486B79A38EA3DB39CD1DC833DAA6EA86501F77D4B"}
   ],
   "config": {
     "path": "tests/mutation/raster_line_join_p15_cosmic_ray.toml",

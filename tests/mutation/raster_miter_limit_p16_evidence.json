@@ -1,0 +1,53 @@
+{
+  "condition": "RASTER-MITER-LIMIT-P16",
+  "evidence_generated_utc": "2026-08-05T15:05:00Z",
+  "tool": {
+    "name": "Cosmic Ray",
+    "version": "8.4.6",
+    "execution_environment": "two sequential disjoint WSL shards followed by a complete database merge"
+  },
+  "source_files": [
+    {"path": "src/InkGen/raster_renderer.py", "sha256": "9609F229AF0404328D3E8BF595D3DE4410F98165E62210C1D0064FAF9893F245"}
+  ],
+  "condition_tests": [
+    {"path": "tests/test_raster_miter_limit_contract.py", "sha256": "03B885DB85FDBDD50E8D7C4740E18A9285E98FECCF7BC359C7312A777221C2B2"}
+  ],
+  "mutation_tests": [
+    {"path": "tests/mutation/check_raster_miter_limit_p16.py", "sha256": "247340AD926BDA07A3FF992F35DAE231615DCE59BB410F5EFDCBBD6093424D31"}
+  ],
+  "config": {
+    "path": "tests/mutation/raster_miter_limit_p16_cosmic_ray.toml",
+    "sha256": "C87D8AF1E95C5457147140E5EB4F3349F00DD23E9631F19B99E1704BEF6E5BEA"
+  },
+  "filter": {
+    "path": "tests/mutation/filter_raster_miter_limit_p16_work_items.py",
+    "sha256": "92E0BA90AC5997C1135E220855A39D233755FDB25D150A57B690DF4E8976B8F0"
+  },
+  "partition": {
+    "path": "tests/mutation/partition_cosmic_ray_work_items.py",
+    "sha256": "D41FD32FD30C61EFC16ABC54DFF13DC9E82A3BD825E7E7D0A437EB28441F89FE"
+  },
+  "merge": {
+    "path": "tests/mutation/merge_cosmic_ray_shards.py",
+    "sha256": "E3F601D439D91E919E8F29394459492920B2D751C2801E122D96543DB1B607B1"
+  },
+  "database": {
+    "path": "tests/mutation/raster_miter_limit_p16.sqlite",
+    "sha256": "86CA9158BFE9D3FBC5A3DB3A8FECB3A276AC07CA759E6E911656F979DBD02172"
+  },
+  "campaign": {
+    "generated_candidates": 5870,
+    "selected_work_items": 701,
+    "completed_results": 701,
+    "killed": 701,
+    "survived": 0,
+    "equivalent_survivors": 0,
+    "worker_errors": 0,
+    "worker_timeouts": 0,
+    "raw_mutation_coverage": 1.0,
+    "effective_mutation_coverage": 1.0
+  },
+  "execution_artifacts": [9671, 9674],
+  "shard_sizes": [351, 350],
+  "equivalent_survivor_proofs": []
+}

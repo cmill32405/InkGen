@@ -166,8 +166,19 @@ outer half-width offsets. The default `miter` path remains unchanged.
 Sampled arcs, Bezier primitives, and paths retain explicit non-miter rejection.
 Their sampled points approximate smooth geometry and are not semantic path
 joins; styling every sample as a join would change the source contract.
-Nondefault miter limits also remain rejected pending a separate bounded miter
-intersection and fallback proof.
+
+P16 admits nondefault miter limits for sharp `RectangleDrawing`,
+`PolygonalDrawing`, and zero-corner-radius `RegularPolygonDrawing` outlines.
+For every semantic vertex, it constructs the two outer half-width offsets and
+the exact angle-bisector intersection. The miter is retained when its
+half-width ratio is less than or equal to the positive finite style limit;
+otherwise the same vertex falls back to the established bevel triangle.
+Generated coordinates are preflighted against a signed 32-bit raster bound
+before Pillow allocates a surface. The default limit of 10 retains the exact
+pre-P16 Pillow route and bytes. Limits are neutral for non-miter joins,
+join-free primitives, and already-rounded outlines. Sampled arcs, Beziers,
+and paths reject nondefault miter limits because their tessellation points are
+not semantic joins.
 
 ## Dependencies And Contracts
 
@@ -221,6 +232,9 @@ PDF, SVG, DXF, and document outputs do not depend on the raster renderer.
   geometry, including bounded zero-length dotted caps.
 - Sharp straight-edge primitives preserve miter, round, and bevel corner
   semantics without treating curve tessellation points as source joins.
+- Nondefault miter limits preserve the exact half-angle ratio, deterministic
+  bevel fallback, and a pre-allocation coordinate bound while the default
+  rendering path remains byte-identical.
 - Later clipping slices can extend a proven boundary without weakening
   existing rejection contracts.
 

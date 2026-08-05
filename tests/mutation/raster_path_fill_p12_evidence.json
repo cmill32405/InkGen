@@ -9,7 +9,7 @@
   "source_files": [
     {
       "path": "src/InkGen/raster_renderer.py",
-      "sha256": "2FF1E75B49ECC90853E07D2F89EF011B8722A4FC2756256D397ADEA289666858"
+      "sha256": "9609F229AF0404328D3E8BF595D3DE4410F98165E62210C1D0064FAF9893F245"
     }
   ],
   "mutation_tests": [

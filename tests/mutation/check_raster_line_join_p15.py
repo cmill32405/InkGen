@@ -92,14 +92,11 @@ def _assert_validation() -> None:
     ):
         _raises(ValueError, lambda component=unsupported: _validate_raster_stroke_style(component, component.style))
 
-    bad_limit = _style("round")
-    bad_limit._stroke_miterlimit = 2.0
-    _raises(
-        ValueError,
-        lambda: _validate_raster_stroke_style(
-            PolygonalDrawing([(0, 0), (1, 0), (1, 1)], bad_limit),
-            bad_limit,
-        ),
+    neutral_limit = _style("round")
+    neutral_limit._stroke_miterlimit = 2.0
+    _validate_raster_stroke_style(
+        PolygonalDrawing([(0, 0), (1, 0), (1, 1)], neutral_limit),
+        neutral_limit,
     )
 
 

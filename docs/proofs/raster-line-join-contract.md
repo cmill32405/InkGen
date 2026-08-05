@@ -71,9 +71,9 @@ outlines evaluate every vertex exactly once, including the first/last seam.
 Open line and circle primitives have no semantic join and therefore retain
 identical pixels for all three selectors.
 
-The miter route is dispatched through the pre-P15 six-argument drawing path,
-so P15 introduces no changed operation for default styles. Nondefault miter
-limits remain rejected before allocation and are not rationalized as bevels.
+The default miter route is dispatched through the pre-P15 drawing path, so P15
+and the later P16 extension introduce no changed operation for default styles.
+P16 separately owns bounded nondefault miter construction and bevel fallback.
 
 ## Comprehensiveness
 
@@ -90,7 +90,7 @@ limits remain rejected before allocation and are not rationalized as bevels.
 | Smooth outlines | Existing rounded rectangle/polygon paths remain canonical and selector-neutral |
 | Sampled geometry | Path and Bezier non-miter joins fail before Pillow allocation |
 | Mutable corruption | Invalid join type and value fail before allocation |
-| Miter limit | Nondefault value remains explicitly rejected before allocation |
+| Miter limit | Nondefault values are neutral for the P15 round/bevel selectors; P16 separately proves miter behavior |
 | Invisible stroke | Join geometry cannot create paint when stroke opacity is zero |
 | Legacy miter | Dynamic equal selector produces byte-identical established output |
 
@@ -125,8 +125,8 @@ limits remain rejected before allocation and are not rationalized as bevels.
 - Non-miter joins at true command boundaries inside `PathDrawing` require a
   path sampler that preserves semantic segment boundaries separately from
   curve tessellation points.
-- Nondefault miter limits require line-intersection geometry, an explicit
-  unbounded-miter defense, and the specified bevel fallback.
+- Nondefault miter limits are proven by `RASTER-MITER-LIMIT-P16`; this P15
+  condition continues to own round and bevel behavior only.
 - Dashed strokes remain `LineDrawing`-only under P13, so dash continuity around
   closed corners remains outside this condition.
 

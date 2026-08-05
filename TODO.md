@@ -17,12 +17,12 @@ Completed:
 
 Remaining:
 
-- [ ] Add a dependency-free, in-memory raster renderer for InkGen drawing
+- [x] Add a dependency-free, in-memory raster renderer for InkGen drawing
   primitives and document pages. Preserve alpha until the caller explicitly
   selects a paper/background color.
-- [ ] Add a renderer-to-Baird composition API so a clean InkGen drawing can be
+- [x] Add a renderer-to-Baird composition API so a clean InkGen drawing can be
   rasterized and degraded without writing or rereading a PDF.
-- [ ] Preserve deterministic seeds, physical resolution, source dimensions,
+- [x] Preserve deterministic seeds, physical resolution, source dimensions,
   background policy, and degradation parameters in the composed result
   manifest.
 - [ ] Add end-to-end fixtures proving clean drawing -> raster -> Baird

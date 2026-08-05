@@ -54,6 +54,7 @@ _MAX_SUPERSAMPLED_PIXELS = 64_000_000
 _MAX_SUPERSAMPLE = 8
 _GRADIENT_TILE_PIXELS = 1_000_000
 _MAX_DASH_STEPS = 100_000
+_MAX_RASTER_COORDINATE = 2_147_483_647.0
 _RENDERER_NAME = "inkgen-raster-v1"
 
 RasterPrimitive = (
@@ -319,7 +320,7 @@ def _validate_render_domain(components: Sequence[RasterPrimitive], scale: float)
         style = getattr(component, "style", None)
         if isinstance(style, DrawingStyle):
             _validate_raster_fill_style(component, style)
-            _validate_raster_stroke_style(component, style)
+            _validate_raster_stroke_style(component, style, scale)
 
 
 def _validate_raster_fill_style(component: RasterPrimitive, style: DrawingStyle) -> None:
@@ -330,10 +331,11 @@ def _validate_raster_fill_style(component: RasterPrimitive, style: DrawingStyle)
         raise ValueError("curve fills are not supported by raster renderer P2")
 
 
-def _validate_raster_stroke_style(component: RasterPrimitive, style: DrawingStyle) -> None:
+def _validate_raster_stroke_style(component: RasterPrimitive, style: DrawingStyle, scale: float = 1.0) -> None:
     """Validate the closed raster stroke-presentation domain before allocation."""
     line_cap = _validated_line_cap(style)
     line_join = _validated_line_join(style)
+    miter_limit = _positive_finite_number(style.stroke_miterlimit, "stroke miter limit")
     dash = _validated_line_dash(style)
     if dash is not None:
         if not isinstance(component, LineDrawing):
@@ -348,8 +350,53 @@ def _validate_raster_stroke_style(component: RasterPrimitive, style: DrawingStyl
         (RectangleDrawing, LineDrawing, CircleDrawing, PolygonalDrawing, RegularPolygonDrawing),
     ):
         raise ValueError("non-miter stroke joins are supported only for raster straight-edge primitives P15")
-    if style.stroke_miterlimit != 10.0:
-        raise ValueError("nondefault stroke miter limits are not supported by raster renderer P1")
+    if line_join == "miter" and miter_limit != 10.0 and _has_visible_stroke(style):
+        points = _nondefault_miter_points(component, scale)
+        stroke_width = _validated_scaled_stroke_width(style, scale)
+        _validate_miter_geometry(points, stroke_width, miter_limit)
+
+
+def _has_visible_stroke(style: DrawingStyle) -> bool:
+    """Return whether stroke geometry can contribute raster pixels."""
+    return style.stroke != "none" and style.stroke_opacity != 0.0 and style.stroke_width > 0.0
+
+
+def _validated_scaled_stroke_width(style: DrawingStyle, scale: float) -> int:
+    """Return a finite Pillow stroke width bounded to its coordinate domain."""
+    scaled = style.stroke_width * scale
+    if not math.isfinite(scaled) or scaled > _MAX_RASTER_COORDINATE:
+        raise ValueError("raster stroke width exceeds the safe coordinate range")
+    return max(1, round(scaled))
+
+
+def _nondefault_miter_points(component: RasterPrimitive, scale: float) -> list[tuple[int, int]]:
+    """Return closed sharp-vertex points, or reject unsupported sampled geometry."""
+    points: Sequence[tuple[float, float]]
+    if isinstance(component, RectangleDrawing):
+        radius_x, radius_y = normalize_rectangle_corner_radii(component.corner_radii, component.width, component.height)
+        if radius_x > 0.0 and radius_y > 0.0:
+            return []
+        x, y = component.position
+        points = [(x, y), (x + component.width, y), (x + component.width, y + component.height), (x, y + component.height)]
+    elif isinstance(component, PolygonalDrawing):
+        points = component.points
+    elif isinstance(component, RegularPolygonDrawing):
+        if component.corner_radius > 0.0:
+            return []
+        points = _regular_polygon_points(component)
+    elif isinstance(component, (LineDrawing, CircleDrawing)):
+        return []
+    else:
+        raise ValueError("nondefault stroke miter limits are supported only for raster straight-edge primitives P16")
+    return [_scaled_point(point, scale) for point in points]
+
+
+def _validate_miter_geometry(points: Sequence[tuple[float, float]], stroke_width: int, miter_limit: float) -> None:
+    """Construct every closed join to prove it remains in the raster domain."""
+    if len(points) < 2:
+        return
+    for index, vertex in enumerate(points):
+        _miter_join_polygon(points[index - 1], vertex, points[(index + 1) % len(points)], stroke_width, miter_limit)
 
 
 def _render_rectangle_component(
@@ -393,7 +440,7 @@ def _render_rectangle_component(
             stroke_width=stroke_width,
         )
         return
-    if stroke is None or component.style.stroke_linejoin == "miter":
+    if stroke is None or (component.style.stroke_linejoin == "miter" and component.style.stroke_miterlimit == 10.0):
         draw.rectangle(box, fill=fill, outline=stroke, width=stroke_width)
         return
     draw.rectangle(box, fill=fill)
@@ -403,6 +450,7 @@ def _render_rectangle_component(
         stroke,
         stroke_width,
         component.style.stroke_linejoin,
+        component.style.stroke_miterlimit,
         closed=True,
     )
 
@@ -415,12 +463,13 @@ def _draw_styled_polygon(
     stroke: tuple[int, int, int, int] | None,
     stroke_width: int,
     line_join: str,
+    miter_limit: float,
 ) -> None:
     """Draw a polygon while preserving the legacy miter path."""
-    if line_join == "miter":
+    if line_join == "miter" and miter_limit == 10.0:
         _draw_polygon(draw, points, scale, fill, stroke, stroke_width)
     else:
-        _draw_polygon(draw, points, scale, fill, stroke, stroke_width, line_join)
+        _draw_polygon(draw, points, scale, fill, stroke, stroke_width, line_join, miter_limit)
 
 
 def _draw_regular_polygon_component(
@@ -437,7 +486,16 @@ def _draw_regular_polygon_component(
         points = sample_rounded_polygon_path(regular_polygon_corner_geometry(points, component.corner_radius))
         _draw_polygon(draw, points, scale, fill, stroke, stroke_width)
         return
-    _draw_styled_polygon(draw, points, scale, fill, stroke, stroke_width, component.style.stroke_linejoin)
+    _draw_styled_polygon(
+        draw,
+        points,
+        scale,
+        fill,
+        stroke,
+        stroke_width,
+        component.style.stroke_linejoin,
+        component.style.stroke_miterlimit,
+    )
 
 
 def _render_component(
@@ -483,7 +541,16 @@ def _render_component(
     elif isinstance(component, PathDrawing):
         _render_path_component(surface, draw, component, scale, fill, stroke, stroke_width)
     elif isinstance(component, PolygonalDrawing):
-        _draw_styled_polygon(draw, component.points, scale, fill, stroke, stroke_width, style.stroke_linejoin)
+        _draw_styled_polygon(
+            draw,
+            component.points,
+            scale,
+            fill,
+            stroke,
+            stroke_width,
+            style.stroke_linejoin,
+            style.stroke_miterlimit,
+        )
     elif isinstance(component, QuadraticBezierDrawing):
         if stroke is not None:
             points = SampledQuadraticBezier(
@@ -1220,16 +1287,56 @@ def _bevel_join_polygon(
     ]
 
 
+def _bounded_join_polygon(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """Reject generated join coordinates outside Pillow's safe integer domain."""
+    if any(not math.isfinite(value) or abs(value) > _MAX_RASTER_COORDINATE for point in points for value in point):
+        raise ValueError("raster miter geometry exceeds the safe coordinate range")
+    return points
+
+
+def _miter_join_polygon(
+    previous: tuple[float, float],
+    vertex: tuple[float, float],
+    following: tuple[float, float],
+    stroke_width: int,
+    miter_limit: float,
+) -> list[tuple[float, float]]:
+    """Return an exact bounded miter wedge, falling back to a bevel at the limit."""
+    bevel = _bevel_join_polygon(previous, vertex, following, stroke_width)
+    if not bevel:
+        return []
+    incoming_x, incoming_y = _unit_tangent(previous, vertex)
+    outgoing_x, outgoing_y = _unit_tangent(vertex, following)
+    denominator = 1.0 + max(-1.0, min(1.0, incoming_x * outgoing_x + incoming_y * outgoing_y))
+    ratio = math.sqrt(2.0 / denominator) if denominator > 0.0 else math.inf
+    if ratio > miter_limit:
+        return _bounded_join_polygon(bevel)
+    cross = incoming_x * outgoing_y - incoming_y * outgoing_x
+    side = -1.0 if cross > 0.0 else 1.0
+    normal_sum_x = side * (-incoming_y - outgoing_y)
+    normal_sum_y = side * (incoming_x + outgoing_x)
+    normal_sum_length = math.hypot(normal_sum_x, normal_sum_y)
+    if normal_sum_length == 0.0:
+        return _bounded_join_polygon(bevel)
+    distance = (stroke_width / 2.0) * ratio
+    tip = (
+        vertex[0] + normal_sum_x * distance / normal_sum_length,
+        vertex[1] + normal_sum_y * distance / normal_sum_length,
+    )
+    return _bounded_join_polygon([bevel[0], bevel[1], tip, bevel[2]])
+
+
 def _draw_joined_polyline(
     draw: ImageDraw.ImageDraw,
     points: Sequence[tuple[float, float]],
     stroke: tuple[int, int, int, int],
     stroke_width: int,
     line_join: str,
+    miter_limit: float = 10.0,
     *,
     closed: bool,
 ) -> None:
-    """Paint one straight-edge polyline with explicit round or bevel joins."""
+    """Paint one straight-edge polyline with explicit bounded joins."""
     if len(points) < 2:
         return
     vertices = list(points)
@@ -1257,8 +1364,12 @@ def _draw_joined_polyline(
                     ),
                     fill=stroke,
                 )
-        else:
+        elif line_join == "bevel":
             polygon = _bevel_join_polygon(previous, vertex, following, stroke_width)
+            if polygon:
+                draw.polygon(polygon, fill=stroke)
+        else:
+            polygon = _miter_join_polygon(previous, vertex, following, stroke_width, miter_limit)
             if polygon:
                 draw.polygon(polygon, fill=stroke)
 
@@ -1271,15 +1382,16 @@ def _draw_polygon(
     stroke: tuple[int, int, int, int] | None,
     stroke_width: int,
     line_join: str = "miter",
+    miter_limit: float = 10.0,
 ) -> None:
     scaled = [_scaled_point(point, scale) for point in points]
     if fill is not None:
         draw.polygon(scaled, fill=fill)
     if stroke is not None:
-        if line_join == "miter":
+        if line_join == "miter" and miter_limit == 10.0:
             draw.line([*scaled, scaled[0]], fill=stroke, width=stroke_width)
         else:
-            _draw_joined_polyline(draw, scaled, stroke, stroke_width, line_join, closed=True)
+            _draw_joined_polyline(draw, scaled, stroke, stroke_width, line_join, miter_limit, closed=True)
 
 
 def _render_image(surface: Image.Image, component: ImageDrawing, scale: float) -> None:

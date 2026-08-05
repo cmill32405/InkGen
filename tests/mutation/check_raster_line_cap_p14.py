@@ -78,9 +78,9 @@ def _assert_validation() -> None:
     invalid_join = _style()
     invalid_join._stroke_linejoin = "round"
     _validate_raster_stroke_style(LineDrawing((0, 0), (1, 0), invalid_join), invalid_join)
-    invalid_miter = _style()
-    invalid_miter._stroke_miterlimit = 5.0
-    _raises(ValueError, lambda: _validate_raster_stroke_style(LineDrawing((0, 0), (1, 0), invalid_miter), invalid_miter))
+    neutral_miter = _style()
+    neutral_miter._stroke_miterlimit = 5.0
+    _validate_raster_stroke_style(LineDrawing((0, 0), (1, 0), neutral_miter), neutral_miter)
 
     overflow = _style("round", pattern=(1.0, 1.0))
     overflow._stroke_dasharray = (1e308, 1e308)

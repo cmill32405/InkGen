@@ -7,13 +7,13 @@
     "execution_environment": "eight disjoint WSL ext4 source-copy shards followed by survivor-only master reruns"
   },
   "source_files": [
-    {"path": "src/InkGen/raster_renderer.py", "sha256": "2FF1E75B49ECC90853E07D2F89EF011B8722A4FC2756256D397ADEA289666858"}
+    {"path": "src/InkGen/raster_renderer.py", "sha256": "9609F229AF0404328D3E8BF595D3DE4410F98165E62210C1D0064FAF9893F245"}
   ],
   "condition_tests": [
     {"path": "tests/test_raster_line_cap_contract.py", "sha256": "1174419EC68077FFBF430AB628A34A09310558B3E74F4D7A2781C4B427A5FF86"}
   ],
   "mutation_tests": [
-    {"path": "tests/mutation/check_raster_line_cap_p14.py", "sha256": "6F6E6C45DAFBF10FCF24EA83C1CD5785C279DE6B4749024298E05E1C8E7EB034"}
+    {"path": "tests/mutation/check_raster_line_cap_p14.py", "sha256": "F463E82041D4C2090EA071A3F972CA6D9A63041B1CEFA938D842890EA23391C2"}
   ],
   "config": {
     "path": "tests/mutation/raster_line_cap_p14_cosmic_ray.toml",

@@ -144,10 +144,15 @@ tangent fallback. Sharp rectangles, irregular polygons, and regular polygons
 support `miter`, `round`, and `bevel` stroke joins. Join selectors are neutral
 for lines, circles, and already-rounded outlines. Sampled arcs, Beziers, and
 paths reject non-miter joins because their tessellation points are not semantic
-source joins. Caps on other primitives and nondefault miter limits fail
-explicitly rather than being approximated. Components paint in group order
-with source-over alpha compositing. The output remains RGBA even when a fully
-opaque background is supplied.
+source joins. Nondefault positive finite miter limits apply to sharp rectangles
+and polygons: a corner whose miter-to-half-width ratio exceeds the limit falls
+back to a bevel. The default limit of 10 preserves the established Pillow path,
+and limits are neutral for round/bevel joins and geometry without sharp joins.
+Sampled geometry with a nondefault miter limit fails explicitly instead of
+styling tessellation vertices. Caps on other primitives also remain outside
+the closed domain. Components paint in group order with source-over alpha
+compositing. The output remains RGBA even when a fully opaque background is
+supplied.
 
 The default output is transparent. Supply `background_rgba=(r, g, b, a)` only
 when a specific substrate is part of the fixture contract. InkGen does not
@@ -165,7 +170,8 @@ fail before surface allocation.
 
 The renderer deliberately rejects zoning overlays, dashed strokes and
 non-butt caps outside their line domains, non-miter joins on sampled geometry,
-nondefault miter limits, and text presentation outside the P3/P11 domain.
+nondefault miter limits on sampled geometry, and text presentation outside the
+P3/P11 domain.
 Later slices can add these features without weakening the closed-domain
 behavior. The Baird composition API below consumes
 `RasterRenderResult.asset` without a PDF or SVG intermediary.

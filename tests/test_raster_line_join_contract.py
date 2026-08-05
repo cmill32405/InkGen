@@ -240,14 +240,15 @@ def test_live_join_corruption_fails_before_surface_allocation(
 
 
 @pytest.mark.condition("RASTER-LINE-JOIN-P15")
-def test_nondefault_miter_limit_remains_outside_p15_before_allocation(monkeypatch: pytest.MonkeyPatch) -> None:
-    """RASTER-LINE-JOIN-P15: Join support does not approximate the separate miter-limit contract."""
-    style = _style("round")
-    style.stroke_miterlimit = 2.0
-    component = PolygonalDrawing([(0, 0), (1, 0), (1, 1)], style)
-    monkeypatch.setattr(raster_renderer.Image, "new", lambda *args, **kwargs: pytest.fail("surface allocated"))
-    with pytest.raises(ValueError, match="nondefault stroke miter limits"):
-        render_drawing_group(DrawingComponentGroup("miter-limit", [component]), Canvas(2, 2, "in"), dpi=20)
+def test_nondefault_miter_limit_is_neutral_for_round_join() -> None:
+    """RASTER-LINE-JOIN-P15: Miter limits cannot alter an explicitly round join."""
+    outputs = []
+    for miter_limit in (1.0, 20.0):
+        style = _style("round")
+        style.stroke_miterlimit = miter_limit
+        component = PolygonalDrawing([(0, 0), (1, 0), (1, 1)], style)
+        outputs.append(render_drawing_group(DrawingComponentGroup("miter-limit", [component]), Canvas(2, 2, "in"), dpi=20).asset.data)
+    assert outputs[0] == outputs[1]
 
 
 @pytest.mark.condition("RASTER-LINE-JOIN-P15")
