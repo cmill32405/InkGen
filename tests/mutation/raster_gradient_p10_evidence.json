@@ -8,11 +8,11 @@
   },
   "source": {
     "path": "src/InkGen/raster_renderer.py",
-    "sha256": "9609F229AF0404328D3E8BF595D3DE4410F98165E62210C1D0064FAF9893F245"
+    "sha256": "04324ACDCA65E492F393EADAE2A3AEF56AE84471CF006EF07481D9FE91DCD0FF"
   },
   "tests": [
     {"path": "tests/test_raster_gradient_contract.py", "sha256": "B9817E950D60F2B6D5C181039A697D321617441E10140331F95CC3AC60025141"},
-    {"path": "tests/test_raster_renderer_contract.py", "sha256": "E9402FAE5DE6698B789636EA99A636EBB4C4B4D44F0FE10A3527CA1E4983010E"},
+    {"path": "tests/test_raster_renderer_contract.py", "sha256": "C8C4E9CB2BC88B2F27055A65B47DE4FBB44834CE5951A60CA841599D30E40193"},
     {"path": "tests/test_linear_gradient_contract.py", "sha256": "F854DE89870D16E279CCCF9F4F93D3AE6C44BAE729DA4E4C8440B8DAE3032A81"},
     {"path": "tests/test_raster_rounded_rectangle_contract.py", "sha256": "90FC8ABEFB5082895ED1EE8CBE0A798DE4E6B2D0F3917645BE7D5028DBCC3730"},
     {"path": "tests/test_rounded_regular_polygon_contract.py", "sha256": "4966A27F8EB15318182FA68D950D503161D8427B7EEE68F0F7B719D37B9F1AF7"},
@@ -44,8 +44,8 @@
   },
   "execution_artifacts": [9396, 9399, 9402],
   "dependency_refresh": {
-    "reason": "RASTER-LINE-CAP-P14 changed raster_renderer.py and one shared renderer condition test, invalidating retained whole-file freshness hashes",
-    "method": "P14 changed stroke-cap/dash validation and LineDrawing cap helpers outside the P10 gradient mutation ranges. The complete P10 dependency suite was rerun before re-attesting both hashes (artifact 9606).",
+    "reason": "RASTER-PATH-STROKE-P17 changed raster_renderer.py and one shared renderer condition test, invalidating retained whole-file freshness hashes",
+    "method": "P17 changed path sampling and semantic path strokes outside the P10 gradient mutation ranges. The complete P10 dependency suite and full suite were rerun before re-attesting both hashes.",
     "scoped_definitions": ["_validate_render_domain", "_render_component", "_validated_raster_gradient", "_render_linear_gradient_rectangle"]
   },
   "late_kill_witnesses": [

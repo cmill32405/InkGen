@@ -86,10 +86,7 @@ def _assert_validation() -> None:
     for component in supported:
         _validate_raster_stroke_style(component, component.style)
 
-    for unsupported in (
-        PathDrawing(_style("round")),
-        QuadraticBezierDrawing((0, 0), (1, 0), (1, 1), _style("bevel")),
-    ):
+    for unsupported in (QuadraticBezierDrawing((0, 0), (1, 0), (1, 1), _style("bevel")),):
         _raises(ValueError, lambda component=unsupported: _validate_raster_stroke_style(component, component.style))
 
     neutral_limit = _style("round")

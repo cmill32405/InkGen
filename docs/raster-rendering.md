@@ -140,19 +140,22 @@ dashed strokes. Round and square geometry is applied to every positive dash
 and to zero-length on-dashes, so `(0, gap)` patterns produce bounded dotted
 lines. A zero-length butt line is transparent, a round line is a centered
 circle, and a square line is a centered square with a deterministic horizontal
-tangent fallback. Sharp rectangles, irregular polygons, and regular polygons
-support `miter`, `round`, and `bevel` stroke joins. Join selectors are neutral
-for lines, circles, and already-rounded outlines. Sampled arcs, Beziers, and
-paths reject non-miter joins because their tessellation points are not semantic
-source joins. Nondefault positive finite miter limits apply to sharp rectangles
-and polygons: a corner whose miter-to-half-width ratio exceeds the limit falls
-back to a bevel. The default limit of 10 preserves the established Pillow path,
-and limits are neutral for round/bevel joins and geometry without sharp joins.
-Sampled geometry with a nondefault miter limit fails explicitly instead of
-styling tessellation vertices. Caps on other primitives also remain outside
-the closed domain. Components paint in group order with source-over alpha
-compositing. The output remains RGBA even when a fully opaque background is
-supplied.
+tangent fallback. Sharp rectangles, irregular polygons, regular polygons, and
+source-command path vertices support `miter`, `round`, and `bevel` stroke
+joins. Join selectors are neutral for lines, circles, and already-rounded
+outlines. `PathDrawing` retains source segment endpoints separately from
+Bezier and arc tessellation points, so sampled points provide local tangent
+directions but do not become joins. Open path subpaths support `butt`, `round`,
+and `square` caps at the two subpath ends; `Z`-closed subpaths join their seam
+and ignore cap selectors. Nondefault positive finite miter limits apply to
+sharp rectangles, polygons, and semantic path vertices: a corner whose
+miter-to-half-width ratio exceeds the limit falls back to a bevel. The default
+limit of 10 preserves the established Pillow path, and limits are neutral for
+round/bevel joins and geometry without sharp joins. Standalone sampled arc and
+Bezier primitives still reject non-miter joins and nondefault miter limits.
+Caps on other primitives also remain outside the closed domain. Components
+paint in group order with source-over alpha compositing. The output remains
+RGBA even when a fully opaque background is supplied.
 
 The default output is transparent. Supply `background_rgba=(r, g, b, a)` only
 when a specific substrate is part of the fixture contract. InkGen does not
@@ -168,10 +171,10 @@ The supersampled working surface is limited to 64,000,000 pixels and the
 supersampling factor is limited to 1 through 8. Invalid or unsupported inputs
 fail before surface allocation.
 
-The renderer deliberately rejects zoning overlays, dashed strokes and
-non-butt caps outside their line domains, non-miter joins on sampled geometry,
-nondefault miter limits on sampled geometry, and text presentation outside the
-P3/P11 domain.
+The renderer deliberately rejects zoning overlays, dashed strokes outside the
+line domain, non-butt caps outside line and path domains, non-miter joins and
+nondefault miter limits on standalone sampled curves, and text presentation
+outside the P3/P11 domain.
 Later slices can add these features without weakening the closed-domain
 behavior. The Baird composition API below consumes
 `RasterRenderResult.asset` without a PDF or SVG intermediary.

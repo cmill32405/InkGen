@@ -16,7 +16,6 @@ from InkGen import (
     DrawingComponentGroup,
     DrawingStyle,
     LineDrawing,
-    PathDrawing,
     PolygonalDrawing,
     QuadraticBezierDrawing,
     RectangleDrawing,
@@ -144,14 +143,12 @@ def test_limit_is_neutral_when_no_sharp_join_exists(primitive: str) -> None:
 
 
 @pytest.mark.condition("RASTER-MITER-LIMIT-P16")
-@pytest.mark.parametrize("primitive", ["path", "curve"])
 def test_nondefault_limit_rejects_sampled_geometry_before_allocation(
     monkeypatch: pytest.MonkeyPatch,
-    primitive: str,
 ) -> None:
     """P16: Tessellation vertices are not presented as semantic miter joins."""
     style = _style(2.0)
-    component = PathDrawing(style) if primitive == "path" else QuadraticBezierDrawing((0, 0), (1, 0), (1, 1), style)
+    component = QuadraticBezierDrawing((0, 0), (1, 0), (1, 1), style)
     monkeypatch.setattr(raster_renderer.Image, "new", lambda *args, **kwargs: pytest.fail("surface allocated"))
     with pytest.raises(ValueError, match="straight-edge primitives P16"):
         render_drawing_group(DrawingComponentGroup("sampled", [component]), Canvas(2, 2, "in"), dpi=20)

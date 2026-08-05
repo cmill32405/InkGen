@@ -7,7 +7,7 @@
     "execution_environment": "four disjoint WSL ext4 source-copy shards"
   },
   "source_files": [
-    {"path": "src/InkGen/raster_renderer.py", "sha256": "9609F229AF0404328D3E8BF595D3DE4410F98165E62210C1D0064FAF9893F245"}
+    {"path": "src/InkGen/raster_renderer.py", "sha256": "04324ACDCA65E492F393EADAE2A3AEF56AE84471CF006EF07481D9FE91DCD0FF"}
   ],
   "condition_tests": [
     {"path": "tests/test_raster_line_dash_contract.py", "sha256": "BADBDBC0DB2A1D4E646A05ABB6C799C66D3C7C392D9677D8609BEB88F3500223"}
@@ -50,8 +50,8 @@
   "execution_artifacts": [9535, 9536, 9537, 9538],
   "shard_sizes": [58, 58, 58, 57],
   "dependency_refresh": {
-    "reason": "RASTER-LINE-CAP-P14 changed raster_renderer.py and invalidated the retained whole-source freshness hash",
-    "method": "P14 preserved P13 cadence/phase segmentation and independently mutation-tested its new aggregate-period guard. The P13 condition suite and fast mutation witness were rerun before re-attesting the hash (artifact 9606).",
+    "reason": "RASTER-PATH-STROKE-P17 changed raster_renderer.py and invalidated the retained whole-source freshness hash",
+    "method": "P17 left P13 dash cadence and phase functions unchanged, composed the P13 fast witness into its 579-item campaign, and reran the P13 condition and full suites before re-attesting the hash.",
     "scoped_definitions": ["_validated_line_dash", "_line_dash_segments", "_dash_cursor", "_next_dash_slot", "_draw_dashed_line"]
   },
   "equivalent_survivor_proofs": [

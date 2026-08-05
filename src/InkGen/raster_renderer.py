@@ -73,6 +73,16 @@ RasterPrimitive = (
 
 
 @dataclass(frozen=True, slots=True)
+class _SampledPathSubpath:
+    """Sampled path points with retained source-level stroke topology."""
+
+    points: tuple[tuple[float, float], ...]
+    endpoint_indices: tuple[int, ...]
+    segment_count: int
+    closed: bool
+
+
+@dataclass(frozen=True, slots=True)
 class RasterRenderResult:
     """A rendered PNG asset and deterministic rasterization provenance."""
 
@@ -343,17 +353,20 @@ def _validate_raster_stroke_style(component: RasterPrimitive, style: DrawingStyl
         _line_dash_segments(component.point_1, component.point_2, *dash)
         if line_cap != "butt":
             _line_cap_dash_geometry(component.point_1, component.point_2, *dash)
-    if line_cap != "butt" and not isinstance(component, LineDrawing):
-        raise ValueError("non-butt stroke caps are supported only for raster LineDrawing P14")
+    if line_cap != "butt" and not isinstance(component, (LineDrawing, PathDrawing)):
+        raise ValueError("non-butt stroke caps require raster LineDrawing P14 or PathDrawing P17")
     if line_join != "miter" and not isinstance(
         component,
-        (RectangleDrawing, LineDrawing, CircleDrawing, PolygonalDrawing, RegularPolygonDrawing),
+        (RectangleDrawing, LineDrawing, CircleDrawing, PathDrawing, PolygonalDrawing, RegularPolygonDrawing),
     ):
         raise ValueError("non-miter stroke joins are supported only for raster straight-edge primitives P15")
     if line_join == "miter" and miter_limit != 10.0 and _has_visible_stroke(style):
-        points = _nondefault_miter_points(component, scale)
         stroke_width = _validated_scaled_stroke_width(style, scale)
-        _validate_miter_geometry(points, stroke_width, miter_limit)
+        if isinstance(component, PathDrawing):
+            _validate_path_miter_geometry(component, scale, stroke_width, miter_limit)
+        else:
+            points = _nondefault_miter_points(component, scale)
+            _validate_miter_geometry(points, stroke_width, miter_limit)
 
 
 def _has_visible_stroke(style: DrawingStyle) -> bool:
@@ -397,6 +410,19 @@ def _validate_miter_geometry(points: Sequence[tuple[float, float]], stroke_width
         return
     for index, vertex in enumerate(points):
         _miter_join_polygon(points[index - 1], vertex, points[(index + 1) % len(points)], stroke_width, miter_limit)
+
+
+def _validate_path_miter_geometry(
+    component: PathDrawing,
+    scale: float,
+    stroke_width: int,
+    miter_limit: float,
+) -> None:
+    """Construct every semantic path miter before raster allocation."""
+    for subpath in _sampled_path_geometry(component):
+        scaled = _scaled_sampled_subpath(subpath, scale)
+        for previous, vertex, following in _semantic_path_join_triples(scaled):
+            _miter_join_polygon(previous, vertex, following, stroke_width, miter_limit)
 
 
 def _render_rectangle_component(
@@ -1031,115 +1057,203 @@ def _sampled_svg_endpoint_arc(
     return sampled
 
 
-def _sampled_path_subpaths(component: PathDrawing) -> list[list[tuple[float, float]]]:
-    """Validate and sample the closed P5/P6/P7 stroke-path command domain."""
+class _PathSampler:
+    """Expand neutral path commands while retaining source segment endpoints."""
+
+    def __init__(self, component: PathDrawing) -> None:
+        self._component = component
+        self._subpaths: list[_SampledPathSubpath] = []
+        self._current: list[tuple[float, float]] | None = None
+        self._endpoint_indices: list[int] = []
+        self._segment_count = 0
+        self._previous_cubic_control: tuple[float, float] | None = None
+        self._previous_quadratic_control: tuple[float, float] | None = None
+
+    def sample(self, commands: Sequence[PathCommand]) -> list[_SampledPathSubpath]:
+        """Consume a validated command container and return sampled subpaths."""
+        for command in commands:
+            self._consume(command)
+        if self._current is not None:
+            self._finish(closed=False)
+        return self._subpaths
+
+    def _consume(self, command: object) -> None:
+        if not isinstance(command, PathCommand):
+            raise TypeError("PathDrawing commands must contain only PathCommand objects")
+        command_type = command.type
+        if command_type not in {"M", "L", "H", "V", "Z", "C", "S", "Q", "T", "A"}:
+            raise ValueError(f"path command {command_type} is not supported by raster renderer P7")
+        if command_type == "M":
+            self._move(command.points)
+            return
+        if self._current is None:
+            message = "new subpath must begin with M" if self._subpaths else "path must begin with M"
+            raise ValueError(message)
+        if command_type == "Z":
+            self._close(command.points)
+            return
+        self._validate_segment_cardinality(command_type, command.points)
+        handlers = {
+            "L": self._linear,
+            "H": self._linear,
+            "V": self._linear,
+            "C": self._cubic,
+            "S": self._cubic,
+            "Q": self._quadratic,
+            "T": self._quadratic,
+            "A": self._arc,
+        }
+        handlers[command_type](command_type, command.points, command)
+
+    def _move(self, points: Sequence[tuple[float, float]]) -> None:
+        if len(points) != 1:
+            raise ValueError("path command M requires exactly one point")
+        if self._current is not None:
+            self._finish(closed=False)
+        self._current = [points[0]]
+        self._endpoint_indices = [0]
+        self._segment_count = 0
+        self._reset_controls()
+
+    def _close(self, points: Sequence[tuple[float, float]]) -> None:
+        if points:
+            raise ValueError("path command Z does not accept points")
+        if self._current is None:
+            raise AssertionError("close requires an active subpath")
+        if len(self._current) > 1:
+            self._current.append(self._current[0])
+            self._segment_count += 1
+        self._finish(closed=True)
+
+    @staticmethod
+    def _validate_segment_cardinality(command_type: str, points: Sequence[tuple[float, float]]) -> None:
+        grouped = {"C": 3, "S": 2, "Q": 2}
+        group_names = {3: "three", 2: "two"}
+        group_size = grouped.get(command_type)
+        if group_size is not None and len(points) % group_size:
+            raise ValueError(f"path command {command_type} requires points in groups of {group_names[group_size]}")
+        if command_type in {"T", "A"} and not points:
+            raise ValueError(f"path command {command_type} requires an endpoint")
+        if command_type in {"L", "H", "V"} and not points:
+            raise ValueError(f"path command {command_type} requires at least one point")
+
+    def _linear(self, command_type: str, points: Sequence[tuple[float, float]], command: PathCommand) -> None:
+        del command
+        for point in points:
+            current = self._current_point()
+            endpoint = point
+            if command_type == "H":
+                endpoint = point[0], current[1]
+            elif command_type == "V":
+                endpoint = current[0], point[1]
+            self._append_segment([current, endpoint])
+        self._reset_controls()
+
+    def _cubic(self, command_type: str, points: Sequence[tuple[float, float]], command: PathCommand) -> None:
+        del command
+        group_size = 3 if command_type == "C" else 2
+        for index in range(0, len(points), group_size):
+            if command_type == "C":
+                control_1, control_2, endpoint = points[index : index + group_size]
+            else:
+                control_2, endpoint = points[index : index + group_size]
+                current = self._current_point()
+                control_1 = (
+                    _reflect_path_control(self._previous_cubic_control, current) if self._previous_cubic_control is not None else current
+                )
+            sampled = SampledCubicBezier(
+                self._current_point(),
+                control_1,
+                control_2,
+                endpoint,
+                self._component.style,
+            ).points
+            self._append_segment(sampled)
+            self._previous_cubic_control = control_2
+            self._previous_quadratic_control = None
+
+    def _quadratic(self, command_type: str, points: Sequence[tuple[float, float]], command: PathCommand) -> None:
+        del command
+        group_size = 2 if command_type == "Q" else 1
+        for index in range(0, len(points), group_size):
+            if command_type == "Q":
+                control, endpoint = points[index : index + group_size]
+            else:
+                endpoint = points[index]
+                current = self._current_point()
+                control = (
+                    _reflect_path_control(self._previous_quadratic_control, current)
+                    if self._previous_quadratic_control is not None
+                    else current
+                )
+            sampled = SampledQuadraticBezier(
+                self._current_point(),
+                control,
+                endpoint,
+                self._component.style,
+            ).points
+            self._append_segment(sampled)
+            self._previous_cubic_control = None
+            self._previous_quadratic_control = control
+
+    def _arc(self, command_type: str, points: Sequence[tuple[float, float]], command: PathCommand) -> None:
+        del command_type
+        sampled = _sampled_svg_endpoint_arc(
+            self._current_point(),
+            points[-1],
+            command,
+            self._component.style,
+        )
+        if len(sampled) > 1:
+            self._append_segment(sampled)
+        self._reset_controls()
+
+    def _append_segment(self, sampled: Sequence[tuple[float, float]]) -> None:
+        if self._current is None:
+            raise AssertionError("segment requires an active subpath")
+        self._current.extend(sampled[1:])
+        self._endpoint_indices.append(len(self._current) - 1)
+        self._segment_count += 1
+
+    def _current_point(self) -> tuple[float, float]:
+        if self._current is None:
+            raise AssertionError("path command requires an active subpath")
+        return self._current[-1]
+
+    def _finish(self, *, closed: bool) -> None:
+        if self._current is None:
+            raise AssertionError("finish requires an active subpath")
+        self._subpaths.append(
+            _SampledPathSubpath(
+                points=tuple(self._current),
+                endpoint_indices=tuple(self._endpoint_indices),
+                segment_count=self._segment_count,
+                closed=closed,
+            )
+        )
+        self._current = None
+        self._endpoint_indices = []
+        self._segment_count = 0
+        self._reset_controls()
+
+    def _reset_controls(self) -> None:
+        self._previous_cubic_control = None
+        self._previous_quadratic_control = None
+
+
+def _sampled_path_geometry(component: PathDrawing) -> list[_SampledPathSubpath]:
+    """Validate and sample paths while retaining source stroke boundaries."""
     commands = component.commands
     if commands is None:
         return []
     if isinstance(commands, (str, bytes)) or not isinstance(commands, Sequence):
         raise TypeError("PathDrawing commands must be a sequence of PathCommand objects")
+    return _PathSampler(component).sample(commands)
 
-    subpaths: list[list[tuple[float, float]]] = []
-    current: list[tuple[float, float]] | None = None
-    previous_cubic_control: tuple[float, float] | None = None
-    previous_quadratic_control: tuple[float, float] | None = None
-    for command in commands:
-        if not isinstance(command, PathCommand):
-            raise TypeError("PathDrawing commands must contain only PathCommand objects")
-        command_type = command.type
-        points = command.points
-        if command_type not in {"M", "L", "H", "V", "Z", "C", "S", "Q", "T", "A"}:
-            raise ValueError(f"path command {command_type} is not supported by raster renderer P7")
-        if command_type == "M":
-            if len(points) != 1:
-                raise ValueError("path command M requires exactly one point")
-            if current is not None:
-                subpaths.append(current)
-            current = [points[0]]
-            previous_cubic_control = None
-            previous_quadratic_control = None
-            continue
-        if current is None:
-            message = "new subpath must begin with M" if subpaths else "path must begin with M"
-            raise ValueError(message)
-        if command_type == "Z":
-            if points:
-                raise ValueError("path command Z does not accept points")
-            if len(current) > 1:
-                current.append(current[0])
-            subpaths.append(current)
-            current = None
-            previous_cubic_control = None
-            previous_quadratic_control = None
-            continue
-        if command_type == "C" and len(points) % 3:
-            raise ValueError("path command C requires points in groups of three")
-        if command_type == "S" and len(points) % 2:
-            raise ValueError("path command S requires points in groups of two")
-        if command_type == "Q" and len(points) % 2:
-            raise ValueError("path command Q requires points in groups of two")
-        if command_type == "T" and not points:
-            raise ValueError("path command T requires an endpoint")
-        if command_type == "A" and not points:
-            raise ValueError("path command A requires an endpoint")
-        if command_type in {"L", "H", "V"} and not points:
-            raise ValueError(f"path command {command_type} requires at least one point")
-        if command_type == "L":
-            current.extend(points)
-            previous_cubic_control = None
-            previous_quadratic_control = None
-        elif command_type == "H":
-            current.extend((point[0], current[-1][1]) for point in points)
-            previous_cubic_control = None
-            previous_quadratic_control = None
-        elif command_type == "V":
-            current.extend((current[-1][0], point[1]) for point in points)
-            previous_cubic_control = None
-            previous_quadratic_control = None
-        elif command_type == "C":
-            for index in range(0, len(points), 3):
-                control_1, control_2, end = points[index : index + 3]
-                sampled = SampledCubicBezier(current[-1], control_1, control_2, end, component.style).points
-                current.extend(sampled[1:])
-                previous_cubic_control = control_2
-                previous_quadratic_control = None
-        elif command_type == "S":
-            for index in range(0, len(points), 2):
-                control_2, end = points[index : index + 2]
-                control_1 = (
-                    _reflect_path_control(previous_cubic_control, current[-1]) if previous_cubic_control is not None else current[-1]
-                )
-                sampled = SampledCubicBezier(current[-1], control_1, control_2, end, component.style).points
-                current.extend(sampled[1:])
-                previous_cubic_control = control_2
-                previous_quadratic_control = None
-        elif command_type == "Q":
-            for index in range(0, len(points), 2):
-                control, end = points[index : index + 2]
-                sampled = SampledQuadraticBezier(current[-1], control, end, component.style).points
-                current.extend(sampled[1:])
-                previous_cubic_control = None
-                previous_quadratic_control = control
-        elif command_type == "A":
-            sampled = _sampled_svg_endpoint_arc(current[-1], points[-1], command, component.style)
-            current.extend(sampled[1:])
-            previous_cubic_control = None
-            previous_quadratic_control = None
-        else:
-            for end in points:
-                control = (
-                    _reflect_path_control(previous_quadratic_control, current[-1])
-                    if previous_quadratic_control is not None
-                    else current[-1]
-                )
-                sampled = SampledQuadraticBezier(current[-1], control, end, component.style).points
-                current.extend(sampled[1:])
-                previous_cubic_control = None
-                previous_quadratic_control = control
 
-    if current is not None:
-        subpaths.append(current)
-    return subpaths
+def _sampled_path_subpaths(component: PathDrawing) -> list[list[tuple[float, float]]]:
+    """Return the established P5/P6/P7 sampled point sequences."""
+    return [list(subpath.points) for subpath in _sampled_path_geometry(component)]
 
 
 def _render_path_component(
@@ -1152,29 +1266,97 @@ def _render_path_component(
     stroke_width: int,
 ) -> None:
     """Render one sampled path's fill and stroke in paint order."""
-    subpaths = _sampled_path_subpaths(component)
+    geometry = _sampled_path_geometry(component)
+    subpaths = [subpath.points for subpath in geometry]
     if fill is not None:
         _render_nonzero_path_fill(surface, subpaths, scale, fill)
     if stroke is None:
         return
     if fill is None:
-        for subpath in subpaths:
-            _draw_curve(draw, subpath, scale, stroke, stroke_width)
+        _draw_path_strokes(draw, geometry, component.style, scale, stroke, stroke_width)
         return
 
     stroke_layer = Image.new("RGBA", surface.size, (0, 0, 0, 0))
     stroke_draw = ImageDraw.Draw(stroke_layer)
-    for subpath in subpaths:
-        _draw_curve(stroke_draw, subpath, scale, stroke, stroke_width)
+    _draw_path_strokes(stroke_draw, geometry, component.style, scale, stroke, stroke_width)
     surface.alpha_composite(stroke_layer)
+
+
+def _draw_path_strokes(
+    draw: ImageDraw.ImageDraw,
+    geometry: Sequence[_SampledPathSubpath],
+    style: DrawingStyle,
+    scale: float,
+    stroke: tuple[int, int, int, int],
+    stroke_width: int,
+) -> None:
+    """Paint every subpath through its legacy or semantic stroke route."""
+    for subpath in geometry:
+        _draw_semantic_path_stroke(draw, subpath, style, scale, stroke, stroke_width)
+
+
+def _draw_semantic_path_stroke(
+    draw: ImageDraw.ImageDraw,
+    subpath: _SampledPathSubpath,
+    style: DrawingStyle,
+    scale: float,
+    stroke: tuple[int, int, int, int],
+    stroke_width: int,
+) -> None:
+    """Paint one path using source boundaries for joins and endpoint caps."""
+    custom_join = style.stroke_linejoin != "miter" or style.stroke_miterlimit != 10.0
+    if custom_join:
+        _draw_path_segment_bodies(draw, subpath, scale, stroke, stroke_width)
+        scaled = _scaled_sampled_subpath(subpath, scale)
+        for previous, vertex, following in _semantic_path_join_triples(scaled):
+            _draw_stroke_join(
+                draw,
+                previous,
+                vertex,
+                following,
+                stroke,
+                stroke_width,
+                style.stroke_linejoin,
+                style.stroke_miterlimit,
+            )
+    else:
+        _draw_curve(draw, subpath.points, scale, stroke, stroke_width)
+        scaled = _scaled_sampled_subpath(subpath, scale)
+    if not subpath.closed and style.stroke_linecap != "butt":
+        _draw_open_path_caps(draw, scaled, stroke, stroke_width, style.stroke_linecap)
+
+
+def _draw_path_segment_bodies(
+    draw: ImageDraw.ImageDraw,
+    subpath: _SampledPathSubpath,
+    scale: float,
+    stroke: tuple[int, int, int, int],
+    stroke_width: int,
+) -> None:
+    """Paint sampled source segments without inventing boundary joins."""
+    indices = subpath.endpoint_indices
+    for start, end in zip(indices, indices[1:], strict=False):
+        _draw_curve(draw, subpath.points[start : end + 1], scale, stroke, stroke_width)
+    if subpath.closed:
+        _draw_curve(draw, subpath.points[indices[-1] :], scale, stroke, stroke_width)
+
+
+def _scaled_sampled_subpath(subpath: _SampledPathSubpath, scale: float) -> _SampledPathSubpath:
+    """Scale one prevalidated sampled subpath without changing topology."""
+    return _SampledPathSubpath(
+        points=tuple((x * scale, y * scale) for x, y in subpath.points),
+        endpoint_indices=subpath.endpoint_indices,
+        segment_count=subpath.segment_count,
+        closed=subpath.closed,
+    )
 
 
 def _scaled_path_subpaths(component: PathDrawing, scale: float) -> list[list[tuple[float, float]]]:
     """Return sampled path points in the finite supersampled pixel domain."""
     scaled_subpaths: list[list[tuple[float, float]]] = []
-    for subpath in _sampled_path_subpaths(component):
+    for subpath in _sampled_path_geometry(component):
         scaled_subpath: list[tuple[float, float]] = []
-        for x, y in subpath:
+        for x, y in subpath.points:
             scaled = x * scale, y * scale
             if not all(math.isfinite(value) for value in scaled):
                 raise ValueError("raster path geometry must remain finite after scaling")
@@ -1258,6 +1440,105 @@ def _draw_curve(
     draw.line([_scaled_point(point, scale) for point in points], fill=stroke, width=stroke_width)
 
 
+def _semantic_path_join_triples(
+    subpath: _SampledPathSubpath,
+) -> list[tuple[tuple[float, float], tuple[float, float], tuple[float, float]]]:
+    """Return neighboring stroke points at source-level path joins only."""
+    indices = subpath.endpoint_indices if subpath.closed else subpath.endpoint_indices[1:-1]
+    triples: list[tuple[tuple[float, float], tuple[float, float], tuple[float, float]]] = []
+    for index in indices:
+        previous = _distinct_path_neighbor(subpath, index, -1)
+        following = _distinct_path_neighbor(subpath, index, 1)
+        if previous is not None and following is not None:
+            triples.append((previous, subpath.points[index], following))
+    return triples
+
+
+def _distinct_path_neighbor(
+    subpath: _SampledPathSubpath,
+    index: int,
+    direction: int,
+) -> tuple[float, float] | None:
+    """Find the nearest distinct sampled point without crossing an open end."""
+    point_count = len(subpath.points) - int(subpath.closed and subpath.segment_count > 0)
+    candidate = index
+    for _ in range(max(0, point_count - 1)):
+        candidate += direction
+        if subpath.closed:
+            candidate %= point_count
+        elif not 0 <= candidate < point_count:
+            return None
+        if subpath.points[candidate] != subpath.points[index]:
+            return subpath.points[candidate]
+    return None
+
+
+def _open_path_endpoint_tangents(
+    subpath: _SampledPathSubpath,
+) -> tuple[tuple[float, float], tuple[float, float]]:
+    """Return forward unit tangents at both ends of one open subpath."""
+    end_index = subpath.endpoint_indices[-1]
+    following = _distinct_path_neighbor(subpath, 0, 1)
+    previous = _distinct_path_neighbor(subpath, end_index, -1)
+    start_tangent = _unit_tangent(subpath.points[0], following) if following is not None else (1.0, 0.0)
+    end_tangent = _unit_tangent(previous, subpath.points[end_index]) if previous is not None else (1.0, 0.0)
+    return start_tangent, end_tangent
+
+
+def _draw_open_path_caps(
+    draw: ImageDraw.ImageDraw,
+    subpath: _SampledPathSubpath,
+    stroke: tuple[int, int, int, int],
+    stroke_width: int,
+    line_cap: str,
+) -> None:
+    """Paint caps at an open path's endpoints without capping commands."""
+    if subpath.closed or not subpath.segment_count:
+        return
+    start_tangent, end_tangent = _open_path_endpoint_tangents(subpath)
+    start = subpath.points[0]
+    end = subpath.points[subpath.endpoint_indices[-1]]
+    if _distinct_path_neighbor(subpath, 0, 1) is None:
+        _draw_capped_segment(draw, start, end, stroke, stroke_width, line_cap, start_tangent)
+        return
+    _draw_path_endpoint_cap(draw, start, start_tangent, stroke, stroke_width, line_cap, at_start=True)
+    _draw_path_endpoint_cap(draw, end, end_tangent, stroke, stroke_width, line_cap, at_start=False)
+
+
+def _draw_path_endpoint_cap(
+    draw: ImageDraw.ImageDraw,
+    point: tuple[float, float],
+    tangent: tuple[float, float],
+    stroke: tuple[int, int, int, int],
+    stroke_width: int,
+    line_cap: str,
+    *,
+    at_start: bool,
+) -> None:
+    """Paint one round or square cap from a forward endpoint tangent."""
+    radius = stroke_width / 2.0
+    if line_cap == "round":
+        draw.ellipse(
+            (point[0] - radius, point[1] - radius, point[0] + radius, point[1] + radius),
+            fill=stroke,
+        )
+        return
+    direction = -1.0 if at_start else 1.0
+    normal = -tangent[1], tangent[0]
+    extension = direction * tangent[0] * radius, direction * tangent[1] * radius
+    inner_a = point[0] + normal[0] * radius, point[1] + normal[1] * radius
+    inner_b = point[0] - normal[0] * radius, point[1] - normal[1] * radius
+    draw.polygon(
+        [
+            inner_a,
+            (inner_a[0] + extension[0], inner_a[1] + extension[1]),
+            (inner_b[0] + extension[0], inner_b[1] + extension[1]),
+            inner_b,
+        ],
+        fill=stroke,
+    )
+
+
 def _bevel_join_polygon(
     previous: tuple[float, float],
     vertex: tuple[float, float],
@@ -1326,6 +1607,32 @@ def _miter_join_polygon(
     return _bounded_join_polygon([bevel[0], bevel[1], tip, bevel[2]])
 
 
+def _draw_stroke_join(
+    draw: ImageDraw.ImageDraw,
+    previous: tuple[float, float],
+    vertex: tuple[float, float],
+    following: tuple[float, float],
+    stroke: tuple[int, int, int, int],
+    stroke_width: int,
+    line_join: str,
+    miter_limit: float,
+) -> None:
+    """Paint one explicit round, bevel, or bounded-miter join."""
+    if line_join == "round":
+        radius = stroke_width / 2.0
+        draw.ellipse(
+            (vertex[0] - radius, vertex[1] - radius, vertex[0] + radius, vertex[1] + radius),
+            fill=stroke,
+        )
+        return
+    if line_join == "bevel":
+        polygon = _bevel_join_polygon(previous, vertex, following, stroke_width)
+    else:
+        polygon = _miter_join_polygon(previous, vertex, following, stroke_width, miter_limit)
+    if polygon:
+        draw.polygon(polygon, fill=stroke)
+
+
 def _draw_joined_polyline(
     draw: ImageDraw.ImageDraw,
     points: Sequence[tuple[float, float]],
@@ -1348,30 +1655,12 @@ def _draw_joined_polyline(
             draw.line([start, end], fill=stroke, width=stroke_width)
 
     join_indices = range(len(vertices)) if closed else range(1, len(vertices) - 1)
-    radius = stroke_width / 2.0
     for index in join_indices:
         previous = vertices[index - 1]
         vertex = vertices[index]
         following = vertices[(index + 1) % len(vertices)]
-        if line_join == "round":
-            if previous != vertex and vertex != following:
-                draw.ellipse(
-                    (
-                        vertex[0] - radius,
-                        vertex[1] - radius,
-                        vertex[0] + radius,
-                        vertex[1] + radius,
-                    ),
-                    fill=stroke,
-                )
-        elif line_join == "bevel":
-            polygon = _bevel_join_polygon(previous, vertex, following, stroke_width)
-            if polygon:
-                draw.polygon(polygon, fill=stroke)
-        else:
-            polygon = _miter_join_polygon(previous, vertex, following, stroke_width, miter_limit)
-            if polygon:
-                draw.polygon(polygon, fill=stroke)
+        if previous != vertex and vertex != following:
+            _draw_stroke_join(draw, previous, vertex, following, stroke, stroke_width, line_join, miter_limit)
 
 
 def _draw_polygon(

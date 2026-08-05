@@ -10,7 +10,7 @@
     {"path": "src/InkGen/drawing_components.py", "sha256": "6679A6E3AE03E74F0EFC329C95B0D968D96ABCF2433A06FC564999828F7D38EB"},
     {"path": "src/InkGen/pdf_generator.py", "sha256": "426D67585F253129EAB35A35226921F99963A922E4788EDCA4CF98B8684F31C9"},
     {"path": "src/InkGen/svg_generator.py", "sha256": "C5091B8F99A71F6936369990143D46A98A465BDE80190A1439A6AFF643A745C0"},
-    {"path": "src/InkGen/raster_renderer.py", "sha256": "9609F229AF0404328D3E8BF595D3DE4410F98165E62210C1D0064FAF9893F245"}
+    {"path": "src/InkGen/raster_renderer.py", "sha256": "04324ACDCA65E492F393EADAE2A3AEF56AE84471CF006EF07481D9FE91DCD0FF"}
   ],
   "tests": [
     {"path": "tests/test_raster_text_contract.py", "sha256": "7CE5E5CFA6A0637960FDDD8E6D9025E1126A069C2E7F17D9F2293A120866D681"},
@@ -42,8 +42,8 @@
   },
   "execution_artifacts": [9385],
   "dependency_refresh": {
-    "reason": "RASTER-LINE-JOIN-P15 changed raster_renderer.py and invalidated the retained whole-source freshness hash",
-    "method": "P15 changed stroke-join validation and rectangle/polygon dispatch outside every P11 text mutation range. The full suite and P11 freshness test were rerun before re-attesting the hash (coverage artifacts 9658-9660).",
+    "reason": "RASTER-PATH-STROKE-P17 changed raster_renderer.py and invalidated the retained whole-source freshness hash",
+    "method": "P17 changed path sampling and semantic path strokes outside every P11 text mutation range. The full suite and P11 freshness test were rerun before re-attesting the hash.",
     "scoped_definitions": ["normalize_text_lines", "generate_svg", "_validate_render_domain text branch", "_validated_raster_text", "_render_text"]
   },
   "late_kill_witnesses": [

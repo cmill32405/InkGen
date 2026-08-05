@@ -101,10 +101,7 @@ def _assert_validation() -> None:
         corrupt._stroke_miterlimit = value
         _raises(error, lambda item=corrupt: _validate_raster_stroke_style(polygon, item))
 
-    for component in (
-        PathDrawing(_style(2.0)),
-        QuadraticBezierDrawing((0, 0), (1, 0), (1, 1), _style(2.0)),
-    ):
+    for component in (QuadraticBezierDrawing((0, 0), (1, 0), (1, 1), _style(2.0)),):
         _raises(
             ValueError,
             lambda item=component: _validate_raster_stroke_style(item, item.style),

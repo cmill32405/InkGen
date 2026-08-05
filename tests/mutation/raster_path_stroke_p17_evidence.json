@@ -1,0 +1,190 @@
+{
+  "condition": "RASTER-PATH-STROKE-P17",
+  "evidence_generated_utc": "2026-08-05T20:08:38.0686366Z",
+  "tool": {
+    "name": "Cosmic Ray",
+    "version": "8.4.6",
+    "execution_environment": "two sequential disjoint WSL shards, a complete database merge, and two survivor-only witness reruns"
+  },
+  "source_files": [
+    {"path": "src/InkGen/raster_renderer.py", "sha256": "04324ACDCA65E492F393EADAE2A3AEF56AE84471CF006EF07481D9FE91DCD0FF"}
+  ],
+  "condition_tests": [
+    {"path": "tests/test_raster_path_stroke_contract.py", "sha256": "2A81E0432A530BD7E5C80BEDB6D6A2E5541EB6B926EF0274B1BCFC9C4D6132FB"}
+  ],
+  "mutation_tests": [
+    {"path": "tests/mutation/check_raster_path_stroke_p17.py", "sha256": "A46D1AE3CABA537E8DC4689305BB263996F53F5DCD32EF096B801A2AF68E9D15"}
+  ],
+  "config": {
+    "path": "tests/mutation/raster_path_stroke_p17_cosmic_ray.toml",
+    "sha256": "D6EC246B3CBAC82EDDBCDD03BCEE84906B9DFD02DE3AA28793FC63B8942A7BE9"
+  },
+  "filter": {
+    "path": "tests/mutation/filter_raster_path_stroke_p17_work_items.py",
+    "sha256": "843104CE7870F148D7031CBABC0BACAC0986F82E163BF0280A47B0F4D6B4F1E2"
+  },
+  "partition": {
+    "path": "tests/mutation/partition_cosmic_ray_work_items.py",
+    "sha256": "D41FD32FD30C61EFC16ABC54DFF13DC9E82A3BD825E7E7D0A437EB28441F89FE"
+  },
+  "merge": {
+    "path": "tests/mutation/merge_cosmic_ray_shards.py",
+    "sha256": "E3F601D439D91E919E8F29394459492920B2D751C2801E122D96543DB1B607B1"
+  },
+  "database": {
+    "path": "tests/mutation/raster_path_stroke_p17.sqlite",
+    "sha256": "FDD9655D756AB311873837AA6A41AF8BBD1D03E95F08B07CFE25E3577D077EF9"
+  },
+  "campaign": {
+    "generated_candidates": 6321,
+    "selected_work_items": 579,
+    "completed_results": 579,
+    "killed": 539,
+    "survived": 40,
+    "equivalent_survivors": 40,
+    "worker_errors": 0,
+    "worker_timeouts": 0,
+    "raw_mutation_coverage": 0.9309153713298791,
+    "effective_mutation_coverage": 1.0
+  },
+  "execution_artifacts": [9742, 9744, 9745, 9747],
+  "shard_sizes": [290, 289],
+  "equivalent_survivor_proofs": [
+    {
+      "job_ids": ["3f07d44fcb5e4f02b0d1a2411359aa0d", "0fc4493653a9443c89fae7452e5accdc"],
+      "mutation": "The private stroke-validator scale default changes from 1.0 to 2.0 or 0.0.",
+      "premises": [
+        "The production renderer is the only live caller and always supplies its computed scale explicitly.",
+        "Mutation-witness calls that omit scale either fail before scale is consumed or use the neutral default miter contract."
+      ],
+      "proof": "No reachable call reads the mutated default, so every validation result and exception is unchanged."
+    },
+    {
+      "job_ids": ["e377f85ffb224270b1f8530128726b05", "13d1a22cb0854850870da179fbed430a", "e7a0fbacd3b743ab85628a6de4472c76"],
+      "mutation": "A non-butt cap comparison changes from inequality to lexicographic greater-than.",
+      "premises": [
+        "Live validation restricts cap values to butt, round, or square.",
+        "Python orders these values as butt < round < square."
+      ],
+      "proof": "On the validated set, cap != butt if and only if cap > butt, so all three branch decisions are unchanged."
+    },
+    {
+      "job_ids": ["8127f07c2ef540318ba6b7a0bbb5c3f2", "2840963f2d4742d08aaeaed4bcda102f", "f357de1153e34f13a4216d4ac92053d5", "52642a6f2d364f42bc63487fb698696e", "556dc540ac6740cba76e74fae3ed3cce", "a77489b17ff947acb9bb396ea64c009e", "169e15c0bcb2456994ea7b58f08f4e6a"],
+      "mutation": "A transparent stroke-layer RGB channel becomes positive or negative one, or its alpha becomes negative one.",
+      "premises": [
+        "Pillow clamps negative channel initializers to zero.",
+        "Positive RGB values paired with alpha zero contribute no source-over color.",
+        "Stroke drawing replaces pixels that become visible."
+      ],
+      "proof": "Each mutant initializes the same fully transparent compositing layer at every observable pixel; rendered RGBA output is identical."
+    },
+    {
+      "job_ids": ["ff08a7144aa540c7a2e15b98110b3d93"],
+      "mutation": "Open-path join enumeration also examines the start endpoint.",
+      "premises": [
+        "An open start has no previous point because neighbor search cannot cross the boundary.",
+        "A join is emitted only when both neighbors exist."
+      ],
+      "proof": "The added start candidate always has previous = None and is discarded, leaving the join list unchanged."
+    },
+    {
+      "job_ids": ["b85703e0d0114ef7ad9217e2adc97777", "b8f2bec3c94e47029113dbcebe50f8ab", "3b158f6fd023419c90e4ca1d7a128000", "135ab8fe3f1a41d1aeaec8cca4e96963", "b8709ba048ab4d14a19759388f346d7a", "00f93570e72a44f9aeca51825d3bd911", "9cccee86c29447efbfa7e96317a76005"],
+      "mutation": "Closed-path point-count predicates stop excluding the duplicated closing sample in some cases.",
+      "premises": [
+        "A closed sampled subpath is either move-only with segment_count == 0 or nondegenerate with segment_count >= 2 and points[-1] == points[0].",
+        "Neighbor search returns a coordinate, not an index.",
+        "A one-segment closed path contains no distinct neighbor."
+      ],
+      "proof": "For move-only closure, every form performs zero loop iterations and returns None. For nondegenerate closure, including the closing sample only repeats the start coordinate in the cyclic search and cannot change the first distinct coordinate; > 0 and > 1 are identical because segment_count is at least two."
+    },
+    {
+      "job_ids": ["6ff0a50748844adfb012581e033183d1", "d1e9afdbd69b48919e5790386b5e47b0", "6f4cc9346d724bf4919089628148a662", "fcbe6d6bbb5b4a1fab13d332e3df28ac", "2cf0c78fc84441029b7e43cf9a7b32fa", "4608d7bd4086459997d88242fca13dd5"],
+      "mutation": "Neighbor-search loop bounds gain zero, one, or two extra iterations or use an equivalent nonnegative lower bound.",
+      "premises": [
+        "Every sampled subpath has at least one point, so point_count - 1 is nonnegative.",
+        "Open search returns None on its first step beyond an endpoint.",
+        "Closed search has already visited every non-start coordinate before an extra iteration."
+      ],
+      "proof": "The -1 lower bound equals zero on this domain. Extra open iterations terminate at the same boundary, while extra closed iterations only revisit coordinates and cannot discover a new first distinct value."
+    },
+    {
+      "job_ids": ["ba0003c821fe4d09927e62deed74d0fc"],
+      "mutation": "The open upper-bound check changes from candidate < point_count to candidate != point_count.",
+      "premises": [
+        "Candidate begins in range and changes by exactly one per iteration.",
+        "The guard returns at the first out-of-range value."
+      ],
+      "proof": "The first upper-bound violation is exactly candidate == point_count, while the lower guard handles -1; no value above point_count is reachable before return. The predicates therefore agree."
+    },
+    {
+      "job_ids": ["6d0823933b86497a884abf3880387a31", "1ec9c4f80ab4407aa33d408b5497e110", "42a62701cee44dfa97d07707e2bdbe7e", "8a50ccbb49bc4180b19a2f9b9dd6aa62"],
+      "mutation": "The fallback end tangent changes when no distinct predecessor exists.",
+      "premises": [
+        "No distinct predecessor at the final endpoint implies every sampled point is equal.",
+        "The same path consequently has no distinct successor at the start.",
+        "The live cap caller takes its degenerate-segment branch and consumes only the start tangent."
+      ],
+      "proof": "The mutated end-tangent tuple is unreachable from any rendering operation and cannot affect output or validation."
+    },
+    {
+      "job_ids": ["12ca76f13f4f4103b70fd7385cfe14c2"],
+      "mutation": "The degenerate-cap existence probe starts at index -1 instead of index 0.",
+      "premises": [
+        "The probe result is consumed only as None versus non-None.",
+        "If every open-path point is equal, both searches return None.",
+        "If any point differs, a forward scan from either endpoint encounters a distinct coordinate."
+      ],
+      "proof": "Both probes classify exactly the same all-equal versus nondegenerate paths, so cap dispatch is unchanged."
+    },
+    {
+      "job_ids": ["c06c98d90be44e059eb7d0db24f43c6b"],
+      "mutation": "The private endpoint-cap separator changes keyword-only syntax to positional-only syntax for preceding arguments.",
+      "premises": ["All live callers pass the preceding arguments positionally and at_start by keyword."],
+      "proof": "Every live invocation is valid under both signatures and binds identical argument values."
+    },
+    {
+      "job_ids": ["878b51d235154aecbbd2ecabb9b65a24"],
+      "mutation": "Round-cap equality changes to line_cap <= round.",
+      "premises": [
+        "The helper receives only round or square after non-butt dispatch.",
+        "Python orders round < square."
+      ],
+      "proof": "On the helper domain, line_cap == round if and only if line_cap <= round."
+    },
+    {
+      "job_ids": ["51b8e637cdb749dc8841fde5b94e6ed9", "ecedb8bf43f44cc980a2863151eadd7b"],
+      "mutation": "Round or bevel join equality changes to lexicographic ordering.",
+      "premises": [
+        "Live validation restricts joins to bevel, miter, or round.",
+        "Python orders bevel < miter < round.",
+        "The bevel branch is evaluated only after round has returned."
+      ],
+      "proof": "join == round equals join >= round on the full domain, and join == bevel equals join <= bevel on the remaining bevel/miter domain."
+    },
+    {
+      "job_ids": ["5c9c94a978004b959c94d35dcbd3b41a", "b026c10bfbda4de3918e4afb4dddc7e3"],
+      "mutation": "The private joined-polyline miter-limit default changes from 10.0 to 11.0 or 9.0.",
+      "premises": ["Every live caller supplies the validated miter limit explicitly."],
+      "proof": "The mutated default is never read, so all emitted line and join operations are unchanged."
+    },
+    {
+      "job_ids": ["ca72fae9fba844859c14e313ef97b420"],
+      "mutation": "The short-polyline guard changes from fewer than two points to fewer than one point.",
+      "premises": [
+        "The predicates differ only for a one-point sequence.",
+        "A one-point open sequence has no segment or join indices.",
+        "A one-point closed sequence has one self-pair that is skipped and one join whose equal neighbors suppress drawing."
+      ],
+      "proof": "Both implementations emit zero drawing operations for the only differing input cardinality."
+    },
+    {
+      "job_ids": ["0e602cd8be464a30a90c85b082c41f7c"],
+      "mutation": "Closed-polyline following-index modulo changes to index + 1 - length.",
+      "premises": [
+        "Closed join indices range from zero through length - 1.",
+        "Python negative indexing maps k - length to k for every k in [0, length - 1]."
+      ],
+      "proof": "For every join index, vertices[(index + 1) % length] and vertices[index + 1 - length] select the same object."
+    }
+  ]
+}

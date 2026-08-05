@@ -190,7 +190,7 @@ def test_non_line_caps_remain_outside_the_closed_domain_before_allocation(
     """RASTER-LINE-CAP-P14: P14 does not silently broaden cap support to shapes."""
     monkeypatch.setattr(raster_renderer.Image, "new", lambda *args, **kwargs: pytest.fail("surface allocated"))
     rectangle = RectangleDrawing((0, 0), 1, 1, 0, _style(line_cap))
-    with pytest.raises(ValueError, match="supported only for raster LineDrawing P14"):
+    with pytest.raises(ValueError, match="require raster LineDrawing P14 or PathDrawing P17"):
         render_drawing_group(DrawingComponentGroup("invalid-cap-shape", [rectangle]), Canvas(2, 2, "in"), dpi=10)
 
 

@@ -450,7 +450,7 @@ def test_unsupported_primitive_and_style_features_fail_loudly() -> None:
         (unsupported, "unsupported raster primitive: UnsupportedDrawing"),
         (dashed, "dashed strokes are supported only for raster LineDrawing P13"),
         (dash_offset, "stroke dash offset requires a nonempty dash array"),
-        (round_cap, "non-butt stroke caps are supported only for raster LineDrawing P14"),
+        (round_cap, "non-butt stroke caps require raster LineDrawing P14 or PathDrawing P17"),
     ]:
         with pytest.raises(ValueError, match=message):
             render_drawing_group(DrawingComponentGroup("unsupported", [component]), Canvas(3, 3, "in"), dpi=10)

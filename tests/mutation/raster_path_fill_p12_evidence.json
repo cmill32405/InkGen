@@ -9,7 +9,7 @@
   "source_files": [
     {
       "path": "src/InkGen/raster_renderer.py",
-      "sha256": "9609F229AF0404328D3E8BF595D3DE4410F98165E62210C1D0064FAF9893F245"
+      "sha256": "04324ACDCA65E492F393EADAE2A3AEF56AE84471CF006EF07481D9FE91DCD0FF"
     }
   ],
   "mutation_tests": [
@@ -50,8 +50,8 @@
   },
   "execution_artifacts": [9479, 9484],
   "dependency_refresh": {
-    "reason": "RASTER-LINE-CAP-P14 changed raster_renderer.py and invalidated the retained whole-source freshness hash",
-    "method": "P14 changed stroke-cap/dash validation and LineDrawing cap helpers outside every P12 path-fill mutation range. The P12 condition suite and fast mutation witness were rerun before re-attesting the hash (artifact 9606).",
+    "reason": "RASTER-PATH-STROKE-P17 changed raster_renderer.py and invalidated the retained whole-source freshness hash",
+    "method": "P17 refactored shared path sampling and directly mutation-tested the changed fill/stroke composition branch. The P12 condition suite, P17 compositing witnesses, and full suite were rerun before re-attesting the hash.",
     "scoped_definitions": ["_render_path_component", "_scaled_path_subpaths", "_render_nonzero_path_fill"]
   },
   "late_kill_witnesses": [

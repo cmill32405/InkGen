@@ -7,13 +7,13 @@
     "execution_environment": "two sequential disjoint WSL shards followed by a complete database merge"
   },
   "source_files": [
-    {"path": "src/InkGen/raster_renderer.py", "sha256": "9609F229AF0404328D3E8BF595D3DE4410F98165E62210C1D0064FAF9893F245"}
+    {"path": "src/InkGen/raster_renderer.py", "sha256": "04324ACDCA65E492F393EADAE2A3AEF56AE84471CF006EF07481D9FE91DCD0FF"}
   ],
   "condition_tests": [
-    {"path": "tests/test_raster_miter_limit_contract.py", "sha256": "03B885DB85FDBDD50E8D7C4740E18A9285E98FECCF7BC359C7312A777221C2B2"}
+    {"path": "tests/test_raster_miter_limit_contract.py", "sha256": "0F288AC8BBB7ACDE4F523E979A71D4CF949D8EEAD1252B5CF516F532F263DF96"}
   ],
   "mutation_tests": [
-    {"path": "tests/mutation/check_raster_miter_limit_p16.py", "sha256": "247340AD926BDA07A3FF992F35DAE231615DCE59BB410F5EFDCBBD6093424D31"}
+    {"path": "tests/mutation/check_raster_miter_limit_p16.py", "sha256": "D19AB1AD43E9B24DC86E5D5268406FFC3CE4E7519F5C2A39486C4E294E29E094"}
   ],
   "config": {
     "path": "tests/mutation/raster_miter_limit_p16_cosmic_ray.toml",
@@ -49,5 +49,10 @@
   },
   "execution_artifacts": [9671, 9674],
   "shard_sizes": [351, 350],
+  "dependency_refresh": {
+    "reason": "RASTER-PATH-STROKE-P17 changed raster_renderer.py and superseded the prior PathDrawing miter-limit rejection contract",
+    "method": "P17 preserved P16 point/shape miter behavior, composed the P16 validation, point, geometry, and operation witnesses into its 579-item campaign, and reran the P16 condition and full suites before re-attesting the hashes.",
+    "scoped_definitions": ["_validate_raster_stroke_style", "_validate_path_miter_geometry", "_draw_stroke_join"]
+  },
   "equivalent_survivor_proofs": []
 }

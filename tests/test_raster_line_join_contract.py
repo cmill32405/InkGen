@@ -16,7 +16,6 @@ from InkGen import (
     DrawingComponentGroup,
     DrawingStyle,
     LineDrawing,
-    PathDrawing,
     PolygonalDrawing,
     QuadraticBezierDrawing,
     RectangleDrawing,
@@ -209,15 +208,13 @@ def test_join_selectors_are_neutral_for_primitives_without_vertices(primitive: s
 
 @pytest.mark.condition("RASTER-LINE-JOIN-P15")
 @pytest.mark.parametrize("line_join", ["round", "bevel"])
-@pytest.mark.parametrize("primitive", ["path", "curve"])
 def test_sampled_geometry_joins_remain_closed_before_surface_allocation(
     monkeypatch: pytest.MonkeyPatch,
     line_join: str,
-    primitive: str,
 ) -> None:
     """RASTER-LINE-JOIN-P15: Tessellation points are not misclassified as semantic joins."""
     style = _style(line_join)
-    component = PathDrawing(style) if primitive == "path" else QuadraticBezierDrawing((0, 0), (1, 0), (1, 1), style)
+    component = QuadraticBezierDrawing((0, 0), (1, 0), (1, 1), style)
     monkeypatch.setattr(raster_renderer.Image, "new", lambda *args, **kwargs: pytest.fail("surface allocated"))
     with pytest.raises(ValueError, match="straight-edge primitives P15"):
         render_drawing_group(DrawingComponentGroup("unsupported-join", [component]), Canvas(2, 2, "in"), dpi=20)

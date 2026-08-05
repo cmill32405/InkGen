@@ -180,6 +180,19 @@ join-free primitives, and already-rounded outlines. Sampled arcs, Beziers,
 and paths reject nondefault miter limits because their tessellation points are
 not semantic joins.
 
+P17 admits `butt`, `round`, and `square` caps plus `miter`, `round`, and
+`bevel` joins for solid `PathDrawing` strokes. Path sampling now retains the
+sample index of every source segment endpoint separately from the sampled
+point sequence. Open subpaths receive caps only at their first and last source
+endpoints. Closed subpaths receive a join at the `Z` seam and no caps. Join
+geometry uses the nearest distinct sampled point on each incident source
+segment, so Bezier and arc samples determine local tangents without becoming
+additional joins. Nondefault miter limits use the P16 ratio and bevel fallback
+at those semantic boundaries, including the same pre-allocation signed
+32-bit coordinate bound. The default butt/miter/10 route preserves the exact
+established polyline dispatch. Dash arrays remain limited to `LineDrawing`
+until subpath phase continuity is separately proven.
+
 ## Dependencies And Contracts
 
 | Dependency | Consumed contract | Failure if changed |
@@ -235,6 +248,9 @@ PDF, SVG, DXF, and document outputs do not depend on the raster renderer.
 - Nondefault miter limits preserve the exact half-angle ratio, deterministic
   bevel fallback, and a pre-allocation coordinate bound while the default
   rendering path remains byte-identical.
+- Solid paths preserve source-command joins, open-subpath cap placement,
+  closed-seam joins, local sampled tangents, and bounded miter fallback without
+  styling curve tessellation points as source vertices.
 - Later clipping slices can extend a proven boundary without weakening
   existing rejection contracts.
 
