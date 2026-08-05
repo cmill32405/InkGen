@@ -1,0 +1,111 @@
+{
+  "condition": "RASTER-LINE-JOIN-P15",
+  "evidence_generated_utc": "2026-08-05T13:32:00Z",
+  "tool": {
+    "name": "Cosmic Ray",
+    "version": "8.4.6",
+    "execution_environment": "two sequential disjoint WSL shards followed by a complete database merge"
+  },
+  "source_files": [
+    {"path": "src/InkGen/raster_renderer.py", "sha256": "2FF1E75B49ECC90853E07D2F89EF011B8722A4FC2756256D397ADEA289666858"}
+  ],
+  "condition_tests": [
+    {"path": "tests/test_raster_line_join_contract.py", "sha256": "2B980AA7C4A9DE76ACD85DC53FAC01F7418431B1C5C301774FCB81C6BE9237E4"}
+  ],
+  "mutation_tests": [
+    {"path": "tests/mutation/check_raster_line_join_p15.py", "sha256": "07F5755577A5CBCB5FD6D737406371E36E9F69616729116353D398482D31733F"}
+  ],
+  "config": {
+    "path": "tests/mutation/raster_line_join_p15_cosmic_ray.toml",
+    "sha256": "09CF045155A506E7A2B7D2F78C4597D667CC0DA8781B4A9FE61055AA16EF0CCF"
+  },
+  "filter": {
+    "path": "tests/mutation/filter_raster_line_join_p15_work_items.py",
+    "sha256": "49957A2AEC5A6CB01E22F4F87889D35378B038AA34586D1EE62C279504BF95AA"
+  },
+  "partition": {
+    "path": "tests/mutation/partition_cosmic_ray_work_items.py",
+    "sha256": "D41FD32FD30C61EFC16ABC54DFF13DC9E82A3BD825E7E7D0A437EB28441F89FE"
+  },
+  "merge": {
+    "path": "tests/mutation/merge_cosmic_ray_shards.py",
+    "sha256": "E3F601D439D91E919E8F29394459492920B2D751C2801E122D96543DB1B607B1"
+  },
+  "database": {
+    "path": "tests/mutation/raster_line_join_p15.sqlite",
+    "sha256": "4AF45B0DA0D2894C715E4FD99684262C7E0D6B86550A2373F6E579B0ABA733AC"
+  },
+  "campaign": {
+    "generated_candidates": 5360,
+    "selected_work_items": 333,
+    "completed_results": 333,
+    "killed": 327,
+    "survived": 6,
+    "equivalent_survivors": 6,
+    "worker_errors": 0,
+    "worker_timeouts": 0,
+    "raw_mutation_coverage": 0.9819819819819819,
+    "effective_mutation_coverage": 1.0
+  },
+  "execution_artifacts": [9655, 9656],
+  "shard_sizes": [167, 166],
+  "equivalent_survivor_proofs": [
+    {
+      "job_ids": ["fc60b6f7984c4c979fba428881992c5e"],
+      "mutation": "The outer-side test changes from cross > 0 to cross >= 0.",
+      "premises": [
+        "The immediately preceding guard returns when cross == 0.",
+        "Every value reaching the side expression is therefore strictly positive or strictly negative."
+      ],
+      "proof": "For every reachable cross value, cross > 0 and cross >= 0 have the same truth value, so the selected normal side is unchanged."
+    },
+    {
+      "job_ids": ["e2a3364a08914c85853d80f47354ba20"],
+      "mutation": "The short-polyline guard changes from len(points) < 2 to len(points) < 1.",
+      "premises": [
+        "The predicates differ only for exactly one point.",
+        "One point produces zero adjacent segment pairs.",
+        "The closed seam is a repeated point and is skipped; every join has equal incident points and emits no shape."
+      ],
+      "proof": "Both versions perform zero Pillow calls and return the same transparent result for the only differing input cardinality."
+    },
+    {
+      "job_ids": ["3e1fe93cdc37453795083f465b379146"],
+      "mutation": "Closed following-index normalization changes from (i + 1) % n to (i + 1) - n.",
+      "premises": [
+        "Closed join indices satisfy 0 <= i < n.",
+        "Python negative indices k - n select the same element as nonnegative index k for 0 <= k < n."
+      ],
+      "proof": "For i < n - 1, (i + 1) - n is the negative index of element i + 1; for i == n - 1 both expressions select zero. Every following vertex is identical."
+    },
+    {
+      "job_ids": ["6f5061ba6a3a46b0a8c4f07053fcd137"],
+      "mutation": "The helper's round selector changes from line_join == round to line_join >= round.",
+      "premises": [
+        "Live validation restricts non-miter helper calls to round or bevel.",
+        "Python lexicographically orders bevel < round."
+      ],
+      "proof": "On the complete reachable set, equality with round and greater-than-or-equal to round are true only for round."
+    },
+    {
+      "job_ids": ["7cee8828e1b844ad9b5b3f09e7d3ba58"],
+      "mutation": "An outer polygon miter equality changes to object identity.",
+      "premises": [
+        "Equal interned values take the unchanged legacy route.",
+        "An equal non-interned miter value may take the outer else route.",
+        "That route passes the same value to _draw_polygon, which re-evaluates it with value equality and takes the same legacy line operation."
+      ],
+      "proof": "Both outer routes converge on the same scaled vertices, fill, stroke, width, and legacy miter draw call for every equal miter string."
+    },
+    {
+      "job_ids": ["d4e3b5d8f53046fcace73c366db43882"],
+      "mutation": "The private helper signature changes closed from keyword-only to positional-or-keyword.",
+      "premises": [
+        "Every reachable caller supplies closed by keyword.",
+        "Both signatures accept the same closed keyword and bind it to the same boolean value.",
+        "The helper is private and signature introspection is outside the rendering contract."
+      ],
+      "proof": "The mutation only admits additional positional call syntax; it does not change binding or execution for any production call."
+    }
+  ]
+}

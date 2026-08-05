@@ -437,14 +437,6 @@ def test_unsupported_primitive_and_style_features_fail_loudly() -> None:
     dashed = RectangleDrawing((0, 0), 1, 1, 0, _style(stroke="#000000", stroke_width=1, stroke_dasharray=(1, 1)))
     dash_offset = LineDrawing((0, 0), (1, 1), _style(stroke="#000000", stroke_width=1, stroke_dash_offset=1))
     round_cap = RectangleDrawing((0, 0), 1, 1, 0, _style(stroke="#000000", stroke_width=1, stroke_linecap="round"))
-    round_join = PolygonalDrawing(
-        [(0, 0), (1, 0), (1, 1)],
-        _style(stroke="#000000", stroke_width=1, stroke_linejoin="round"),
-    )
-    bevel_join = PolygonalDrawing(
-        [(0, 0), (1, 0), (1, 1)],
-        _style(stroke="#000000", stroke_width=1, stroke_linejoin="bevel"),
-    )
     miter_limit = PolygonalDrawing(
         [(0, 0), (1, 0), (1, 1)],
         _style(stroke="#000000", stroke_width=1, stroke_miterlimit=5),
@@ -459,8 +451,6 @@ def test_unsupported_primitive_and_style_features_fail_loudly() -> None:
         (dashed, "dashed strokes are supported only for raster LineDrawing P13"),
         (dash_offset, "stroke dash offset requires a nonempty dash array"),
         (round_cap, "non-butt stroke caps are supported only for raster LineDrawing P14"),
-        (round_join, "only miter stroke joins are supported"),
-        (bevel_join, "only miter stroke joins are supported"),
         (miter_limit, "nondefault stroke miter limits are not supported"),
         (high_miter_limit, "nondefault stroke miter limits are not supported"),
     ]:

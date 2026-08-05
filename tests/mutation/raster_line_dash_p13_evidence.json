@@ -7,7 +7,7 @@
     "execution_environment": "four disjoint WSL ext4 source-copy shards"
   },
   "source_files": [
-    {"path": "src/InkGen/raster_renderer.py", "sha256": "0A0835182BC33EB184584F693CF3800775FB5C3C1F4CB6FD2A804D1875601480"}
+    {"path": "src/InkGen/raster_renderer.py", "sha256": "2FF1E75B49ECC90853E07D2F89EF011B8722A4FC2756256D397ADEA289666858"}
   ],
   "condition_tests": [
     {"path": "tests/test_raster_line_dash_contract.py", "sha256": "BADBDBC0DB2A1D4E646A05ABB6C799C66D3C7C392D9677D8609BEB88F3500223"}

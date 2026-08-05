@@ -8,7 +8,7 @@ Accepted for `RASTER-RENDERER-P1`, `RASTER-BAIRD-P1`,
 `RASTER-ROUNDED-RECT-P8`, `RASTER-ROUNDED-POLYGON-P9`, and
 `RASTER-GRADIENT-P10`, `RASTER-TEXT-MULTILINE-P11`, and
 `RASTER-PATH-FILL-P12`, `RASTER-LINE-DASH-P13`, and
-`RASTER-LINE-CAP-P14`.
+`RASTER-LINE-CAP-P14`, and `RASTER-LINE-JOIN-P15`.
 
 ## Context
 
@@ -155,13 +155,27 @@ square-path no-op remains a backend-specific difference. Positive dash
 segments and unique zero-dash cap centers share a 100,000-operation bound
 before allocation. Non-line primitives retain explicit non-butt-cap rejection.
 
+P15 admits `round` and `bevel` stroke joins for sharp `RectangleDrawing`,
+`PolygonalDrawing`, and `RegularPolygonDrawing` corners. It also accepts those
+selectors as neutral no-ops for lines, circles, and already-rounded rectangle
+or regular-polygon outlines, where no sharp semantic vertex exists. Round
+joins are the union of the two incident stroke bodies and a radius-half-width
+disk at the vertex. Bevel joins add the triangle from the vertex to the two
+outer half-width offsets. The default `miter` path remains unchanged.
+
+Sampled arcs, Bezier primitives, and paths retain explicit non-miter rejection.
+Their sampled points approximate smooth geometry and are not semantic path
+joins; styling every sample as a join would change the source contract.
+Nondefault miter limits also remain rejected pending a separate bounded miter
+intersection and fallback proof.
+
 ## Dependencies And Contracts
 
 | Dependency | Consumed contract | Failure if changed |
 |---|---|---|
 | `drawing_components.py` | Neutral primitive geometry, style ownership, and group order | Geometry or ordering renders incorrectly |
 | `component.py` | Established curve samples, normalized path commands, rectangle radii, and regular-polygon tangent-circle geometry | Raster curves, paths, or rounded shapes diverge from neutral/PDF/SVG/DXF geometry |
-| `style.py` | Validated nonnegative dash arrays, phase, stroke width, opacity, and `butt`/`round`/`square` cap selectors | Raster line cadence or cap paint differs from neutral intent |
+| `style.py` | Validated nonnegative dash arrays, phase, stroke width, opacity, cap selectors, and `miter`/`round`/`bevel` join selectors | Raster stroke presentation differs from neutral intent |
 | `gradients.py` | Full-coverage axis, ordered extended stops, and normalized sRGB colors | Raster direction, endpoint extension, or interpolation diverges from SVG/PDF intent |
 | `boundary.py` | Positive canvas dimensions and normalized `mm`/`in` units | Physical pixel dimensions become incorrect |
 | `style.py` | Normalized drawing colors, text colors, font-file resolution, point size, visibility, and alignment | Paint, glyph source, or baseline alignment differs from SVG/PDF semantics |
@@ -205,6 +219,8 @@ PDF, SVG, DXF, and document outputs do not depend on the raster renderer.
   modulo phase, alpha, and deterministic resource bounds.
 - Solid and dashed lines preserve butt, round, and projecting-square endpoint
   geometry, including bounded zero-length dotted caps.
+- Sharp straight-edge primitives preserve miter, round, and bevel corner
+  semantics without treating curve tessellation points as source joins.
 - Later clipping slices can extend a proven boundary without weakening
   existing rejection contracts.
 

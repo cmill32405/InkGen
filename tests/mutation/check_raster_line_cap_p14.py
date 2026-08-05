@@ -77,7 +77,7 @@ def _assert_validation() -> None:
 
     invalid_join = _style()
     invalid_join._stroke_linejoin = "round"
-    _raises(ValueError, lambda: _validate_raster_stroke_style(LineDrawing((0, 0), (1, 0), invalid_join), invalid_join))
+    _validate_raster_stroke_style(LineDrawing((0, 0), (1, 0), invalid_join), invalid_join)
     invalid_miter = _style()
     invalid_miter._stroke_miterlimit = 5.0
     _raises(ValueError, lambda: _validate_raster_stroke_style(LineDrawing((0, 0), (1, 0), invalid_miter), invalid_miter))

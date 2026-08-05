@@ -333,6 +333,7 @@ def _validate_raster_fill_style(component: RasterPrimitive, style: DrawingStyle)
 def _validate_raster_stroke_style(component: RasterPrimitive, style: DrawingStyle) -> None:
     """Validate the closed raster stroke-presentation domain before allocation."""
     line_cap = _validated_line_cap(style)
+    line_join = _validated_line_join(style)
     dash = _validated_line_dash(style)
     if dash is not None:
         if not isinstance(component, LineDrawing):
@@ -342,10 +343,101 @@ def _validate_raster_stroke_style(component: RasterPrimitive, style: DrawingStyl
             _line_cap_dash_geometry(component.point_1, component.point_2, *dash)
     if line_cap != "butt" and not isinstance(component, LineDrawing):
         raise ValueError("non-butt stroke caps are supported only for raster LineDrawing P14")
-    if style.stroke_linejoin != "miter":
-        raise ValueError("only miter stroke joins are supported by raster renderer P1")
+    if line_join != "miter" and not isinstance(
+        component,
+        (RectangleDrawing, LineDrawing, CircleDrawing, PolygonalDrawing, RegularPolygonDrawing),
+    ):
+        raise ValueError("non-miter stroke joins are supported only for raster straight-edge primitives P15")
     if style.stroke_miterlimit != 10.0:
         raise ValueError("nondefault stroke miter limits are not supported by raster renderer P1")
+
+
+def _render_rectangle_component(
+    surface: Image.Image,
+    draw: ImageDraw.ImageDraw,
+    component: RectangleDrawing,
+    scale: float,
+    fill: tuple[int, int, int, int] | None,
+    stroke: tuple[int, int, int, int] | None,
+    stroke_width: int,
+) -> None:
+    """Render one rectangle with its fill, corners, and explicit stroke join."""
+    x, y = component.position
+    box = _scaled_box(x, y, x + component.width, y + component.height, scale)
+    rx, ry = normalize_rectangle_corner_radii(component.corner_radii, component.width, component.height)
+    pixel_width = box[2] - box[0]
+    pixel_height = box[3] - box[1]
+    radius_x = min(pixel_width // 2, max(1, round(rx * scale))) if rx > 0.0 else 0
+    radius_y = min(pixel_height // 2, max(1, round(ry * scale))) if ry > 0.0 else 0
+    gradient_and_axis = _validated_raster_gradient(component, scale)
+    if gradient_and_axis is not None:
+        gradient, axis = gradient_and_axis
+        _render_linear_gradient_rectangle(
+            surface,
+            box,
+            radius_x,
+            radius_y,
+            gradient,
+            axis,
+            component.style.fill_opacity,
+        )
+        fill = None
+    if radius_x > 0 and radius_y > 0:
+        _draw_rounded_rectangle(
+            draw,
+            box,
+            radius_x,
+            radius_y,
+            fill=fill,
+            stroke=stroke,
+            stroke_width=stroke_width,
+        )
+        return
+    if stroke is None or component.style.stroke_linejoin == "miter":
+        draw.rectangle(box, fill=fill, outline=stroke, width=stroke_width)
+        return
+    draw.rectangle(box, fill=fill)
+    _draw_joined_polyline(
+        draw,
+        [(box[0], box[1]), (box[2], box[1]), (box[2], box[3]), (box[0], box[3])],
+        stroke,
+        stroke_width,
+        component.style.stroke_linejoin,
+        closed=True,
+    )
+
+
+def _draw_styled_polygon(
+    draw: ImageDraw.ImageDraw,
+    points: Sequence[tuple[float, float]],
+    scale: float,
+    fill: tuple[int, int, int, int] | None,
+    stroke: tuple[int, int, int, int] | None,
+    stroke_width: int,
+    line_join: str,
+) -> None:
+    """Draw a polygon while preserving the legacy miter path."""
+    if line_join == "miter":
+        _draw_polygon(draw, points, scale, fill, stroke, stroke_width)
+    else:
+        _draw_polygon(draw, points, scale, fill, stroke, stroke_width, line_join)
+
+
+def _draw_regular_polygon_component(
+    draw: ImageDraw.ImageDraw,
+    component: RegularPolygonDrawing,
+    scale: float,
+    fill: tuple[int, int, int, int] | None,
+    stroke: tuple[int, int, int, int] | None,
+    stroke_width: int,
+) -> None:
+    """Draw a regular polygon with either rounded corners or an explicit join."""
+    points = _regular_polygon_points(component)
+    if component.corner_radius > 0.0:
+        points = sample_rounded_polygon_path(regular_polygon_corner_geometry(points, component.corner_radius))
+        _draw_polygon(draw, points, scale, fill, stroke, stroke_width)
+        return
+    _draw_styled_polygon(draw, points, scale, fill, stroke, stroke_width, component.style.stroke_linejoin)
 
 
 def _render_component(
@@ -369,49 +461,7 @@ def _render_component(
     stroke = _style_color(style.stroke, style.stroke_opacity) if style.stroke_width > 0.0 else None
     stroke_width = max(1, round(style.stroke_width * scale)) if stroke is not None else 0
     if isinstance(component, RectangleDrawing):
-        x, y = component.position
-        box = _scaled_box(x, y, x + component.width, y + component.height, scale)
-        rx, ry = normalize_rectangle_corner_radii(component.corner_radii, component.width, component.height)
-        pixel_width = box[2] - box[0]
-        pixel_height = box[3] - box[1]
-        radius_x = min(pixel_width // 2, max(1, round(rx * scale))) if rx > 0.0 else 0
-        radius_y = min(pixel_height // 2, max(1, round(ry * scale))) if ry > 0.0 else 0
-        gradient_and_axis = _validated_raster_gradient(component, scale)
-        if gradient_and_axis is not None:
-            gradient, axis = gradient_and_axis
-            _render_linear_gradient_rectangle(
-                surface,
-                box,
-                radius_x,
-                radius_y,
-                gradient,
-                axis,
-                component.style.fill_opacity,
-            )
-            if radius_x == 0 or radius_y == 0:
-                draw.rectangle(box, fill=None, outline=stroke, width=stroke_width)
-            else:
-                _draw_rounded_rectangle(
-                    draw,
-                    box,
-                    radius_x,
-                    radius_y,
-                    fill=None,
-                    stroke=stroke,
-                    stroke_width=stroke_width,
-                )
-        elif radius_x == 0 or radius_y == 0:
-            draw.rectangle(box, fill=fill, outline=stroke, width=stroke_width)
-        else:
-            _draw_rounded_rectangle(
-                draw,
-                box,
-                radius_x,
-                radius_y,
-                fill=fill,
-                stroke=stroke,
-                stroke_width=stroke_width,
-            )
+        _render_rectangle_component(surface, draw, component, scale, fill, stroke, stroke_width)
     elif isinstance(component, LineDrawing):
         _draw_dispatched_line_component(draw, component, scale, stroke, stroke_width)
     elif isinstance(component, CircleDrawing):
@@ -433,7 +483,7 @@ def _render_component(
     elif isinstance(component, PathDrawing):
         _render_path_component(surface, draw, component, scale, fill, stroke, stroke_width)
     elif isinstance(component, PolygonalDrawing):
-        _draw_polygon(draw, component.points, scale, fill, stroke, stroke_width)
+        _draw_styled_polygon(draw, component.points, scale, fill, stroke, stroke_width, style.stroke_linejoin)
     elif isinstance(component, QuadraticBezierDrawing):
         if stroke is not None:
             points = SampledQuadraticBezier(
@@ -455,10 +505,7 @@ def _render_component(
             _draw_curve(draw, points, scale, stroke, stroke_width)
     else:
         # The validated RasterPrimitive union leaves only RegularPolygonDrawing.
-        points = _regular_polygon_points(component)
-        if component.corner_radius > 0.0:
-            points = sample_rounded_polygon_path(regular_polygon_corner_geometry(points, component.corner_radius))
-        _draw_polygon(draw, points, scale, fill, stroke, stroke_width)
+        _draw_regular_polygon_component(draw, component, scale, fill, stroke, stroke_width)
 
 
 def _regular_polygon_points(component: RegularPolygonDrawing) -> list[tuple[float, float]]:
@@ -500,6 +547,16 @@ def _validated_line_cap(style: DrawingStyle) -> str:
     if line_cap not in {"butt", "round", "square"}:
         raise ValueError("stroke line cap must be butt, round, or square")
     return line_cap
+
+
+def _validated_line_join(style: DrawingStyle) -> str:
+    """Return a live-validated raster line-join selector."""
+    line_join = style.stroke_linejoin
+    if not isinstance(line_join, str):
+        raise TypeError("stroke line join must be a string")
+    if line_join not in {"miter", "round", "bevel"}:
+        raise ValueError("stroke line join must be miter, round, or bevel")
+    return line_join
 
 
 def _nonnegative_finite_number(value: object, name: str) -> float:
@@ -1134,6 +1191,78 @@ def _draw_curve(
     draw.line([_scaled_point(point, scale) for point in points], fill=stroke, width=stroke_width)
 
 
+def _bevel_join_polygon(
+    previous: tuple[float, float],
+    vertex: tuple[float, float],
+    following: tuple[float, float],
+    stroke_width: int,
+) -> list[tuple[float, float]]:
+    """Return the outer bevel triangle, or an empty list for a degenerate join."""
+    incoming_x, incoming_y = _unit_tangent(previous, vertex)
+    outgoing_x, outgoing_y = _unit_tangent(vertex, following)
+    cross = incoming_x * outgoing_y - incoming_y * outgoing_x
+    if previous == vertex or vertex == following or cross == 0.0:
+        return []
+    side = -1.0 if cross > 0.0 else 1.0
+    radius = stroke_width / 2.0
+    incoming_normal = -incoming_y, incoming_x
+    outgoing_normal = -outgoing_y, outgoing_x
+    return [
+        vertex,
+        (
+            vertex[0] + side * incoming_normal[0] * radius,
+            vertex[1] + side * incoming_normal[1] * radius,
+        ),
+        (
+            vertex[0] + side * outgoing_normal[0] * radius,
+            vertex[1] + side * outgoing_normal[1] * radius,
+        ),
+    ]
+
+
+def _draw_joined_polyline(
+    draw: ImageDraw.ImageDraw,
+    points: Sequence[tuple[float, float]],
+    stroke: tuple[int, int, int, int],
+    stroke_width: int,
+    line_join: str,
+    *,
+    closed: bool,
+) -> None:
+    """Paint one straight-edge polyline with explicit round or bevel joins."""
+    if len(points) < 2:
+        return
+    vertices = list(points)
+    pairs = list(zip(vertices, vertices[1:], strict=False))
+    if closed:
+        pairs.append((vertices[-1], vertices[0]))
+    for start, end in pairs:
+        if start != end:
+            draw.line([start, end], fill=stroke, width=stroke_width)
+
+    join_indices = range(len(vertices)) if closed else range(1, len(vertices) - 1)
+    radius = stroke_width / 2.0
+    for index in join_indices:
+        previous = vertices[index - 1]
+        vertex = vertices[index]
+        following = vertices[(index + 1) % len(vertices)]
+        if line_join == "round":
+            if previous != vertex and vertex != following:
+                draw.ellipse(
+                    (
+                        vertex[0] - radius,
+                        vertex[1] - radius,
+                        vertex[0] + radius,
+                        vertex[1] + radius,
+                    ),
+                    fill=stroke,
+                )
+        else:
+            polygon = _bevel_join_polygon(previous, vertex, following, stroke_width)
+            if polygon:
+                draw.polygon(polygon, fill=stroke)
+
+
 def _draw_polygon(
     draw: ImageDraw.ImageDraw,
     points: Sequence[tuple[float, float]],
@@ -1141,12 +1270,16 @@ def _draw_polygon(
     fill: tuple[int, int, int, int] | None,
     stroke: tuple[int, int, int, int] | None,
     stroke_width: int,
+    line_join: str = "miter",
 ) -> None:
     scaled = [_scaled_point(point, scale) for point in points]
     if fill is not None:
         draw.polygon(scaled, fill=fill)
     if stroke is not None:
-        draw.line([*scaled, scaled[0]], fill=stroke, width=stroke_width)
+        if line_join == "miter":
+            draw.line([*scaled, scaled[0]], fill=stroke, width=stroke_width)
+        else:
+            _draw_joined_polyline(draw, scaled, stroke, stroke_width, line_join, closed=True)
 
 
 def _render_image(surface: Image.Image, component: ImageDrawing, scale: float) -> None:
