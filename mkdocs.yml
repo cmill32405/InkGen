@@ -54,6 +54,7 @@ nav:
       - ADR-0033 Standalone Baird Degradation: adr/0033-standalone-baird-degradation.md
       - ADR-0034 Dependency-Free Raster Renderer: adr/0034-dependency-free-raster-renderer.md
       - ADR-0035 Shared Multiline Text Materialization: adr/0035-shared-multiline-text-materialization.md
+      - ADR-0036 Raster-Baird PDF Fixture: adr/0036-raster-baird-pdf-fixture.md
   - Proof Notes:
       - Grammar Truth: proofs/grammar-truth.md
       - Extraction Truth Contract: proofs/extraction-truth-contract.md
@@ -149,6 +150,7 @@ nav:
       - Raster Miter Limit Contract: proofs/raster-miter-limit-contract.md
       - Raster Path Stroke Contract: proofs/raster-path-stroke-contract.md
       - Raster Path Dash Contract: proofs/raster-path-dash-contract.md
+      - Raster-Baird PDF Fixture Contract: proofs/raster-baird-fixture-contract.md
   - Architecture Diagrams: architecture-diagrams.md
   - Notes:
       - Mask Alignment Findings: mask_alignment_findings.md

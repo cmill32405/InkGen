@@ -1,5 +1,5 @@
 flowchart LR
-    Group[DrawingComponentGroup] --> Validate[Closed P1 through P14 domain validation]
+    Group[DrawingComponentGroup] --> Validate[Closed P1 through P18 domain validation]
     Canvas[Canvas and DPI] --> Scale[Physical pixel scale]
     Validate --> Surface[Supersampled RGBA surface]
     Scale --> Surface
@@ -26,3 +26,7 @@ flowchart LR
     Substrate[Explicit RGB substrate] --> Baird
     Baird --> Scan[Opaque degraded PNG]
     Scan --> Pair
+    Pair --> Fixture[RasterBairdPDFFixture]
+    Fixture --> ImageDrawing[Neutral ImageDrawing]
+    ImageDrawing --> ImagePDF[Opaque ImagePDF XObject]
+    ImagePDF --> PDF[Image-only DocumentPDF]

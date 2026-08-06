@@ -167,6 +167,14 @@ ordinary SVG text fail closed.
 - `render_and_degrade_drawing_group()`: composes the clean renderer with Baird
   using a required explicit RGB substrate.
 
+## Raster-Baird Fixtures (`InkGen.raster_baird_fixtures`)
+
+- `RasterBairdPDFFixture`: clean/degraded raster results paired with an
+  image-only `DocumentPDF` and complete nested manifest.
+- `build_raster_baird_pdf_fixture()`: builds a deterministic text/vector/alpha
+  fixture, applies canvas clipping and Baird degradation, and embeds the opaque
+  scan through the neutral image-to-PDF path.
+
 ## Baird Degradation (`InkGen.baird`)
 
 - `BairdParams`: immutable validated parameters for Baird's document image

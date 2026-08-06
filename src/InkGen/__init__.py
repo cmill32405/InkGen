@@ -81,6 +81,7 @@ from .pdf_generator import (
     RegularPolygonPDF,
     TextPDF,
 )
+from .raster_baird_fixtures import RasterBairdPDFFixture, build_raster_baird_pdf_fixture
 from .raster_renderer import RasterBairdResult, RasterRenderResult, render_and_degrade_drawing_group, render_drawing_group
 from .region_svg import PositionedTextRun, SvgClipWindow, emit_svg_region
 from .style import DrawingStyle, Font, Style, TextStyle
@@ -196,6 +197,7 @@ __all__ = [
     "RasterImageAsset",
     "RasterImageComponent",
     "RasterBairdResult",
+    "RasterBairdPDFFixture",
     "RasterRenderResult",
     "RectangleSVG",
     "RectangleDrawing",
@@ -236,6 +238,7 @@ __all__ = [
     "outline_for_text",
     "outline_for_text_bytes",
     "render_and_degrade_drawing_group",
+    "build_raster_baird_pdf_fixture",
     "render_drawing_group",
     "sigma_px_to_um",
     "sigma_um_to_px",

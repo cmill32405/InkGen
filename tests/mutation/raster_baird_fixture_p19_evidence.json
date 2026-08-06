@@ -1,0 +1,56 @@
+{
+  "condition": "RASTER-BAIRD-E2E-P19",
+  "evidence_generated_utc": "2026-08-06T01:53:56.5415405Z",
+  "tool": {
+    "name": "Cosmic Ray",
+    "version": "8.4.6",
+    "execution_environment": "isolated disposable WSL source copy"
+  },
+  "source_files": [
+    {
+      "path": "src/InkGen/raster_baird_fixtures.py",
+      "sha256": "AC4A905B73CCF635FC50CCDC5A14F4B6C60E7565F8698884EE1CC669E2CB7244"
+    }
+  ],
+  "condition_tests": [
+    {
+      "path": "tests/test_raster_baird_fixture_contract.py",
+      "sha256": "30CE749316E4CF69E86FDD1E4AD3A481ECDA8661CF8DA0D216C89E81B61E41BB"
+    }
+  ],
+  "mutation_tests": [
+    {
+      "path": "tests/mutation/check_raster_baird_fixture_p19.py",
+      "sha256": "73F4DEB68C33C8F9D9F63C9E1CF5866317AFB5FCD7A88CF2A6F5C48D8864D822"
+    }
+  ],
+  "config": {
+    "path": "tests/mutation/raster_baird_fixture_p19_cosmic_ray.toml",
+    "sha256": "F5768EAB811F1081695EF94CC6977274371BDC5F3CB51387980D27460D91B6DC"
+  },
+  "filter": {
+    "path": "tests/mutation/filter_raster_baird_fixture_p19_work_items.py",
+    "sha256": "6EDA021CC95BF8FC8EDB5F26029E1BD2345BE0E49DC6DA822BD5C0491C85D7F9"
+  },
+  "database": {
+    "path": "tests/mutation/raster_baird_fixture_p19.sqlite",
+    "sha256": "134732F5F7AE78F59C4F0E017682A021FD315784CED76E3A475155F23EE54248"
+  },
+  "campaign": {
+    "generated_candidates": 165,
+    "selected_work_items": 154,
+    "excluded_annotation_only": 11,
+    "completed_results": 154,
+    "killed": 154,
+    "survived": 0,
+    "worker_errors": 0,
+    "worker_timeouts": 0,
+    "raw_mutation_coverage": 1.0,
+    "effective_mutation_coverage": 1.0
+  },
+  "execution_artifacts": [9817],
+  "exclusion_proof": {
+    "domain": "the postponed BairdParams | None type annotation",
+    "reason": "The excluded BitOr replacement operators alter only the unevaluated annotation string under from __future__ import annotations; no runtime value, branch, artifact, or public behavior reads that annotation."
+  }
+}

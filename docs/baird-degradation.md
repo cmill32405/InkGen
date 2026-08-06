@@ -78,8 +78,9 @@ parameter.
 
 ## Boundaries
 
-- Baird starts with an already-rendered raster. A future InkGen raster backend
-  can produce that raster directly from neutral drawing primitives.
+- Baird starts with an already-rendered raster. InkGen's raster renderer can
+  produce it directly from neutral drawing primitives, and
+  `build_raster_baird_pdf_fixture()` proves the complete image-only PDF path.
 - PDF grammar faults such as missing `ToUnicode` maps, malformed metrics, and
   unusual stream filters belong to PDF fixture construction, not Baird.
 - Shadows, perspective, crop loss, bleed-through, and JPEG transport damage are

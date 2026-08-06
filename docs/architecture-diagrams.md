@@ -12,6 +12,7 @@ This document provides class diagrams for the InkGen architecture in both Markdo
 - [text-fitting.mmd](diagrams/text-fitting.mmd) - Text Fitting Classes
 - [utilities.mmd](diagrams/utilities.mmd) - Utility Classes
 - [baird-degradation.mmd](diagrams/baird-degradation.mmd) - Standalone Baird parameters and raster-asset relationships
+- [raster-renderer.mmd](diagrams/raster-renderer.mmd) - Neutral drawing rasterization, Baird composition, and image-only PDF fixture flow
 - [raster-renderer.mmd](diagrams/raster-renderer.mmd) - Neutral drawing validation, physical scaling, RGBA compositing, and PNG output
 
 ## Diagram 1: Base Classes

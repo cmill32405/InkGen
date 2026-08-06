@@ -213,3 +213,25 @@ degraded_asset = scan.degraded.asset
 physical substrate used when Baird converts the clean RGBA asset to its opaque
 scan domain. `RasterBairdResult.manifest` nests the complete render and
 degradation manifests so the output can be reproduced.
+
+## End-to-End PDF Fixture
+
+`build_raster_baird_pdf_fixture()` provides a reusable integration fixture that
+contains neutral text and vector geometry, partial alpha, canvas-edge clipping,
+an explicit colored substrate, deterministic Baird degradation, and terminal
+PDF image embedding:
+
+```python
+from InkGen import build_raster_baird_pdf_fixture
+
+fixture = build_raster_baird_pdf_fixture(seed=19)
+clean_png = fixture.scan.clean.asset.data
+degraded_png = fixture.scan.degraded.asset.data
+pdf_bytes = fixture.document.to_pdf_bytes()
+manifest = fixture.manifest
+```
+
+The PDF contains one opaque image XObject and no live text. It is a terminal
+container for the degraded asset, not an input or intermediary for rasterizing
+the source drawing. Canvas clipping is exercised by the fixture; arbitrary
+user-defined raster clip windows remain outside this contract.

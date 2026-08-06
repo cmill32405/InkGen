@@ -25,7 +25,7 @@ Remaining:
 - [x] Preserve deterministic seeds, physical resolution, source dimensions,
   background policy, and degradation parameters in the composed result
   manifest.
-- [ ] Add end-to-end fixtures proving clean drawing -> raster -> Baird
+- [x] Add end-to-end fixtures proving clean drawing -> raster -> Baird
   degradation -> PDF/image embedding, including text, vector geometry,
   transparency, clipping, and colored backgrounds.
 

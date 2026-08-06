@@ -270,6 +270,8 @@ PDF, SVG, DXF, and document outputs do not depend on the raster renderer.
   tangents, independent alpha, and one pre-allocation operation bound.
 - Later clipping slices can extend a proven boundary without weakening
   existing rejection contracts.
+- ADR-0036 composes the renderer into a known image-only PDF fixture and proves
+  canvas-edge clipping without adding a user-defined clipping API.
 
 ## Alternatives Rejected
 
