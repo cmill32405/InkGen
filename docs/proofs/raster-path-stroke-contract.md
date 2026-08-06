@@ -14,8 +14,8 @@ surface allocation.
 
 - Path commands satisfy the P5 linear, P6 Bezier, and P7 endpoint-arc
   cardinality and ordering contracts.
-- The dash array is empty and dash phase is zero; path dash continuity remains
-  outside P17.
+- The dash array is empty and dash phase is zero. Dashed path continuity is
+  proven separately by `RASTER-PATH-DASH-P18`.
 - The cap is `butt`, `round`, or `square`; the join is `miter`, `round`, or
   `bevel`; the miter limit is positive and finite.
 - Stroke width, stroke opacity, canvas, DPI, supersampling, and background
@@ -105,7 +105,7 @@ P17 does not alter the established independent fill/stroke paint order.
 | Round and bevel joins | explicit source-boundary geometry | public and call-contract tests |
 | Nondefault miter limit | inclusive P16 threshold and bevel fallback | public and preflight tests |
 | Fill plus custom stroke | P12 fill before P17 stroke | compositing test |
-| Path dash array | reject before allocation | failure-mode test |
+| Path dash array | delegated to the P18 measured-dash contract | P18 regression test |
 | Standalone sampled curves | retain P15/P16 rejection | regression tests |
 | Default butt/miter/10 | exact established `_draw_curve` dispatch | legacy-route test |
 

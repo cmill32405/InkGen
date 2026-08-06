@@ -9,7 +9,7 @@
   "source_files": [
     {
       "path": "src/InkGen/raster_renderer.py",
-      "sha256": "04324ACDCA65E492F393EADAE2A3AEF56AE84471CF006EF07481D9FE91DCD0FF"
+      "sha256": "8F36F1A68EC0A2C765ACC2D85E72C0B1EF1205AC349263E0B171920EFC7C2A6A"
     }
   ],
   "mutation_tests": [
@@ -60,6 +60,15 @@
     "Tall, clipped, tangent, and beyond-small-integer-cache geometry",
     "Exact fill-only, stroke-only, and translucent fill-plus-stroke paint-order witnesses"
   ],
+  "dependency_refresh": {
+    "reason": "RASTER-PATH-DASH-P18 added measured PathDrawing dash support and invalidated the retained whole-source freshness hash",
+    "method": "P18 preserves earlier scoped behavior, composes inherited P13-P17 mutation witnesses into its 736-item campaign, and requires the earlier condition, mutation-evidence, and full regression suites to pass before re-attestation.",
+    "scoped_definitions": [
+      "_render_path_component",
+      "_scaled_path_subpaths",
+      "_render_nonzero_path_fill"
+    ]
+  },
   "equivalent_survivor_proofs": [
     {
       "job_ids": [

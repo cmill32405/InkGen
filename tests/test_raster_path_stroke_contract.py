@@ -467,19 +467,19 @@ def test_unsafe_path_miter_fails_before_surface_allocation(monkeypatch: pytest.M
 
 
 @pytest.mark.condition("RASTER-PATH-STROKE-P17")
-def test_path_dashes_remain_outside_p17_before_surface_allocation(monkeypatch: pytest.MonkeyPatch) -> None:
-    """RASTER-PATH-STROKE-P17: P17 does not silently add dash continuity."""
+def test_path_dash_style_does_not_change_p17_source_topology() -> None:
+    """RASTER-PATH-STROKE-P17: Later dash support reuses the same source topology."""
     style = _style(linecap="round", linejoin="round")
     style.stroke_dasharray = [0.2, 0.1]
-    path = PathDrawing(style, [PathCommand("M", [(0.0, 0.0)]), PathCommand("L", [(1.0, 1.0)])])
-    monkeypatch.setattr(raster_renderer.Image, "new", lambda *args, **kwargs: pytest.fail("surface allocated"))
+    path = PathDrawing(
+        style,
+        [PathCommand("M", [(0.0, 0.0)]), PathCommand("Q", [(0.5, 1.0), (1.0, 1.0)]), PathCommand("L", [(2.0, 1.0)])],
+    )
 
-    with pytest.raises(ValueError, match="dashed strokes are supported only"):
-        render_drawing_group(
-            DrawingComponentGroup("dashed-path", [path]),
-            Canvas(2.0, 2.0, "in"),
-            dpi=20,
-        )
+    subpath = raster_renderer._sampled_path_geometry(path)[0]
+
+    assert subpath.endpoint_indices == (0, 32, 33)
+    assert subpath.segment_count == 2
 
 
 @pytest.mark.condition("RASTER-PATH-STROKE-P17")

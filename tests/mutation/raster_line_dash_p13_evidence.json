@@ -7,7 +7,7 @@
     "execution_environment": "four disjoint WSL ext4 source-copy shards"
   },
   "source_files": [
-    {"path": "src/InkGen/raster_renderer.py", "sha256": "04324ACDCA65E492F393EADAE2A3AEF56AE84471CF006EF07481D9FE91DCD0FF"}
+    {"path": "src/InkGen/raster_renderer.py", "sha256": "8F36F1A68EC0A2C765ACC2D85E72C0B1EF1205AC349263E0B171920EFC7C2A6A"}
   ],
   "condition_tests": [
     {"path": "tests/test_raster_line_dash_contract.py", "sha256": "BADBDBC0DB2A1D4E646A05ABB6C799C66D3C7C392D9677D8609BEB88F3500223"}
@@ -50,9 +50,15 @@
   "execution_artifacts": [9535, 9536, 9537, 9538],
   "shard_sizes": [58, 58, 58, 57],
   "dependency_refresh": {
-    "reason": "RASTER-PATH-STROKE-P17 changed raster_renderer.py and invalidated the retained whole-source freshness hash",
-    "method": "P17 left P13 dash cadence and phase functions unchanged, composed the P13 fast witness into its 579-item campaign, and reran the P13 condition and full suites before re-attesting the hash.",
-    "scoped_definitions": ["_validated_line_dash", "_line_dash_segments", "_dash_cursor", "_next_dash_slot", "_draw_dashed_line"]
+    "reason": "RASTER-PATH-DASH-P18 added measured PathDrawing dash support and invalidated the retained whole-source freshness hash",
+    "method": "P18 preserves earlier scoped behavior, composes inherited P13-P17 mutation witnesses into its 736-item campaign, and requires the earlier condition, mutation-evidence, and full regression suites to pass before re-attestation.",
+    "scoped_definitions": [
+      "_validated_line_dash",
+      "_line_dash_segments",
+      "_dash_cursor",
+      "_next_dash_slot",
+      "_draw_dashed_line"
+    ]
   },
   "equivalent_survivor_proofs": [
     {

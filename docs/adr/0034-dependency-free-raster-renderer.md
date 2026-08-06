@@ -8,7 +8,9 @@ Accepted for `RASTER-RENDERER-P1`, `RASTER-BAIRD-P1`,
 `RASTER-ROUNDED-RECT-P8`, `RASTER-ROUNDED-POLYGON-P9`, and
 `RASTER-GRADIENT-P10`, `RASTER-TEXT-MULTILINE-P11`, and
 `RASTER-PATH-FILL-P12`, `RASTER-LINE-DASH-P13`, and
-`RASTER-LINE-CAP-P14`, and `RASTER-LINE-JOIN-P15`.
+`RASTER-LINE-CAP-P14`, `RASTER-LINE-JOIN-P15`,
+`RASTER-MITER-LIMIT-P16`, `RASTER-PATH-STROKE-P17`, and
+`RASTER-PATH-DASH-P18`.
 
 ## Context
 
@@ -191,7 +193,19 @@ additional joins. Nondefault miter limits use the P16 ratio and bevel fallback
 at those semantic boundaries, including the same pre-allocation signed
 32-bit coordinate bound. The default butt/miter/10 route preserves the exact
 established polyline dispatch. Dash arrays remain limited to `LineDrawing`
-until subpath phase continuity is separately proven.
+until P18 separately proves subpath phase continuity.
+
+P18 admits dash arrays and phase for `PathDrawing`. Each sampled subpath is
+measured in neutral logical units and reapplies the normalized P13 cursor from
+the configured phase. Source-command endpoints retained by P17 are the only
+join candidates; curve and arc samples advance distance and provide tangents
+without becoming joins. Positive dash boundaries receive P14 caps, while a
+source vertex strictly inside a dash receives its P15/P16 join. A closed dash
+crossing the `Z` seam is joined exactly when its first and last portions are
+continuous; a full closed-cycle dash receives joins and no caps. Positive
+steps and zero-length on-dashes across every subpath share one 100,000-operation
+bound, floating-point stagnation fails explicitly, and nondefault miter
+geometry is preflighted only for painted source joins before allocation.
 
 ## Dependencies And Contracts
 
@@ -251,6 +265,9 @@ PDF, SVG, DXF, and document outputs do not depend on the raster renderer.
 - Solid paths preserve source-command joins, open-subpath cap placement,
   closed-seam joins, local sampled tangents, and bounded miter fallback without
   styling curve tessellation points as source vertices.
+- Dashed paths preserve per-subpath phase, logical arc length, strict
+  dash-boundary caps, painted source joins, closed-seam continuity, local
+  tangents, independent alpha, and one pre-allocation operation bound.
 - Later clipping slices can extend a proven boundary without weakening
   existing rejection contracts.
 

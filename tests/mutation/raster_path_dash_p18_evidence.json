@@ -1,0 +1,323 @@
+{
+  "condition": "RASTER-PATH-DASH-P18",
+  "evidence_generated_utc": "2026-08-05T23:16:37.213308Z",
+  "tool": {
+    "name": "Cosmic Ray",
+    "version": "8.4.6",
+    "execution_environment": "four disjoint WSL source-copy shards, a complete database merge, and two survivor-only monotonic witness reruns"
+  },
+  "source_files": [
+    {
+      "path": "src/InkGen/raster_renderer.py",
+      "sha256": "8F36F1A68EC0A2C765ACC2D85E72C0B1EF1205AC349263E0B171920EFC7C2A6A"
+    }
+  ],
+  "condition_tests": [
+    {
+      "path": "tests/test_raster_path_dash_contract.py",
+      "sha256": "2E3D366A9B1DA8C034A8762A9FC65B35D2A34C6492850A84FA5C4FFECDBCF8FD"
+    }
+  ],
+  "mutation_tests": [
+    {
+      "path": "tests/mutation/check_raster_path_dash_p18.py",
+      "sha256": "6484FFECBC4B166B5310A4385B51EB5E6EAD095F63B1BB36BCE8474D3D089955"
+    }
+  ],
+  "config": {
+    "path": "tests/mutation/raster_path_dash_p18_cosmic_ray.toml",
+    "sha256": "A114D1A3809BA7C5167332586C0223080EFE73F730962A98308E36CE6E7800BC"
+  },
+  "filter": {
+    "path": "tests/mutation/filter_raster_path_dash_p18_work_items.py",
+    "sha256": "E872DCC88EEF377D773E67043E5130B24E741F79A4361AB3F9175A21611AA6D2"
+  },
+  "partition": {
+    "path": "tests/mutation/partition_cosmic_ray_work_items.py",
+    "sha256": "D41FD32FD30C61EFC16ABC54DFF13DC9E82A3BD825E7E7D0A437EB28441F89FE"
+  },
+  "merge": {
+    "path": "tests/mutation/merge_cosmic_ray_shards.py",
+    "sha256": "E3F601D439D91E919E8F29394459492920B2D751C2801E122D96543DB1B607B1"
+  },
+  "database": {
+    "path": "tests/mutation/raster_path_dash_p18.sqlite",
+    "sha256": "A9FB8F4A83B60DD85038588D9F85DDA3F90AACB2FA1518FF3EE3A885D28A673E"
+  },
+  "campaign": {
+    "generated_candidates": 7220,
+    "selected_work_items": 736,
+    "completed_results": 736,
+    "killed": 670,
+    "survived": 66,
+    "equivalent_survivors": 66,
+    "worker_errors": 0,
+    "worker_timeouts": 0,
+    "raw_mutation_coverage": 0.9103260869565217,
+    "effective_mutation_coverage": 1.0
+  },
+  "execution_artifacts": [
+    9792,
+    9793,
+    9794,
+    9795,
+    9796,
+    9797,
+    9798
+  ],
+  "shard_sizes": [
+    184,
+    184,
+    184,
+    184
+  ],
+  "equivalent_survivor_proofs": [
+    {
+      "job_ids": [
+        "2678ab99af9c4eb5a56398143875eaae",
+        "48334940722844f3bf70fffdd0ac1be0",
+        "efbc44ad1eae4ae58e930543e613d9d4",
+        "8d60816486944898b0a69ec2ddcb2285",
+        "b48838e730ce4f3ca348b53508c10a5a"
+      ],
+      "mutation": "Private helper separators change the preceding parameters from positional-or-keyword to positional-only.",
+      "premises": [
+        "Every live caller passes each preceding parameter positionally.",
+        "Every live caller passes the trailing outgoing or closed selector by keyword."
+      ],
+      "proof": "The original and mutated signatures bind identical values for every reachable invocation, so behavior is unchanged."
+    },
+    {
+      "job_ids": [
+        "62ae57bf370945b5af5a1be92644f532",
+        "7295e8243c154090b970f0b30150cf4d",
+        "c75d3d0d31a94456805e9aa8f011729f",
+        "edbd98011c414248bd2d8363455c537e",
+        "571f62277e0b405e9567f2ca1b962378"
+      ],
+      "mutation": "An unused scale default changes, or a validated non-butt comparison becomes lexicographic greater-than or less-than-or-equal.",
+      "premises": [
+        "The production renderer always passes scale explicitly.",
+        "Validation restricts cap values to butt, round, or square.",
+        "Python orders these values as butt < round < square."
+      ],
+      "proof": "The scale default is unreachable. On the validated cap set, cap != butt, cap > butt, and not cap <= butt select exactly round and square."
+    },
+    {
+      "job_ids": [
+        "fc371c8bad4b40d19064747b3f0b8481",
+        "caa87fdeb68d403faa3d15dbc2294798"
+      ],
+      "mutation": "Modulo-period dash phase is replaced by the phase plus one period.",
+      "premises": [
+        "The normalized pattern has positive period P.",
+        "The dash cursor and zero-position arithmetic are P-periodic."
+      ],
+      "proof": "For every offset o, o + P and o mod P identify the same slot and the same arithmetic progression of painted positions; adding a whole period changes no output."
+    },
+    {
+      "job_ids": [
+        "9505b64412384bea82607ad79e7da667",
+        "bac70491d7784e90b09bab461c328a04",
+        "555479c4e2914200b6f255d42b8ac4c1",
+        "f92fcaeb4dbd444fad93d7a8f7a3648d",
+        "f3bd9d41267f459f9a02e6f300c8b20e",
+        "0433a920fd5d49ee83309bca7b49149f",
+        "be5e56ef4e1643cbb18d5e2e078934a5",
+        "fd4a964f99a94bb788fc2e1a9a1e2d0c"
+      ],
+      "mutation": "Even-slot predicates change from modulo-two equality to an ordering predicate or modulo one.",
+      "premises": [
+        "Every pattern index is a nonnegative integer.",
+        "An index modulo two is exactly zero or one.",
+        "The final-step strict containment condition is false at an exact slot boundary, independently of slot parity."
+      ],
+      "proof": "Equality, <= 0, and >= 0 mutations agree whenever the parity value can affect an emitted interval. Modulo-one makes the parity term true, but its only surviving cases have step == remaining, making the conjunction false."
+    },
+    {
+      "job_ids": [
+        "20d401f7b1ae44af916a4ff99853f25a",
+        "384ee4335302436f8c80008c7088aba6",
+        "442655a524244c018aced095f88f1638",
+        "1f98014f256b45dab7b3e99484a8926c",
+        "b47f344c30ab46ad8b6f97a86b88b783",
+        "6488292768e14a7faea26836a2c60508",
+        "05a97cc98d984c57b725dda03b49633b",
+        "917882da4f7f4a75a4de1bfee278f8a3",
+        "f46b0bfa08e040ccb8c4f06e3a72a5b8"
+      ],
+      "mutation": "Dash-walker guards replace nonnegative ordering predicates with equality, inequality, or adjacent bounds.",
+      "premises": [
+        "Path length and remaining budget are nonnegative.",
+        "Position starts at zero and each accepted step is positive and no larger than length - position.",
+        "Operation count starts at zero and increases by exactly one.",
+        "The final clamped step reaches length exactly and next_position never exceeds length."
+      ],
+      "proof": "Negative lengths are outside the reachable metric domain. On the reachable domain the loop stops exactly at length, the budget first fails exactly at equality, stagnation cannot move backward, and every final-position predicate writes either the same value or a value overwritten by the final iteration."
+    },
+    {
+      "job_ids": [
+        "e444df3d163e4262bbb16c75bf36b3d6"
+      ],
+      "mutation": "The closed-seam final-slot flag is initialized true instead of false.",
+      "premises": [
+        "Positive path length guarantees at least one walker iteration.",
+        "Every iteration assigns the flag before it can be returned."
+      ],
+      "proof": "The mutated initializer is overwritten on every reachable return and is therefore unobservable."
+    },
+    {
+      "job_ids": [
+        "9510be3914414d569290b0f8f608caad",
+        "06d3e1b2ebe04ebb93e181d11b0a95fd",
+        "d81858773b12443589ef4045dd70870d"
+      ],
+      "mutation": "Strict slot containment or the consumed-slot remainder uses an alternative equality or modulo expression.",
+      "premises": [
+        "step = min(remaining, length - position).",
+        "If another iteration follows, the current slot is exhausted and step == remaining.",
+        "If step < remaining, the path is complete and the returned cursor is unused."
+      ],
+      "proof": "Identity/nonidentity and inequality agree with strict containment for the selected minimum objects. At a continued slot boundary, remaining - step and remaining % step are both zero; otherwise the cursor result cannot be observed."
+    },
+    {
+      "job_ids": [
+        "ecb3d1afd8f240b188eb50a469aa46dc",
+        "d05717881684486cbd75fd9994b1b0e6",
+        "636648b5249a4964bda33b1b42987726"
+      ],
+      "mutation": "The negative arithmetic-progression correction guard changes at zero, positive values below one, or nonzero values.",
+      "premises": [
+        "Before correction, distance is prefix - phase with prefix and phase in one period.",
+        "For distance == 0 the correction term is zero.",
+        "For positive distance, ceil(-distance / period) is zero."
+      ],
+      "proof": "Every added correction is zero in the cases newly admitted by the mutant, while negative cases retain the original correction; generated distances are identical."
+    },
+    {
+      "job_ids": [
+        "372c95d0bfd34be3930872c89a785896",
+        "34d76ddf7e194534983da7d04a3687b6",
+        "2677986fd84947da9592b495f35f9d5f"
+      ],
+      "mutation": "Zero-dash budget or zero-length guards use equality or non-strict ordering.",
+      "premises": [
+        "Distance count and remaining budget are nonnegative integers.",
+        "Sampled path length is nonnegative.",
+        "Counts increase by one and the first budget violation occurs at equality."
+      ],
+      "proof": "The predicates differ only on unreachable negative values or select the same first failing count, so positions and exceptions are unchanged."
+    },
+    {
+      "job_ids": [
+        "cc874fe2839b422ea0ccf2fc83accdd1",
+        "2448352867a54821a9b8e5e149e01f65",
+        "403fe9403df94292900bcff22634f1ab",
+        "474423ca44d646c5af1a32f5937f6e98",
+        "4c33fed853964066928c50e4e5bf854e",
+        "56f30eb2d7b144b8871033c67dd8e349",
+        "b5102a1e0ad64ac5b1a817988c8fd92f",
+        "ef012ff31d874d84938b5f9b0108b9f9",
+        "1aa8c75f01e24b2c8071aef46d998628"
+      ],
+      "mutation": "Metric-edge guards or candidate ranges examine index zero, minus one, or extra duplicate endpoints.",
+      "premises": [
+        "The cumulative sequence contains at least one element and is nondecreasing.",
+        "A positive metric edge has an end index of at least one.",
+        "Indices zero and minus one compare the same endpoint pair in reverse storage order and cannot satisfy cumulative[end] > cumulative[end - 1] after all real candidates have failed."
+      ],
+      "proof": "The added candidates cannot identify a positive-width edge and occur only after the original candidates, so the first returned real edge or None is unchanged."
+    },
+    {
+      "job_ids": [
+        "3d6c974886c24abc8b63678fd2af6d53",
+        "0c0a9624705947ed92aeb886b7447427"
+      ],
+      "mutation": "A no-edge path returns its last point instead of its first, or a singleton run is indexed from the end.",
+      "premises": [
+        "No positive metric edge implies all sampled points are coordinate-equal.",
+        "For a one-element tuple, indexes zero and minus one select the same object."
+      ],
+      "proof": "Each alternative returns an equal coordinate or the identical singleton run, so downstream geometry is unchanged."
+    },
+    {
+      "job_ids": [
+        "c1d48e2d47c245ada267632a8f9a0fee",
+        "0a060156bd704d1c8b0c67e370d9273e",
+        "c0a26d75a1c94b5087314a0b94772db8"
+      ],
+      "mutation": "An exact-boundary point is selected using the incoming rather than outgoing edge, or conversely.",
+      "premises": [
+        "All positive-width incident edges share the exact boundary coordinate by sampled-polyline continuity.",
+        "The outgoing selector changes tangent choice but not the interpolated boundary coordinate.",
+        "Zero-dash drawing computes its tangent in a separate outgoing call."
+      ],
+      "proof": "Each mutation changes only which edge supplies an identical endpoint coordinate; every emitted section and zero-dash mark is unchanged."
+    },
+    {
+      "job_ids": [
+        "2a442e1b11ce438f80bf253510e2b465"
+      ],
+      "mutation": "Point deduplication scans from index zero instead of index one.",
+      "premises": [
+        "The output list is initialized with points[0].",
+        "The added first comparison tests points[0] != points[0], which is false."
+      ],
+      "proof": "The extra generator iteration emits nothing and all subsequent comparisons are unchanged."
+    },
+    {
+      "job_ids": [
+        "631da54576c74ea7b9aad70049d152d3",
+        "66d308185b074ab1a774d840b8819a80"
+      ],
+      "mutation": "A nonnegative segment or run count equality changes to less-than-or-equal.",
+      "premises": [
+        "segment_count is a nonnegative integer.",
+        "The seam helper has already returned for an empty run tuple."
+      ],
+      "proof": "segment_count == 0 iff segment_count <= 0, and after the empty guard len(runs) == 1 iff len(runs) <= 1."
+    },
+    {
+      "job_ids": [
+        "22c38e2c20ee45adb63630c76c28bedc",
+        "674c4a2ae9f94fe887fbd155285553a5",
+        "022d731607924358b70563e9d6296bf6",
+        "a9e1d269a26a4564babcf9a1fd9cfea7",
+        "88a42577c9cb4f7d94847ce2994eb218",
+        "3cbf6c189cd744c09bc99c4f4d1de08b",
+        "2d2fe3541b7d4480a47dd0acec7694ed",
+        "bfc2596eed8146f39a8ed533319c4d4d"
+      ],
+      "mutation": "The monotone painted-join scan uses adjacent boundary, exhaustion, or strict-interior predicates.",
+      "premises": [
+        "Join distances and interval endpoints are nonnegative and sorted.",
+        "Intervals are ordered and nonoverlapping.",
+        "Before the containment test, every exhausted interval has been advanced and the current end is greater than distance.",
+        "Once all intervals are exhausted, no later join can be painted."
+      ],
+      "proof": "At an exact interval end, retaining the interval fails the strict containment test and the next iteration advances it. Index equality and >= agree because the index advances by one. Break and continue agree after exhaustion. For a current interval, end > distance makes <=, !=, and identity alternatives equivalent to strict upper containment."
+    },
+    {
+      "job_ids": [
+        "265990a99dd94f20a97c35b4b1da626c"
+      ],
+      "mutation": "A closed-cycle run skips with break instead of continue.",
+      "premises": [
+        "A closed cycle exists only when one on interval covers the entire closed subpath.",
+        "The seam construction then returns exactly that one run."
+      ],
+      "proof": "There can be no later run after a closed cycle, so break and continue reach the same zero-cap state."
+    },
+    {
+      "job_ids": [
+        "ac525a8dccfc413a83564b23a6211611"
+      ],
+      "mutation": "Open semantic-join enumeration includes the start endpoint.",
+      "premises": [
+        "An open start has no previous neighbor because search cannot cross the boundary.",
+        "A join is emitted only when both distinct neighbors exist."
+      ],
+      "proof": "The added start candidate is discarded and the join sequence is unchanged."
+    }
+  ]
+}

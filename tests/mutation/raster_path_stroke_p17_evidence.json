@@ -7,10 +7,10 @@
     "execution_environment": "two sequential disjoint WSL shards, a complete database merge, and two survivor-only witness reruns"
   },
   "source_files": [
-    {"path": "src/InkGen/raster_renderer.py", "sha256": "04324ACDCA65E492F393EADAE2A3AEF56AE84471CF006EF07481D9FE91DCD0FF"}
+    {"path": "src/InkGen/raster_renderer.py", "sha256": "8F36F1A68EC0A2C765ACC2D85E72C0B1EF1205AC349263E0B171920EFC7C2A6A"}
   ],
   "condition_tests": [
-    {"path": "tests/test_raster_path_stroke_contract.py", "sha256": "2A81E0432A530BD7E5C80BEDB6D6A2E5541EB6B926EF0274B1BCFC9C4D6132FB"}
+    {"path": "tests/test_raster_path_stroke_contract.py", "sha256": "4EF29916F3722D10C6B566C7BED12C1D4877827EE71CE818AAB730285971DAE2"}
   ],
   "mutation_tests": [
     {"path": "tests/mutation/check_raster_path_stroke_p17.py", "sha256": "A46D1AE3CABA537E8DC4689305BB263996F53F5DCD32EF096B801A2AF68E9D15"}
@@ -49,6 +49,17 @@
   },
   "execution_artifacts": [9742, 9744, 9745, 9747],
   "shard_sizes": [290, 289],
+  "dependency_refresh": {
+    "reason": "RASTER-PATH-DASH-P18 added measured PathDrawing dash support and invalidated the retained whole-source freshness hash",
+    "method": "P18 preserves earlier scoped behavior, composes inherited P13-P17 mutation witnesses into its 736-item campaign, and requires the earlier condition, mutation-evidence, and full regression suites to pass before re-attestation.",
+    "scoped_definitions": [
+      "_validate_raster_stroke_style",
+      "_sampled_path_geometry",
+      "_draw_path_strokes",
+      "_draw_path_endpoint_cap",
+      "_draw_stroke_join"
+    ]
+  },
   "equivalent_survivor_proofs": [
     {
       "job_ids": ["3f07d44fcb5e4f02b0d1a2411359aa0d", "0fc4493653a9443c89fae7452e5accdc"],

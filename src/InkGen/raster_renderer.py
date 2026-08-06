@@ -5,8 +5,10 @@ from __future__ import annotations
 import io
 import logging
 import math
+from bisect import bisect_left, bisect_right
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from itertools import chain
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -80,6 +82,40 @@ class _SampledPathSubpath:
     endpoint_indices: tuple[int, ...]
     segment_count: int
     closed: bool
+
+
+@dataclass(frozen=True, slots=True)
+class _DashedPathRun:
+    """One painted path-length interval, split at semantic join boundaries."""
+
+    sections: tuple[tuple[tuple[float, float], ...], ...]
+    start_distance: float
+    end_distance: float
+    start_tangent: tuple[float, float]
+    end_tangent: tuple[float, float]
+    wraps_seam: bool = False
+    closed_cycle: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class _DashedPathSubpath:
+    """Bounded dash runs and zero-length marks for one sampled subpath."""
+
+    source: _SampledPathSubpath
+    cumulative_distances: tuple[float, ...]
+    painted_intervals: tuple[tuple[float, float], ...]
+    runs: tuple[_DashedPathRun, ...]
+    zero_dash_distances: tuple[float, ...]
+    joins_closed_seam: bool
+
+
+@dataclass(frozen=True, slots=True)
+class _DashIntervals:
+    """Positive dash intervals plus their bounded-walk and seam metadata."""
+
+    intervals: tuple[tuple[float, float], ...]
+    operation_count: int
+    joins_closed_seam: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -347,12 +383,16 @@ def _validate_raster_stroke_style(component: RasterPrimitive, style: DrawingStyl
     line_join = _validated_line_join(style)
     miter_limit = _positive_finite_number(style.stroke_miterlimit, "stroke miter limit")
     dash = _validated_line_dash(style)
+    dashed_path: tuple[_DashedPathSubpath, ...] | None = None
     if dash is not None:
-        if not isinstance(component, LineDrawing):
-            raise ValueError("dashed strokes are supported only for raster LineDrawing P13")
-        _line_dash_segments(component.point_1, component.point_2, *dash)
-        if line_cap != "butt":
-            _line_cap_dash_geometry(component.point_1, component.point_2, *dash)
+        if isinstance(component, LineDrawing):
+            _line_dash_segments(component.point_1, component.point_2, *dash)
+            if line_cap != "butt":
+                _line_cap_dash_geometry(component.point_1, component.point_2, *dash)
+        elif isinstance(component, PathDrawing):
+            dashed_path = _dashed_path_geometry(_sampled_path_geometry(component), *dash)
+        else:
+            raise ValueError("dashed strokes are supported only for raster LineDrawing P13 or PathDrawing P18")
     if line_cap != "butt" and not isinstance(component, (LineDrawing, PathDrawing)):
         raise ValueError("non-butt stroke caps require raster LineDrawing P14 or PathDrawing P17")
     if line_join != "miter" and not isinstance(
@@ -363,7 +403,10 @@ def _validate_raster_stroke_style(component: RasterPrimitive, style: DrawingStyl
     if line_join == "miter" and miter_limit != 10.0 and _has_visible_stroke(style):
         stroke_width = _validated_scaled_stroke_width(style, scale)
         if isinstance(component, PathDrawing):
-            _validate_path_miter_geometry(component, scale, stroke_width, miter_limit)
+            if dashed_path is None:
+                _validate_path_miter_geometry(component, scale, stroke_width, miter_limit)
+            else:
+                _validate_dashed_path_miter_geometry(dashed_path, scale, stroke_width, miter_limit)
         else:
             points = _nondefault_miter_points(component, scale)
             _validate_miter_geometry(points, stroke_width, miter_limit)
@@ -423,6 +466,19 @@ def _validate_path_miter_geometry(
         scaled = _scaled_sampled_subpath(subpath, scale)
         for previous, vertex, following in _semantic_path_join_triples(scaled):
             _miter_join_polygon(previous, vertex, following, stroke_width, miter_limit)
+
+
+def _validate_dashed_path_miter_geometry(
+    geometry: Sequence[_DashedPathSubpath],
+    scale: float,
+    stroke_width: int,
+    miter_limit: float,
+) -> None:
+    """Construct only miters reached by painted dash intervals."""
+    for dashed in geometry:
+        for _, triple in _painted_path_join_records(dashed):
+            scaled = tuple((x * scale, y * scale) for x, y in triple)
+            _miter_join_polygon(*scaled, stroke_width, miter_limit)
 
 
 def _render_rectangle_component(
@@ -1256,6 +1312,269 @@ def _sampled_path_subpaths(component: PathDrawing) -> list[list[tuple[float, flo
     return [list(subpath.points) for subpath in _sampled_path_geometry(component)]
 
 
+def _sampled_path_cumulative_distances(subpath: _SampledPathSubpath) -> tuple[float, ...]:
+    """Return finite logical distances at every sampled path point."""
+    distances = [0.0]
+    total = 0.0
+    for start, end in zip(subpath.points, subpath.points[1:], strict=False):
+        length = math.hypot(end[0] - start[0], end[1] - start[1])
+        total += length
+        if not math.isfinite(total):
+            raise ValueError("raster path dash length must remain finite")
+        distances.append(total)
+    return tuple(distances)
+
+
+def _path_dash_intervals(
+    length: float,
+    pattern: tuple[float, ...],
+    offset: float,
+    limit: int,
+    *,
+    closed: bool,
+) -> _DashIntervals:
+    """Partition one subpath length into bounded positive dash intervals."""
+    if length <= 0.0:
+        return _DashIntervals((), 0, False)
+    period = sum(pattern)
+    pattern_index, remaining = _dash_cursor(pattern, offset % period)
+    starts_on = pattern_index % 2 == 0
+    position = 0.0
+    operations = 0
+    intervals: list[tuple[float, float]] = []
+    ends_within_on = False
+    while position < length:
+        if operations >= limit:
+            raise ValueError(f"raster path dash geometry exceeds the {_MAX_DASH_STEPS:,}-operation limit")
+        operations += 1
+        step = min(remaining, length - position)
+        next_position = position + step
+        if next_position <= position:
+            raise ValueError("raster path dash pattern cannot advance at this coordinate magnitude")
+        if pattern_index % 2 == 0:
+            intervals.append((position, next_position))
+        if next_position == length:
+            ends_within_on = pattern_index % 2 == 0 and step < remaining
+        position = next_position
+        pattern_index, remaining = _next_dash_slot(pattern, pattern_index, remaining - step)
+    return _DashIntervals(tuple(intervals), operations, closed and starts_on and ends_within_on)
+
+
+def _zero_length_dash_distances(
+    length: float,
+    pattern: tuple[float, ...],
+    offset: float,
+    limit: int,
+    *,
+    closed: bool,
+) -> tuple[float, ...]:
+    """Return bounded zero-length on-dash positions along one subpath."""
+    period = sum(pattern)
+    phase = offset % period
+    distances: set[float] = set()
+    prefix = 0.0
+    for index, value in enumerate(pattern):
+        if index % 2 == 0 and value == 0.0:
+            distance = prefix - phase
+            if distance < 0.0:
+                distance += math.ceil(-distance / period) * period
+            while distance <= length:
+                if distance not in distances:
+                    if len(distances) >= limit:
+                        raise ValueError(f"raster path dash geometry exceeds the {_MAX_DASH_STEPS:,}-operation limit")
+                    distances.add(distance)
+                distance += period
+        prefix += value
+    if length == 0.0:
+        pattern_index, _ = _dash_cursor(pattern, phase)
+        if pattern_index % 2 == 0:
+            if not distances and limit == 0:
+                raise ValueError(f"raster path dash geometry exceeds the {_MAX_DASH_STEPS:,}-operation limit")
+            distances.add(0.0)
+    if closed and 0.0 in distances and length in distances:
+        distances.remove(length)
+    return tuple(sorted(distances))
+
+
+def _path_edge_index(
+    cumulative: Sequence[float],
+    distance: float,
+    *,
+    outgoing: bool,
+) -> int | None:
+    """Return the end-point index of the nearest nonzero metric edge."""
+    if len(cumulative) < 2:
+        return None
+    if outgoing:
+        start = bisect_right(cumulative, distance)
+        candidates = chain(range(start, len(cumulative)), range(min(start, len(cumulative) - 1), 0, -1))
+    else:
+        start = bisect_left(cumulative, distance)
+        candidates = chain(range(min(start, len(cumulative) - 1), 0, -1), range(max(1, start), len(cumulative)))
+    for end_index in candidates:
+        if cumulative[end_index] > cumulative[end_index - 1]:
+            return end_index
+    return None
+
+
+def _path_point_at_distance(
+    subpath: _SampledPathSubpath,
+    cumulative: Sequence[float],
+    distance: float,
+    *,
+    outgoing: bool,
+) -> tuple[float, float]:
+    """Interpolate one logical point at a measured subpath distance."""
+    edge_end = _path_edge_index(cumulative, distance, outgoing=outgoing)
+    if edge_end is None:
+        return subpath.points[0]
+    edge_start = edge_end - 1
+    start_distance = cumulative[edge_start]
+    edge_length = cumulative[edge_end] - start_distance
+    fraction = min(1.0, max(0.0, (distance - start_distance) / edge_length))
+    start = subpath.points[edge_start]
+    end = subpath.points[edge_end]
+    return _point_along_line(start, end[0] - start[0], end[1] - start[1], fraction)
+
+
+def _path_tangent_at_distance(
+    subpath: _SampledPathSubpath,
+    cumulative: Sequence[float],
+    distance: float,
+    *,
+    outgoing: bool,
+) -> tuple[float, float]:
+    """Return the nearest nonzero sampled tangent at a path distance."""
+    edge_end = _path_edge_index(cumulative, distance, outgoing=outgoing)
+    if edge_end is None:
+        return 1.0, 0.0
+    return _unit_tangent(subpath.points[edge_end - 1], subpath.points[edge_end])
+
+
+def _path_points_between(
+    subpath: _SampledPathSubpath,
+    cumulative: Sequence[float],
+    start: float,
+    end: float,
+) -> tuple[tuple[float, float], ...]:
+    """Return one measured sampled-polyline section including exact endpoints."""
+    points = [_path_point_at_distance(subpath, cumulative, start, outgoing=True)]
+    first = bisect_right(cumulative, start)
+    last = bisect_left(cumulative, end)
+    points.extend(subpath.points[first:last])
+    points.append(_path_point_at_distance(subpath, cumulative, end, outgoing=False))
+    deduplicated = [points[0]]
+    deduplicated.extend(point for point in points[1:] if point != deduplicated[-1])
+    return tuple(deduplicated)
+
+
+def _path_join_records_with_distances(
+    subpath: _SampledPathSubpath,
+    cumulative: Sequence[float],
+) -> tuple[tuple[float, tuple[tuple[float, float], tuple[float, float], tuple[float, float]]], ...]:
+    """Pair every semantic source join with its logical path distance."""
+    return tuple((cumulative[index], triple) for index, triple in _semantic_path_join_records(subpath))
+
+
+def _path_dash_run(
+    subpath: _SampledPathSubpath,
+    cumulative: Sequence[float],
+    join_distances: Sequence[float],
+    start: float,
+    end: float,
+) -> _DashedPathRun:
+    """Build one painted interval split only at source-command joins."""
+    cuts = sorted({distance for distance in join_distances if start < distance < end})
+    boundaries = [start, *cuts, end]
+    sections = tuple(
+        _path_points_between(subpath, cumulative, section_start, section_end)
+        for section_start, section_end in zip(boundaries, boundaries[1:], strict=False)
+    )
+    return _DashedPathRun(
+        sections=sections,
+        start_distance=start,
+        end_distance=end,
+        start_tangent=_path_tangent_at_distance(subpath, cumulative, start, outgoing=True),
+        end_tangent=_path_tangent_at_distance(subpath, cumulative, end, outgoing=False),
+    )
+
+
+def _join_closed_dash_seam(runs: Sequence[_DashedPathRun]) -> tuple[_DashedPathRun, ...]:
+    """Join the first and last on-dashes when a closed dash crosses the seam."""
+    if not runs:
+        return ()
+    if len(runs) == 1:
+        run = runs[0]
+        return (
+            _DashedPathRun(
+                sections=run.sections,
+                start_distance=run.start_distance,
+                end_distance=run.end_distance,
+                start_tangent=run.start_tangent,
+                end_tangent=run.end_tangent,
+                wraps_seam=True,
+                closed_cycle=True,
+            ),
+        )
+    first = runs[0]
+    last = runs[-1]
+    wrapped = _DashedPathRun(
+        sections=(*last.sections, *first.sections),
+        start_distance=last.start_distance,
+        end_distance=first.end_distance,
+        start_tangent=last.start_tangent,
+        end_tangent=first.end_tangent,
+        wraps_seam=True,
+    )
+    return (wrapped, *runs[1:-1])
+
+
+def _dashed_path_subpath(
+    subpath: _SampledPathSubpath,
+    pattern: tuple[float, ...],
+    offset: float,
+    limit: int,
+) -> tuple[_DashedPathSubpath, int]:
+    """Measure and partition one sampled subpath within a shared operation bound."""
+    cumulative = _sampled_path_cumulative_distances(subpath)
+    length = cumulative[-1]
+    if subpath.segment_count == 0:
+        return _DashedPathSubpath(subpath, cumulative, (), (), (), False), 0
+    intervals = _path_dash_intervals(length, pattern, offset, limit, closed=subpath.closed)
+    remaining = limit - intervals.operation_count
+    zero_distances = _zero_length_dash_distances(length, pattern, offset, remaining, closed=subpath.closed)
+    join_distances = tuple(distance for distance, _ in _path_join_records_with_distances(subpath, cumulative))
+    runs = tuple(_path_dash_run(subpath, cumulative, join_distances, *interval) for interval in intervals.intervals)
+    if intervals.joins_closed_seam:
+        runs = _join_closed_dash_seam(runs)
+    return (
+        _DashedPathSubpath(
+            subpath,
+            cumulative,
+            intervals.intervals,
+            runs,
+            zero_distances,
+            intervals.joins_closed_seam,
+        ),
+        intervals.operation_count + len(zero_distances),
+    )
+
+
+def _dashed_path_geometry(
+    geometry: Sequence[_SampledPathSubpath],
+    pattern: tuple[float, ...],
+    offset: float,
+) -> tuple[_DashedPathSubpath, ...]:
+    """Partition all subpaths with a reset phase and one global operation bound."""
+    remaining = _MAX_DASH_STEPS
+    dashed: list[_DashedPathSubpath] = []
+    for subpath in geometry:
+        result, operation_count = _dashed_path_subpath(subpath, pattern, offset, remaining)
+        dashed.append(result)
+        remaining -= operation_count
+    return tuple(dashed)
+
+
 def _render_path_component(
     surface: Image.Image,
     draw: ImageDraw.ImageDraw,
@@ -1291,6 +1610,12 @@ def _draw_path_strokes(
     stroke_width: int,
 ) -> None:
     """Paint every subpath through its legacy or semantic stroke route."""
+    dash = _validated_line_dash(style)
+    if dash is not None:
+        dashed = _dashed_path_geometry(geometry, *dash)
+        for subpath in dashed:
+            _draw_dashed_path_subpath(draw, subpath, style, scale, stroke, stroke_width)
+        return
     for subpath in geometry:
         _draw_semantic_path_stroke(draw, subpath, style, scale, stroke, stroke_width)
 
@@ -1324,6 +1649,82 @@ def _draw_semantic_path_stroke(
         scaled = _scaled_sampled_subpath(subpath, scale)
     if not subpath.closed and style.stroke_linecap != "butt":
         _draw_open_path_caps(draw, scaled, stroke, stroke_width, style.stroke_linecap)
+
+
+def _painted_path_join_records(
+    dashed: _DashedPathSubpath,
+) -> tuple[tuple[float, tuple[tuple[float, float], tuple[float, float], tuple[float, float]]], ...]:
+    """Return semantic joins crossed by at least one positive dash."""
+    records = _path_join_records_with_distances(dashed.source, dashed.cumulative_distances)
+    painted: list[tuple[float, tuple[tuple[float, float], tuple[float, float], tuple[float, float]]]] = []
+    interval_index = 0
+    for record in records:
+        distance = record[0]
+        if distance == 0.0 and dashed.joins_closed_seam:
+            painted.append(record)
+            continue
+        while interval_index < len(dashed.painted_intervals) and dashed.painted_intervals[interval_index][1] <= distance:
+            interval_index += 1
+        if interval_index == len(dashed.painted_intervals):
+            break
+        start, end = dashed.painted_intervals[interval_index]
+        if start < distance < end:
+            painted.append(record)
+    return tuple(painted)
+
+
+def _flatten_dash_sections(sections: Sequence[Sequence[tuple[float, float]]]) -> tuple[tuple[float, float], ...]:
+    """Join ordered body sections without duplicating their shared vertices."""
+    flattened: list[tuple[float, float]] = []
+    for section in sections:
+        for point in section:
+            if not flattened or point != flattened[-1]:
+                flattened.append(point)
+    return tuple(flattened)
+
+
+def _draw_dashed_path_subpath(
+    draw: ImageDraw.ImageDraw,
+    dashed: _DashedPathSubpath,
+    style: DrawingStyle,
+    scale: float,
+    stroke: tuple[int, int, int, int],
+    stroke_width: int,
+) -> None:
+    """Paint one measured dashed subpath with cap and source-join semantics."""
+    custom_join = style.stroke_linejoin != "miter" or style.stroke_miterlimit != 10.0
+    for run in dashed.runs:
+        if custom_join:
+            for section in run.sections:
+                _draw_curve(draw, section, scale, stroke, stroke_width)
+        else:
+            _draw_curve(draw, _flatten_dash_sections(run.sections), scale, stroke, stroke_width)
+    for _, triple in _painted_path_join_records(dashed):
+        scaled = tuple((x * scale, y * scale) for x, y in triple)
+        _draw_stroke_join(
+            draw,
+            *scaled,
+            stroke,
+            stroke_width,
+            style.stroke_linejoin,
+            style.stroke_miterlimit,
+        )
+    if style.stroke_linecap == "butt":
+        return
+    for run in dashed.runs:
+        if run.closed_cycle:
+            continue
+        start = _scaled_point(run.sections[0][0], scale)
+        end = _scaled_point(run.sections[-1][-1], scale)
+        _draw_path_endpoint_cap(draw, start, run.start_tangent, stroke, stroke_width, style.stroke_linecap, at_start=True)
+        _draw_path_endpoint_cap(draw, end, run.end_tangent, stroke, stroke_width, style.stroke_linecap, at_start=False)
+    for distance in dashed.zero_dash_distances:
+        point = _scaled_point(
+            _path_point_at_distance(dashed.source, dashed.cumulative_distances, distance, outgoing=True),
+            scale,
+        )
+        tangent = _path_tangent_at_distance(dashed.source, dashed.cumulative_distances, distance, outgoing=True)
+        _draw_capped_segment(draw, point, point, stroke, stroke_width, style.stroke_linecap, tangent)
 
 
 def _draw_path_segment_bodies(
@@ -1444,14 +1845,21 @@ def _semantic_path_join_triples(
     subpath: _SampledPathSubpath,
 ) -> list[tuple[tuple[float, float], tuple[float, float], tuple[float, float]]]:
     """Return neighboring stroke points at source-level path joins only."""
+    return [triple for _, triple in _semantic_path_join_records(subpath)]
+
+
+def _semantic_path_join_records(
+    subpath: _SampledPathSubpath,
+) -> list[tuple[int, tuple[tuple[float, float], tuple[float, float], tuple[float, float]]]]:
+    """Return each semantic join's sampled index and neighboring points."""
     indices = subpath.endpoint_indices if subpath.closed else subpath.endpoint_indices[1:-1]
-    triples: list[tuple[tuple[float, float], tuple[float, float], tuple[float, float]]] = []
+    records: list[tuple[int, tuple[tuple[float, float], tuple[float, float], tuple[float, float]]]] = []
     for index in indices:
         previous = _distinct_path_neighbor(subpath, index, -1)
         following = _distinct_path_neighbor(subpath, index, 1)
         if previous is not None and following is not None:
-            triples.append((previous, subpath.points[index], following))
-    return triples
+            records.append((index, (previous, subpath.points[index], following)))
+    return records
 
 
 def _distinct_path_neighbor(

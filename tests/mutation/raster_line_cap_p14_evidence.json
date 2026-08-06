@@ -7,7 +7,7 @@
     "execution_environment": "eight disjoint WSL ext4 source-copy shards followed by survivor-only master reruns"
   },
   "source_files": [
-    {"path": "src/InkGen/raster_renderer.py", "sha256": "04324ACDCA65E492F393EADAE2A3AEF56AE84471CF006EF07481D9FE91DCD0FF"}
+    {"path": "src/InkGen/raster_renderer.py", "sha256": "8F36F1A68EC0A2C765ACC2D85E72C0B1EF1205AC349263E0B171920EFC7C2A6A"}
   ],
   "condition_tests": [
     {"path": "tests/test_raster_line_cap_contract.py", "sha256": "295785F460BB36079C11F9D06333E2286E4D75E9E091693A2E1D4DC60828858B"}
@@ -53,9 +53,13 @@
   "execution_artifacts": [9586, 9587, 9588, 9589, 9590, 9591, 9592, 9593, 9594, 9600, 9602],
   "initial_shard_sizes": [60, 60, 60, 60, 59, 59, 59, 59],
   "dependency_refresh": {
-    "reason": "RASTER-PATH-STROKE-P17 changed raster_renderer.py and superseded the prior PathDrawing cap rejection contract",
-    "method": "P17 preserved LineDrawing cap behavior, composed the P14 fast witness into its 579-item campaign, and reran the P14 condition and full suites before re-attesting the hashes.",
-    "scoped_definitions": ["_validate_raster_stroke_style", "_draw_capped_segment", "_draw_line_component"]
+    "reason": "RASTER-PATH-DASH-P18 added measured PathDrawing dash support and invalidated the retained whole-source freshness hash",
+    "method": "P18 preserves earlier scoped behavior, composes inherited P13-P17 mutation witnesses into its 736-item campaign, and requires the earlier condition, mutation-evidence, and full regression suites to pass before re-attestation.",
+    "scoped_definitions": [
+      "_validate_raster_stroke_style",
+      "_draw_capped_segment",
+      "_draw_line_component"
+    ]
   },
   "equivalent_survivor_proofs": [
     {

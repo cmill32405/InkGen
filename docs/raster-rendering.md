@@ -131,6 +131,16 @@ butt-cap no-op. More than 100,000 positive pattern steps fails before
 surface allocation. Dash arrays on other primitives and a phase without an
 array remain outside the closed domain.
 
+P18 additionally renders dashed `PathDrawing` strokes. Dash distance continues
+across every source segment in one subpath, while each `M` subpath reapplies the
+configured phase. Bezier and arc samples contribute measured length and local
+tangents without becoming source joins. A source vertex strictly inside an
+on-dash receives its configured join; a vertex at a dash boundary receives
+separate dash caps. Closed paths join a dash across the `Z` seam only when the
+first and final on-portions are continuous, and a dash covering the full closed
+cycle receives joins without caps. Positive and zero-length dash work across
+all subpaths shares the 100,000-operation pre-allocation bound.
+
 Fill and stroke colors, widths, and independent opacity values are preserved.
 Paths support solid fills under the SVG/PDF nonzero winding rule, including
 implicit closure, nested holes, self-intersections, curves, and off-canvas
@@ -172,9 +182,9 @@ supersampling factor is limited to 1 through 8. Invalid or unsupported inputs
 fail before surface allocation.
 
 The renderer deliberately rejects zoning overlays, dashed strokes outside the
-line domain, non-butt caps outside line and path domains, non-miter joins and
-nondefault miter limits on standalone sampled curves, and text presentation
-outside the P3/P11 domain.
+line and path domains, non-butt caps outside line and path domains, non-miter
+joins and nondefault miter limits on standalone sampled curves, and text
+presentation outside the P3/P11 domain.
 Later slices can add these features without weakening the closed-domain
 behavior. The Baird composition API below consumes
 `RasterRenderResult.asset` without a PDF or SVG intermediary.

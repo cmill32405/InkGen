@@ -8,7 +8,7 @@
   },
   "source": {
     "path": "src/InkGen/raster_renderer.py",
-    "sha256": "04324ACDCA65E492F393EADAE2A3AEF56AE84471CF006EF07481D9FE91DCD0FF"
+    "sha256": "8F36F1A68EC0A2C765ACC2D85E72C0B1EF1205AC349263E0B171920EFC7C2A6A"
   },
   "tests": [
     {"path": "tests/test_raster_gradient_contract.py", "sha256": "B9817E950D60F2B6D5C181039A697D321617441E10140331F95CC3AC60025141"},
@@ -57,6 +57,16 @@
     "Single-pixel intersections and subpixel valid axes",
     "Live malformed, overflow, and zero-length axis failures"
   ],
+  "dependency_refresh": {
+    "reason": "RASTER-PATH-DASH-P18 added measured PathDrawing dash support and invalidated the retained whole-source freshness hash",
+    "method": "P18 preserves earlier scoped behavior, composes inherited P13-P17 mutation witnesses into its 736-item campaign, and requires the earlier condition, mutation-evidence, and full regression suites to pass before re-attestation.",
+    "scoped_definitions": [
+      "_validate_render_domain",
+      "_render_component",
+      "_validated_raster_gradient",
+      "_render_linear_gradient_rectangle"
+    ]
+  },
   "equivalent_survivor_proofs": [
     {
       "job_ids": ["d5b6a7bba5de4ea1b32ca01da4181f46", "465b7e66239a4646add8d6373cdffa83"],

@@ -7,7 +7,7 @@
     "execution_environment": "two sequential disjoint WSL shards followed by a complete database merge"
   },
   "source_files": [
-    {"path": "src/InkGen/raster_renderer.py", "sha256": "04324ACDCA65E492F393EADAE2A3AEF56AE84471CF006EF07481D9FE91DCD0FF"}
+    {"path": "src/InkGen/raster_renderer.py", "sha256": "8F36F1A68EC0A2C765ACC2D85E72C0B1EF1205AC349263E0B171920EFC7C2A6A"}
   ],
   "condition_tests": [
     {"path": "tests/test_raster_miter_limit_contract.py", "sha256": "0F288AC8BBB7ACDE4F523E979A71D4CF949D8EEAD1252B5CF516F532F263DF96"}
@@ -50,9 +50,13 @@
   "execution_artifacts": [9671, 9674],
   "shard_sizes": [351, 350],
   "dependency_refresh": {
-    "reason": "RASTER-PATH-STROKE-P17 changed raster_renderer.py and superseded the prior PathDrawing miter-limit rejection contract",
-    "method": "P17 preserved P16 point/shape miter behavior, composed the P16 validation, point, geometry, and operation witnesses into its 579-item campaign, and reran the P16 condition and full suites before re-attesting the hashes.",
-    "scoped_definitions": ["_validate_raster_stroke_style", "_validate_path_miter_geometry", "_draw_stroke_join"]
+    "reason": "RASTER-PATH-DASH-P18 added measured PathDrawing dash support and invalidated the retained whole-source freshness hash",
+    "method": "P18 preserves earlier scoped behavior, composes inherited P13-P17 mutation witnesses into its 736-item campaign, and requires the earlier condition, mutation-evidence, and full regression suites to pass before re-attestation.",
+    "scoped_definitions": [
+      "_validate_raster_stroke_style",
+      "_validate_path_miter_geometry",
+      "_draw_stroke_join"
+    ]
   },
   "equivalent_survivor_proofs": []
 }

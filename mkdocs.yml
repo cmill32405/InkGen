@@ -148,6 +148,7 @@ nav:
       - Raster Line Join Contract: proofs/raster-line-join-contract.md
       - Raster Miter Limit Contract: proofs/raster-miter-limit-contract.md
       - Raster Path Stroke Contract: proofs/raster-path-stroke-contract.md
+      - Raster Path Dash Contract: proofs/raster-path-dash-contract.md
   - Architecture Diagrams: architecture-diagrams.md
   - Notes:
       - Mask Alignment Findings: mask_alignment_findings.md
